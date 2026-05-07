@@ -448,6 +448,7 @@ FINAL_LR_FRAC = 0.0     # final LR as fraction of initial
 
 # Model size
 DEPTH = 8               # number of transformer layers
+N_KV_HEADS = 2          # number of KV heads (was 4, enabling GQA)
 DEVICE_BATCH_SIZE = 64   # per-device batch size (reduce if OOM)
 
 # ---------------------------------------------------------------------------
@@ -470,9 +471,11 @@ def build_model_config(depth):
     base_dim = depth * ASPECT_RATIO
     model_dim = ((base_dim + HEAD_DIM - 1) // HEAD_DIM) * HEAD_DIM
     num_heads = model_dim // HEAD_DIM
+    n_kv_heads = N_KV_HEADS
+    assert num_heads % n_kv_heads == 0, f"n_head {num_heads} must be divisible by n_kv_head {n_kv_heads}"
     return GPTConfig(
         sequence_len=MAX_SEQ_LEN, vocab_size=vocab_size,
-        n_layer=depth, n_head=num_heads, n_kv_head=num_heads, n_embd=model_dim,
+        n_layer=depth, n_head=num_heads, n_kv_head=n_kv_heads, n_embd=model_dim,
         window_pattern=WINDOW_PATTERN,
     )
 
