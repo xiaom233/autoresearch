@@ -71,7 +71,7 @@ EXPERIMENTS = [
     ("deeper depths=(4,4,4,4)",      {"AR_DEPTHS": "(4,4,4,4)"}),
     ("deeper depths=(6,6,6,6)",      {"AR_DEPTHS": "(6,6,6,6)"}),
     ("larger window_size=16",        {"AR_WINDOW_SIZE": "16"}),
-    ("smaller window_size=4",        {"AR_WINDOW_SIZE": "4"}),
+    ("narrower embed_dim=48",        {"AR_EMBED_DIM": "48"}),
     ("wider mlp_ratio=4",            {"AR_MLP_RATIO": "4"}),
     ("more heads num_heads=(8,8,8,8)", {"AR_NUM_HEADS": "(8,8,8,8)"}),
 
@@ -101,7 +101,7 @@ EXPERIMENTS = [
     ("embed_dim=128 + window_size=16",   {"AR_EMBED_DIM": "128", "AR_WINDOW_SIZE": "16"}),
     ("depths=(4,4,4,4) + MSE loss",      {"AR_DEPTHS": "(4,4,4,4)", "AR_LOSS_FN": "mse"}),
     ("embed_dim=96 + depths=(4,4,4,4) + MSE", {"AR_EMBED_DIM": "96", "AR_DEPTHS": "(4,4,4,4)", "AR_LOSS_FN": "mse"}),
-    ("depths=(6,6,6,6) + window_size=4", {"AR_DEPTHS": "(6,6,6,6)", "AR_WINDOW_SIZE": "4"}),
+    ("depths=(6,6,6,6) + embed_dim=48", {"AR_DEPTHS": "(6,6,6,6)", "AR_EMBED_DIM": "48"}),
     ("embed_dim=128 + depths=(1,1,1,1)", {"AR_EMBED_DIM": "128", "AR_DEPTHS": "(1,1,1,1)"}),
     ("embed_dim=80 + depths=(2,2,2,2) + L1+edge", {"AR_EMBED_DIM": "80", "AR_LOSS_FN": "l1+edge", "AR_LOSS_WEIGHTS": "(1.0, 0.1)"}),
 ]
@@ -126,7 +126,7 @@ def run_experiment(exp_idx, description, env_vars, gpu_id, round_num):
                 env=full_env,
                 stdout=lf,
                 stderr=subprocess.STDOUT,
-                timeout=900,  # 15 min timeout
+                timeout=1200,  # 20 min timeout
             )
     except subprocess.TimeoutExpired:
         print(f"  TIMEOUT after 15min")
