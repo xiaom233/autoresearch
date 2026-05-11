@@ -76,6 +76,18 @@ LR_SCHEDULE = "cosine"       # "cosine" or "constant"
 LOG_INTERVAL = 25            # steps between PSNR logging
 VAL_INTERVAL = 200           # steps between full validation
 
+# Environment variable overrides for parallel experiments
+for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNING_RATE",
+           "WEIGHT_DECAY", "WARMUP_STEPS", "TIME_BUDGET", "WINDOW_SIZE", "MLP_RATIO",
+           "VAL_INTERVAL", "LOG_INTERVAL", "NUM_WORKERS", "SHUFFLE_BUFFER",
+           "LR_SCHEDULE", "VAL_COUNT", "DEPTHS", "NUM_HEADS", "ADAM_BETAS"):
+    _env = os.environ.get(f"AR_{_v}")
+    if _env is not None:
+        if _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "LR_SCHEDULE"):
+            globals()[_v] = _env
+        else:
+            globals()[_v] = eval(_env)
+
 # ---------------------------------------------------------------------------
 # Validation dataset
 # ---------------------------------------------------------------------------
