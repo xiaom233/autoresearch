@@ -72,6 +72,12 @@ ADAM_BETAS = (0.9, 0.999)
 WARMUP_STEPS = 100
 LR_SCHEDULE = "cosine"       # "cosine" or "constant"
 
+# Loss function: "l1", "mse", "huber", "l1+mse", "l1+fft", "l1+edge"
+LOSS_FN = "l1"
+HUBER_DELTA = 0.1
+GRAD_CLIP = 0.0              # 0 = no gradient clipping
+LOSS_WEIGHTS = (1.0, 0.1)    # (primary, auxiliary) weight for combined losses
+
 # Logging
 LOG_INTERVAL = 25            # steps between PSNR logging
 VAL_INTERVAL = 200           # steps between full validation
@@ -80,10 +86,11 @@ VAL_INTERVAL = 200           # steps between full validation
 for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNING_RATE",
            "WEIGHT_DECAY", "WARMUP_STEPS", "TIME_BUDGET", "WINDOW_SIZE", "MLP_RATIO",
            "VAL_INTERVAL", "LOG_INTERVAL", "NUM_WORKERS", "SHUFFLE_BUFFER",
-           "LR_SCHEDULE", "VAL_COUNT", "DEPTHS", "NUM_HEADS", "ADAM_BETAS"):
+           "LR_SCHEDULE", "VAL_COUNT", "DEPTHS", "NUM_HEADS", "ADAM_BETAS",
+           "LOSS_FN", "HUBER_DELTA", "GRAD_CLIP", "LOSS_WEIGHTS"):
     _env = os.environ.get(f"AR_{_v}")
     if _env is not None:
-        if _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "LR_SCHEDULE"):
+        if _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "LR_SCHEDULE", "LOSS_FN"):
             globals()[_v] = _env
         else:
             globals()[_v] = eval(_env)
@@ -378,7 +385,55 @@ x, y = x.to(device), y.to(device)
 
 print(f"Train: x {tuple(x.shape)} [{x.min():.3f},{x.max():.3f}], "
       f"y {tuple(y.shape)} [{y.min():.3f},{y.max():.3f}]")
-print(f"Time budget: {TIME_BUDGET}s  Batch: {BATCH_SIZE}  LR: {LEARNING_RATE}")
+print(f"Time budget: {TIME_BUDGET}s  Batch: {BATCH_SIZE}  LR: {LEARNING_RATE}  "
+      f"Loss: {LOSS_FN}  Clip: {GRAD_CLIP}")
+
+# ---------------------------------------------------------------------------
+# Loss helpers
+# ---------------------------------------------------------------------------
+
+def _sobel_kernels():
+    """Return (kx, ky) Sobel kernels [1, 1, 3, 3]."""
+    kx = torch.tensor([[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]]) / 4.
+    ky = torch.tensor([[-1., -2., -1.], [0., 0., 0.], [1., 2., 1.]]) / 4.
+    return kx.view(1, 1, 3, 3), ky.view(1, 1, 3, 3)
+
+def edge_loss(pred, target):
+    """Sobel edge-aware loss (L1 on gradient magnitude difference)."""
+    kx, ky = _sobel_kernels()
+    kx, ky = kx.to(pred.device), ky.to(pred.device)
+    gx_p = F.conv2d(pred, kx, padding=1)
+    gy_p = F.conv2d(pred, ky, padding=1)
+    gx_t = F.conv2d(target, kx, padding=1)
+    gy_t = F.conv2d(target, ky, padding=1)
+    mag_p = torch.sqrt(gx_p ** 2 + gy_p ** 2 + 1e-6)
+    mag_t = torch.sqrt(gx_t ** 2 + gy_t ** 2 + 1e-6)
+    return F.l1_loss(mag_p, mag_t)
+
+def fft_loss(pred, target):
+    """Frequency-domain L1 loss on magnitude spectrum."""
+    pred_f = torch.fft.rfft2(pred.float(), norm='ortho')
+    target_f = torch.fft.rfft2(target.float(), norm='ortho')
+    return F.l1_loss(pred_f.abs(), target_f.abs())
+
+def compute_loss(pred, target):
+    """Flexible loss dispatch based on LOSS_FN."""
+    if LOSS_FN == "l1":
+        return F.l1_loss(pred, target)
+    if LOSS_FN == "mse":
+        return F.mse_loss(pred, target)
+    if LOSS_FN == "huber":
+        return F.huber_loss(pred, target, delta=HUBER_DELTA)
+    if LOSS_FN == "l1+mse":
+        w1, w2 = LOSS_WEIGHTS
+        return w1 * F.l1_loss(pred, target) + w2 * F.mse_loss(pred, target)
+    if LOSS_FN == "l1+fft":
+        w1, w2 = LOSS_WEIGHTS
+        return w1 * F.l1_loss(pred, target) + w2 * fft_loss(pred, target)
+    if LOSS_FN == "l1+edge":
+        w1, w2 = LOSS_WEIGHTS
+        return w1 * F.l1_loss(pred, target) + w2 * edge_loss(pred, target)
+    return F.l1_loss(pred, target)
 
 # ---------------------------------------------------------------------------
 # LR schedule
@@ -410,9 +465,12 @@ while True:
     # Forward + backward
     with autocast_ctx:
         pred = model(x)
-        loss = F.l1_loss(pred, y)
+        loss = compute_loss(pred, y)
 
     loss.backward()
+
+    if GRAD_CLIP > 0:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
 
     # LR update
     lrm = get_lr_multiplier(step, max(step + 1, 1000))
