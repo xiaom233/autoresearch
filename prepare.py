@@ -97,11 +97,11 @@ def extract_dataset():
     # extract_subimages(opt)
 
     # LRx4 images
-    opt['input_folder'] = 'datasets/DIV2K/DIV2K_train_LR_bicubic/X4'
-    opt['save_folder'] = 'datasets/DIV2K/DIV2K_train_LR_bicubic/X4_sub'
-    opt['crop_size'] = 64
-    opt['step'] = 32
-    opt['thresh_size'] = 0
+    # opt['input_folder'] = 'datasets/DIV2K/DIV2K_train_LR_bicubic/X4'
+    # opt['save_folder'] = 'datasets/DIV2K/DIV2K_train_LR_bicubic/X4_sub'
+    # opt['crop_size'] = 64
+    # opt['step'] = 32
+    # opt['thresh_size'] = 0
     extract_subimages(opt)
 
 
