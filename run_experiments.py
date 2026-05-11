@@ -107,10 +107,33 @@ EXPERIMENTS = [
 ]
 
 
+def cleanup_gpu(gpu_id):
+    """Kill any leftover processes on the specified GPU."""
+    import signal
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader",
+             f"--id={gpu_id}"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.strip().split("\n"):
+            pid = line.strip()
+            if pid and pid.isdigit():
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+    except Exception:
+        pass
+
+
 def run_experiment(exp_idx, description, env_vars, gpu_id, round_num):
     """Run a single experiment on a specific GPU."""
     log_file = PROJECT_DIR / f"logs/exp_{round_num:02d}_{exp_idx:03d}.log"
     log_file.parent.mkdir(exist_ok=True)
+
+    # Cleanup leftover processes on this GPU
+    cleanup_gpu(gpu_id)
 
     full_env = {**os.environ, **BASE_ENV, **env_vars, "CUDA_VISIBLE_DEVICES": str(gpu_id)}
 
@@ -126,11 +149,20 @@ def run_experiment(exp_idx, description, env_vars, gpu_id, round_num):
                 env=full_env,
                 stdout=lf,
                 stderr=subprocess.STDOUT,
-                timeout=1200,  # 20 min timeout
+                timeout=1200,
+                preexec_fn=os.setsid,
             )
     except subprocess.TimeoutExpired:
-        print(f"  TIMEOUT after 15min")
+        print(f"  TIMEOUT after 20min")
+        # Kill the whole process group to free GPU memory
+        try:
+            os.killpg(proc.pid, __import__('signal').SIGKILL)
+        except Exception:
+            pass
         return description, None, "crash"
+
+    # Ensure subprocess is fully terminated
+    cleanup_gpu(gpu_id)
 
     elapsed = time.time() - t0
     metrics = parse_results(log_file)
