@@ -243,6 +243,8 @@ def make_dataloader_gpt(tokenizer, B, T, split, buffer_size=1000):
         gpu_buffer.copy_(cpu_buffer, non_blocking=True)
         yield inputs, targets, epoch
 
+def make_dataloader_restoration(degradation, clean_shards, batch_size, buffer_size=1000):
+
 
 if __name__ == '__main__':
     extract_dataset()
