@@ -52,6 +52,13 @@ VAL_COUNT = 0                # max images per val set (0 = use all)
 # an upper bound (model can't beat the skill's estimation error).
 VAL_PARAMS_PATH = PARAMS_PATH  # replace with ground-truth params if available
 
+# Model architecture (SwinIR)
+EMBED_DIM = 64
+DEPTHS = (2, 2, 2, 2)       # Swin blocks per RSTB stage
+NUM_HEADS = (4, 4, 4, 4)     # attention heads per stage
+WINDOW_SIZE = 8
+MLP_RATIO = 2
+
 # Training
 TIME_BUDGET = 600            # training wall-clock budget in seconds (10 min baseline)
 BATCH_SIZE = 16
@@ -135,25 +142,181 @@ def compute_psnr(pred, target):
 
 
 # ---------------------------------------------------------------------------
-# Model (replace this class with your own architecture)
+# Model — simplified SwinIR for image restoration (no upsampling, window SDPA)
+# Based on: SwinIR (Liang et al., 2021), modernized with F.scaled_dot_product_attention
 # ---------------------------------------------------------------------------
 
-class RestoreNet(nn.Module):
-    """Baseline restoration model placeholder. Replace with your architecture."""
+class WindowSDPA(nn.Module):
+    """Window-based multi-head attention using F.scaled_dot_product_attention.
 
-    def __init__(self, in_ch=3, out_ch=3):
+    Supports regular (W-MSA) and shifted (SW-MSA) window partitioning.
+    Uses PyTorch's native SDPA which dispatches to flash-attention on supported GPUs.
+    """
+
+    def __init__(self, dim, num_heads, window_size=8, shift_size=0):
         super().__init__()
-        # ------------------------------------------------------------------
-        # TODO: define your model layers here
-        # ------------------------------------------------------------------
-        self.model = nn.Sequential(
-            nn.Conv2d(in_ch, 32, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, out_ch, 3, padding=1),
+        self.dim = dim
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.window_size = window_size
+        self.shift_size = shift_size
+        self.qkv = nn.Linear(dim, dim * 3, bias=False)
+        self.proj = nn.Linear(dim, dim)
+
+    def forward(self, x, x_size):
+        B, L, C = x.shape
+        H, W = x_size
+        ws = self.window_size
+        assert H % ws == 0 and W % ws == 0, f"Spatial dims ({H},{W}) must be multiples of window_size {ws}"
+
+        # [B, H*W, C] → [B, H, W, C]
+        x = x.view(B, H, W, C)
+
+        # Cyclic shift for SW-MSA
+        if self.shift_size > 0:
+            x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
+
+        # Window partition: [B, H, W, C] → [B*nW, ws*ws, C]
+        nH, nW = H // ws, W // ws
+        x = x.view(B, nH, ws, nW, ws, C)
+        x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, ws * ws, C)
+
+        # QKV projection → multi-head SDPA
+        B_win, N, _ = x.shape
+        qkv = self.qkv(x).view(B_win, N, 3, self.num_heads, self.head_dim)
+        q, k, v = qkv.unbind(dim=2)
+        q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)  # [B_win, nH, N, d]
+
+        x = F.scaled_dot_product_attention(q, k, v)  # flash-attn backend
+
+        # Merge heads: [B_win, nH, N, d] → [B_win, N, C]
+        x = x.transpose(1, 2).contiguous().view(B_win, N, C)
+        x = self.proj(x)
+
+        # Window reverse: [B*nW, ws*ws, C] → [B, H, W, C]
+        x = x.view(B, nH, nW, ws, ws, C)
+        x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, C)
+
+        # Reverse cyclic shift
+        if self.shift_size > 0:
+            x = torch.roll(x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
+
+        return x.view(B, L, C)
+
+
+class SwinBlock(nn.Module):
+    """Swin Transformer block: window SDPA + MLP, pre-norm style."""
+
+    def __init__(self, dim, num_heads, window_size=8, shift_size=0, mlp_ratio=2):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn = WindowSDPA(dim, num_heads, window_size, shift_size)
+        self.norm2 = nn.LayerNorm(dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim, int(dim * mlp_ratio)),
+            nn.GELU(),
+            nn.Linear(int(dim * mlp_ratio), dim),
         )
 
+    def forward(self, x, x_size):
+        x = x + self.attn(self.norm1(x), x_size)
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+
+class RSTB(nn.Module):
+    """Residual Swin Transformer Block: Swin blocks + conv skip connection."""
+
+    def __init__(self, dim, depth, num_heads, window_size=8, mlp_ratio=2):
+        super().__init__()
+        self.blocks = nn.ModuleList([
+            SwinBlock(dim, num_heads, window_size,
+                      shift_size=0 if i % 2 == 0 else window_size // 2,
+                      mlp_ratio=mlp_ratio)
+            for i in range(depth)
+        ])
+        self.conv = nn.Conv2d(dim, dim, 3, 1, 1)
+
+    def forward(self, x, x_size):
+        for blk in self.blocks:
+            x = blk(x, x_size)
+        B, L, C = x.shape
+        H, W = x_size
+        feat = x.transpose(1, 2).view(B, C, H, W)
+        feat = self.conv(feat).flatten(2).transpose(1, 2)
+        return x + feat
+
+
+class RestoreNet(nn.Module):
+    """SwinIR for image restoration (no upsampling, same-resolution in/out).
+
+    Architecture:
+      1. Shallow feature extraction: 3×3 conv
+      2. Deep feature extraction: RSTB stack (window-based transformer)
+      3. Reconstruction: conv → conv with global residual
+
+    Args:
+        in_ch: Input/output channels (default 3 for RGB).
+        embed_dim: Feature dimension throughout the transformer.
+        depths: Number of Swin blocks per RSTB stage.
+        num_heads: Attention heads per stage.
+        window_size: Window size for W-MSA / SW-MSA (spatial dims must be multiples).
+        mlp_ratio: MLP hidden dimension ratio.
+    """
+
+    def __init__(self, in_ch=3, embed_dim=64, depths=(2, 2, 2, 2),
+                 num_heads=(4, 4, 4, 4), window_size=8, mlp_ratio=2):
+        super().__init__()
+        self.window_size = window_size
+        self.embed_dim = embed_dim
+
+        # Shallow feature extraction
+        self.conv_first = nn.Conv2d(in_ch, embed_dim, 3, 1, 1)
+
+        # Deep feature extraction: RSTB stack
+        self.layers = nn.ModuleList([
+            RSTB(embed_dim, d, nh, window_size, mlp_ratio)
+            for d, nh in zip(depths, num_heads)
+        ])
+        self.norm = nn.LayerNorm(embed_dim)
+
+        # Reconstruction
+        self.conv_after_body = nn.Conv2d(embed_dim, embed_dim, 3, 1, 1)
+        self.conv_last = nn.Conv2d(embed_dim, in_ch, 3, 1, 1)
+
+    def _pad_to_window(self, x):
+        _, _, H, W = x.shape
+        ws = self.window_size
+        pad_h = (ws - H % ws) % ws
+        pad_w = (ws - W % ws) % ws
+        if pad_h or pad_w:
+            x = F.pad(x, (0, pad_w, 0, pad_h), mode='reflect')
+        return x
+
     def forward(self, x):
-        return self.model(x) + x  # residual by default
+        H_in, W_in = x.shape[2:]
+        x = self._pad_to_window(x)
+
+        # Shallow feature
+        feat = self.conv_first(x)                     # [B, C, H, W]
+        B, C, H, W = feat.shape
+
+        # Patch embed: [B, C, H, W] → [B, H*W, C]
+        x_seq = feat.flatten(2).transpose(1, 2)
+
+        # RSTB stack
+        for layer in self.layers:
+            x_seq = layer(x_seq, (H, W))
+
+        # Patch unembed: [B, H*W, C] → [B, C, H, W]
+        x_seq = self.norm(x_seq)
+        feat = x_seq.transpose(1, 2).view(B, C, H, W)
+
+        # Reconstruction with skip connections
+        out = self.conv_after_body(feat) + self.conv_first(x)
+        out = self.conv_last(out) + x[:, :3, :, :]    # global residual
+
+        return out[:, :, :H_in, :W_in]
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +341,8 @@ val_x, val_y = val_dataset[0]
 print(f"Val: {len(val_dataset)} images, example shape {tuple(val_x.shape)}")
 
 # Model
-model = RestoreNet(in_ch=3, out_ch=3)
+model = RestoreNet(in_ch=3, embed_dim=EMBED_DIM, depths=DEPTHS,
+                    num_heads=NUM_HEADS, window_size=WINDOW_SIZE, mlp_ratio=MLP_RATIO)
 model.to(device)
 num_params = sum(p.numel() for p in model.parameters())
 print(f"Model params: {num_params:,}")
