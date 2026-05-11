@@ -353,9 +353,15 @@ def make_dataloader_restoration(params_path, shards_url, batch_size,
                 return degraded_t, clean_t
         raise KeyError(f"No image key found in sample: {list(sample.keys())}")
 
+    # Expand glob pattern to list (webdataset 1.x compat)
+    import glob as _glob
+    shards_list = sorted(_glob.glob(shards_url))
+    if not shards_list:
+        raise FileNotFoundError(f"No shards found matching: {shards_url}")
+
     epoch = 1
     while True:
-        dataset = wds.WebDataset(shards_url, shardshuffle=(shuffle_buffer > 0))
+        dataset = wds.WebDataset(shards_list, shardshuffle=shuffle_buffer if shuffle_buffer > 0 else False)
         if shuffle_buffer > 0:
             dataset = dataset.shuffle(shuffle_buffer)
         dataset = dataset.map(decode_and_degrade)

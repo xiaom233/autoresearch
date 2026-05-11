@@ -1,91 +1,183 @@
-# autoresearch
+# autoresearch — Image Restoration via Degradation Simulation
 
-![teaser](progress.png)
+给定一张退化图像，自动识别其退化类型与严重程度，在干净数据集上在线模拟相同退化，训练专用复原模型。
 
-*One day, frontier AI research used to be done by meat computers in between eating, sleeping, having other fun, and synchronizing once in a while using sound wave interconnect in the ritual of "group meeting". That era is long gone. Research is now entirely the domain of autonomous swarms of AI agents running across compute cluster megastructures in the skies. The agents claim that we are now in the 10,205th generation of the code base, in any case no one could tell if that's right or wrong as the "code" is now a self-modifying binary that has grown beyond human comprehension. This repo is the story of how it all began. -@karpathy, March 2026*.
+## Pipeline 概览
 
-The idea: give an AI agent a small but real LLM training setup and let it experiment autonomously overnight. It modifies the code, trains for 5 minutes, checks if the result improved, keeps or discards, and repeats. You wake up in the morning to a log of experiments and (hopefully) a better model. The training code here is a simplified single-GPU implementation of [nanochat](https://github.com/karpathy/nanochat). The core idea is that you're not touching any of the Python files like you normally would as a researcher. Instead, you are programming the `program.md` Markdown files that provide context to the AI agents and set up your autonomous research org. The default `program.md` in this repo is intentionally kept as a bare bones baseline, though it's obvious how one would iterate on it over time to find the "research org code" that achieves the fastest research progress, how you'd add more agents to the mix, etc. A bit more context on this project is here in this [tweet](https://x.com/karpathy/status/2029701092347630069) and [this tweet](https://x.com/karpathy/status/2031135152349524125).
+```
+┌─────────────────┐      ┌──────────────────────────┐      ┌─────────────────────┐      ┌──────────────────┐
+│  1. 目标退化图像  │ ───▶ │ 2. degradation-simulator │ ───▶ │ 3. prepare.py        │ ───▶ │ 4. train.py       │
+│  (target.png)   │      │   识别退化 → params.json   │      │   WebDataset + 退化模拟 │      │   复原模型训练      │
+└─────────────────┘      └──────────────────────────┘      └─────────────────────┘      └──────────────────┘
+```
 
-## How it works
+- **Step 1-2**: 使用 `image-degradation-simulator` skill 分析目标退化图像，输出 `params.json`（退化流程参数）
+- **Step 3**: `prepare.py` 将 DIV2K 等数据集裁切打包为 WebDataset，根据 `params.json` 在线模拟退化，提供 `(inputs, targets, epoch)` 格式的 DataLoader
+- **Step 4**: `train.py` 训练图像复原模型（inputs=退化图, targets=clean 原图）
 
-The repo is deliberately kept small and only really has three files that matter:
+## 快速开始
 
-- **`prepare.py`** — fixed constants, one-time data prep (downloads training data, trains a BPE tokenizer), and runtime utilities (dataloader, evaluation). Not modified.
-- **`train.py`** — the single file the agent edits. Contains the full GPT model, optimizer (Muon + AdamW), and training loop. Everything is fair game: architecture, hyperparameters, optimizer, batch size, etc. **This file is edited and iterated on by the agent**.
-- **`program.md`** — baseline instructions for one agent. Point your agent here and let it go. **This file is edited and iterated on by the human**.
-
-By design, training runs for a **fixed 5-minute time budget** (wall clock, excluding startup/compilation), regardless of the details of your compute. The metric is **val_bpb** (validation bits per byte) — lower is better, and vocab-size-independent so architectural changes are fairly compared.
-
-If you are new to neural networks, this ["Dummy's Guide"](https://x.com/hooeem/status/2030720614752039185) looks pretty good for a lot more context.
-
-## Quick start
-
-**Requirements:** A single NVIDIA GPU (tested on H100), Python 3.10+, [uv](https://docs.astral.sh/uv/).
+**Requirements:** NVIDIA GPU, Python 3.10+, [uv](https://docs.astral.sh/uv/).
 
 ```bash
-
-# 1. Install uv project manager (if you don't already have it)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 2. Install dependencies
+# 1. 安装依赖
 uv sync
 
-# 3. Download data and train tokenizer (one-time, ~2 min)
+# 2. 准备数据集（裁切 + WebDataset 打包，首次运行约 5 分钟）
 uv run prepare.py
 
-# 4. Manually run a single training experiment (~5 min)
-uv run train.py
+# 3. 测试 DataLoader（用已有的 params.json 验证流水线）
+uv run prepare.py --demo
 ```
 
-If the above commands all work ok, your setup is working and you can go into autonomous research mode.
-
-## Running the agent
-
-Simply spin up your Claude/Codex or whatever you want in this repo (and disable all permissions), then you can prompt something like:
+## 项目结构
 
 ```
-Hi have a look at program.md and let's kick off a new experiment! let's do the setup first.
+prepare.py                              — 数据准备（裁切/WDS打包）+ DataLoader（退化模拟）+ 评估
+train.py                                — 复原模型定义 + 训练循环（agent 可修改）
+program.md                              — agent 指令
+pyproject.toml                          — 依赖
+x_distortion/                           — 退化算法库（35 种退化 × 5 级严重度）
+.claude/skills/image-degradation-simulator/  — 退化识别 skill
+    ├── SKILL.md                        — skill 指令
+    ├── scripts/
+    │   ├── analyze_degradation.py      — 定量分析退化图像
+    │   ├── apply_multi.py             — 应用多步退化
+    │   └── compare_degradation.py      — 对比退化纹理
+    └── references/
+        └── severity_mappings.md        — severity→物理参数映射表
 ```
 
-The `program.md` file is essentially a super lightweight "skill".
+## x_distortion
 
-## Project structure
+位于 `x_distortion/`，包含 35 种图像退化函数，每种支持 5 级严重度 (1–5)。输入输出均为 `np.ndarray, uint8, H×W×3, RGB, [0,255]`。
 
+### 快速使用
+
+```python
+import numpy as np
+from PIL import Image
+from x_distortion import add_distortion
+
+# 读取干净图像
+img = np.array(Image.open('clean.png').convert('RGB'), dtype=np.uint8)
+
+# 单步退化
+degraded = add_distortion(img, severity=3, distortion_name='blur_gaussian')
+
+# 多步退化（顺序很重要！先模糊再加噪声 ≠ 先噪声再模糊）
+for func, sev in [('blur_gaussian', 3), ('noise_gaussian_RGB', 2), ('compression_jpeg', 3)]:
+    img = add_distortion(img, severity=sev, distortion_name=func)
+
+Image.fromarray(img).save('degraded.png')
 ```
-prepare.py      — constants, data prep + runtime utilities (do not modify)
-train.py        — model, optimizer, training loop (agent modifies this)
-program.md      — agent instructions
-pyproject.toml  — dependencies
+
+### 退化类型一览
+
+| 类别 | 函数 | 说明 |
+|------|------|------|
+| blur | `blur_gaussian` | 高斯模糊 |
+| blur | `blur_motion` | 运动模糊（带随机角度） |
+| blur | `blur_glass` | 玻璃模糊 |
+| blur | `blur_lens` | 镜头模糊（径向） |
+| blur | `blur_zoom` | 缩放模糊 |
+| blur | `blur_jitter` | 抖动模糊 |
+| noise | `noise_gaussian_RGB` | RGB 通道独立高斯噪声 |
+| noise | `noise_gaussian_YCrCb` | YCrCb 空间高斯噪声（亮度权重不同） |
+| noise | `noise_speckle` | 散斑噪声 |
+| noise | `noise_spatially_correlated` | 空间相关噪声 |
+| noise | `noise_poisson` | 泊松噪声 |
+| noise | `noise_impulse` | 椒盐/脉冲噪声 |
+| compression | `compression_jpeg` | JPEG 压缩伪影 |
+| compression | `compression_jpeg_2000` | JPEG 2000 压缩伪影 |
+| brighten | `brightness_brighten_shift_HSV` | HSV 空间亮度提升 |
+| brighten | `brightness_brighten_shift_RGB` | RGB 空间亮度提升 |
+| brighten | `brightness_brighten_gamma_HSV` | HSV 空间 Gamma 提亮 |
+| brighten | `brightness_brighten_gamma_RGB` | RGB 空间 Gamma 提亮 |
+| darken | `brightness_darken_shift_HSV` | HSV 空间亮度降低 |
+| darken | `brightness_darken_shift_RGB` | RGB 空间亮度降低 |
+| darken | `brightness_darken_gamma_HSV` | HSV 空间 Gamma 压暗 |
+| darken | `brightness_darken_gamma_RGB` | RGB 空间 Gamma 压暗 |
+| contrast | `contrast_strengthen_scale` | 对比度增强（缩放） |
+| contrast | `contrast_strengthen_stretch` | 对比度增强（拉伸） |
+| contrast | `contrast_weaken_scale` | 对比度减弱（缩放） |
+| contrast | `contrast_weaken_stretch` | 对比度减弱（拉伸） |
+| saturation | `saturate_strengthen_HSV` | HSV 空间饱和度增强 |
+| saturation | `saturate_strengthen_YCrCb` | YCrCb 空间饱和度增强 |
+| saturation | `saturate_weaken_HSV` | HSV 空间饱和度减弱 |
+| saturation | `saturate_weaken_YCrCb` | YCrCb 空间饱和度减弱 |
+| other | `oversharpen` | 过度锐化 |
+| other | `pixelate` | 像素化 |
+| other | `quantization_otsu` | 量化（Otsu 阈值） |
+| other | `quantization_median` | 量化（中值分割） |
+| other | `quantization_hist` | 量化（直方图分割） |
+
+### Severity → 物理参数映射
+
+#### Blur
+
+| 函数 | 参数 | sev=1 | sev=2 | sev=3 | sev=4 | sev=5 |
+|------|------|-------|-------|-------|-------|-------|
+| `blur_gaussian` | sigma | 1 | 2 | 3 | 4 | 5 |
+| `blur_motion` | (radius, sigma) | (5,3) | (10,5) | (15,7) | (15,9) | (20,12) |
+| `blur_glass` | (sigma, shift, iter) | (0.7,1,1) | (0.9,2,1) | (1.2,2,2) | (1.4,3,2) | (1.6,4,2) |
+| `blur_lens` | radius | 2 | 3 | 4 | 6 | 8 |
+| `blur_zoom` | zoom_range | [1,1.03] | [1,1.06] | [1,1.10] | [1,1.15] | [1,1.21] |
+| `blur_jitter` | shift | 1 | 2 | 3 | 4 | 5 |
+
+#### Noise
+
+| 函数 | 参数 | sev=1 | sev=2 | sev=3 | sev=4 | sev=5 |
+|------|------|-------|-------|-------|-------|-------|
+| `noise_gaussian_RGB` | sigma | 0.05 | 0.1 | 0.15 | 0.2 | 0.25 |
+| `noise_gaussian_YCrCb` | sigma_l / sigma_r / sigma_b | 0.05/0.05/0.05 | 0.06/0.087/0.087 | 0.07/0.133/0.133 | 0.08/0.188/0.188 | 0.09/0.252/0.252 |
+| `noise_speckle` | sigma | 0.14 | 0.21 | 0.28 | 0.35 | 0.42 |
+| `noise_spatially_correlated` | sigma | 0.08 | 0.11 | 0.14 | 0.18 | 0.22 |
+| `noise_poisson` | c | 80 | 60 | 40 | 25 | 15 |
+| `noise_impulse` | amount | 0.01 | 0.03 | 0.05 | 0.07 | 0.10 |
+
+#### Compression
+
+| 函数 | 参数 | sev=1 | sev=2 | sev=3 | sev=4 | sev=5 |
+|------|------|-------|-------|-------|-------|-------|
+| `compression_jpeg` | quality | 25 | 18 | 12 | 8 | 5 |
+| `compression_jpeg_2000` | quality (dB) | 29 | 27.5 | 26 | 24.5 | 23 |
+
+#### Brightness / Contrast / Saturation / Other
+
+| 函数 | 参数 | sev=1 | sev=2 | sev=3 | sev=4 | sev=5 |
+|------|------|-------|-------|-------|-------|-------|
+| `brightness_brighten_gamma_RGB` | gamma | 0.8 | 0.7 | 0.6 | 0.45 | 0.3 |
+| `brightness_darken_gamma_RGB` | gamma | 1.4 | 1.7 | 2.1 | 2.6 | 3.2 |
+| `contrast_strengthen_scale` | scale | 1.4 | 1.7 | 2.1 | 2.6 | 4.0 |
+| `contrast_weaken_scale` | scale | 0.75 | 0.6 | 0.45 | 0.3 | 0.2 |
+| `saturate_strengthen_HSV` | scale | 3.0 | 6.0 | 12.0 | 20.0 | 64.0 |
+| `saturate_weaken_HSV` | scale | 0.7 | 0.55 | 0.4 | 0.2 | 0.0 |
+| `oversharpen` | amount | 2 | 2.8 | 4 | 6 | 8 |
+| `pixelate` | scale_factor | 0.5 | 0.4 | 0.3 | 0.25 | 0.2 |
+| `quantization_otsu` | num_classes | 15 | 11 | 8 | 5 | 3 |
+| `quantization_median` | num_classes | 20 | 15 | 10 | 6 | 3 |
+| `quantization_hist` | num_classes | 24 | 16 | 8 | 6 | 4 |
+
+完整参数参见 `.claude/skills/image-degradation-simulator/references/severity_mappings.md`。
+
+## DataLoader 使用
+
+```python
+from prepare import make_dataloader_restoration
+
+loader = make_dataloader_restoration(
+    params_path='path/to/params.json',           # degradation-simulator 输出
+    shards_url='datasets/DIV2K/DIV2K_train_HR_wds/train-*.tar',
+    batch_size=16,
+)
+
+for inputs, targets, epoch in loader:
+    # inputs: [B, 3, H, W] 退化图像 (float32, [0,1])
+    # targets: [B, 3, H, W] 干净原图 (float32, [0,1])
+    # epoch: 当前 epoch 编号（无穷循环，递增）
+    ...
 ```
-
-## Design choices
-
-- **Single file to modify.** The agent only touches `train.py`. This keeps the scope manageable and diffs reviewable.
-- **Fixed time budget.** Training always runs for exactly 5 minutes, regardless of your specific platform. This means you can expect approx 12 experiments/hour and approx 100 experiments while you sleep. There are two upsides of this design decision. First, this makes experiments directly comparable regardless of what the agent changes (model size, batch size, architecture, etc). Second, this means that autoresearch will find the most optimal model for your platform in that time budget. The downside is that your runs (and results) become not comparable to other people running on other compute platforms.
-- **Self-contained.** No external dependencies beyond PyTorch and a few small packages. No distributed training, no complex configs. One GPU, one file, one metric.
-
-## Platform support
-
-This code currently requires that you have a single NVIDIA GPU. In principle it is quite possible to support CPU, MPS and other platforms but this would also bloat the code. I'm not 100% sure that I want to take this on personally right now. People can reference (or have their agents reference) the full/parent nanochat repository that has wider platform support and shows the various solutions (e.g. a Flash Attention 3 kernels fallback implementation, generic device support, autodetection, etc.), feel free to create forks or discussions for other platforms and I'm happy to link to them here in the README in some new notable forks section or etc.
-
-Seeing as there seems to be a lot of interest in tinkering with autoresearch on much smaller compute platforms than an H100, a few extra words. If you're going to try running autoresearch on smaller computers (Macbooks etc.), I'd recommend one of the forks below. On top of this, here are some recommendations for how to tune the defaults for much smaller models for aspiring forks:
-
-1. To get half-decent results I'd use a dataset with a lot less entropy, e.g. this [TinyStories dataset](https://huggingface.co/datasets/karpathy/tinystories-gpt4-clean). These are GPT-4 generated short stories. Because the data is a lot narrower in scope, you will see reasonable results with a lot smaller models (if you try to sample from them after training).
-2. You might experiment with decreasing `vocab_size`, e.g. from 8192 down to 4096, 2048, 1024, or even - simply byte-level tokenizer with 256 possibly bytes after utf-8 encoding.
-3. In `prepare.py`, you'll want to lower `MAX_SEQ_LEN` a lot, depending on the computer even down to 256 etc. As you lower `MAX_SEQ_LEN`, you may want to experiment with increasing `DEVICE_BATCH_SIZE` in `train.py` slightly to compensate. The number of tokens per fwd/bwd pass is the product of these two.
-4. Also in `prepare.py`, you'll want to decrease `EVAL_TOKENS` so that your validation loss is evaluated on a lot less data.
-5. In `train.py`, the primary single knob that controls model complexity is the `DEPTH` (default 8, here). A lot of variables are just functions of this, so e.g. lower it down to e.g. 4.
-6. You'll want to most likely use `WINDOW_PATTERN` of just "L", because "SSSL" uses alternating banded attention pattern that may be very inefficient for you. Try it.
-7. You'll want to lower `TOTAL_BATCH_SIZE` a lot, but keep it powers of 2, e.g. down to `2**14` (~16K) or so even, hard to tell.
-
-I think these would be the reasonable hyperparameters to play with. Ask your favorite coding agent for help and copy paste them this guide, as well as the full source code.
-
-## Notable forks
-
-- [miolini/autoresearch-macos](https://github.com/miolini/autoresearch-macos) (MacOS)
-- [trevin-creator/autoresearch-mlx](https://github.com/trevin-creator/autoresearch-mlx) (MacOS)
-- [jsegov/autoresearch-win-rtx](https://github.com/jsegov/autoresearch-win-rtx) (Windows)
-- [andyluo7/autoresearch](https://github.com/andyluo7/autoresearch) (AMD)
 
 ## License
 

@@ -1,0 +1,50 @@
+{
+  "skill_name": "image-degradation-simulator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我有一张降质图像 /tmp/skill_test_targets/eval1_target.png，帮我分析它遭受了什么类型的图像降质以及严重程度。然后用 x_distortion 对 tests/test_image.png 进行降质模拟，反复调整参数直到效果非常接近目标。保存结果到 degradation_results/eval1/。不要问我任何问题，直接分析并开始迭代。",
+      "expected_output": "自主分析目标图像的降质特征，使用迭代方式调整 distortion 类型和 severity 对 tests/test_image.png 进行降质模拟，最终 params.json 中记录正确的 distortion 类型和 severity，输出保存到 degradation_results/eval1/",
+      "files": [],
+      "assertions": [
+        {"id": "correct_blur_type", "description": "Identifies blur as the primary degradation category"},
+        {"id": "correct_blur_function", "description": "Identifies Gaussian blur specifically"},
+        {"id": "severity_within_range", "description": "Blur severity is within ±1 of ground truth (severity=3)"},
+        {"id": "params_json_exists", "description": "params.json is created with pipeline field"},
+        {"id": "simulated_image_exists", "description": "Simulated degraded image is saved"},
+        {"id": "iterations_saved", "description": "At least 2 iteration images are saved"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "这张降质图像 /tmp/skill_test_targets/eval2_target.png 的画质明显有问题，看起来被多种降质叠加了。帮我仔细分析具体有哪些降质类型、它们的严重程度、以及叠加顺序。然后用 x_distortion 对 tests/test_image.png 模拟同样的降质管道，反复调整直到模拟结果和目标的视觉特征非常接近。结果保存到 degradation_results/eval2/。不要问我任何问题，直接开始分析。",
+      "expected_output": "识别出多种降质类型以及正确的叠加顺序，通过迭代调整参数逼近目标，params.json 记录完整的 pipeline，结果保存到 degradation_results/eval2/",
+      "files": [],
+      "assertions": [
+        {"id": "multi_distortion_detected", "description": "Identifies at least 2 distinct degradations"},
+        {"id": "noise_detected", "description": "Identifies noise as one of the degradations"},
+        {"id": "compression_detected", "description": "Identifies compression as one of the degradations"},
+        {"id": "correct_order_noise_before_compression", "description": "Noise is applied before compression"},
+        {"id": "params_json_exists", "description": "params.json is created with pipeline field"},
+        {"id": "simulated_image_exists", "description": "Simulated degraded image is saved"},
+        {"id": "iterations_saved", "description": "At least 3 iterations saved for multi-degradation case"}
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "我在研究这张图像的降质特征 /tmp/skill_test_targets/eval3_target.png，需要你用 x_distortion 对 tests/test_image.png 进行降质模拟来复现它的降质效果。请反复反思和迭代，把每轮调整的理由记录下来。最终结果、所有中间迭代图像、完整的参数 JSON 都保存到 degradation_results/eval3/。不要问我任何问题，直接开始分析和迭代。",
+      "expected_output": "正确识别多种降质类型及叠加顺序，通过多轮反思迭代调整参数，最终保存完整的 pipeline 参数和迭代过程到 degradation_results/eval3/",
+      "files": [],
+      "assertions": [
+        {"id": "triple_distortion_detected", "description": "Identifies at least 3 distinct degradations"},
+        {"id": "motion_blur_detected", "description": "Identifies motion blur (not just generic blur)"},
+        {"id": "impulse_noise_detected", "description": "Identifies impulse/salt&pepper noise"},
+        {"id": "compression_detected", "description": "Identifies JPEG compression"},
+        {"id": "correct_order", "description": "Pipeline order is blur → noise → compression"},
+        {"id": "reflection_json_exists", "description": "reflection.json is created with iteration history"},
+        {"id": "reflection_has_analysis", "description": "reflection.json contains initial_analysis with suspected and ruled_out"},
+        {"id": "iterations_saved", "description": "At least 3 iterations saved for complex triple-degradation"}
+      ]
+    }
+  ]
+}
