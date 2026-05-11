@@ -28,6 +28,8 @@ from x_distortion import add_distortion
 # ---------------------------------------------------------------------------
 
 # Data
+# Training degradation. Set to None for random pipeline (blur/noise/compression,
+# 1/2/3 degradations with equal probability, random severity 1-5 per sample).
 PARAMS_PATH = ".claude/skills/image-degradation-simulator-workspace/iteration-3/eval-16/with_skill/outputs/params.json"
 TRAIN_SHARDS = "datasets/DIV2K/DIV2K_train_HR_wds/train-*.tar"
 
