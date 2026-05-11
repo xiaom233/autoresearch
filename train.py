@@ -28,9 +28,10 @@ from x_distortion import add_distortion
 # ---------------------------------------------------------------------------
 
 # Data
-# Training degradation. Set to None for random pipeline (blur/noise/compression,
-# 1/2/3 degradations with equal probability, random severity 1-5 per sample).
-PARAMS_PATH = ".claude/skills/image-degradation-simulator-workspace/iteration-3/eval-16/with_skill/outputs/params.json"
+# Training degradation:
+#   None = random pipeline per sample (blind restoration baseline)
+#   "path/to/params.json" = fixed degradation from skill output (targeted)
+PARAMS_PATH = None
 TRAIN_SHARDS = "datasets/DIV2K/DIV2K_train_HR_wds/train-*.tar"
 
 # Validation: standard SR benchmarks + DIV2K valid. Uses HR/original clean images
@@ -52,7 +53,7 @@ VAL_COUNT = 0                # max images per val set (0 = use all)
 VAL_PARAMS_PATH = PARAMS_PATH  # replace with ground-truth params if available
 
 # Training
-TIME_BUDGET = 300            # training wall-clock budget in seconds
+TIME_BUDGET = 600            # training wall-clock budget in seconds (10 min baseline)
 BATCH_SIZE = 16
 NUM_WORKERS = 4
 SHUFFLE_BUFFER = 1000
