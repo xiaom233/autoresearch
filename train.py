@@ -160,8 +160,11 @@ def compute_ssim(pred, target):
 
 @torch.no_grad()
 def evaluate(model, val_dataset, device, autocast_ctx):
-    """Compute PSNR/SSIM in RGB and Y over full validation set."""
-    model.eval()
+    """Compute PSNR/SSIM in RGB and Y over full validation set.
+    Uses eager-mode model (uncompiled) to avoid recompilation for variable image sizes.
+    """
+    eval_model = getattr(model, '_orig_mod', model)  # uncompiled for variable-size eval
+    eval_model.eval()
     metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
     n = len(val_dataset)
     for i in range(n):
@@ -169,15 +172,12 @@ def evaluate(model, val_dataset, device, autocast_ctx):
         degraded = degraded.unsqueeze(0).to(device)
         clean = clean.unsqueeze(0).to(device)
         with autocast_ctx:
-            pred = model(degraded)
+            pred = eval_model(degraded)
         pred_f = pred.float()
         clean_f = clean.float()
-        # RGB PSNR
         metrics["psnr_rgb"] += compute_psnr(pred_f, clean_f)
-        # Y PSNR
         pred_y, clean_y = rgb_to_y(pred_f, clean_f)
         metrics["psnr_y"] += compute_psnr(pred_y, clean_y)
-        # SSIM (one image, squeeze batch dim)
         metrics["ssim_rgb"] += compute_ssim(pred_f[0], clean_f[0])
         metrics["ssim_y"] += compute_ssim(pred_y[0], clean_y[0])
     model.train()
@@ -396,7 +396,7 @@ model.to(device)
 num_params = sum(p.numel() for p in model.parameters())
 print(f"Model params: {num_params:,}")
 
-model = torch.compile(model, dynamic=True)   # dynamic=True for variable-size validation images
+model = torch.compile(model, dynamic=False)
 
 # Optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE,
