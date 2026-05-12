@@ -552,7 +552,7 @@ while True:
         ckpt_file = f"ckpt_step{step}.pt"
         torch.save({"step": step, "model": model.state_dict(), "optimizer": optimizer.state_dict()}, ckpt_file)
         m = evaluate(model, val_dataset, device, autocast_ctx)
-        print(f"\n  [Ckpt @ step {step}/{MAX_STEPS}] {fmt_metrics(m)}")
+        print(f"\n  [Ckpt @ step {step}/{MAX_STEPS}] {fmt_metrics(m)}", flush=True)
         if best_checkpoint["metrics"] is None or m["psnr_rgb"] > best_checkpoint["metrics"]["psnr_rgb"]:
             best_checkpoint = {"step": step, "metrics": m}
 
