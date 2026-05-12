@@ -20,8 +20,30 @@ import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
 
+import random as _random
+
 from prepare import load_degradation_params, make_dataloader_restoration, scandir
 from x_distortion import add_distortion
+
+# Monkey-patch: category-balanced random pipeline (blur/noise/compression equal weight)
+import prepare as _prepare
+_DEG_CATS = {
+    "blur": ["blur_gaussian", "blur_motion", "blur_glass", "blur_lens", "blur_zoom", "blur_jitter"],
+    "noise": ["noise_gaussian_RGB", "noise_gaussian_YCrCb", "noise_speckle",
+              "noise_spatially_correlated", "noise_poisson", "noise_impulse"],
+    "compression": ["compression_jpeg", "compression_jpeg_2000"],
+}
+def _balanced_random_pipeline():
+    n = _random.choices([1, 2, 3], weights=[0.33, 0.33, 0.34])[0]
+    cats = list(_DEG_CATS.keys())
+    pipeline = []
+    for _ in range(n):
+        cat = _random.choice(cats)
+        func = _random.choice(_DEG_CATS[cat])
+        sev = _random.randint(1, 5)
+        pipeline.append((func, sev))
+    return pipeline
+_prepare.generate_random_pipeline = _balanced_random_pipeline
 
 # ---------------------------------------------------------------------------
 # Hyperparameters (edit these directly — the agent modifies this section)
