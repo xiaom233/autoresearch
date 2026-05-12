@@ -382,12 +382,12 @@ print(f"AMP dtype: {AMP_DTYPE}")
 print(f"Device: {torch.cuda.get_device_name(device)}")
 print(f"Params: {PARAMS_PATH}")
 print(f"Train shards: {TRAIN_SHARDS}")
-print(f"Val dirs: {len(VAL_DIRS)} sets, {VAL_COUNT if VAL_COUNT else 'all'} images each")
 
-# Build validation dataset (full images, evaluated one at a time)
-val_dataset = ValDataset(VAL_DIRS, count=VAL_COUNT, params_path=VAL_PARAMS_PATH)
-val_x, val_y = val_dataset[0]
-print(f"Val: {len(val_dataset)} images, example shape {tuple(val_x.shape)}")
+# Validation: quick (Set14 only, for intermediate checkpoints) + full (all sets)
+VAL_QUICK_DIRS = ["datasets/Set14/GTmod4"]
+val_quick = ValDataset(VAL_QUICK_DIRS, count=0, params_path=VAL_PARAMS_PATH)
+val_full = ValDataset(VAL_DIRS, count=VAL_COUNT, params_path=VAL_PARAMS_PATH)
+print(f"Val quick: {len(val_quick)} images  |  Val full: {len(val_full)} images")
 
 # Model
 model = RestoreNet(in_ch=3, embed_dim=EMBED_DIM, depths=DEPTHS,
@@ -547,12 +547,12 @@ while True:
             train_psnr = compute_psnr(pred.float(), y)
             best_train_psnr = max(best_train_psnr, train_psnr)
 
-    # Checkpoint: save model + run full validation
+    # Checkpoint: save + quick validation on Set14 only
     if step > 0 and step in checkpoint_steps:
         ckpt_file = f"ckpt_step{step}.pt"
-        torch.save({"step": step, "model": model.state_dict(), "optimizer": optimizer.state_dict()}, ckpt_file)
-        m = evaluate(model, val_dataset, device, autocast_ctx)
-        print(f"\n  [Ckpt @ step {step}/{MAX_STEPS}] {fmt_metrics(m)}", flush=True)
+        torch.save({"step": step, "model": getattr(model, '_orig_mod', model).state_dict()}, ckpt_file)
+        m = evaluate(model, val_quick, device, autocast_ctx)
+        print(f"\n  [Ckpt @ step {step}/{MAX_STEPS}] Set14: {fmt_metrics(m)}", flush=True)
         if best_checkpoint["metrics"] is None or m["psnr_rgb"] > best_checkpoint["metrics"]["psnr_rgb"]:
             best_checkpoint = {"step": step, "metrics": m}
 
@@ -587,23 +587,19 @@ while True:
 print()
 
 # ---------------------------------------------------------------------------
-# Final evaluation (if not already done at last checkpoint)
+# Final evaluation — load best checkpoint, run on ALL validation datasets
 # ---------------------------------------------------------------------------
 
-if best_checkpoint["metrics"] is None:
-    print("Running final validation...")
-    m = evaluate(model, val_dataset, device, autocast_ctx)
-    best_checkpoint = {"step": step, "metrics": m}
+if best_checkpoint["metrics"] is not None:
+    ckpt_file = f"ckpt_step{best_checkpoint['step']}.pt"
+    if os.path.exists(ckpt_file):
+        ckpt = torch.load(ckpt_file, map_location=device, weights_only=True)
+        getattr(model, '_orig_mod', model).load_state_dict(ckpt["model"])
+        print(f"\nLoaded best checkpoint: step {best_checkpoint['step']} "
+              f"(Set14 PSNR_RGB={best_checkpoint['metrics']['psnr_rgb']:.2f})", flush=True)
 
-# Load best checkpoint for final metrics
-ckpt_file = f"ckpt_step{best_checkpoint['step']}.pt"
-if os.path.exists(ckpt_file):
-    ckpt = torch.load(ckpt_file, map_location=device, weights_only=True)
-    model.load_state_dict(ckpt["model"])
-    print(f"\nLoaded best checkpoint: step {best_checkpoint['step']}")
-
-# Final eval with best model
-final_metrics = evaluate(model, val_dataset, device, autocast_ctx)
+print(f"Running full validation on {len(val_full)} images...", flush=True)
+final_metrics = evaluate(model, val_full, device, autocast_ctx)
 total_imgs = step * BATCH_SIZE
 
 # ---------------------------------------------------------------------------
