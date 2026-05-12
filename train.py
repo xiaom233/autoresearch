@@ -187,6 +187,22 @@ def fmt_metrics(m):
     return (f"PSNR_RGB={m['psnr_rgb']:.2f} PSNR_Y={m['psnr_y']:.2f} "
             f"SSIM_RGB={m['ssim_rgb']:.4f} SSIM_Y={m['ssim_y']:.4f}")
 
+def evaluate_all(model, val_sets, device, autocast_ctx):
+    """Evaluate per-dataset and overall. Returns (per_set_dict, overall_dict)."""
+    per_set = {}
+    overall = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
+    total_n = 0
+    for name, ds in val_sets:
+        m = evaluate(model, ds, device, autocast_ctx)
+        n = len(ds)
+        per_set[name] = m
+        for k in overall:
+            overall[k] += m[k] * n
+        total_n += n
+    for k in overall:
+        overall[k] /= total_n
+    return per_set, overall
+
 
 # ---------------------------------------------------------------------------
 # Model — simplified SwinIR for image restoration (no upsampling, window SDPA)
@@ -383,11 +399,13 @@ print(f"Device: {torch.cuda.get_device_name(device)}")
 print(f"Params: {PARAMS_PATH}")
 print(f"Train shards: {TRAIN_SHARDS}")
 
-# Validation: quick (Set14 only, for intermediate checkpoints) + full (all sets)
+# Validation: quick (Set14 only, for intermediate checkpoints) + per-dataset full sets
 VAL_QUICK_DIRS = ["datasets/Set14/GTmod4"]
 val_quick = ValDataset(VAL_QUICK_DIRS, count=0, params_path=VAL_PARAMS_PATH)
-val_full = ValDataset(VAL_DIRS, count=VAL_COUNT, params_path=VAL_PARAMS_PATH)
-print(f"Val quick: {len(val_quick)} images  |  Val full: {len(val_full)} images")
+val_full_sets = [(d.split("/")[-2], ValDataset([d], count=VAL_COUNT, params_path=VAL_PARAMS_PATH))
+                  for d in VAL_DIRS]
+total_val = sum(len(v[1]) for v in val_full_sets)
+print(f"Val quick: {len(val_quick)} images  |  Val full: {total_val} images across {len(val_full_sets)} sets")
 
 # Model
 model = RestoreNet(in_ch=3, embed_dim=EMBED_DIM, depths=DEPTHS,
@@ -600,9 +618,18 @@ if best_checkpoint["metrics"] is not None:
         print(f"\nLoaded best checkpoint: step {best_checkpoint['step']} "
               f"(Set14 PSNR_RGB={best_checkpoint['metrics']['psnr_rgb']:.2f})", flush=True)
 
-print(f"Running full validation on {len(val_full)} images...", flush=True)
-final_metrics = evaluate(model, val_full, device, autocast_ctx)
+print(f"Running full validation on {total_val} images across {len(val_full_sets)} sets...", flush=True)
+per_set, final_metrics = evaluate_all(model, val_full_sets, device, autocast_ctx)
 total_imgs = step * BATCH_SIZE
+
+# Print per-dataset table
+print(f"\n{'Dataset':<14} {'PSNR_RGB':>10} {'PSNR_Y':>10} {'SSIM_RGB':>10} {'SSIM_Y':>10}")
+print("-" * 58)
+for name in [v[0] for v in val_full_sets]:
+    m = per_set[name]
+    print(f"{name:<14} {m['psnr_rgb']:>10.2f} {m['psnr_y']:>10.2f} {m['ssim_rgb']:>10.4f} {m['ssim_y']:>10.4f}")
+print("-" * 58)
+print(f"{'Overall':<14} {final_metrics['psnr_rgb']:>10.2f} {final_metrics['psnr_y']:>10.2f} {final_metrics['ssim_rgb']:>10.4f} {final_metrics['ssim_y']:>10.4f}")
 
 # ---------------------------------------------------------------------------
 # Summary
