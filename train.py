@@ -423,8 +423,10 @@ if EPOCH_BUDGET > 0:
     VAL_INTERVAL = max(1, MAX_STEPS // CHECKPOINT_INTERVAL)
     USE_TIME_BUDGET = False
 else:
+    # TIME_BUDGET mode: estimate steps from budget, apply checkpoint interval
+    est_steps = int(TIME_BUDGET / 0.35)  # rough estimate at ~350ms/step
+    VAL_INTERVAL = max(1, est_steps // CHECKPOINT_INTERVAL) if CHECKPOINT_INTERVAL > 0 else 10 ** 9
     MAX_STEPS = 10 ** 9
-    VAL_INTERVAL = 10 ** 9
     USE_TIME_BUDGET = True
 
 print(f"Regime: {'time_budget='+str(TIME_BUDGET)+'s' if USE_TIME_BUDGET else 'epoch_budget='+str(EPOCH_BUDGET)+' ('+str(MAX_STEPS)+' steps)'}")
