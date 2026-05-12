@@ -2,14 +2,39 @@
 
 Autonomous image restoration research: train models to recover clean images from degraded inputs. The agent edits `train.py`, the goal is maximizing `val_psnr_db`. Default: 1 epoch ≈ 45 min (44 min training + 1 min eval).
 
-## Pipeline overview
+## Full research pipeline (6 phases)
 
 ```
-┌──────────────┐    ┌──────────────────┐    ┌──────────────┐    ┌────────────┐
-│  prepare.py  │───▶│  degradation     │───▶│  train.py    │───▶│  results   │
-│  DIV2K→WDS   │    │  random / skill  │    │  SwinIR 10min │    │  .tsv log  │
-└──────────────┘    └──────────────────┘    └──────────────┘    └────────────┘
+Phase 1           Phase 2            Phase 3
+┌──────────┐     ┌──────────┐       ┌──────────────┐
+│ 随机退化  │     │ 目标退化  │       │ 盲模型测试     │
+│ 训练      │     │ 定义      │       │ 特定退化      │
+│ NONE     │     │ params.  │       │ VAL_PARAMS   │
+│ → M_blind│     │ json     │       │ → PSNR_baseln│
+└──────────┘     └──────────┘       └──────────────┘
+                                          │
+              ┌───────────────────────────┘
+              ▼
+Phase 4                    Phase 5                    Phase 6
+┌──────────────────┐     ┌──────────────────┐       ┌──────────────┐
+│ 盲退化识别         │     │ 针对性优化         │       │ 效果验证      │
+│ skill 分析退化图   │     │ experiment loop   │       │ M_spec vs    │
+│ → predicted_     │     │ 架构/损失/超参搜索  │       │ M_blind      │
+│   params.json    │     │ → M_specialist    │       │ spec >> blind│
+└──────────────────┘     └──────────────────┘       └──────────────┘
 ```
+
+**Phase 1 — Blind baseline training**: Train with `PARAMS_PATH = None` (random per-sample degradations). Model learns general blind restoration. ~45 min.
+
+**Phase 2 — Target degradation definition**: Define a specific degradation pipeline via `image-degradation-simulator` skill or manually. Saved as `params.json`.
+
+**Phase 3 — Baseline testing**: Test the blind model (`M_blind`) on the specific degradation (`VAL_PARAMS_PATH = "params.json"`). Result: baseline PSNR without any specialized optimization.
+
+**Phase 4 — Blind degradation identification**: Given an unknown degraded image, use `image-degradation-simulator` skill to identify degradation types, severities, and order. Output: `predicted_params.json`. This is the core "auto" capability.
+
+**Phase 5 — Targeted optimization (experiment loop)**: Use `PARAMS_PATH = "predicted_params.json"` to train a specialist model. Run experiment loop: modify `train.py`, train, evaluate, keep/discard. Goal: maximize PSNR on the target degradation.
+
+**Phase 6 — Validation**: Compare specialist vs blind baseline on the same degradation. Success: `PSNR_specialist >> PSNR_baseline`. This proves the auto-research system effectively identifies AND optimizes for arbitrary degradations.
 
 ### Step 1 — Data preparation (one-time, `prepare.py`)
 
