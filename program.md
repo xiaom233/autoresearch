@@ -151,6 +151,56 @@ LOOP FOREVER:
 
 **NEVER STOP**: Do not ask "should I keep going?". The human may be asleep. Run indefinitely until interrupted. ~6 experiments/hour, ~50 overnight.
 
+## Archiving experiments
+
+After a batch of experiments completes, archive everything into an `expN/` folder and summarize findings.
+
+### Folder structure
+
+```
+exp1/
+├── degradation/
+│   ├── pipeline.json         ← degradation definition
+│   ├── sample1_clean.png     ← example clean images
+│   ├── sample1_degraded.png  ← degraded counterparts
+│   └── ...
+├── experiments/
+│   ├── run_experiments.py    ← experiment runner script
+│   ├── baseline_run.log      ← baseline training log
+│   ├── final_model.log       ← best combined model log
+│   └── exp_*.log             ← all individual experiment logs
+├── results/
+│   └── results.tsv           ← tab-separated results
+└── model/
+    └── train.py              ← final training script snapshot
+```
+
+### Archival steps
+
+1. Create `expN/` folder with subdirectories: `degradation/`, `experiments/`, `results/`, `model/`.
+2. Copy `params.json` and a few degraded/clean example image pairs to `degradation/`.
+3. Copy all experiment logs (`logs/exp_*.log`), baseline log, and final model log to `experiments/`.
+4. Copy `results.tsv` to `results/`.
+5. Copy `train.py` and `run_experiments.py` to `model/` and `experiments/` respectively.
+
+**IMPORTANT**: `exp*/` and `logs/` are in `.gitignore`. Do NOT commit them. They stay local.
+
+### Writing the summary
+
+Create `summarize/expN_summarize.md` (this folder IS tracked by git):
+
+Sections to include:
+1. **Degradation Pipeline** — the degradation definition, function names, severities
+2. **Model Architecture** — brief description, key hyperparameters
+3. **Training Setup** — data, batch size, time budget, optimizer
+4. **Experiment Results** — table per round with PSNR, delta, VRAM
+5. **Key Findings** — what worked, what didn't, insights
+6. **Final Model** — best configuration and metrics
+7. **Infrastructure** — GPU count, total compute time
+8. **File Index** — folder structure map
+
+Commit the summary: `git add summarize/ && git commit -m "docs: add expN summary"`
+
 ## Current default hyperparameters (train.py)
 
 ```
