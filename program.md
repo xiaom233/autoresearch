@@ -1,6 +1,6 @@
 # autoresearch — Image Restoration
 
-Autonomous image restoration research: train models to recover clean images from degraded inputs. The agent edits `train.py`, each run is 10 minutes on a single GPU, the goal is maximizing `val_psnr_db`.
+Autonomous image restoration research: train models to recover clean images from degraded inputs. The agent edits `train.py`, the goal is maximizing `val_psnr_db`. Default: 1 epoch ≈ 45 min (44 min training + 1 min eval).
 
 ## Pipeline overview
 
@@ -49,13 +49,14 @@ Default config (~455K params): `EMBED_DIM=64`, `DEPTHS=(2,2,2,2)`, `NUM_HEADS=(4
 
 ### Step 4 — Training loop
 
-- **Time budget**: 600s (10 min), enforced by wall clock
-- **Loss**: L1
+- **Training budget**: `EPOCH_BUDGET=1` (~45 min, 7,547 steps). Set to 0 for `TIME_BUDGET` fallback (seconds).
+- **Checkpoints**: `CHECKPOINT_INTERVAL=4` times per epoch. Intermediate validations on Set14 only (14 images, fast). Final evaluation on all 6 benchmarks.
+- **Loss**: L1 (configurable via `LOSS_FN`: l1, mse, huber, l1+mse, l1+fft, l1+edge)
 - **Optimizer**: AdamW (betas 0.9/0.999, weight decay 1e-4)
-- **LR schedule**: linear warmup 100 steps → cosine decay
-- **Mixed precision**: bfloat16 autocast
-- **Evaluation**: PSNR on 428 full-resolution images from 6 benchmarks (Set5, Set14, B100, Urban100, Manga109, DIV2K), degraded with `VAL_PARAMS_PATH`
-- **Metrics logged**: `val_psnr_db`, `best_train_psnr`, `best_val_psnr`, `final_loss`, `training_seconds`, `peak_vram_mb`, `num_steps`, `num_params_M`
+- **LR schedule**: linear warmup 100 steps → cosine decay. Set `LR_SCHEDULE="constant"` for no decay.
+- **Mixed precision**: bfloat16 autocast (`AMP_DTYPE="bfloat16"` or `"float32"`)
+- **Evaluation**: Per-dataset PSNR/SSIM in RGB + YCbCr (BT.601) on 737 full-resolution images from 6 benchmarks. GPU-accelerated.
+- **Metrics logged**: `psnr_rgb`, `psnr_y`, `ssim_rgb`, `ssim_y`, per-dataset breakdown, `best_step`, `peak_vram_mb`, `num_steps`, `num_params_M`
 
 ## Setup
 
@@ -70,7 +71,7 @@ To set up a new experiment:
    - `x_distortion/` — degradation library. Read-only.
 4. **Verify data exists**: `datasets/DIV2K/DIV2K_train_HR_wds/` must contain tar shards. If not, tell the human: `uv run prepare.py`.
 5. **Initialize results.tsv**: Create with header `commit\tval_psnr_db\tmemory_gb\tstatus\tdescription`.
-6. **Run baseline**: Set `PARAMS_PATH = None`, `TIME_BUDGET = 600`, run `uv run train.py > run.log 2>&1`. Record result.
+6. **Run baseline**: Set `PARAMS_PATH = None`, `EPOCH_BUDGET = 1`, run `uv run train.py > run.log 2>&1`. Record result.
 7. **Start the loop**.
 
 ## What you CAN and CANNOT do
@@ -97,22 +98,36 @@ To set up a new experiment:
 ## Output format
 
 ```
+Dataset         PSNR_RGB    PSNR_Y   SSIM_RGB   SSIM_Y
+----------------------------------------------------------
+Set5              26.50     27.10      0.7890    0.8012
+Set14             25.80     26.30      0.7456    0.7623
+B100              24.90     25.40      0.7123    0.7301
+Urban100          25.10     25.70      0.7567    0.7789
+Manga109          26.20     26.80      0.8012    0.8156
+DIV2K             27.30     27.90      0.8234    0.8401
+----------------------------------------------------------
+Overall           25.97     26.53      0.7714    0.7880
 ---
-val_psnr_db:       26.33
+best_step:         7544
+psnr_rgb:          25.97
+psnr_y:            26.53
+ssim_rgb:          0.7714
+ssim_y:            0.7880
 best_train_psnr:   30.12
-best_val_psnr:     26.45
 final_loss:        0.030426
-training_seconds:  600.1
-total_seconds:     625.9
-peak_vram_mb:      4520.2
-num_steps:         5652
+training_seconds:  2619.1
+total_seconds:     3250.5
+peak_vram_mb:      14182.0
+num_steps:         7547
 num_params_M:      0.5
-total_imgs:        90432
+total_imgs:        120752
 batch_size:        16
 learning_rate:     0.001
+val_psnr_db:       25.97
 ```
 
-Extract key metrics: `grep "^val_psnr_db:\|^peak_vram_mb:\|^num_steps:\|^num_params_M:" run.log`
+Extract key metrics: `grep "^psnr_rgb:\|^psnr_y:\|^ssim_rgb:\|^ssim_y:\|^val_psnr_db:\|^peak_vram_mb:\|^num_steps:\|^num_params_M:" run.log`
 
 ## Logging results
 
@@ -145,11 +160,11 @@ LOOP FOREVER:
 9. If equal or worse → `git reset --hard HEAD~1` (discard).
 10. Repeat.
 
-**Timeout**: ~10 min per experiment. Kill if >15 min, treat as failure.
+**Timeout**: ~50 min per experiment (1 epoch + eval). Kill if >75 min, treat as failure. For quick tests, use `TIME_BUDGET` mode (set `EPOCH_BUDGET=0`).
 
 **Crashes**: Fix trivial bugs (typos, imports) and re-run. Broken ideas → log "crash", move on.
 
-**NEVER STOP**: Do not ask "should I keep going?". The human may be asleep. Run indefinitely until interrupted. ~6 experiments/hour, ~50 overnight.
+**NEVER STOP**: Do not ask "should I keep going?". The human may be asleep. Run indefinitely until interrupted. ~1 experiment/hour/GPU, ~200 overnight with 8 GPUs.
 
 ## Archiving experiments
 
@@ -207,12 +222,12 @@ Commit the summary: `git add summarize/ && git commit -m "docs: add expN summary
 PARAMS_PATH = None           # random degradation (blind restoration)
 TRAIN_SHARDS = "datasets/DIV2K/DIV2K_train_HR_wds/train-*.tar"
 
-VAL_DIRS = [                 # 6 benchmarks, 428 full images total
+VAL_DIRS = [                 # 6 benchmarks, 737 full images total
     "datasets/Set5/GTmod4", "datasets/Set14/GTmod4",
     "datasets/B100/GTmod4", "datasets/Urban100/GTmod4",
     "datasets/Manga109/GTmod4", "datasets/DIV2K/DIV2K_valid_HR",
 ]
-VAL_PARAMS_PATH = PARAMS_PATH
+VAL_PARAMS_PATH = "params.json"  # specific degradation to test against
 
 # Model (SwinIR)
 EMBED_DIM = 64
@@ -222,12 +237,15 @@ WINDOW_SIZE = 8
 MLP_RATIO = 2
 
 # Training
-TIME_BUDGET = 600
+EPOCH_BUDGET = 1             # 1 epoch = 7,547 steps ≈ 44 min
+TIME_BUDGET = 600            # fallback when EPOCH_BUDGET=0
+CHECKPOINT_INTERVAL = 4      # validate/save N times per epoch
 BATCH_SIZE = 16
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-4
 WARMUP_STEPS = 100
 LR_SCHEDULE = "cosine"
+AMP_DTYPE = "bfloat16"
 ```
 
 ## Ideas to explore
