@@ -396,7 +396,7 @@ model.to(device)
 num_params = sum(p.numel() for p in model.parameters())
 print(f"Model params: {num_params:,}")
 
-model = torch.compile(model, dynamic=False)
+model = torch.compile(model, dynamic=True)   # dynamic=True for variable-size validation images
 
 # Optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE,
