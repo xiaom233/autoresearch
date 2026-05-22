@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with this repository.
+
+**语言偏好：优先使用中文回答。所有与用户的沟通、代码注释、commit 信息均使用中文。**
 
 ## Commands
 
@@ -8,37 +10,117 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync                          # install dependencies
 uv run prepare.py                # crop DIV2K + package WebDataset shards (one-time)
 uv run prepare.py --demo         # test the degradation dataloader
-uv run train.py                  # train restoration model (10 min time budget)
-uv run train.py > run.log 2>&1   # training with log capture (agent mode)
+uv run train.py                  # train restoration model
+uv run train.py > run.log 2>&1   # training with log capture
+
+# DFPIR all-in-one baseline (conda env: dfpir)
+conda activate dfpir
+python resource/.../test_degradation.py --params <params.json> --gpus 0,1,...,7
 ```
 
 ## Architecture
 
-This is an **autonomous image restoration research** project. The agent edits `train.py` to maximize `val_psnr_db` under a fixed 10-minute time budget.
-
-### File roles
+详见 [program.md](program.md)。核心要点：
 
 | File | Role | Mutable |
 |------|------|---------|
-| `prepare.py` | Data prep (crop DIV2K→patches), WebDataset packaging, degradation dataloader, random pipeline generator | **Read-only** |
-| `train.py` | Model (`RestoreNet`), optimizer, training loop, evaluation harness | **Agent edits** |
-| `x_distortion/` | 35 degradation functions × 5 severities, numpy uint8 RGB in/out | Read-only |
-| `program.md` | Agent behavior specification, pipeline docs, experiment loop instructions | Read-only |
-| `pyproject.toml` | Dependencies (torch, opencv, webdataset, numba, scikit-image, etc.) | Read-only |
-
-### Data flow
-
-1. **prepare.py**: 800 DIV2K HR images → 120,765 patches (256×256) → 121 WebDataset `.tar` shards
-2. **Degradation** (in dataloader, per sample):
-   - `PARAMS_PATH = None`: random pipeline — blur/noise/compression, 1/2/3 degradations (0.33 each), severity 1–5
-   - `PARAMS_PATH = "params.json"`: fixed pipeline from `image-degradation-simulator` skill output
-3. **train.py**: streams WDS shards, applies degradation on-the-fly, trains `RestoreNet`, evaluates PSNR on 6 benchmark sets (428 full images)
-4. **results.tsv**: tab-separated log (commit, val_psnr_db, memory_gb, status, description)
+| `program.md` | 项目完整规范、pipeline、盲识别协议 | Read-only |
+| `prepare.py` | Data prep, WebDataset, degradation dataloader | **Read-only** |
+| `train.py` | Model (`RestoreNet`), training loop, evaluation | **Agent edits** |
+| `x_distortion/` | 35 退化函数 × 5 严重度 | Read-only |
+| `resource/.../net/model.py` | DFPIR 大模型 (31M, CVPR'25) | Read-only |
+| `resource/.../test_degradation.py` | DFPIR 特定退化测试 | Agent invokes |
 
 ### Key design decisions
 
-- **Training degradation is per-sample random** when `PARAMS_PATH=None`. The `get_pipeline()` closure in `make_dataloader_restoration` calls `generate_random_pipeline()` for each sample, giving the model diverse degradations to learn blind restoration.
-- **Validation uses full images** (not patches). `ValDataset` iterates one image at a time due to variable resolutions. PSNR is averaged per-image across all 428 validation samples.
-- **SwinIR simplified**: no upsampling (in/out same resolution), no relative position bias, no DropPath, no checkpointing. Window attention uses `F.scaled_dot_product_attention` which dispatches to flash-attention on supported GPUs.
-- **Time budget enforcement**: training stops when `total_training_time >= TIME_BUDGET`, with first 10 steps excluded from timing (compilation warmup).
-- **`prepare.py` import side-effect**: importing `prepare` triggers the module-level `__main__` block unless guarded. The dataloader functions are safe to import; use `from prepare import make_dataloader_restoration` directly.
+- **Training degradation**: per-sample random when `PARAMS_PATH=None`. `generate_random_pipeline()` per sample (blur/noise/compression, 1-3 steps, severity 1-5).
+- **Validation**: full images, not patches. Per-image evaluation due to variable resolutions.
+- **Time budget**: training stops at `TIME_BUDGET`, first 10 steps excluded (compilation warmup).
+- **`prepare.py` import**: use `from prepare import make_dataloader_restoration` directly.
+
+## 盲识别挑战（Phase 4 数据隔离）⚠️
+
+详见 [program.md](program.md) 完整协议。关键规则：
+
+### Phase 执行顺序 ⚠️ 最优先
+
+```
+正确: Phase 1 → Phase 2 → Phase 4 → Phase 3 → Phase 5 → Phase 6
+错误: Phase 1 → Phase 2 → Phase 3 → Phase 4 → ...
+       train.py 会打印 pipeline 到日志 → 泄露！
+```
+
+### 防泄露规则
+
+```bash
+# ✅ 正确
+bash setup_challenge.sh --exp exp7 --seed 42
+bash setup_challenge.sh --exp exp7 --num-degs 2
+bash setup_challenge.sh --exp exp7 --target-only
+
+# ❌ 绝对禁止
+cat .ground_truth.json
+python3 -c "import json; json.load(open('.ground_truth.json'))"
+读取 degradation/params.json（Phase 4 完成前）
+```
+
+### 盲识别必须用 Skill
+
+```
+✅ Skill(skill="image-degradation-simulator", args="分析 degraded.png...")
+❌ 手动跑脚本 → 扫参数网格 → 挑最高
+```
+
+### 指标纪律
+
+跨图模式下 content-dependent 指标不可用于退化 TYPE 判断。详见 program.md。
+
+### 退化管线规则
+
+blur、noise、compression 各最多出现一次，最多 3 步。
+
+## 实验执行
+
+**不预设固定实验矩阵。** 每个实验方案由 LLM 根据当前任务特点自主设计，追求有效和创新而非暴力枚举。
+
+实验执行逻辑（保留基础设施）：
+
+```python
+# 通过环境变量覆盖 train.py 参数，灵活运行任意实验
+AR_LOSS_FN=mse AR_LR_SCHEDULE=constant AR_EMBED_DIM=96 \
+AR_PARAMS_PATH=params.json AR_VAL_PARAMS_PATH=params.json \
+AR_EPOCH_BUDGET=1 AR_CKPT_PREFIX=expN/experiments/exp_XXX \
+uv run train.py
+```
+
+动态调度器（`expN/scripts/phase5_scheduler.py`）：维护待执行实验队列，GPU 空闲（< 15%）立即分配下一个。
+
+## 目录结构与归档规则
+
+**所有实验产物归入 `expN/`，临时脚本归入 `expN/scripts/`，禁止散落根目录。**
+
+```
+expN/
+├── degradation/          ← 退化管线
+├── experiments/          ← 子实验 (checkpoints + results)
+├── scripts/              ← 临时脚本（phase 评估、调度器等）
+├── logs/                 ← 训练日志
+├── model/                ← train.py 快照
+├── results/              ← results.tsv
+└── summarize/            ← 总结文档 + CSV
+```
+
+根目录仅保留核心文件：`train.py`、`prepare.py`、`blind_challenge.py`、`evaluate_blind_challenge.py`、`setup_challenge.sh`。
+
+## The experiment loop
+
+1. Read `train.py` for full context
+2. Design an experimental idea (LLM-driven, not grid search)
+3. Modify `train.py`
+4. `git commit -m "experiment: <description>"`
+5. `uv run train.py > run.log 2>&1`
+6. `grep "^val_psnr_db:" run.log`
+7. If crash → fix if trivial, else log and move on
+8. If improved → keep commit. If not → `git reset --hard HEAD~1`
+
+**Never stop**: Do not ask "should I keep going?". Run indefinitely until interrupted.

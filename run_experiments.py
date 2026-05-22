@@ -1,243 +1,265 @@
 #!/usr/bin/env python3
-"""Experiment runner: launches experiments in parallel batches across all GPUs.
+"""
+通用实验执行器 — 通过环境变量覆盖 train.py 参数，运行任意实验。
 
-Each experiment runs train.py with env var overrides, logs output, and records
-results to results.tsv. The configs list defines all 32 experiments.
+不预设固定实验矩阵。实验方案由 LLM 自主设计，通过此脚本执行。
+
+用法:
+    # 单个实验
+    AR_LOSS_FN=mse AR_LR_SCHEDULE=constant \
+    uv run run_experiments.py --desc "MSE loss + const LR"
+
+    # 从 JSON 文件加载一组实验
+    uv run run_experiments.py --from-file experiments.json --gpu 0
+
+    # 动态调度（多 GPU 并行）
+    uv run run_experiments.py --from-file experiments.json --gpus 0,1,2,3
 """
 
-import os
-import sys
-import json
-import time
-import subprocess
-import re
+import os, sys, time, subprocess, re, argparse, json
 from pathlib import Path
+from collections import deque
 
 PROJECT_DIR = Path("/data/zyli/projects/autoresearch")
 TRAIN_SCRIPT = PROJECT_DIR / "train.py"
-RESULTS_TSV = PROJECT_DIR / "results.tsv"
 
-# Number of GPUs and experiments per round
-NUM_GPUS = 8
 
-def get_commit_hash():
-    return subprocess.check_output(
-        ["git", "rev-parse", "--short=7", "HEAD"],
-        cwd=PROJECT_DIR, text=True
-    ).strip()
+def build_env(env_overrides):
+    """构建完整环境变量。env_overrides: {key: value} dict，key 不含 AR_ 前缀。"""
+    env = os.environ.copy()
+    for key, val in env_overrides.items():
+        env[f"AR_{key.upper()}"] = str(val)
+    return env
 
-def parse_results(log_path):
-    """Parse key metrics from run.log. Returns dict or None on crash."""
+
+def parse_metrics(log_path):
+    """解析日志中的指标。返回 dict 或 None（崩溃）。"""
     try:
         text = Path(log_path).read_text()
     except FileNotFoundError:
         return None
-
     metrics = {}
-    for key in ["val_psnr_db", "peak_vram_mb", "num_steps", "num_params_M"]:
+    for key in ["val_psnr_db", "peak_vram_mb", "num_steps", "num_params_M",
+                "psnr_rgb", "psnr_y", "ssim_rgb", "ssim_y"]:
         m = re.search(rf"^{key}:\s+([\d.]+)", text, re.MULTILINE)
         if m:
             metrics[key] = float(m.group(1))
-        else:
-            return None  # incomplete log = crash
-
-    return metrics
-
-def log_result(commit, description, metrics, status):
-    """Append a row to results.tsv."""
-    val_psnr = metrics.get("val_psnr_db", 0.0) if metrics else 0.0
-    memory_gb = round(metrics.get("peak_vram_mb", 0.0) / 1024, 1) if metrics else 0.0
-
-    with open(RESULTS_TSV, "a") as f:
-        f.write(f"{commit}\t{val_psnr}\t{memory_gb}\t{status}\t{description}\n")
-
-    print(f"  -> logged: status={status} psnr={val_psnr} mem={memory_gb}GB")
-
-# ---------------------------------------------------------------------------
-# Experiment definitions (32 experiments, 4 rounds × 8)
-# Each entry: (description, env_vars_dict)
-# Base defaults: PARAMS_PATH="params.json", VAL_PARAMS_PATH="params.json"
-# ---------------------------------------------------------------------------
-
-BASE_ENV = {
-    "AR_PARAMS_PATH": "params.json",
-    "AR_VAL_PARAMS_PATH": "params.json",
-}
-
-EXPERIMENTS = [
-    # ===== Round 1: Architecture variants =====
-    ("wider embed_dim=96",           {"AR_EMBED_DIM": "96"}),
-    ("wider embed_dim=128",          {"AR_EMBED_DIM": "128"}),
-    ("deeper depths=(4,4,4,4)",      {"AR_DEPTHS": "(4,4,4,4)"}),
-    ("deeper depths=(6,6,6,6)",      {"AR_DEPTHS": "(6,6,6,6)"}),
-    ("larger window_size=16",        {"AR_WINDOW_SIZE": "16"}),
-    ("narrower embed_dim=48",        {"AR_EMBED_DIM": "48"}),
-    ("wider mlp_ratio=4",            {"AR_MLP_RATIO": "4"}),
-    ("more heads num_heads=(8,8,8,8)", {"AR_NUM_HEADS": "(8,8,8,8)"}),
-
-    # ===== Round 2: Loss functions =====
-    ("MSE loss",                     {"AR_LOSS_FN": "mse"}),
-    ("Huber loss delta=0.1",         {"AR_LOSS_FN": "huber", "AR_HUBER_DELTA": "0.1"}),
-    ("L1+MSE combined (1.0+0.3)",    {"AR_LOSS_FN": "l1+mse", "AR_LOSS_WEIGHTS": "(1.0, 0.3)"}),
-    ("L1+FFT frequency loss",        {"AR_LOSS_FN": "l1+fft", "AR_LOSS_WEIGHTS": "(1.0, 0.1)"}),
-    ("L1+Sobel edge loss (0.1)",     {"AR_LOSS_FN": "l1+edge", "AR_LOSS_WEIGHTS": "(1.0, 0.1)"}),
-    ("L1+Sobel edge loss (0.5)",     {"AR_LOSS_FN": "l1+edge", "AR_LOSS_WEIGHTS": "(1.0, 0.5)"}),
-    ("Huber loss delta=0.5",         {"AR_LOSS_FN": "huber", "AR_HUBER_DELTA": "0.5"}),
-    ("L1+MSE combined (1.0+1.0)",    {"AR_LOSS_FN": "l1+mse", "AR_LOSS_WEIGHTS": "(1.0, 1.0)"}),
-
-    # ===== Round 3: Optimization =====
-    ("LR=5e-4",                      {"AR_LEARNING_RATE": "5e-4"}),
-    ("LR=2e-3",                      {"AR_LEARNING_RATE": "2e-3"}),
-    ("constant LR schedule",         {"AR_LR_SCHEDULE": "constant"}),
-    ("warmup_steps=500",             {"AR_WARMUP_STEPS": "500"}),
-    ("weight_decay=1e-3",            {"AR_WEIGHT_DECAY": "1e-3"}),
-    ("no weight decay",              {"AR_WEIGHT_DECAY": "0"}),
-    ("AdamW betas=(0.95, 0.999)",    {"AR_ADAM_BETAS": "(0.95, 0.999)"}),
-    ("gradient clip max_norm=1.0",   {"AR_GRAD_CLIP": "1.0"}),
-
-    # ===== Round 4: Architectural combinations =====
-    ("embed_dim=96 + depths=(4,4,4,4)",  {"AR_EMBED_DIM": "96", "AR_DEPTHS": "(4,4,4,4)"}),
-    ("embed_dim=96 + MSE loss",          {"AR_EMBED_DIM": "96", "AR_LOSS_FN": "mse"}),
-    ("embed_dim=128 + window_size=16",   {"AR_EMBED_DIM": "128", "AR_WINDOW_SIZE": "16"}),
-    ("depths=(4,4,4,4) + MSE loss",      {"AR_DEPTHS": "(4,4,4,4)", "AR_LOSS_FN": "mse"}),
-    ("embed_dim=96 + depths=(4,4,4,4) + MSE", {"AR_EMBED_DIM": "96", "AR_DEPTHS": "(4,4,4,4)", "AR_LOSS_FN": "mse"}),
-    ("depths=(6,6,6,6) + embed_dim=48", {"AR_DEPTHS": "(6,6,6,6)", "AR_EMBED_DIM": "48"}),
-    ("embed_dim=128 + depths=(1,1,1,1)", {"AR_EMBED_DIM": "128", "AR_DEPTHS": "(1,1,1,1)"}),
-    ("embed_dim=80 + depths=(2,2,2,2) + L1+edge", {"AR_EMBED_DIM": "80", "AR_LOSS_FN": "l1+edge", "AR_LOSS_WEIGHTS": "(1.0, 0.1)"}),
-]
+    if "val_psnr_db" not in metrics and "psnr_rgb" in metrics:
+        metrics["val_psnr_db"] = metrics["psnr_rgb"]
+    return metrics if "val_psnr_db" in metrics else None
 
 
-def cleanup_gpu(gpu_id):
-    """Kill any leftover processes on the specified GPU."""
-    import signal
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader",
-             f"--id={gpu_id}"],
-            capture_output=True, text=True, timeout=5
-        )
-        for line in result.stdout.strip().split("\n"):
-            pid = line.strip()
-            if pid and pid.isdigit():
-                try:
-                    os.kill(int(pid), signal.SIGKILL)
-                except (ProcessLookupError, PermissionError):
-                    pass
-    except Exception:
-        pass
+def run_experiment(exp_id, desc, env_overrides, gpu_id=None, log_dir=None, ckpt_prefix=None, dry_run=False):
+    """运行单个实验。返回 (psnr, vram_gb, status)。
 
+    Args:
+        exp_id: 实验 ID
+        desc: 实验描述
+        env_overrides: {key: value} dict (key 可含或不含 AR_ 前缀)
+        gpu_id: 指定 GPU ID
+        log_dir: 日志目录
+        ckpt_prefix: checkpoint 前缀
+        dry_run: 仅打印不执行
+    """
+    print(f"\n{'='*60}")
+    print(f"  [{exp_id}] {desc}")
+    print(f"{'='*60}")
 
-def run_experiment(exp_idx, description, env_vars, gpu_id, round_num):
-    """Run a single experiment on a specific GPU."""
-    log_file = PROJECT_DIR / f"logs/exp_{round_num:02d}_{exp_idx:03d}.log"
-    log_file.parent.mkdir(exist_ok=True)
+    # Normalize env keys (strip AR_ prefix if present, will be added back in build_env)
+    normalized = {}
+    for k, v in env_overrides.items():
+        key = k.replace("AR_", "").lower()
+        normalized[key] = v
 
-    # Cleanup leftover processes on this GPU
-    cleanup_gpu(gpu_id)
+    if dry_run:
+        env = build_env(normalized)
+        for k, v in sorted(env.items()):
+            if k.startswith("AR_"):
+                print(f"    {k}={v}")
+        return None, None, "dry_run"
 
-    full_env = {**os.environ, **BASE_ENV, **env_vars, "CUDA_VISIBLE_DEVICES": str(gpu_id)}
+    env = build_env(normalized)
+    if gpu_id is not None:
+        env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    if ckpt_prefix:
+        env["AR_CKPT_PREFIX"] = ckpt_prefix
 
-    print(f"[GPU {gpu_id}] Exp {exp_idx+1}/32 (R{round_num}): {description}")
-    print(f"  log: {log_file}")
+    log_dir = Path(log_dir) if log_dir else PROJECT_DIR / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"{exp_id}.log"
 
     t0 = time.time()
     try:
-        with open(log_file, "w") as lf:
-            proc = subprocess.run(
-                ["uv", "run", str(TRAIN_SCRIPT)],
-                cwd=PROJECT_DIR,
-                env=full_env,
-                stdout=lf,
-                stderr=subprocess.STDOUT,
-                timeout=1200,
-                preexec_fn=os.setsid,
-            )
+        result = subprocess.run(
+            [".venv/bin/python3", str(TRAIN_SCRIPT)],
+            cwd=PROJECT_DIR, env=env,
+            stdout=open(log_file, "w"), stderr=subprocess.STDOUT,
+            timeout=6000,
+        )
+        elapsed = time.time() - t0
+
+        if result.returncode != 0:
+            print(f"  FAILED (exit={result.returncode}) after {elapsed:.0f}s")
+            return 0.0, 0.0, "crash"
+
+        metrics = parse_metrics(log_file)
+        if metrics is None:
+            print(f"  INCOMPLETE after {elapsed:.0f}s")
+            return 0.0, 0.0, "crash"
+
+        psnr = metrics["val_psnr_db"]
+        vram = round(metrics.get("peak_vram_mb", 0) / 1024, 1)
+        status = "keep" if psnr > 0 else "crash"
+        print(f"  PSNR={psnr:.2f} VRAM={vram:.1f}GB time={elapsed:.0f}s status={status}")
+        return psnr, vram, status
+
     except subprocess.TimeoutExpired:
-        print(f"  TIMEOUT after 20min")
-        # Kill the whole process group to free GPU memory
-        try:
-            os.killpg(proc.pid, __import__('signal').SIGKILL)
-        except Exception:
-            pass
-        return description, None, "crash"
-
-    # Ensure subprocess is fully terminated
-    cleanup_gpu(gpu_id)
-
-    elapsed = time.time() - t0
-    metrics = parse_results(log_file)
-    status = "keep" if metrics and metrics["val_psnr_db"] > 0 else "crash"
-
-    print(f"  done in {elapsed:.0f}s | status={status} | "
-          f"psnr={metrics.get('val_psnr_db', 'N/A') if metrics else 'N/A'}")
-
-    return description, metrics, status
+        print(f"  TIMEOUT (>100 min)")
+        return 0.0, 0.0, "crash"
 
 
-def run_round(experiments_batch, round_num):
-    """Run a batch of experiments in parallel across GPUs."""
-    import concurrent.futures
+def load_experiments_from_file(filepath):
+    """从 JSON 文件加载实验定义。
 
-    commit = get_commit_hash()
-    print(f"\n{'='*70}")
-    print(f"Round {round_num}: {len(experiments_batch)} experiments on {min(NUM_GPUS, len(experiments_batch))} GPUs")
-    print(f"Commit: {commit}")
-    print(f"{'='*70}")
+    格式: [{"id": "A1", "desc": "...", "env": {"LOSS_FN": "mse", ...}}, ...]
+    """
+    with open(filepath) as f:
+        experiments = json.load(f)
+    if not isinstance(experiments, list):
+        raise ValueError("Experiment file must contain a JSON array")
+    for exp in experiments:
+        if "id" not in exp:
+            raise ValueError("Each experiment must have an 'id' field")
+    return experiments
 
-    gpu_ids = list(range(min(NUM_GPUS, len(experiments_batch))))
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(gpu_ids)) as executor:
-        futures = []
-        for i, (gpu_id, (exp_idx, (desc, env_vars))) in enumerate(
-            zip(gpu_ids, experiments_batch)
-        ):
-            future = executor.submit(run_experiment, exp_idx, desc, env_vars, gpu_id, round_num)
-            futures.append(future)
+def dynamic_schedule(experiments, gpu_pool, log_dir, ckpt_prefix_template=None):
+    """动态调度：在空闲 GPU 上并行运行实验队列。"""
+    from collections import deque
+    queue = deque(experiments)
+    running = {}  # {pid: (exp, gpu_id, log_file)}
 
-        for future in concurrent.futures.as_completed(futures):
-            desc, metrics, status = future.result()
-            log_result(commit, desc, metrics, status)
+    print(f"\nDynamic scheduling: {len(queue)} experiments on GPUs {gpu_pool}")
+
+    while queue or running:
+        done_pids = []
+        for pid, (exp, gpu_id, log_file) in running.items():
+            try:
+                wpid, status = os.waitpid(pid, os.WNOHANG)
+                if wpid != 0:
+                    done_pids.append(pid)
+                    metrics = parse_metrics(log_file)
+                    if metrics:
+                        print(f"[{time.strftime('%H:%M:%S')}] [{exp['id']}] DONE: "
+                              f"PSNR={metrics['val_psnr_db']:.2f}")
+                    else:
+                        print(f"[{time.strftime('%H:%M:%S')}] [{exp['id']}] CRASH")
+            except ChildProcessError:
+                done_pids.append(pid)
+
+        for pid in done_pids:
+            del running[pid]
+
+        busy_gpus = {info[1] for info in running.values()}
+        while queue:
+            free_gpus = [g for g in gpu_pool if g not in busy_gpus]
+            if not free_gpus:
+                break
+            exp = queue.popleft()
+            gpu_id = free_gpus[0]
+            busy_gpus.add(gpu_id)
+
+            ckpt_prefix = None
+            if ckpt_prefix_template:
+                ckpt_prefix = ckpt_prefix_template.format(id=exp["id"])
+
+            env_overrides = exp.get("env", {})
+            normalized = {k.replace("AR_", "").lower(): v for k, v in env_overrides.items()}
+
+            env = build_env(normalized)
+            env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+            if ckpt_prefix:
+                env["AR_CKPT_PREFIX"] = ckpt_prefix
+
+            log_file = Path(log_dir) / f"{exp['id']}.log"
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+
+            print(f"[{time.strftime('%H:%M:%S')}] [{exp['id']}] START GPU {gpu_id}: "
+                  f"{exp.get('desc', '')}")
+
+            pid = os.fork()
+            if pid == 0:
+                log_f = open(log_file, "w")
+                os.dup2(log_f.fileno(), 1)
+                os.dup2(log_f.fileno(), 2)
+                log_f.close()
+                os.execve(str(PROJECT_DIR / ".venv/bin/python3"),
+                          [".venv/bin/python3", str(TRAIN_SCRIPT)], env)
+                sys.exit(1)
+            else:
+                running[pid] = (exp, gpu_id, log_file)
+                time.sleep(3)
+
+        time.sleep(15)
 
 
 def main():
-    if len(sys.argv) > 1:
-        # Run a specific round or experiment
-        arg = sys.argv[1]
-        if arg == "list":
-            for i, (desc, env) in enumerate(EXPERIMENTS):
-                print(f"{i:3d}: {desc}")
+    parser = argparse.ArgumentParser(description="通用实验执行器")
+    parser.add_argument("--desc", type=str, default="", help="实验描述")
+    parser.add_argument("--from-file", type=str, default=None, help="从 JSON 文件加载实验")
+    parser.add_argument("--gpu", type=int, default=None, help="指定 GPU")
+    parser.add_argument("--gpus", type=str, default=None, help="多 GPU 动态调度 (逗号分隔)")
+    parser.add_argument("--dry-run", action="store_true", help="仅打印不执行")
+    parser.add_argument("--log-dir", type=str, default=None, help="日志目录")
+    parser.add_argument("--ckpt-prefix-template", type=str, default=None,
+                        help="checkpoint 前缀模板，{id} 替换为实验 ID")
+
+    # Also accept arbitrary AR_* env vars from command line via remaining args
+    args, remaining = parser.parse_known_args()
+
+    # If --from-file, load experiments
+    if args.from_file:
+        experiments = load_experiments_from_file(args.from_file)
+        if args.dry_run:
+            for exp in experiments:
+                print(f"  [{exp['id']}] {exp.get('desc', '')}")
+                for k, v in exp.get("env", {}).items():
+                    print(f"       AR_{k.upper()}={v}")
             return
-        elif arg == "dryrun":
-            print(f"Total experiments: {len(EXPERIMENTS)}")
-            print(f"Rounds: {(len(EXPERIMENTS) + NUM_GPUS - 1) // NUM_GPUS}")
-            for r in range(0, len(EXPERIMENTS), NUM_GPUS):
-                batch = list(enumerate(EXPERIMENTS[r:r+NUM_GPUS], start=r))
-                print(f"  Round {r//NUM_GPUS + 1}: {len(batch)} experiments")
-            return
+
+        if args.gpus:
+            gpu_pool = [int(x.strip()) for x in args.gpus.split(",")]
+            log_dir = args.log_dir or "logs"
+            dynamic_schedule(experiments, gpu_pool, log_dir,
+                             ckpt_prefix_template=args.ckpt_prefix_template)
         else:
-            round_num = int(arg)
-            r = (round_num - 1) * NUM_GPUS
-            batch = list(enumerate(EXPERIMENTS[r:r+NUM_GPUS], start=r))
-            run_round(batch, round_num)
-    else:
-        # Run all 4 rounds sequentially
-        total_rounds = (len(EXPERIMENTS) + NUM_GPUS - 1) // NUM_GPUS
-        print(f"Running {len(EXPERIMENTS)} experiments in {total_rounds} rounds "
-              f"across {NUM_GPUS} GPUs")
+            for exp in experiments:
+                psnr, vram, status = run_experiment(
+                    exp["id"], exp.get("desc", ""), exp.get("env", {}),
+                    gpu_id=args.gpu, log_dir=args.log_dir,
+                    ckpt_prefix=args.ckpt_prefix_template.format(id=exp["id"]) if args.ckpt_prefix_template else None,
+                    dry_run=False)
+        return
 
-        for round_num in range(1, total_rounds + 1):
-            r = (round_num - 1) * NUM_GPUS
-            batch = list(enumerate(EXPERIMENTS[r:r+NUM_GPUS], start=r))
-            run_round(batch, round_num)
+    # Single experiment mode — env from command line
+    env_overrides = {}
+    for arg in remaining:
+        if arg.startswith("--"):
+            key = arg[2:].replace("-", "_")
+            env_overrides[key] = "1"
+        elif "=" in arg:
+            key, val = arg.split("=", 1)
+            key = key.lstrip("-").replace("-", "_")
+            env_overrides[key] = val
 
-        print(f"\n{'='*70}")
-        print("All experiments complete!")
-        print(f"{'='*70}")
+    # Also pick up env vars already set in environment
+    for k, v in os.environ.items():
+        if k.startswith("AR_"):
+            env_overrides[k[3:].lower()] = v
 
-        # Print summary
-        if RESULTS_TSV.exists():
-            print("\nResults summary:")
-            print(Path(RESULTS_TSV).read_text())
+    exp_id = args.desc.replace(" ", "_")[:50] if args.desc else "experiment"
+    run_experiment(exp_id, args.desc or "Custom experiment", env_overrides,
+                   gpu_id=args.gpu, log_dir=args.log_dir, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
