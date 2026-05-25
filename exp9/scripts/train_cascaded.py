@@ -7,6 +7,7 @@ Reads clean images via WebDataset, applies a degradation pipeline on-the-fly
 """
 
 import os, sys, contextlib
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 
 import gc
@@ -95,7 +96,7 @@ CHECKPOINT_INTERVAL = 4       # save/validate N times per epoch
 BATCH_SIZE = 16
 NUM_WORKERS = 4
 SHUFFLE_BUFFER = 1000
-MAX_STEPS = 0                 # 0=auto (EPOCH_BUDGET/TIME_BUDGET), >0=直接指定步数
+MAX_STEPS = 0                 # 0=auto, >0=直接指定步数
 
 # Optimization
 LEARNING_RATE = 1e-3
@@ -126,6 +127,10 @@ REPLAY_RATIO = 0.0        # 阶段 2+ 混入随机退化的比例 (0.0-1.0)
 FREEZE_STAGES = 0          # 阶段 2+ 冻结前 N 个 RSTB 层 + conv_first
 PHASE2_LR_MULT = 1.0       # 阶段 2+ 的 LR 倍率 (< 1.0 = 更小 LR)
 
+# 级联模型参数
+NUM_EXPERTS = 2             # 级联专家数量
+LOAD_EXPERTS = None          # 联合微调：逗号分隔的 checkpoint 路径
+
 # 高级架构参数（Phase 5 第二批实验）
 WINDOW_SHIFT_RATIO = 0.5     # 窗口位移比例（0.5=标准半窗位移, 0.25=四分之一）
 HEAD_DIM = 16                # 注意力头维度（0=由 EMBED_DIM/NUM_HEADS 推导）
@@ -152,7 +157,8 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
            "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX",
            "WINDOW_SHIFT_RATIO", "HEAD_DIM", "NORM_TYPE", "SKIP_RSTB",
            "CONV_KERNEL", "CHANNEL_MIX", "STAGE_CONFIG", "NUM_STAGES", "QUIET_PIPELINE",
-           "CURRICULUM_CONFIG", "REPLAY_RATIO", "FREEZE_STAGES", "PHASE2_LR_MULT"):
+           "CURRICULUM_CONFIG", "REPLAY_RATIO", "FREEZE_STAGES", "PHASE2_LR_MULT",
+           "NUM_EXPERTS", "LOAD_EXPERTS"):
     _env = os.environ.get(f"AR_{_v}")
     if _env is not None:
         if _v in ("PARAMS_PATH", "VAL_PARAMS_PATH"):
@@ -160,7 +166,7 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
         elif _v in ("LR_SCHEDULE", "LOSS_FN", "AMP_DTYPE",
                   "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX",
                   "NORM_TYPE", "SKIP_RSTB", "CHANNEL_MIX", "STAGE_CONFIG",
-                  "CURRICULUM_CONFIG"):
+                  "CURRICULUM_CONFIG", "LOAD_EXPERTS"):
             globals()[_v] = _env
         else:
             globals()[_v] = eval(_env)
@@ -615,16 +621,42 @@ def main():
     total_val = sum(len(v[1]) for v in val_full_sets)
     print(f"Val quick: {len(val_quick)} images  |  Val full: {total_val} images across {len(val_full_sets)} sets")
 
-    # Model
-    model = RestoreNet(in_ch=3, embed_dim=EMBED_DIM, depths=DEPTHS,
-                        num_heads=NUM_HEADS, window_size=WINDOW_SIZE, mlp_ratio=MLP_RATIO,
-                        activation=ACTIVATION, head_dim=HEAD_DIM,
-                        stage_config=STAGE_CONFIG, num_stages=NUM_STAGES,
-                        window_shift_ratio=WINDOW_SHIFT_RATIO, skip_type=SKIP_RSTB,
-                        conv_kernel=CONV_KERNEL)
+    # Model — CascadedModel with N RestoreNet experts
+    class CascadedModel(nn.Module):
+        def __init__(self, num_experts, embed_dim):
+            super().__init__()
+            self.experts = nn.ModuleList([
+                RestoreNet(in_ch=3, embed_dim=embed_dim, depths=DEPTHS,
+                           num_heads=NUM_HEADS, window_size=WINDOW_SIZE,
+                           mlp_ratio=MLP_RATIO, activation=ACTIVATION,
+                           head_dim=HEAD_DIM, stage_config=STAGE_CONFIG,
+                           num_stages=NUM_STAGES, window_shift_ratio=WINDOW_SHIFT_RATIO,
+                           skip_type=SKIP_RSTB, conv_kernel=CONV_KERNEL)
+                for _ in range(num_experts)
+            ])
+        def forward(self, x):
+            for expert in self.experts:
+                x = expert(x)
+            return x
+
+    model = CascadedModel(NUM_EXPERTS, EMBED_DIM)
     model.to(device)
     num_params = sum(p.numel() for p in model.parameters())
-    print(f"Model params: {num_params:,}")
+    print(f"CascadedModel: {NUM_EXPERTS} experts, EMBED_DIM={EMBED_DIM}, "
+          f"params={num_params:,}")
+
+    # 联合微调：加载独立专家权重
+    if LOAD_EXPERTS is not None:
+        ckpt_paths = [p.strip() for p in LOAD_EXPERTS.split(",")]
+        if len(ckpt_paths) != NUM_EXPERTS:
+            raise ValueError(f"LOAD_EXPERTS has {len(ckpt_paths)} paths, "
+                             f"but NUM_EXPERTS={NUM_EXPERTS}")
+        for i, ckpt_path in enumerate(ckpt_paths):
+            ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
+            getattr(model, '_orig_mod', model).experts[i].load_state_dict(ckpt["model"])
+            print(f"  Loaded expert {i+1}/{NUM_EXPERTS}: {ckpt_path} "
+                  f"(step {ckpt.get('step','?')})")
+        del ckpt
 
     model = torch.compile(model, dynamic=False)
 
@@ -710,7 +742,6 @@ def main():
     TOTAL_PATCHES = 120765
     STEPS_PER_EPOCH = TOTAL_PATCHES // BATCH_SIZE  # 7548
     if MAX_STEPS > 0:
-        # 直接指定步数（用于专家训练等精确步数场景）
         VAL_INTERVAL = max(1, MAX_STEPS // CHECKPOINT_INTERVAL)
         USE_TIME_BUDGET = False
     elif EPOCH_BUDGET > 0:
@@ -740,16 +771,12 @@ def main():
 
     def edge_loss(pred, target):
         """Sobel edge-aware loss (L1 on gradient magnitude difference)."""
-        # 转灰度以适配单通道 Sobel kernel
-        w = torch.tensor([0.299, 0.587, 0.114], device=pred.device).view(1, 3, 1, 1)
-        pred_gray = (pred * w).sum(dim=1, keepdim=True)
-        target_gray = (target * w).sum(dim=1, keepdim=True)
         kx, ky = _sobel_kernels()
         kx, ky = kx.to(pred.device), ky.to(pred.device)
-        gx_p = F.conv2d(pred_gray, kx, padding=1)
-        gy_p = F.conv2d(pred_gray, ky, padding=1)
-        gx_t = F.conv2d(target_gray, kx, padding=1)
-        gy_t = F.conv2d(target_gray, ky, padding=1)
+        gx_p = F.conv2d(pred, kx, padding=1)
+        gy_p = F.conv2d(pred, ky, padding=1)
+        gx_t = F.conv2d(target, kx, padding=1)
+        gy_t = F.conv2d(target, ky, padding=1)
         mag_p = torch.sqrt(gx_p ** 2 + gy_p ** 2 + 1e-6)
         mag_t = torch.sqrt(gx_t ** 2 + gy_t ** 2 + 1e-6)
         return F.l1_loss(mag_p, mag_t)
