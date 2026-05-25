@@ -13,7 +13,8 @@
 **Phase 1**：Direct / Curriculum / Fine-tune × 6 退化 = 18 组
 **Phase 2**：FtCurr / FtReplay / FtFreeze / FtLR × 6 退化 = 24 组
 **Phase 3**：多专家(21组) + Loss耦合(24组) + 修复(6组) = 51 组
-**合计**：93 组实验，~105 GPU hours
+**Phase 4 (逆序)**：Curric(逆序) + FtCurr(逆序) × 6 退化 = 12 组
+**合计**：105 组实验，~115 GPU hours
 
 ---
 
@@ -385,7 +386,92 @@ Phase 1/2 发现 Fine-tune 框架内的策略变体影响小，Phase 3 探索两
 | Phase 2 Fine-tune 变体 | **弱** | FtCurr/FtReplay/FtFreeze/FtLR 影响 < 0.3 dB |
 | 多专家分步修复 | **无效** | ME 从未超越 Ft，级联误差放大 |
 | Loss 函数选择 | **弱** | 除 D2(l1+fft), Δ 仅 0.14-0.23 dB |
+| 课程学习顺序 | **强** | Curric(逆) 在 D2 夺冠、D3 崩溃，Δ 达 7.19 |
+
+---
+
+# Phase 4：逆序课程学习
+
+## 动机
+
+Phase 1/2 的 Curric 和 FtCurr 都是"正序"——按照退化施加的先后顺序教学。但修复过程应该是退化施加的**逆序**——先剥离最外层（最后施加的退化），再逐步向内。
+
+```
+退化施加:   clean → [blur] → [blur+noise] = degraded
+修复逆序:   degraded → [去noise] → [去blur] = clean  (从外到内)
+```
+
+## 实验设计
+
+12 组（6 Curric + 6 FtCurr），全部用逆序，步数对齐 Phase 1/2。
+
+### 逆序 Curric
+
+| 退化 | Phase 1 (0-5000) | Phase 2 (5000-15094) | 逆序逻辑 |
+|------|------|------|------|
+| D1 blur→noise | noise_gaussian_RGB(3) | blur+noise | 先剥 noise |
+| D2 noise→blur | blur_motion(3) | noise+blur | 先剥 blur |
+| D3 comp→blur | blur_lens(4) | comp+blur | 先剥 blur |
+| T1 blur→noise→jpeg | jpeg(3) → noise+jpeg | full | jpeg→noise→blur |
+| T2 noise→blur→jpeg2000 | jpeg2000 → blur+jpeg2000 | full | jpeg2000→blur→noise |
+| T3 blur→jpeg→noise | noise(5) → jpeg+noise | full | noise→jpeg→blur |
+
+## 正序 vs 逆序 对比
+
+### Curric 正序 vs 逆序
+
+| 退化 | Curric(正) | Curric(逆) | Δ | 胜者 |
+|------|:--:|:--:|:--:|------|
+| D1 blur→noise | 21.05 | **22.77** | +1.73 | 逆序 |
+| D2 noise→blur | 26.24 | **28.19** | +1.95 | 逆序 |
+| D3 comp→blur | **25.26** | 21.00 | -4.27 | 正序 |
+| T1 标准 | 20.75 | **22.40** | +1.65 | 逆序 |
+| T2 噪声优先 | 18.89 | 18.85 | -0.04 | 持平 |
+| T3 混合 | 21.95 | **22.20** | +0.25 | 逆序 |
+
+### FtCurr 正序 vs 逆序
+
+| 退化 | FtCurr(正) | FtCurr(逆) | Δ | 胜者 |
+|------|:--:|:--:|:--:|------|
+| D1 blur→noise | **22.66** | 21.53 | -1.13 | 正序 |
+| D2 noise→blur | 21.09 | **25.56** | **+4.47** | 逆序 |
+| D3 comp→blur | **25.73** | 21.34 | -4.39 | 正序 |
+| T1 标准 | 21.34 | **22.37** | +1.03 | 逆序 |
+| T2 噪声优先 | 18.78 | 18.85 | +0.06 | 持平 |
+| T3 混合 | **21.22** | 20.81 | -0.41 | 正序 |
+
+## 逆序耦合分析
+
+### D2（逆序大赢家）：弱交互退化 + 逆序
+
+D2 是 `noise_impulse` → `blur_motion`。脉冲噪声和运动模糊是**弱交互**的：
+- 脉冲噪声仅翻转少量随机像素，不影响图像整体结构
+- `blur(noise(img))` 在统计上与 `blur(clean_img)` 几乎相同（模糊会把脉冲平滑掉）
+
+**逆序为什么好**：先学 blur_motion（"外层"），5000 步建立通用去模糊能力 → 再叠加噪声修复。从外到内剥离的顺序天然合理。
+
+**正序为什么差**：先学 noise_impulse（"内层"），5000 步学到了脉冲噪声的特定模式 → Phase 2 叠加 blur 时这些模式无用且干扰。
+
+### D3（逆序大输家）：强交互退化 + 逆序
+
+D3 是 `compression_jpeg` → `blur_lens`。JPEG 和模糊是**强交互**的：
+- JPEG 产生 8×8 块效应，丢失高频细节
+- `blur(JPEG(img))` 和 `blur(clean_img)` 完全不同——模糊在 JPEG 伪影上产生新的伪影
+- 去模糊时面对的不是标准边缘，而是"被 JPEG 污染后又被模糊的边缘"
+
+**逆序为什么差**：先学 blur_lens(4)（极难），5000 步在 clean 图上学的去模糊能力→Phase 2 面对的是 JPEG+blur 的完全不同分布，特征无法迁移。5000 步白费。
+
+**正序为什么好**：先学 compression_jpeg(3)（相对容易），建立去 JPEG 基础→Phase 2 在这个基础上叠加去模糊。Phase 1 的技能是可迁移的。
+
+### 耦合机制总结
+
+> **退化之间的交互强度决定了课程学习的最优顺序。**
+> - **弱交互退化**（noise+blur）：逆序更优——从外到内剥离天然合理
+> - **强交互退化**（comp+blur）：正序更优——先学容易的建立基础，再叠加难的
+> - **交互强度的判断标准**：前一个退化是否会改变后一个退化的统计分布
 
 ### 终极结论
 
 > **退化类型决定了"是否使用迁移学习"这一根本选择。一旦大方向选对（Ft vs Direct vs Curric），后续的策略细节（Fine-tune 变体、Loss 选择、多专家架构）对结果影响很小。耦合发生在训练哲学的宏观层面，而非具体的超参数或架构细节。**
+>
+> **Phase 4 补充：课程学习的最优顺序也是由退化类型决定的——退化之间的交互强度决定了应该是正序还是逆序。这是耦合的更精细一层：不仅"用什么策略"取决于退化，连"策略内部的执行顺序"也取决于退化。**
