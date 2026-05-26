@@ -127,3 +127,72 @@ mse/huber/l1+edge/l1+fft 之间的差异通常 < 0.25 dB。l1 是最安全默认
 - 不要尝试 FtCurr（盲预训练后课程，几乎总是最差）
 - 不要尝试多专家级联（单模型更好）
 - 不要在三退化上调策略（浪费时间）
+
+---
+
+## 五、可疑的潜在错误 —— 需谨慎对待的结论
+
+以下每条规则的证据强度不同。在 Phase 6 完成后应重新评估。
+
+### ⚠️ 证据薄弱（仅 1-2 组支撑）
+
+**"severity ≥ 4 → Curric(rev) +2 dB"**
+- 仅 N1 (blur_gauss(4)+speckle(4)) 一组高严重度 blur+noise 样本
+- N2/N3 (sev=3) 没显示此效应，但 severity ≠ 3 的其他组合未测试
+- **风险**：可能只是 blur_gaussian + speckle 的特异性，而非严重度主效应
+- **验证**：需更多高严重度 blur+noise 组合（如 blur_motion(4)+noise_impulse(4)）
+
+**"noise-first → Ft 碾压 (N4: +5.24 dB)"**
+- N4 (poisson+lens) 是极端 outlier，N5 仅 +0.50
+- D2 (impulse+motion) 也是 noise-first，Ft 仅 +2.24
+- **风险**：N4 的 +5.24 可能是 poisson+lens 的特殊交互，不是 noise-first 的通用规律
+- **验证**：需更多 noise-first 双退化，特别是 poisson 噪声与其他 blur 的组合
+
+**"三退化策略差异 < 0.5 dB"**
+- 仅 7 组样本，其中 N11 策略间 Δ = 4.02 dB（巨大 outlier）
+- 如果去掉 N11，均值确实 < 0.5 dB，但 outlier 的存在说明"三退化策略差异小"不是铁律
+- **风险**：某些三退化组合（如 N11 的 comp→blur→impulse）策略差异远超 0.5 dB
+- **验证**：Phase 6 的 10 组新三退化将给出更可靠分布
+
+### ⚠️ 证据中等（2-4 组支撑，但有反例）
+
+**"compression 在外层 → Curric(rev)"**
+- 支持：N6(+1.34), N8(+1.82)
+- 反例：D3（comp 在 inner，但 Curric(fwd) 赢 +4.27）——这说明 compression 位置确实关键
+- 但 N7（comp→noise，comp 在 inner）却是所有策略平手，不符合 "inner→Ft/Direct" 的预期
+- **风险**：compression 的位置效应可能被退化子类型混淆（N6 用 jpeg2000，N8 用 jpeg，N7 用 jpeg 但搭配 noise）
+- **验证**：需系统控制子类型，单独变化 compression 位置
+
+### ⚠️ 未探索的维度
+
+**模型容量 × 策略交互**
+- 所有实验 EMBED_DIM=64（0.45M），更大/更小模型是否改变策略排名？未知
+- 推测：容量越大，策略差异越小（更多参数可以暴力记忆）
+
+**训练预算 × 策略交互**
+- 所有实验固定 15094 步，更长/更短训练是否改变最优策略？未知
+- 推测：预算越小，Ft 优势越大（盲预训练加速收敛）
+
+**Loss × 策略交互**
+- Loss 实验仅在 Ft 框架下测试，Direct/Curric 下不同 Loss 的效果？未知
+- 推测：Direct 可能对 Loss 更敏感（没有盲预训练的鲁棒性）
+
+**三退化子类型效应**
+- 7 组三退化覆盖了不同顺序和函数，但样本太少无法做统计推断
+- N11 (comp→blur→impulse) 的 4 dB outlier 说明子类型组合可能有巨大影响
+- Phase 6 将增加 10 组，但仍只是冰山一角
+
+### 当前证据强度分级
+
+| 结论 | 样本数 | 反例 | 强度 |
+|------|:--:|:--:|:--:|
+| Ft 是安全默认 (双退化) | 18 | 0 | **强** |
+| Ft 从未显著输给 Direct | 30+ | N12(-0.06) | **强** |
+| Loss 选择影响 < 0.3 dB | 6 | D2(l1+fft) | **中** |
+| compression→Curric(rev) | 2 | D3, N7 | **弱** |
+| severity→Curric(rev) | 1 | — | **极弱** |
+| noise-first→Ft 碾压 | 2 | 量级差异大 | **弱** |
+| 三退化策略差异小 | 7 | N11(Δ=4.02) | **中-弱** |
+| 多专家无效 | 6 | 0 | **中** |
+
+> **Phase 6 完成后重评估**：三退化样本从 7→17，将显著提升该部分的证据强度。
