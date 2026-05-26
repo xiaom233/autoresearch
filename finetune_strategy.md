@@ -16,9 +16,7 @@
 输入: 退化管线 P = [(f1,s1), (f2,s2), ...]
 
 Step 1: 判断退化步数
-├── N ≥ 3 (三退化及以上)
-│   → 用 Ft (盲预训练→专攻)
-│   所有策略差异通常 < 0.5 dB。退化复杂度本身 > 策略选择
+├── N ≥ 3 (三退化及以上) → Step 3
 │
 └── N = 2 (双退化) → Step 2
 
@@ -30,19 +28,35 @@ Step 2: 退化包含 compression 吗?
 │   │
 │   └── compression 在最内层 (先施加) 或 与其他退化混合
 │       → Ft 或 Direct。课程顺序影响较小
-│       证据: N7(所有策略 ≈平手), D3(Curric(fwd)最优因为 compression 改变了后续 blur 的分布)
+│       证据: N7(所有策略 ≈平手)
 │
 └── 否 (blur/noise 组合) → Step 2b
     ├── noise-first (noise→blur)
-    │   → Ft 碾压一切 (N4: +5.24 dB!)
+    │   → Ft, 不需要课程
     │   如果需要课程: Curric(fwd) > Curric(rev)
     │   证据: N4(Fwd-Rev=-2.98), N5(Fwd-Rev=-0.21)
     │
     └── blur-first (blur→noise)
         → Ft 是安全默认
-        ├── severity ≥ 4 → Curric(rev) 可能 +2 dB
-        └── severity ≤ 3 → 策略差异 < 0.2 dB, Ft 足够
-        证据: N1(sev=4, Rev+Fwd=+2.27), N2/N3(sev=3, 差异 <0.2)
+        ├── severity ≥ 4 → Curric(rev) 可能有 +2 dB (但仅1组证据, 慎用)
+        └── severity ≤ 3 → Ft 足够
+
+Step 3: 三退化 (Phase 6 修正 — 17 组, 中位Δ=1.22 dB)
+├── blur 子类型 = motion
+│   → Curric(fwd) 有一定优势 (M1: Rev-Fwd=-0.58)
+│
+├── blur 子类型 = lens
+│   → Curric(rev) 有一定优势 (M2: Rev-Fwd=+0.81)
+│
+├── blur 子类型 = jitter
+│   → 课程方向无所谓, Ft 足够 (M3: Rev-Fwd=+0.03)
+│
+├── noise/compression 子类型变化时
+│   → Curric(rev) 一致优于 Curric(fwd) (+1.5~+2.0 dB)
+│   证据: M4-M7, 4/4 组一致 Rev > Fwd
+│
+└── 全高严重度 (sev≥4,4,4)
+    → Ft ≈ Direct, 但 Rev > Fwd 仍保持 (M8: Rev-Fwd=+1.30)
 ```
 
 ---
@@ -87,9 +101,11 @@ Step 2: 退化包含 compression 吗?
 - 不含 compression：Rev-Fwd 差异因 severity 和顺序而异
 - 结论：**compression 在外层 → 逆序剥离；compression 在内层 → 需具体分析**
 
-**3. 三退化策略差异小**
-- 12 组三退化中，9 组策略间 Δ < 0.5 dB
-- 结论：**三退化不需要纠结策略选择，Ft 完事**
+**3. 三退化策略差异不小（Phase 6 修正）**
+- 17 组三退化，策略间 Δ 中位数 1.22 dB，71% ≥ 0.5 dB
+- blur 子类型决定课程方向：motion→Fwd, lens→Rev, jitter→无所谓
+- noise/compression 子类型变化时：Rev 一致优于 Fwd (+1.5~+2.0)
+- 结论：**三退化需要根据 blur 子类型选择课程方向**
 
 ---
 
@@ -114,7 +130,10 @@ mse/huber/l1+edge/l1+fft 之间的差异通常 < 0.25 dB。l1 是最安全默认
 
 | 退化特征 | 推荐策略 | 预期收益 vs Direct |
 |----------|----------|:--:|
-| 任意三退化 | Ft | < 0.5 dB |
+| 三退化, noise/comp 子类型不关键 | Curric(rev) | +1.5~+2.0 dB |
+| 三退化, blur=motion | Curric(fwd) | +0.6 dB |
+| 三退化, blur=lens | Curric(rev) | +0.8 dB |
+| 三退化, blur=jitter | Ft | 策略差异小 |
 | blur+noise (双退化, severity≤3) | Ft | 0.3-0.5 dB |
 | blur+noise (双退化, severity≥4) | Curric(rev) | +2 dB |
 | noise+blur (noise-first) | Ft | **+0.5 ~ +5 dB** |
@@ -126,7 +145,6 @@ mse/huber/l1+edge/l1+fft 之间的差异通常 < 0.25 dB。l1 是最安全默认
 - 不要在 Loss 函数上花时间（l1 够用）
 - 不要尝试 FtCurr（盲预训练后课程，几乎总是最差）
 - 不要尝试多专家级联（单模型更好）
-- 不要在三退化上调策略（浪费时间）
 
 ---
 
@@ -182,17 +200,17 @@ mse/huber/l1+edge/l1+fft 之间的差异通常 < 0.25 dB。l1 是最安全默认
 - N11 (comp→blur→impulse) 的 4 dB outlier 说明子类型组合可能有巨大影响
 - Phase 6 将增加 10 组，但仍只是冰山一角
 
-### 当前证据强度分级
+### 当前证据强度分级（Phase 6 更新后）
 
-| 结论 | 样本数 | 反例 | 强度 |
-|------|:--:|:--:|:--:|
-| Ft 是安全默认 (双退化) | 18 | 0 | **强** |
-| Ft 从未显著输给 Direct | 30+ | N12(-0.06) | **强** |
-| Loss 选择影响 < 0.3 dB | 6 | D2(l1+fft) | **中** |
-| compression→Curric(rev) | 2 | D3, N7 | **弱** |
-| severity→Curric(rev) | 1 | — | **极弱** |
-| noise-first→Ft 碾压 | 2 | 量级差异大 | **弱** |
-| 三退化策略差异小 | 7 | N11(Δ=4.02) | **中-弱** |
-| 多专家无效 | 6 | 0 | **中** |
+| 结论 | 样本数 | 反例 | 强度 | 变化 |
+|------|:--:|:--:|:--:|:--:|
+| Ft 是安全默认 | 30+ | 0 | **强** | — |
+| 三退化 noise/comp 子类型 → Rev | 4 | 0 | **强** | **新增** |
+| blur 子类型决定课程方向 | 3 | 0 | **中** | **新增** |
+| Loss 选择影响 < 0.3 dB | 6 | D2(l1+fft) | **中** | — |
+| 多专家无效 | 6 | 0 | **中** | — |
+| 三退化策略中位Δ = 1.22 dB | 17 | — | **强** | **修正** |
+| compression→Curric(rev) | 2 | D3, N7 | **弱** | — |
+| severity→Curric(rev) | 1 | — | **极弱** | — |
 
-> **Phase 6 完成后重评估**：三退化样本从 7→17，将显著提升该部分的证据强度。
+> **Phase 6 关键修正**：三退化策略差异中位数 1.22 dB（不是之前说的 < 0.5 dB），71% 的三退化策略间 Δ ≥ 0.5 dB。策略在三退化上**确实重要**。
