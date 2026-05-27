@@ -235,6 +235,44 @@ Step 3: 三退化 (Phase 6-8, 21 组, 中位Δ=1.22 dB)
 
 ---
 
+## 五、物理机制解释
+
+### 退化交互强度决定课程顺序
+
+**弱交互（noise + blur）→ Rev 好**：
+- 噪声在模糊面前被"抹平"：`blur(noise(img)) ≈ blur(clean_img)`
+- 先剥 blur（外层），再处理 noise——修复顺序与退化施加顺序相反，天然合理
+
+**强交互（comp + blur）→ Fwd 好**：
+- JPEG 块效应改变了图像的高频结构，blur 在 JPEG 伪影上产生新的扩散模式
+- `blur(jpeg(img))` 的统计分布 ≠ `blur(clean_img)`，在 clean 图上学的去 blur 无法迁移
+- 必须正序：先学去 JPEG（较容易）→ 在此基础上叠加去 blur
+
+### 压缩在外层的特殊行为
+
+**compression 最后施加 → Rev**：
+- JPEG 块效应是"最外层"伪影，先剥离它不会影响内层退化的修复策略
+- N6 (jpeg2000+motion): Rev+Fwd=+1.34, N8 (blur+jpeg): Rev+Fwd=+1.82
+
+**compression 最先施加 → 需具体分析**：
+- D3 (comp+blur): 正序 +4.27（JPEG改变了blur分布）
+- N7 (comp+noise): 所有策略平手（comp和noise交互弱）
+
+### noise-first 双退化 Ft 优势最大
+
+- noise-first（如 poisson+lens）退化与盲预训练中的随机退化相似度低
+- 盲预训练见过的大多是 blur-first 或随机顺序的退化
+- noise 作为第一步改变了所有后续退化的统计特性 → 盲预训练提供的关键先验差距最大 → Ft 收益最高
+- N4: Ft > Direct +5.24 dB 是极端案例
+
+### 严重度削弱策略差异
+
+- 高严重度（sev≥4）：退化本身成为主要瓶颈，策略选择退居次要
+- M8 (全4): Ft≈Direct, 策略差异缩小
+- 但 Rev > Fwd 的课程方向效应仍保持 (+1.30)
+
+---
+
 ## 六、历史发现总结（Phase 1-4）
 
 ### Fine-tune 变体（Phase 2）：影响小
