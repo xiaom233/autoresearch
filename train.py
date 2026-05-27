@@ -121,6 +121,11 @@ DEG_AUGMENT = None
 # 课程学习：多阶段退化切换 "step:params,step:params,..." (params="random" → None)
 CURRICULUM_CONFIG = None
 
+# 混合难度预热: "step:pct1:pct2,step:..." (百分比, 替代 CURRICULUM_CONFIG)
+# 双退化: "0:70:30,2500:40:60,5000:10:90,7547:0:100"
+# 三退化: "0:50:30:20,2500:25:35:40,5000:5:20:75,7547:0:0:100"
+MIXED_WARMUP = None
+
 # Fine-tune 阶段 2 策略参数（配合 CURRICULUM_CONFIG 使用）
 REPLAY_RATIO = 0.0        # 阶段 2+ 混入随机退化的比例 (0.0-1.0)
 FREEZE_STAGES = 0          # 阶段 2+ 冻结前 N 个 RSTB 层 + conv_first
@@ -160,7 +165,7 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
         elif _v in ("LR_SCHEDULE", "LOSS_FN", "AMP_DTYPE",
                   "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX",
                   "NORM_TYPE", "SKIP_RSTB", "CHANNEL_MIX", "STAGE_CONFIG",
-                  "CURRICULUM_CONFIG"):
+                  "CURRICULUM_CONFIG", "MIXED_WARMUP"):
             globals()[_v] = _env
         else:
             globals()[_v] = eval(_env)
@@ -654,10 +659,49 @@ def main():
         _prepare.generate_random_pipeline = _augmented_pipeline
         _train_params_path = None  # 使用随机模式（触发 per-sample augmentation）
 
-    # --- 课程学习：预创建多阶段 DataLoader ---
+    # --- 课程学习/混合预热：预创建多阶段 DataLoader ---
     _phase_loaders = None
     _phase_frozen = False  # 是否已执行冻结操作
-    if CURRICULUM_CONFIG is not None:
+    if MIXED_WARMUP is not None:
+        # 混合难度预热：每阶段按概率混合不同复杂度
+        full_pipeline = _prepare.load_degradation_params(PARAMS_PATH)
+        _phase_loaders = []
+        _orig_gen = _prepare.generate_random_pipeline  # 保存原始
+        for p in MIXED_WARMUP.split(","):
+            parts = p.split(":")
+            step_start = int(parts[0])
+            probs = [float(x) / 100.0 for x in parts[1:]]
+            n_levels = len(probs)
+            full_n = len(full_pipeline)
+            # 为每阶段创建独立生成器（闭包捕获当前 probs）
+            def _make_mixed_gen(probs=probs, full_n=full_n, full=full_pipeline,
+                               n_levels=n_levels):
+                import random as _rnd
+                def _mixed():
+                    r = _rnd.random()
+                    cum = 0.0
+                    for i, p in enumerate(probs):
+                        cum += p
+                        if r < cum:
+                            steps = full_n - n_levels + 1 + i
+                            return full[:steps]
+                    return full
+                return _mixed
+            _prepare.generate_random_pipeline = _make_mixed_gen()
+            with quiet_pipeline():
+                ldr = make_dataloader_restoration(
+                    params_path=None,  # 随机模式, 使用 mixed gen
+                    shards_url=TRAIN_SHARDS,
+                    batch_size=BATCH_SIZE, num_workers=NUM_WORKERS,
+                    shuffle_buffer=SHUFFLE_BUFFER,
+                )
+            _phase_loaders.append((step_start, ldr))
+        _prepare.generate_random_pipeline = _orig_gen  # 恢复
+        _phase_loaders.sort(key=lambda t: t[0])
+        train_loader = _phase_loaders[0][1]
+        print(f"Mixed Warmup: {len(_phase_loaders)} phases at steps "
+              f"{[s for s,_ in _phase_loaders]}")
+    elif CURRICULUM_CONFIG is not None:
         _phase_loaders = []
         for p in CURRICULUM_CONFIG.split(","):
             step_start, ppath = p.split(":", 1)

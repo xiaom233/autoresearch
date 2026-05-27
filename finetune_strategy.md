@@ -1,10 +1,10 @@
-# 退化类型如何影响训练策略 —— 193 组实验的经验总结
+# 退化类型如何影响训练策略 —— 227 组实验的经验总结
 
 ## 核心论点
 
-**退化类型与训练策略之间存在强耦合**——不能对所有退化组合使用同样的训练方式。但耦合主要发生在"是否迁移学习"和"课程顺序"两个宏观决策上。
+**退化类型与训练策略之间存在强耦合**——不能对所有退化组合使用同样的训练方式。耦合主要发生在"是否迁移学习"（Ft vs Direct）、"课程顺序"（Fwd vs Rev vs Mixed Warmup）和"blur 子类型"三个决策上。
 
-> 实验基础：Phase 1-6 共 193 组实验（Phase 1:18 + Phase 2:24 + Phase 3:51 + Phase 4:12 + Phase 5:48 + Phase 6:40）
+> 实验基础：Phase 1-8 共 227 组（P1:18 + P2:24 + P3:51 + P4:12 + P5:48 + P6:40 + P7:18 + P8:16）
 
 ---
 
@@ -41,22 +41,28 @@ Step 2: 退化包含 compression 吗?
         ├── severity ≥ 4 → Curric(rev) 可能有 +2 dB (但仅1组证据, 慎用)
         └── severity ≤ 3 → Ft 足够
 
-Step 3: 三退化 (Phase 6 修正 — 17 组, 中位Δ=1.22 dB)
+Step 3: 三退化 (Phase 6-8, 21 组, 中位Δ=1.22 dB)
+
 ├── blur 子类型 = motion
-│   → Curric(fwd) 有一定优势 (M1: Rev-Fwd=-0.58)
+│   → Curric(fwd) 显著优势 (avg Rev-Fwd=-1.19, 2/2 交叉验证通过)
+│   证据: M1(-0.58), M13(-1.80, impulse噪声下仍Fwd)
+│   机制: 线性拖影, 单独做1D反卷积是好的基础技能
 │
 ├── blur 子类型 = lens
-│   → Curric(rev) 有一定优势 (M2: Rev-Fwd=+0.81)
+│   → Curric(rev) 显著优势 (avg Rev-Fwd=+1.28, 2/2 交叉验证通过)
+│   证据: M2(+0.81), M14(+1.75, poisson噪声下仍Rev)
+│   机制: 径向散焦PSF复杂, 不如先学去JPEG打基础
 │
-├── blur 子类型 = jitter
-│   → 课程方向无所谓, Ft 足够 (M3: Rev-Fwd=+0.03)
+├── blur 子类型 = gaussian/jitter/zoom/glass
+│   → 课程方向不重要 (|Rev-Fwd| < 0.2), Ft 或 Mixed Warmup 均可
+│   证据: M3(+0.03), M11(+0.14), M12(+0.08), T1(基线)
 │
-├── noise/compression 子类型变化时
-│   → Curric(rev) 一致优于 Curric(fwd) (+1.5~+2.0 dB)
-│   证据: M4-M7, 4/4 组一致 Rev > Fwd
+├── 不确定 blur 子类型或想避免硬切换
+│   → Mixed Warmup (MW): 三退化上 6/10 胜出, 且不会像Fwd那样崩溃
+│   证据: M5(MW=22.71 vs Fwd=20.88 +1.82), M7(MW=22.89 vs Fwd=20.79 +2.10)
 │
 └── 全高严重度 (sev≥4,4,4)
-    → Ft ≈ Direct, 但 Rev > Fwd 仍保持 (M8: Rev-Fwd=+1.30)
+    → Ft ≈ Direct, 课程方向影响减弱 (M8: Rev-Fwd=+1.30, 低于正常sev)
 ```
 
 ---
@@ -159,7 +165,77 @@ Step 3: 三退化 (Phase 6 修正 — 17 组, 中位Δ=1.22 dB)
 
 ---
 
-## 四、历史发现总结（Phase 1-4）
+---
+
+## 四、Phase 7+8 实验证据（34 组）
+
+### Phase 7：Mixed Warmup（18 组）
+
+用概率混合替代 Curric 的硬切换。双退化: 70/30→40/60→10/90→0/100；三退化: 50/30/20→25/35/40→5/20/75→0/0/100。
+
+**三退化 MW vs Curric**：
+
+| 退化 | Fwd | Rev | MW | 最优 | MW 救了 |
+|------|:--:|:--:|:--:|------|:--:|
+| M1 (motion) | 21.55 | 20.97 | 21.32 | Fwd | — |
+| M2 (lens) | 22.18 | 22.98 | **23.32** | MW | +1.14 vs Fwd |
+| M3 (jitter) | 22.77 | 22.80 | **22.91** | MW | +0.15 |
+| M4 (impulse) | 20.86 | **22.64** | 22.39 | Rev | — |
+| M5 (poisson) | 20.88 | 22.64 | **22.71** | MW | +1.82 vs Fwd |
+| M6 (correlated) | 20.90 | **22.41** | 22.24 | Rev | — |
+| M7 (jpeg2000) | 20.79 | 22.86 | **22.89** | MW | +2.10 vs Fwd |
+| M8 (sev=4) | 19.72 | **21.02** | 20.79 | Rev | — |
+| M9 (noise→blur→comp) | 22.24 | 21.27 | **22.50** | MW | +0.26 |
+| M10 (comp→blur→noise) | 22.06 | 21.83 | **22.75** | MW | +0.69 |
+
+- MW 在三退化上 **6/10 最优**，关键优势：当 Fwd 很差时 MW 不会崩（M5/M7 挽救 +1.8~+2.1 dB）
+- MW 本质是"消除错误选择风险"——它永远不会像选错课程方向那样差
+
+**双退化 MW vs Curric**：
+
+- MW 在双退化上不占优（2/8 最优）
+- N4 (noise-first) MW 比 Fwd 差 -2.91 dB：对 noise-first 双退化，硬切换 Curric(fwd) 更好
+- 双退化推荐：**继续用 Curric，不要用 MW**
+
+**MW 结论**：三退化且不确定 blur 子类型时，MW 是最安全的选择——比 Curric(fwd) 平均高 +1.1 dB，比 Curric(rev) 平均高 +0.3 dB。
+
+### Phase 8：blur 交叉验证（16 组）
+
+验证 blur 子类型的课程偏好是否对 noise 类型鲁棒。
+
+| 退化 | blur | noise | Rev-Fwd | 方向 | 与基线一致? |
+|------|------|-------|:--:|:--:|:--:|
+| M1 | motion | gauss | -0.58 | Fwd | 基线 |
+| **M13** | motion | **impulse** | **-1.80** | Fwd | ✅ |
+| M2 | lens | gauss | +0.81 | Rev | 基线 |
+| **M14** | lens | **poisson** | **+1.75** | Rev | ✅ |
+| M11 | zoom | gauss | +0.14 | ≈平 | 新 |
+| M12 | glass | gauss | +0.08 | ≈平 | 新 |
+
+**blur 子类型课程偏好对 noise 类型完全鲁棒**：
+- motion → Fwd：不论配 gauss 还是 impulse，始终 Fwd 更好（-0.58, -1.80）
+- lens → Rev：不论配 gauss 还是 poisson，始终 Rev 更好（+0.81, +1.75）
+- zoom/glass：和 gaussian/jitter 一样中性
+
+### blur 子类型规律总结
+
+| blur | 特征 | Rev-Fwd | 方向 | 交叉验证 |
+|------|------|:--:|:--:|:--:|
+| motion | 方向性线性拖影 | **-1.19** | Fwd | ✅ impulse 下仍 Fwd |
+| lens | 径向散焦模糊 | **+1.28** | Rev | ✅ poisson 下仍 Rev |
+| gaussian | 各向同性平滑 | ~0 | ≈平 | — |
+| jitter | 随机像素位移 | +0.03 | ≈平 | — |
+| zoom | 径向缩放 | +0.14 | ≈平 | — |
+| glass | 毛玻璃纹理 | +0.08 | ≈平 | — |
+
+**机制假设**：
+- **motion → Fwd**：线性拖影结构简单、近乎可逆（1D 反卷积）。先学去 motion 提供干净边缘基础
+- **lens → Rev**：径向散焦 PSF 复杂，单独修复困难。先学去 JPEG（基础任务）更有效
+- **其余 → 中性**：各向同性/随机模糊，没有"方向偏好"
+
+---
+
+## 六、历史发现总结（Phase 1-4）
 
 ### Fine-tune 变体（Phase 2）：影响小
 FtCurr/FtReplay/FtFreeze/FtLR 之间的差异通常 < 0.3 dB。FtCurr 尤其危险（D2 崩 -6.83）。
@@ -176,18 +252,18 @@ mse/huber/l1+edge/l1+fft 之间的差异通常 < 0.25 dB。l1 是最安全默认
 
 ---
 
-## 四、实操速查表
+## 七、实操速查表
 
 | 退化特征 | 推荐策略 | 预期收益 vs Direct |
 |----------|----------|:--:|
-| 三退化, noise/comp 子类型不关键 | Curric(rev) | +1.5~+2.0 dB |
-| 三退化, blur=motion | Curric(fwd) | +0.6 dB |
-| 三退化, blur=lens | Curric(rev) | +0.8 dB |
-| 三退化, blur=jitter | Ft | 策略差异小 |
+| **三退化, blur=motion** | **Curric(fwd)** | +0.6~1.8 dB |
+| **三退化, blur=lens** | **Curric(rev)** | +0.8~1.8 dB |
+| 三退化, blur=jitter/zoom/glass/gaussian | Ft 或 MW | 策略差异小 |
+| 三退化, 不确定 blur 子类型 | **Mixed Warmup** | 比 Fwd 平均 +1.1 dB |
 | blur+noise (双退化, severity≤3) | Ft | 0.3-0.5 dB |
-| blur+noise (双退化, severity≥4) | Curric(rev) | +2 dB |
-| noise+blur (noise-first) | Ft | **+0.5 ~ +5 dB** |
-| compression 在外层 + X | Curric(rev) | +1.3 ~ +1.8 dB |
+| blur+noise (双退化, severity≥4) | Curric(rev) | +2 dB (仅1组证据) |
+| noise+blur (noise-first) | Ft 或 Curric(fwd) | +0.5~+5 dB |
+| compression 在外层 + X | Curric(rev) | +1.3~+1.8 dB |
 | compression 在内层 + X | Ft / Direct | 需具体分析 |
 | 不确定 | **Ft** | 永远不会显著差 |
 
@@ -195,6 +271,7 @@ mse/huber/l1+edge/l1+fft 之间的差异通常 < 0.25 dB。l1 是最安全默认
 - 不要在 Loss 函数上花时间（l1 够用）
 - 不要尝试 FtCurr（盲预训练后课程，几乎总是最差）
 - 不要尝试多专家级联（单模型更好）
+- 不要在双退化上用 Mixed Warmup（Curric 更好）
 
 ---
 
@@ -259,7 +336,9 @@ mse/huber/l1+edge/l1+fft 之间的差异通常 < 0.25 dB。l1 是最安全默认
 | Loss 选择影响 < 0.3 dB | 6 | D2(l1+fft) | **中** | — |
 | 多专家无效 | 6 | 0 | **中** | — |
 | 三退化策略中位Δ = 1.22 dB | 17 | — | **强** | ✅ Phase 6 解决 |
-| blur 子类型决定课程方向 | 3 | 0 | **中** | **新增，待Phase 8扩至6种** |
+| blur 子类型决定课程方向 (motion/lens) | 4 | 0 | **强** | ✅ Phase 8 交叉验证通过 |
+| 其余 blur (zoom/glass/jitter) 中性 | 4 | 0 | **中** | ✅ Phase 8 验证 |
+| MW 三退化安全默认 (6/10最优) | 10 | 4 (Rev胜) | **中** | ✅ Phase 7 验证 |
 | compression→Curric(rev) | 2 | D3, N7 | **弱** | — |
 | severity→Curric(rev) | 1 | — | **极弱** | — |
 
