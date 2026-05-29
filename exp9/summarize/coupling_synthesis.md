@@ -239,7 +239,127 @@ Curric Phase1 只学 compression——先建立了"什么是块效应、怎么�
 
 ---
 
-## 八、可验证预测
+## 八、退化属性 → 训练决策 精确映射
+
+以下是从 271 组实验中提取的退化属性与最优训练策略的对应关系。
+
+### 退化属性有哪些
+
+影响训练策略的退化属性共 6 个：
+
+| 属性 | 取值 | 影响什么决策 |
+|------|------|-------------|
+| **退化类别** | blur / noise / compression | Ft vs Direct, 迁移价值 |
+| **blur 子类型** | motion / lens / gaussian / jitter / zoom / glass | Curric 方向 |
+| **严重度** | 1-5 | Ft 优势大小, 方向是否翻转 |
+| **退化步数** | 2 (双退化) / 3 (三退化) | 是否用 Curric |
+| **顺序** | blur-first / noise-first / comp-first / comp-last | Curric 方向 |
+| **类别组合** | blur+noise / comp+blur / comp+noise / blur+comp | 耦合强度 |
+
+### 属性 → 决策映射
+
+#### 退化类别 → Ft vs Direct
+
+```
+noise-first  → Ft 优势最大 (+2.66 均值) 
+              盲预训练中 noise-first 最少见, curriculum 效应最强
+
+blur-first   → Ft 优势中等 (+0.28)
+              盲预训练中 blur-first 最常见, 迁移收益小
+
+compression 相关 → Ft ≈ Direct (+0.05 到 -0.03)
+                  压缩伪影在盲预训练中充分覆盖
+```
+
+#### blur 子类型 → Curric 方向
+
+```
+motion → Fwd (Rev-Fwd = -1.19 均值)
+        1D 线性反卷积: 5000步可学好, 迁移价值极高
+
+lens   → Rev (Rev-Fwd = +1.28 均值)
+        径向 PSF: 5000步学不好, 换 compression 作为 Phase1
+
+jitter/zoom/glass/gaussian → ≈平 (|Rev-Fwd| < 0.2)
+        各向同性或随机模糊, 方向无所谓
+```
+
+#### 严重度 → 调节上述两个决策
+
+```
+对 Ft vs Direct:
+  sev 1→5: Ft 优势 +2.55 → -0.03 (严格单调递减)
+  机制: 盲预训练与目标退化的难度差决定了 curriculum 收益
+
+对 Curric 方向:
+  motion sev=5: Fwd→Rev 翻转 (Rev-Fwd: -0.58 → +0.39)
+  lens: 不受严重度影响 (始终 Rev)
+  机制: 严重度改变"Phase1 能否在预算内学好"的阈值
+
+对不平衡严重度:
+  严重步骤主导 Phase1 选择
+  noise/comp 严重 → Rev (先剥外层)
+  blur 严重 → motion 强化 Fwd, lens 取消 Rev
+```
+
+#### 退化步数 → 是否用 Curric
+
+```
+双退化: Curric 收益因退化类型而异 (0 到 +4.27 dB)
+三退化: Curric 中位收益 +1.22 dB, 71% ≥ 0.5 dB
+       除 T2 (策略饱和) 外, 三退化普遍受益于 Curric
+```
+
+#### 顺序 → Curric 方向
+
+```
+compression 在外层 (最后施加) → Rev
+  先剥外层 compression, 再修内层退化
+
+compression 在内层 (最先施加) → Fwd 或 Ft
+  D3: Fwd, N7: Direct
+
+noise-first 双退化 → Fwd (如用 Curric)
+  noise 是内层, blur 是外层, 先用 noise 打底
+
+blur-first 双退化 → Rev (如用 Curric)
+  外层剥离更自然, 但严重度可能翻转这个偏好
+```
+
+#### 类别组合 → 耦合强度
+
+```
+compression+blur → 极强耦合 (Direct→Curric +4.09 dB)
+  第三种伪影: 块效应被模糊扩散, 梯度互斥
+
+compression+noise → 弱耦合 (所有策略 ≈平手)
+  两者相互独立, 梯度不冲突
+
+blur+noise → 弱-中耦合 (0 到 +2.3 dB)
+  取决于严重度和顺序, 噪声被模糊"抹平"
+
+blur+compression → 中耦合 (取决于 compression 位置)
+  comp 在外层: Rev 有效；comp 在内层: 需具体分析
+```
+
+### 一句话决策树
+
+```
+输入退化 → 
+  含 compression? → 耦合强, 考虑 Curric
+    comp 在外层 → Rev
+    comp 在内层+blur → Fwd
+  noise+blur? → Ft 优势大, 如需 Curric→Rev
+  三退化? → 几乎总是 Curric 优于 Direct
+    blur=motion → Fwd
+    blur=lens → Rev
+    其余 → Ft 或 MW
+  不确定 → Ft (30+组从未显著输)
+```
+
+---
+
+## 九、可验证预测
 
 1. **增加 Phase1 预算 → motion×sev=5 从 Rev 回到 Fwd**
    如果给 motion(sev=5) 10000 步而不是 5000 步，能学好 → 迁移价值兑现 → Fwd 恢复优势
