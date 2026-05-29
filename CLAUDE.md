@@ -95,6 +95,19 @@ uv run train.py
 
 动态调度器（`expN/scripts/phase5_scheduler.py`）：维护待执行实验队列，GPU 空闲（< 15%）立即分配下一个。
 
+### GPU 分配规则 ⚠️ 必须遵守
+
+**每张 GPU 最多同时运行 1 个实验。** 违反会导致 OOM 崩溃。
+
+正确做法：使用 GPU 脚本队列（每次 1 个顺序执行），或轮询分配时确保总数 ≤ 8。
+分配示例：
+```bash
+# 每个 GPU 脚本内部串行：
+CUDA_VISIBLE_DEVICES=0 exp1 ; CUDA_VISIBLE_DEVICES=0 exp2  # 顺序执行
+# 不是：
+CUDA_VISIBLE_DEVICES=0 exp1 & CUDA_VISIBLE_DEVICES=0 exp2 &  # 并行! OOM!
+```
+
 ## 目录结构与归档规则
 
 **所有实验产物归入 `expN/`，临时脚本归入 `expN/scripts/`，禁止散落根目录。**
