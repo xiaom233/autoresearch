@@ -108,6 +108,38 @@ CUDA_VISIBLE_DEVICES=0 exp1 ; CUDA_VISIBLE_DEVICES=0 exp2  # 顺序执行
 CUDA_VISIBLE_DEVICES=0 exp1 & CUDA_VISIBLE_DEVICES=0 exp2 &  # 并行! OOM!
 ```
 
+### DFPIR 大模型基线对比 ⚠️ 所有实验计划必须包含
+
+每个实验计划中，必须用 DFPIR (31M, CVPR'25) 作为大模型基线，与我们的小模型 (~0.45M) 对比。
+
+**启动方式**：使用 Agent 子进程调用，避免阻塞主实验流程。
+
+```bash
+# 用法: 对每组退化参数跑一次 DFPIR
+bash exp9/scripts/dfpir_eval.sh <params.json> [gpus] [output.json]
+
+# 示例 (单GPU):
+bash exp9/scripts/dfpir_eval.sh exp9/degradation/D1_dual.json 0 exp9/dfpir_D1.json
+
+# 示例 (多GPU, 737张图, 约4分钟):
+bash exp9/scripts/dfpir_eval.sh params.json 0,1,2,3 results/dfpir_baseline.json
+```
+
+**关键参数**：
+- Checkpoint: `resource/.../dfpir_blind/checkpoints/dfpir_blind_step301920.pt`
+- 模型: `ChannelShuffle_skip_textguaid` (31.1M 参数)
+- 环境: `conda activate dfpir`
+- 自动 tiled inference (tile=512), 多 GPU 并行
+- 预计 4-5 分钟/退化 (单GPU), ~1 分钟 (8GPU)
+
+**对比格式**：实验报告中必须包含 DFPIR PSNR 作为参考上界。
+
+```
+| 退化 | Direct | Ft | Curric | DFPIR(31M) |
+|------|--------|----|--------|------------|
+| D1   | 22.92  | 23.04 | 21.05 | 22.19      |
+```
+
 ## 目录结构与归档规则
 
 **所有实验产物归入 `expN/`，临时脚本归入 `expN/scripts/`，禁止散落根目录。**
