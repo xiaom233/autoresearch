@@ -605,8 +605,23 @@ def main():
     device = torch.device("cuda")
     amp_dtype = torch.bfloat16 if AMP_DTYPE == "bfloat16" else torch.float32
     autocast_ctx = torch.amp.autocast(device_type="cuda", dtype=amp_dtype)
-    print(f"AMP dtype: {AMP_DTYPE}")
+    # === 实验元数据日志 (防bug, 可追溯) ===
+    import datetime
+    _exp_meta = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "ckpt_prefix": CKPT_PREFIX,
+        "params_path": PARAMS_PATH,
+        "val_params_path": VAL_PARAMS_PATH,
+        "curriculum_config": CURRICULUM_CONFIG,
+        "mixed_warmup": MIXED_WARMUP,
+        "model": {"embed_dim": EMBED_DIM, "depths": list(DEPTHS)},
+        "training": {"epoch_budget": EPOCH_BUDGET, "batch_size": BATCH_SIZE,
+                    "lr": LEARNING_RATE, "loss_fn": LOSS_FN},
+    }
+    _exp_meta["degradation_pipeline"] = load_degradation_params(PARAMS_PATH) if PARAMS_PATH else "random"
+    print(f"=== EXP_META: {json.dumps(_exp_meta, ensure_ascii=False, default=str)} ===")
 
+    print(f"AMP dtype: {AMP_DTYPE}")
     print(f"Device: {torch.cuda.get_device_name(device)}")
     print(f"Params: {PARAMS_PATH}")
     print(f"Train shards: {TRAIN_SHARDS}")
@@ -758,7 +773,7 @@ def main():
         VAL_INTERVAL = max(1, MAX_STEPS // CHECKPOINT_INTERVAL)
         USE_TIME_BUDGET = False
     elif EPOCH_BUDGET > 0:
-        MAX_STEPS = EPOCH_BUDGET * STEPS_PER_EPOCH
+        MAX_STEPS = int(EPOCH_BUDGET * STEPS_PER_EPOCH)
         VAL_INTERVAL = max(1, MAX_STEPS // CHECKPOINT_INTERVAL)
         USE_TIME_BUDGET = False
     else:
