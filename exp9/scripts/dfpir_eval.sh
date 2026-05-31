@@ -16,7 +16,7 @@ echo "Params: $PARAMS"
 echo "GPUs: $GPUS"
 echo "Output: $OUTPUT"
 
-conda run -n dfpir python "$SCRIPT" --params "$PARAMS" --gpus "$GPUS" --output "$OUTPUT" 2>&1 | tail -5
+/home/zyli/anaconda3/envs/dfpir/bin/python "$SCRIPT" --params "$PARAMS" --gpus "$GPUS" --output "$OUTPUT" 2>&1 | tail -5
 
 if [ -f "$OUTPUT" ]; then
     PSNR=$(python3 -c "import json; d=json.load(open('$OUTPUT')); print(f\"{d['overall']['psnr_rgb']:.2f}\")")

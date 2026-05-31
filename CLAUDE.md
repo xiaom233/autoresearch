@@ -128,7 +128,7 @@ bash exp9/scripts/dfpir_eval.sh params.json 0,1,2,3 results/dfpir_baseline.json
 **关键参数**：
 - Checkpoint: `resource/.../dfpir_blind/checkpoints/dfpir_blind_step301920.pt`
 - 模型: `ChannelShuffle_skip_textguaid` (31.1M 参数)
-- 环境: `conda activate dfpir`
+- 环境: `/home/zyli/anaconda3/envs/dfpir/bin/python` (torch 2.5.1+cu124)
 - 自动 tiled inference (tile=512), 多 GPU 并行
 - 预计 4-5 分钟/退化 (单GPU), ~1 分钟 (8GPU)
 
