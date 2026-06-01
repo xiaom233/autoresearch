@@ -104,20 +104,30 @@ Step 4: 步数分配
 
 ---
 
-## 四、待验证实验
+## 四、已完成的验证实验
 
-### 实验 1：梯度干扰的泛化验证
-- 测试 oversharpen+blur, pixelate+noise → Curric > Direct?
-- 4 组退化 × 4 策略 = 16 组
+### 实验 1：梯度干扰泛化 ✅ 已完成
+- O1 (oversharpen+blur): **Ft > Direct +3.55 dB**，强梯度干扰确认。但 Curric 未超越 Ft。
+- O2 (oversharpen(4)+motion): Ft 微弱最优，策略差异小。
+- P1 (pixelate+noise): 策略差异 < 0.5 dB，弱梯度干扰。
+- G1 (oversharpen三退): 所有策略 ~27 dB，退化太轻。
+- G2 (pixelate+blur+jpeg): 全部 ~22.8 dB，完全平手。
+- **结论**：原则1部分成立——梯度干扰确实存在（O1 Ft>Direct +3.55），但 Curric 不能因此超越 Ft。
 
-### 实验 2：Phase1 迁移价值 vs 位置
-- 同组函数，不同顺序 → Phase1 迁移价值变化 → Fwd/Rev 差异是否可预测?
-- 6 组退化 × 2 方向 = 12 组
+### 实验 2：Phase1 迁移价值 ✅ 已完成
+- V1 (gauss+motion+jpeg): Ft≈Direct≈Curric，无差异。
+- V2 (gauss+lens+jpeg): Ft > Curric by 1.6 dB。
+- V3 (motion+gauss+jpeg): Direct > Ft > Curric。
+- **结论**：原则2未验证——Phase1迁移价值差异未转化为Curric方向差异。V1/V2/V3的Fwd/Rev最多差0.7dB。
 
-### 实验 3：修复难度 vs 破坏程度
-- 用 expert PSNR 替代 damage PSNR 作为步数分配依据
-- 6 组退化 × 2 方向 = 12 组
+### 实验 3-4：待实现
 
-### 实验 4：Phase 间退化类型不变的 FtCurr
-- Ft 权重 + 不变退化类型的 Curric（只调 LR/loss/severity）
-- 6 组退化 × 2 方案 = 12 组
+### MD 实验（边际难度分配）✅ 已完成
+- 14 组，MD ≈ Fixed 在大多数退化上
+- S5_rev_MD +1.28, S8_fwd_MD +0.98（少数有效case）
+- **结论**：非普适改进，split微调不应作为主要方向
+
+### DFPIR 基线对比 ✅ 已完成
+- 15 组退化，**小模型(0.45M) 12/15 超越 DFPIR(31M)**
+- G1 (oversharpen三退) 小模型 27.40 vs DFPIR 20.90 (-6.45!)
+- **结论**：核心假设验证——专攻小模型 > 通用大模型
