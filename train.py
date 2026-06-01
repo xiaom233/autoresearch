@@ -126,6 +126,11 @@ CURRICULUM_CONFIG = None
 # 三退化: "0:50:30:20,2500:25:35:40,5000:5:20:75,7547:0:0:100"
 MIXED_WARMUP = None
 
+# 自适应 Phase 切换: 基于 EMA loss 斜率检测 (0=禁用, >0=平滑窗口)
+# 当 EMA loss 在窗口内改善 < 阈值时自动切下一phase
+ADAPTIVE_SWITCH = 0          # EMA平滑窗口 (推荐500)
+ADAPTIVE_THRESHOLD = 0.005   # 切换阈值 (loss改善率)
+
 # Fine-tune 阶段 2 策略参数（配合 CURRICULUM_CONFIG 使用）
 REPLAY_RATIO = 0.0        # 阶段 2+ 混入随机退化的比例 (0.0-1.0)
 FREEZE_STAGES = 0          # 阶段 2+ 冻结前 N 个 RSTB 层 + conv_first
@@ -157,7 +162,8 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
            "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX",
            "WINDOW_SHIFT_RATIO", "HEAD_DIM", "NORM_TYPE", "SKIP_RSTB",
            "CONV_KERNEL", "CHANNEL_MIX", "STAGE_CONFIG", "NUM_STAGES", "QUIET_PIPELINE",
-           "CURRICULUM_CONFIG", "REPLAY_RATIO", "FREEZE_STAGES", "PHASE2_LR_MULT"):
+           "CURRICULUM_CONFIG", "REPLAY_RATIO", "FREEZE_STAGES", "PHASE2_LR_MULT",
+           "ADAPTIVE_SWITCH", "ADAPTIVE_THRESHOLD"):
     _env = os.environ.get(f"AR_{_v}")
     if _env is not None:
         if _v in ("PARAMS_PATH", "VAL_PARAMS_PATH"):
@@ -934,6 +940,34 @@ def main():
         ema_beta = 0.95
         smooth_loss = ema_beta * smooth_loss + (1 - ema_beta) * loss_f
         debiased_loss = smooth_loss / (1 - ema_beta ** (step + 1))
+
+        # === 自适应 Phase 切换 (EMA loss 斜率检测) ===
+        # 机制: 每 ADAPTIVE_SWITCH 步检查一次 loss EMA 的斜率
+        # 斜率 ≈ 0 → loss 不再下降 → 当前退化已学到饱和 → 提前切 Phase
+        # 效果: noise(易) 提前切避免过拟合, lens(难) 持续学不浪费
+        _adp = getattr(main, '_adp_state', None)
+        if ADAPTIVE_SWITCH > 0 and _phase_loaders is not None:
+            if _adp is None:  # 首次: 初始化 EMA 追踪
+                _adp = {'ema': smooth_loss, 'ema_prev': smooth_loss,
+                        'check_at': ADAPTIVE_SWITCH}
+                main._adp_state = _adp
+            _adp['ema'] = 0.95 * _adp['ema'] + 0.05 * loss_f
+            # 到达检查点: 计算斜率, 判断是否收敛
+            if step >= _adp['check_at']:
+                slope = (_adp['ema'] - _adp['ema_prev']) / ADAPTIVE_SWITCH
+                _adp['ema_prev'] = _adp['ema']
+                _adp['check_at'] = step + ADAPTIVE_SWITCH
+                # 收敛条件: |斜率| < 阈值 × EMA ← loss 近乎平坦
+                if abs(slope) < ADAPTIVE_THRESHOLD * max(_adp['ema'], 1e-6):
+                    for start_step, ldr in _phase_loaders:
+                        if start_step > step and train_loader is not ldr:
+                            print(f"\n  [Adaptive] Phase switch at step {step}"
+                                  f" (slope={slope:.6f}, EMA={_adp['ema']:.4f})")
+                            train_loader = ldr
+                            _adp['ema'] = smooth_loss      # 重置 EMA
+                            _adp['ema_prev'] = smooth_loss
+                            _adp['check_at'] = step + ADAPTIVE_SWITCH
+                            break
 
         if step % LOG_INTERVAL == 0:
             with torch.no_grad(), autocast_ctx:
