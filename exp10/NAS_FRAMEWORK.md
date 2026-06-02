@@ -1,121 +1,87 @@
-# exp10: 退化条件化架构生成
+# exp10: 退化条件化架构探索
 
 ## 终极目标
 
-> **构建一个系统：输入任意退化管线，输出为该退化量身定制的训练策略和模型架构。**
->
-> 不是找"最好"的通用方案——是让系统的每个组件（策略、架构、超参）都根据退化特征自适应调整。
+> **输入任意退化管线 → 输出量身定制的训练策略 + 模型架构。**
 
-```
-输入: 退化管线 P = [(blur_motion,5), (noise_gauss,1), (comp_jpeg,1)]
-  │
-  ├→ 退化编码器: 提取退化特征 (类型, 严重度, 交互强度, 结构化程度)
-  │
-  ├→ 策略生成器: Ft/Curric? Fwd/Rev? LR? Loss?  ← exp9 已验证
-  │
-  ├→ 架构生成器: Attention? Norm? Window? Depth? ← exp10 待验证
-  │
-  └→ 输出: 为该退化定制的训练方案 (代码 + 配置)
-```
+---
 
-exp9 解决了策略生成器（~450 组实验）。exp10 解决架构生成器。
+## 架构探索维度
 
-## 核心思想
+基于 X-Restormer、DFPIR 两个资源模型的组件，结合 450 组实验的退化-策略耦合规律，设计 4 个维度：
 
-**不是搜索一个最优架构——是根据退化类型自动生成适配架构。** 不同退化需要不同的网络结构偏置，架构应该是退化特征的函数。
+### 维度 1：注意力类型 ← 退化结构
 
-```
-退化管线 P → 退化编码器 → 架构配置 A → 生成模型代码 → 训练
-```
+| 注意力 | 来源 | 机制 | 退化偏好 |
+|--------|------|------|----------|
+| **Swin** (窗口) | SwinIR | 局部窗口自注意力 + shift | 中性基线 |
+| **MDTA** (通道) | Restormer | 跨通道自注意力，全局感受野 | **noise**（通道维度信号/噪声分离）/ **contrast**（全局变换） |
+| **OCAB** (重叠空间) | X-Restormer | 重叠窗口空间注意力 | **blur**（长程反卷积）/ **compression**（块效应模式） |
 
-## 与传统 NAS 的本质区别
+**假设**：噪声/全局退化→MDTA 优；结构化退化→OCAB 优。**已排队验证。**
 
-| 传统 NAS | 退化条件化架构 |
-|----------|---------------|
-| 搜索**一个**通用架构 | 为**每种**退化生成专用架构 |
-| 预定义搜索空间 | 退化特征 → 架构映射 |
-| 架构搜索与退化无关 | 架构由退化属性决定 |
-| RL/进化驱动 | 退化特征驱动 |
+### 维度 2：FFN 类型 ← 退化复杂度
 
-## 退化-架构耦合规律（基于 ~450 组实验 + XRestormer 比较研究）
+| FFN | 机制 | 退化偏好 |
+|-----|------|----------|
+| **MLP** | 标准两层 + 激活 | 简单退化 |
+| **GDFN** (门控) | 门控深度卷积 + element-wise gating | **混合退化**（需要选择性特征激活） |
 
-### motion blur
-- **特征**: 方向性, 结构化, 1D反卷积可解
-- **架构偏置**: 方向感知空间注意力, 大窗口(12-16), 深层(3+ RSTB)
-- **XRestormer组件**: OCAB (overlap空间注意力), 相对位置编码
+**假设**：三退化/motion 混合→GDFN 优；单退化→MLP 即可。
 
-### lens blur  
-- **特征**: 径向对称, PSF复杂, 单独修复困难
-- **架构偏置**: 径向对称注意力 or 大感受野, 双分支(channel+spatial)
-- **XRestormer组件**: 双分支TransformerBlock (channel + spatial)
+### 维度 3：退化嵌入 ← 退化分布偏移
 
-### gaussian noise
-- **特征**: 独立同分布, 像素级, 通道独立
-- **架构偏置**: 通道注意力(MDTA), 浅层(1-2 RSTB), 小窗口(4)
-- **XRestormer组件**: MDTA (通道注意力), InstanceNorm
-
-### impulse noise
-- **特征**: 稀疏离群值, 非高斯
-- **架构偏置**: 小窗口(4), 浅层, 中值滤波 bias
-- **XRestormer组件**: 轻量MDTA
-
-### compression
-- **特征**: 8×8块效应, 频域结构化
-- **架构偏置**: 频域增强, 窗口=8 (匹配块大小), SE通道混合
-- **XRestormer组件**: SE-like channel recalibration
-
-### 混合退化 (blur+noise+compression)
-- **特征**: 多种梯度冲突
-- **架构偏置**: 双分支(channel+spatial), 多尺度(U-Net skip)
-- **XRestormer组件**: 完整双分支 + U-Net encoder-decoder
-
-## 实施：退化条件化的模块化架构
-
-### 退化编码器
-
-输入退化管线，输出架构配置：
-
-```python
-def degradation_to_architecture(pipeline):
-    features = extract_degradation_features(pipeline)
-    return {
-        "attention_type": select_attention(features),
-        "norm_type": select_norm(features),
-        "window_size": select_window(features),
-        "depth": select_depth(features),
-        "channel_mix": select_mix(features),
-    }
-```
-
-### 可替换模块池
-
-| 模块 | 选项 | 退化条件 |
+| 方案 | 机制 | 退化偏好 |
 |------|------|----------|
-| Attention | Swin(窗口) / MDTA(通道) / OCAB(空间) / Dual | 退化结构 |
-| Norm | LayerNorm / InstanceNorm / BatchNorm | 退化统计 |
-| FFN | MLP / GDFN(门控) | 容量需求 |
-| Window | 4 / 8 / 12 / 16 | 感受野需求 |
-| ChannelMix | none / SE / ECA / LayerScale | 通道交互 |
+| **无嵌入** | 模型隐式推断退化类型 | 局部退化（blur/noise/comp） |
+| **退化嵌入** | 可学习 embedding + 特征调制 | **全局退化**（contrast/brightness 与局部退化分布不同） |
 
-## Round 1：退化-注意力耦合验证（最小可行实验）
+DFPIR 用 CLIP 文本编码退化类型——我们不需要 CLIP，用一个可学习 lookup table（每种退化类型一个 embedding）就行。**关键：全局退化与局部退化的分布偏移需要显式条件化。**
 
-验证一个核心假设：**空间注意力对blur更有效，通道注意力对noise更有效。**
+### 维度 4：多尺度处理 ← 退化尺度
 
-### 实验设计
+| 方案 | 机制 | 退化偏好 |
+|------|------|----------|
+| **单尺度** | 全分辨率处理 | 局部退化 |
+| **轻量 U-Net** | 2 层下采样 + skip | **blur**（多尺度反卷积）/ **大 kernel motion** |
 
-3 组退化 × 3 种注意力 = 9 组实验
+RestoreNet 当前是单尺度。加一个轻量 encoder-decoder 路径，只在最低分辨率加 2 个 RSTB，不显著增加参数。
 
-| 退化 | Swin(基线) | MDTA(通道) | OCAB(空间) |
-|------|:--:|:--:|:--:|
-| D3 (comp+blur, 结构化) | ✓ 已有 | ✓ 新 | ✓ 新 |
-| N4 (noise+blur, 随机主导) | ✓ 已有 | ✓ 新 | ✓ 新 |
-| S5 (motion, 结构化) | ✓ 已有 | ✓ 新 | ✓ 新 |
+---
 
-每实验 × Ft 策略 × EPOCH=1 = 9 × 43 min ≈ 6.5 GPU hours
+## 实验矩阵
 
-### 预期
+### 已有/排队
 
-- D3/S5 (结构化): OCAB > Swin > MDTA
-- N4 (噪声): MDTA > Swin > OCAB
-- 如果成立 → 退化-注意力耦合存在 → 扩展全模块池
-- 如果不成立 → 架构差异 < 0.3 dB → 放弃架构方向
+| 实验 | 退化 | 组数 | 状态 |
+|------|------|:--:|------|
+| NAS R1: MDTA vs OCAB | D3/N4/S5 | 6 | 排队 |
+
+### 新增
+
+| 实验 | 退化 | 维度 | 组数 |
+|------|------|:--:|:--:|
+| NAS R2: GDFN vs MLP | M1/T2/S5 | 2 | 6 |
+| NAS R3: 退化嵌入 | L2/L3/D3 | 3 | 6 |
+| NAS R4: 轻量U-Net | D3/S5/N4 | 3 | 6 |
+
+每实验 × Ft 策略 × EPOCH_BUDGET=2 ≈ 6 × 86 min ≈ 9 GPU hours
+
+### 总计
+
+| Round | 实验 | 组数 | GPU hours |
+|:--:|------|:--:|:--:|
+| R1 | MDTA/OCAB | 6 | ~10 |
+| R2 | GDFN | 6 | ~10 |
+| R3 | 退化嵌入 | 6 | ~10 |
+| R4 | 轻量U-Net | 6 | ~10 |
+| **合计** | | **24** | **~40** |
+
+---
+
+## 预期产出
+
+1. **退化-注意力耦合规律**：哪种注意力对哪种退化最优
+2. **退化-FFN耦合规律**：门控是否在混合退化上有优势
+3. **全局退化的架构需求**：退化嵌入是否能修复 Ft 在 L2 上的崩溃
+4. **架构-退化耦合图谱**：输入退化类型 → 推荐架构配置
