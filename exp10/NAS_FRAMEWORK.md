@@ -6,7 +6,53 @@
 
 ---
 
-## 架构探索维度
+## 退化特性与网络架构的耦合原理
+
+**退化决定了修复需要"看多远"和"看什么维度"——这直接映射到注意力和感受野的设计。**
+
+### 退化属性的三个架构相关维度
+
+```
+退化管线 P
+  │
+  ├→ 空间结构 → 决定感受野大小和注意力类型
+  │   方向性(motion) → 各向异性窗口
+  │   各向同性(gaussian/lens) → 对称窗口
+  │   随机(noise) → 小窗口/通道注意力
+  │   块状(compression 8×8) → 窗口=8
+  │   全局(contrast/brightness) → 全局(channel attn)
+  │
+  ├→ 频域特性 → 决定是否需要频域处理
+  │   低频损失(blur) → 大kernel, 深层
+  │   高频损失(noise/compression) → 小kernel, 浅层
+  │   DCT块效应(compression) → 频域增强可能有益
+  │
+  └→ 交互模式 → 决定是否需要多分支
+      独立(noise+blur) → 单分支足够
+      变换(compression+blur) → 需要多分支/多阶段
+```
+
+### 退化→架构映射表
+
+| 退化 | 空间结构 | 最优注意力 | 感受野 | 归一化 | FFN | 多尺度 |
+|------|:--:|:--:|:--:|:--:|:--:|:--:|
+| **motion blur** | 方向性 | 空间(OCAB) | 大(12-16) | LayerNorm | GDFN | 是 |
+| **lens blur** | 径向对称 | 空间(OCAB) | 大(8-12) | LayerNorm | GDFN | 是 |
+| **gaussian blur** | 各向同性 | Swin | 中(8) | LayerNorm | MLP | 否 |
+| **gaussian noise** | 随机/独立 | 通道(MDTA) | 小(4) | InstNorm | MLP | 否 |
+| **impulse noise** | 稀疏/随机 | 通道(MDTA) | 小(4) | LayerNorm | MLP | 否 |
+| **compression** | 8×8块 | 空间(OCAB) | 中(8) | LayerNorm | GDFN | 否 |
+| **contrast/brightness** | **全局** | **通道(MDTA)** | **全局** | LayerNorm | MLP | 否 |
+| **混合(3退化)** | 混合 | 双分支 | 混合 | LayerNorm | GDFN | 是 |
+
+### 关键洞察
+
+1. **空间结构是架构设计的第一性原理**：退化是方向性的、各向同性的、随机的还是全局的——这直接决定了模型需要"看"的范围和方式
+2. **全局退化(contrast/brightness)需要根本上不同的架构**：不是窗口注意力能解决的——必须用通道注意力或全局 pooling
+3. **混合退化需要多分支**：compression+blur 产生"第三种伪影"，单分支无法同时处理两个退化方向
+4. **这些假设可以通过 R1-R4 直接验证**：MDTA vs OCAB vs Swin 在不同退化上的表现会揭示退化-注意力耦合规律
+
+## 验证实验
 
 基于 X-Restormer、DFPIR 两个资源模型的组件，结合 450 组实验的退化-策略耦合规律，设计 4 个维度：
 
