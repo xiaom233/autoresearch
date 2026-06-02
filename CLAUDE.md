@@ -4,6 +4,22 @@ This file provides guidance to Claude Code when working with this repository.
 
 **语言偏好：优先使用中文回答。所有与用户的沟通、代码注释、commit 信息均使用中文。**
 
+## 环境安装
+
+```bash
+# 主环境 (train.py / prepare.py)
+uv sync                          # 安装所有依赖 (含 torch, webdataset, einops 等)
+uv run prepare.py                # 验证安装: 裁切 DIV2K + 打包 WebDataset
+
+# DFPIR 基线 (独立 conda 环境)
+conda activate dfpir             # torch 2.5.1+cu124
+# DFPIR checkpoint: resource/.../dfpir_blind/checkpoints/dfpir_blind_step301920.pt
+
+# 新增依赖时
+uv add <package>                 # 自动写入 pyproject.toml
+# ⚠️ 不要用 uv pip install — uv run 使用项目虚拟环境，非 conda 环境
+```
+
 ## Commands
 
 ```bash
@@ -14,8 +30,7 @@ uv run train.py                  # train restoration model
 uv run train.py > run.log 2>&1   # training with log capture
 
 # DFPIR all-in-one baseline (conda env: dfpir)
-conda activate dfpir
-python resource/.../test_degradation.py --params <params.json> --gpus 0,1,...,7
+/home/zyli/anaconda3/envs/dfpir/bin/python resource/.../test_degradation.py --params <params.json> --gpus 0,1,...,7
 ```
 
 ## Architecture
