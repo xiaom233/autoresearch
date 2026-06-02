@@ -24,6 +24,7 @@ import random as _random
 
 from prepare import load_degradation_params, make_dataloader_restoration, scandir
 from x_distortion import add_distortion
+from model import RestoreNet
 
 # Monkey-patch: category-balanced random pipeline (blur/noise/compression equal weight)
 import prepare as _prepare
@@ -128,8 +129,10 @@ MIXED_WARMUP = None
 
 # 自适应 Phase 切换: 基于 EMA loss 斜率检测 (0=禁用, >0=平滑窗口)
 # 当 EMA loss 在窗口内改善 < 阈值时自动切下一phase
-ADAPTIVE_SWITCH = 0          # EMA平滑窗口 (推荐500)
-ADAPTIVE_THRESHOLD = 0.005   # 切换阈值 (loss改善率)
+ADAPTIVE_SWITCH = 0          # 检查间隔步数 (推荐500)
+ADAPTIVE_THRESHOLD = 0.005   # 相对改善率阈值 (推荐0.005=0.5%)
+ADAPTIVE_PATIENCE = 3        # 连续平坦次数 (推荐3, 防噪声)
+ADAPTIVE_WARMUP = 500        # 新phase后等待步数 (推荐500)
 
 # Fine-tune 阶段 2 策略参数（配合 CURRICULUM_CONFIG 使用）
 REPLAY_RATIO = 0.0        # 阶段 2+ 混入随机退化的比例 (0.0-1.0)
@@ -941,33 +944,41 @@ def main():
         smooth_loss = ema_beta * smooth_loss + (1 - ema_beta) * loss_f
         debiased_loss = smooth_loss / (1 - ema_beta ** (step + 1))
 
-        # === 自适应 Phase 切换 (EMA loss 斜率检测) ===
-        # 机制: 每 ADAPTIVE_SWITCH 步检查一次 loss EMA 的斜率
-        # 斜率 ≈ 0 → loss 不再下降 → 当前退化已学到饱和 → 提前切 Phase
-        # 效果: noise(易) 提前切避免过拟合, lens(难) 持续学不浪费
+        # === 自适应 Phase 切换 (patience-based, 防误触发) ===
+        # 机制: 新phase前WARMUP步不检查 → 每SWITCH步计算loss相对改善率 →
+        #       连续PATIENCE次低改善才切换 (避免噪声误触发)
         _adp = getattr(main, '_adp_state', None)
+        _adp_warmup = ADAPTIVE_WARMUP
+        _adp_patience = ADAPTIVE_PATIENCE
+        _adp_ema_beta = 0.98
         if ADAPTIVE_SWITCH > 0 and _phase_loaders is not None:
-            if _adp is None:  # 首次: 初始化 EMA 追踪
+            if _adp is None:
                 _adp = {'ema': smooth_loss, 'ema_prev': smooth_loss,
-                        'check_at': ADAPTIVE_SWITCH}
+                        'check_at': ADAPTIVE_SWITCH + _adp_warmup,
+                        'flat_count': 0, 'phase_switched': False}
                 main._adp_state = _adp
-            _adp['ema'] = 0.95 * _adp['ema'] + 0.05 * loss_f
-            # 到达检查点: 计算斜率, 判断是否收敛
+            _adp['ema'] = _adp_ema_beta * _adp['ema'] + (1 - _adp_ema_beta) * loss_f
             if step >= _adp['check_at']:
-                slope = (_adp['ema'] - _adp['ema_prev']) / ADAPTIVE_SWITCH
+                rel_improve = (_adp['ema_prev'] - _adp['ema']) / max(_adp['ema_prev'], 1e-6)
                 _adp['ema_prev'] = _adp['ema']
                 _adp['check_at'] = step + ADAPTIVE_SWITCH
-                # 收敛条件: |斜率| < 阈值 × EMA ← loss 近乎平坦
-                if abs(slope) < ADAPTIVE_THRESHOLD * max(_adp['ema'], 1e-6):
-                    for start_step, ldr in _phase_loaders:
-                        if start_step > step and train_loader is not ldr:
-                            print(f"\n  [Adaptive] Phase switch at step {step}"
-                                  f" (slope={slope:.6f}, EMA={_adp['ema']:.4f})")
-                            train_loader = ldr
-                            _adp['ema'] = smooth_loss      # 重置 EMA
-                            _adp['ema_prev'] = smooth_loss
-                            _adp['check_at'] = step + ADAPTIVE_SWITCH
-                            break
+                if rel_improve < ADAPTIVE_THRESHOLD:
+                    _adp['flat_count'] += 1
+                    if _adp['flat_count'] >= _adp_patience:
+                        for start_step, ldr in _phase_loaders:
+                            if start_step > step and train_loader is not ldr:
+                                print(f"\n  [Adaptive] Phase switch at step {step}"
+                                      f" (flat={_adp['flat_count']}/{_adp_patience}"
+                                      f", rel_improve={rel_improve:.4%})")
+                                train_loader = ldr
+                                # 重置: warmup + EMA
+                                _adp['ema'] = smooth_loss
+                                _adp['ema_prev'] = smooth_loss
+                                _adp['check_at'] = step + ADAPTIVE_SWITCH + _adp_warmup
+                                _adp['flat_count'] = 0
+                                break
+                else:
+                    _adp['flat_count'] = max(0, _adp['flat_count'] - 1)  # 改善恢复→减计数(非直接清零)
 
         if step % LOG_INTERVAL == 0:
             with torch.no_grad(), autocast_ctx:
