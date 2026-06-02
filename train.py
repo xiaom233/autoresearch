@@ -83,6 +83,7 @@ VAL_COUNT = 0                # max images per val set (0 = use all)
 VAL_PARAMS_PATH = "params.json"  # test M_spec on target degradation
 
 # Model architecture (SwinIR)
+ATTENTION_TYPE = "swin"        # "swin" / "mdta" (channel) / "ocab" (overlap spatial)
 EMBED_DIM = 64
 DEPTHS = (2, 2, 2, 2)       # Swin blocks per RSTB stage
 NUM_HEADS = (4, 4, 4, 4)     # attention heads per stage
@@ -172,7 +173,7 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
         if _v in ("PARAMS_PATH", "VAL_PARAMS_PATH"):
             globals()[_v] = None if _env == "None" else _env
         elif _v in ("LR_SCHEDULE", "LOSS_FN", "AMP_DTYPE",
-                  "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX",
+                  "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX", "ATTENTION_TYPE",
                   "NORM_TYPE", "SKIP_RSTB", "CHANNEL_MIX", "STAGE_CONFIG",
                   "CURRICULUM_CONFIG", "MIXED_WARMUP"):
             globals()[_v] = _env
@@ -380,7 +381,7 @@ def main():
                         activation=ACTIVATION, head_dim=HEAD_DIM,
                         stage_config=STAGE_CONFIG, num_stages=NUM_STAGES,
                         window_shift_ratio=WINDOW_SHIFT_RATIO, skip_type=SKIP_RSTB,
-                        conv_kernel=CONV_KERNEL)
+                        conv_kernel=CONV_KERNEL, attention_type=ATTENTION_TYPE)
     model.to(device)
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Model params: {num_params:,}")

@@ -1,17 +1,25 @@
 """
-Image restoration model — SwinIR-based RestoreNet.
+Image restoration model — SwinIR-based RestoreNet with pluggable attention.
 
 Architecture:
   1. Shallow feature extraction: 3×3 conv
   2. Deep feature extraction: RSTB stack (window-based transformer)
   3. Reconstruction: conv → conv with global residual
 
-Based on: SwinIR (Liang et al., 2021), modernized with F.scaled_dot_product_attention.
+Attention types: swin (default), mdta (channel), ocab (overlap spatial)
+Based on: SwinIR (Liang et al., 2021), Restormer (Zamir et al., 2022),
+          X-Restormer (Chen et al., 2023)
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from einops import rearrange
+
+
+# ======================================================================
+# Swin Window Attention (default)
+# ======================================================================
 
 
 class WindowSDPA(nn.Module):
@@ -65,6 +73,132 @@ class WindowSDPA(nn.Module):
         return x.view(B, L, C)
 
 
+# ======================================================================
+# MDTA — Multi-DConv Head Transposed Attention (Restormer channel attn)
+# ======================================================================
+class MDTA(nn.Module):
+    """Channel-wise self-attention from Restormer."""
+    def __init__(self, dim, num_heads, bias=False):
+        super().__init__()
+        self.num_heads = num_heads
+        self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
+        self.qkv = nn.Conv2d(dim, dim * 3, kernel_size=1, bias=bias)
+        self.qkv_dwconv = nn.Conv2d(dim * 3, dim * 3, kernel_size=3, stride=1,
+                                     padding=1, groups=dim * 3, bias=bias)
+        self.project_out = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
+
+    def forward(self, x, x_size):
+        B, L, C = x.shape
+        H, W = x_size
+        x = x.transpose(1, 2).view(B, C, H, W)
+
+        qkv = self.qkv_dwconv(self.qkv(x))
+        q, k, v = qkv.chunk(3, dim=1)
+
+        q = rearrange(q, 'b (h c) x y -> b h c (x y)', h=self.num_heads)
+        k = rearrange(k, 'b (h c) x y -> b h c (x y)', h=self.num_heads)
+        v = rearrange(v, 'b (h c) x y -> b h c (x y)', h=self.num_heads)
+
+        q = F.normalize(q, dim=-1)
+        k = F.normalize(k, dim=-1)
+
+        attn = (q @ k.transpose(-2, -1)) * self.temperature
+        attn = attn.softmax(dim=-1)
+        out = (attn @ v)
+        out = rearrange(out, 'b h c (x y) -> b (h c) x y', x=H, y=W)
+        out = self.project_out(out)
+        return out.flatten(2).transpose(1, 2)
+
+
+class MDTABlock(nn.Module):
+    """MDTA + Gated-Dconv FFN."""
+    def __init__(self, dim, num_heads, mlp_ratio=2., bias=False):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn = MDTA(dim, num_heads, bias)
+        self.norm2 = nn.LayerNorm(dim)
+        hidden = int(dim * mlp_ratio)
+        self.conv1 = nn.Conv2d(dim, hidden * 2, 3, 1, 1)
+        self.conv2 = nn.Conv2d(hidden, dim, 3, 1, 1)
+        self.dwconv = nn.Conv2d(hidden, hidden, 3, 1, 1, groups=hidden)
+
+    def forward(self, x, x_size):
+        H, W = x_size
+        x = x + self.attn(self.norm1(x), x_size)
+        # GDFN
+        B, L, C = x.shape
+        x_norm = self.norm2(x).transpose(1, 2).view(B, C, H, W)
+        x1, x2 = self.conv1(x_norm).chunk(2, dim=1)
+        x_norm = self.conv2(self.dwconv(F.gelu(x1) * x2))
+        return x + x_norm.flatten(2).transpose(1, 2)
+
+
+# ======================================================================
+# OCAB — Overlapping Cross-Attention Block (X-Restormer spatial attn)
+# ======================================================================
+class OCAB(nn.Module):
+    """Spatial attention with overlapping windows from X-Restormer."""
+    def __init__(self, dim, num_heads, window_size=8, overlap_ratio=0.5, bias=False):
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.window_size = window_size
+        self.overlap = int(window_size * overlap_ratio)
+        self.scale = self.head_dim ** -0.5
+
+        self.qkv = nn.Conv2d(dim, dim * 3, 1, bias=bias)
+        self.proj = nn.Conv2d(dim, dim, 1, bias=bias)
+
+    def forward(self, x, x_size):
+        B, L, C = x.shape
+        H, W = x_size
+        x = x.transpose(1, 2).view(B, C, H, W)
+
+        qkv = self.qkv(x)
+        q, k, v = qkv.chunk(3, dim=1)
+
+        ws = self.window_size
+        ov = self.overlap
+        # Q on non-overlapping windows
+        q_w = rearrange(q, 'b (h c) (n1 w1) (n2 w2) -> (b n1 n2) (w1 w2) (h c)',
+                        h=self.num_heads, w1=ws, w2=ws)
+        # K,V on overlapping windows via Unfold
+        k_ov = F.unfold(k, kernel_size=ws+ov, stride=ws, padding=ov//2)
+        v_ov = F.unfold(v, kernel_size=ws+ov, stride=ws, padding=ov//2)
+        k_ov = rearrange(k_ov, 'b (h c k) n -> (b n) k (h c)', h=self.num_heads)
+        v_ov = rearrange(v_ov, 'b (h c k) n -> (b n) k (h c)', h=self.num_heads)
+
+        attn = (q_w @ k_ov.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-1)
+        out = attn @ v_ov
+        out = rearrange(out, '(b n1 n2) (w1 w2) (h c) -> b (h c) (n1 w1) (n2 w2)',
+                        n1=H//ws, n2=W//ws, w1=ws, w2=ws, h=self.num_heads)
+        out = self.proj(out)
+        return out.flatten(2).transpose(1, 2)
+
+
+class OCABBlock(nn.Module):
+    """OCAB + Gated-Dconv FFN."""
+    def __init__(self, dim, num_heads, window_size=8, overlap_ratio=0.5, mlp_ratio=2.):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn = OCAB(dim, num_heads, window_size, overlap_ratio)
+        self.norm2 = nn.LayerNorm(dim)
+        hidden = int(dim * mlp_ratio)
+        self.conv1 = nn.Conv2d(dim, hidden * 2, 3, 1, 1)
+        self.conv2 = nn.Conv2d(hidden, dim, 3, 1, 1)
+        self.dwconv = nn.Conv2d(hidden, hidden, 3, 1, 1, groups=hidden)
+
+    def forward(self, x, x_size):
+        H, W = x_size
+        x = x + self.attn(self.norm1(x), x_size)
+        B, L, C = x.shape
+        x_norm = self.norm2(x).transpose(1, 2).view(B, C, H, W)
+        x1, x2 = self.conv1(x_norm).chunk(2, dim=1)
+        x_norm = self.conv2(self.dwconv(F.gelu(x1) * x2))
+        return x + x_norm.flatten(2).transpose(1, 2)
+
+
 class SwinBlock(nn.Module):
     """Swin Transformer block: window SDPA + MLP, pre-norm style."""
 
@@ -101,19 +235,32 @@ class SwinBlock(nn.Module):
 
 
 class RSTB(nn.Module):
-    """Residual Swin Transformer Block: Swin blocks + conv skip connection."""
+    """Residual Swin Transformer Block: attention blocks + conv skip connection.
+
+    attention_type: "swin" (window), "mdta" (channel), "ocab" (overlap spatial)
+    """
 
     def __init__(self, dim, depth, num_heads, window_size=8, mlp_ratio=2,
                  activation="gelu", window_shift_ratio=0.5, skip_type="standard",
-                 conv_kernel=3):
+                 conv_kernel=3, attention_type="swin"):
         super().__init__()
-        shift_size = int(window_size * window_shift_ratio)
-        self.blocks = nn.ModuleList([
-            SwinBlock(dim, num_heads, window_size,
-                      shift_size=0 if i % 2 == 0 else shift_size,
-                      mlp_ratio=mlp_ratio, activation=activation)
-            for i in range(depth)
-        ])
+        if attention_type == "mdta":
+            self.blocks = nn.ModuleList([
+                MDTABlock(dim, num_heads, mlp_ratio) for _ in range(depth)
+            ])
+        elif attention_type == "ocab":
+            self.blocks = nn.ModuleList([
+                OCABBlock(dim, num_heads, window_size, overlap_ratio=0.5,
+                          mlp_ratio=mlp_ratio) for _ in range(depth)
+            ])
+        else:  # swin
+            shift_size = int(window_size * window_shift_ratio)
+            self.blocks = nn.ModuleList([
+                SwinBlock(dim, num_heads, window_size,
+                          shift_size=0 if i % 2 == 0 else shift_size,
+                          mlp_ratio=mlp_ratio, activation=activation)
+                for i in range(depth)
+            ])
         self.conv = nn.Conv2d(dim, dim, conv_kernel, 1, conv_kernel // 2)
         self.skip_type = skip_type
         if skip_type == "learnable":
@@ -148,7 +295,7 @@ class RestoreNet(nn.Module):
                  num_heads=(4, 4, 4, 4), window_size=8, mlp_ratio=2,
                  activation="gelu", head_dim=0, stage_config="uniform",
                  num_stages=4, window_shift_ratio=0.5, skip_type="standard",
-                 conv_kernel=3):
+                 conv_kernel=3, attention_type="swin"):
         super().__init__()
         self.window_size = window_size
         self.embed_dim = embed_dim
@@ -192,7 +339,7 @@ class RestoreNet(nn.Module):
                 self.layers.append(nn.Conv2d(_dims[i-1], dim, 1))
             self.layers.append(
                 RSTB(dim, d, nh, window_size, mlp_ratio, activation,
-                     window_shift_ratio, skip_type, conv_kernel)
+                     window_shift_ratio, skip_type, conv_kernel, attention_type)
             )
         self.norm = nn.LayerNorm(_dims[-1])
         self._final_dim = _dims[-1]
