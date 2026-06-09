@@ -9,15 +9,19 @@ Analyze degraded images, identify present distortion types and their severity, t
 
 **同图模式优先**：实验生成挑战时使用 `--same-image` 标志（`blind_challenge.py`），clean 和 degraded 来自同一原图。这使得像素级校准成为可能，盲识别准确率远高于跨图模式。
 
-## 🚫 绝对禁止
+## 🚫 绝对禁止（违反立即停止）
 
-以下行为**立即停止并重来**：
+以下任何一条都会导致 CPU 100% 持续数小时、结果质量差、实验作废：
 
-1. **写 Python 脚本用 for 循环遍历退化类型** — 这是暴力搜索，永远禁止
-2. **使用 `itertools.permutations` / `itertools.product`** — 组合爆炸，CPU 100% 持续数小时
-3. **一次性测试 > 5 个假设** — 每轮只测 1 个，基于结果调整
-4. **嵌套循环测试 severity × type × order** — 例如 `for blur in blurs: for noise in noises: for comp in comps: for perm in permutations(...)`
-5. **自动网格搜索代替视觉推理** — 先用眼睛看，再用数字验证
+1. **不允许写任何 Python 脚本文件**：不要用 Write/Edit 创建 `.py` 文件来做盲识别搜索。只使用已有的 Skill 脚本（`analyze_degradation.py`、`apply_multi.py`、`compare_degradation.py`）。如果需要循环，在 Bash 中手动逐条执行，每次只测 1 个假设。
+2. **禁止 `for` 循环遍历退化类型**：看到 `for blur in blurs: for noise in noises: for comp in comps` 立即停止。
+3. **禁止 `itertools.permutations` / `itertools.product`**：组合爆炸。
+4. **禁止一次性测试 > 5 个假设**：每轮 1 个，基于结果调整下一轮。总共最多 5 轮。
+5. **禁止 `run_in_background: true` 启动多个并行搜索**：一次只跑一个模拟，观察结果后再决定下一步。
+6. **禁止编写子进程调用脚本**：不要写 Bash 脚本调用 `blind_search2.py 2009 &` 然后 `blind_search2.py 2010 &`。
+7. **禁止嵌套循环**：`for perm in itertools.permutations([...])` 绝对禁止。
+
+**正确做法**：每个退化 3-5 轮，每轮 1 个假设。先 `analyze`，形成假设，`apply_multi` 模拟，`compare` 比较，根据结果调整下一轮假设。
 
 ## Core principles
 
@@ -110,6 +114,26 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 ```
 
 The `--distortions` argument is a comma-separated list of `name:severity` pairs, applied in order.
+
+## 批量盲识别工作流程
+
+当需要对多个退化图做盲识别时，逐个处理，不要写脚本批量：
+
+```
+对每个退化：
+  1. Read 目标图 + 参考图（视觉检查）
+  2. uv run python analyze_degradation.py --target <d> --clean <c>
+  3. 基于 ratios_vs_clean 形成假设（1个管线）
+  4. uv run python apply_multi.py --input <c> --distortions "f1:s1,..." --output /tmp/t.png
+  5. PYTHONPATH=<project> uv run python compare_degradation.py --target <d> --simulated /tmp/t.png --clean <c>
+  6. 如果 verdict=GOOD → 保存。否则调整假设，回到步骤4（最多5轮）
+  7. 保存到 predicted_params/{id}.json
+```
+
+**同图模式输出格式**：
+```json
+{"pipeline": [{"function":"...","severity":N}], "analysis": {"verdict":"GOOD|NEEDS_WORK|POOR", "ci_pass_rate":"N/10"}}
+```
 
 ## Mode Selection: Same-image vs Cross-image
 
