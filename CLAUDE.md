@@ -13,7 +13,15 @@ This file provides guidance to Claude Code when working with this repository.
 5. **launcher 隔离**：训练用 `bash launcher.sh`，不写完整命令
 6. **已完成的训练不重跑**
 
-详见 [WORKFLOW.md](WORKFLOW.md)
+### 子 Agent 盲识别约束 🔴
+
+子 Agent 做盲识别时**绝对禁止**：
+- 写 Python 脚本用 `for` 循环遍历退化类型
+- 使用 `itertools.permutations` / `itertools.product`
+- 一次性测试 > 5 个假设
+- 嵌套循环测试 severity × type × order
+
+**正确**：每退化 3-5 次迭代，基于上一次结果调整假设。
 
 ## 环境安装
 

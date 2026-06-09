@@ -9,6 +9,16 @@ Analyze degraded images, identify present distortion types and their severity, t
 
 **同图模式优先**：实验生成挑战时使用 `--same-image` 标志（`blind_challenge.py`），clean 和 degraded 来自同一原图。这使得像素级校准成为可能，盲识别准确率远高于跨图模式。
 
+## 🚫 绝对禁止
+
+以下行为**立即停止并重来**：
+
+1. **写 Python 脚本用 for 循环遍历退化类型** — 这是暴力搜索，永远禁止
+2. **使用 `itertools.permutations` / `itertools.product`** — 组合爆炸，CPU 100% 持续数小时
+3. **一次性测试 > 5 个假设** — 每轮只测 1 个，基于结果调整
+4. **嵌套循环测试 severity × type × order** — 例如 `for blur in blurs: for noise in noises: for comp in comps: for perm in permutations(...)`
+5. **自动网格搜索代替视觉推理** — 先用眼睛看，再用数字验证
+
 ## Core principles
 
 ### Visual reasoning, not brute-force enumeration
@@ -19,7 +29,7 @@ Instead, treat each test as a hypothesis to validate or refute:
 - **Look first, simulate second.** Read the target image and describe what you see before writing any code.
 - **Test one hypothesis at a time.** Don't generate 30 images in a grid search. Generate ONE image that tests your current best guess, then compare and refine.
 - **Rule out categories by visual inspection, not by running them.** You can see that an image has no blocking artifacts without running JPEG compression. You can see it has no salt-and-pepper noise without running impulse noise. Only simulate what you genuinely suspect.
-- **Each iteration should be a deliberate adjustment**, not a random probe. If you find yourself writing a for-loop over all distortion types, stop — you're brute-forcing.
+- **Each iteration should be a deliberate adjustment**, not a random probe. **If you find yourself writing a for-loop over all distortion types, stop — you're brute-forcing.**
 
 The difference between a good analysis and a bad one:
 - Bad: "Let me test all 35 functions and see which one has the lowest MSE."
