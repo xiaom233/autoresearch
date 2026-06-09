@@ -11,7 +11,11 @@ This file provides guidance to Claude Code when working with this repository.
 3. **同图盲识别**：挑战生成用 `--same-image`
 4. **不用 rebase**：只用 merge/push
 5. **launcher 隔离**：训练用 `bash launcher.sh`，不写完整命令
-6. **已完成的训练不重跑**
+6. **已完成的训练不重跑**：启动 M_blind 前先检查 checkpoint 是否存在
+   ```bash
+   ls expN/experiments/M_blind/checkpoints/*.pt && echo "已存在，跳过" || echo "需要训练"
+   ```
+   如果已有 checkpoint（含 val_psnr_db 的训练日志），绝不重新训练
 
 ### 子 Agent 盲识别约束 🔴
 

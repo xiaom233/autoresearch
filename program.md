@@ -110,6 +110,8 @@ python resource/.../test_degradation.py \
 错误顺序: Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6
                               ^^^^^^^^
                               train.py 会打印 pipeline 到日志 → 泄露！
+
+**Phase 1 和 Phase 4 可并行**：M_blind 用 GPU 训练，盲识别用 CPU 做 Skill 分析，互不冲突。
 ```
 
 **唯一例外**：Phase 3 的评估脚本作为子进程运行，stdout 只输出 PSNR 数值（`AR_QUIET_PIPELINE=1` 抑制 pipeline 打印）。
