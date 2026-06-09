@@ -12,6 +12,7 @@ DFPIR 盲复原基准模型 — 特定退化测试（多卡并行 + tiled infere
 """
 
 import os, sys, json, argparse, math, time
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import torch
 import torch.nn as nn
@@ -161,28 +162,43 @@ def worker(gpu_id, image_list, pipeline, results_queue):
         ffn_expansion_factor=2.66, bias=False, LayerNorm_type="WithBias",
     )
     model = DFPIRBlind(base).to(device)
+    print(f"[GPU {gpu_id}] Model built, loading checkpoint...", flush=True)
     ckpt = torch.load(CKPT_PATH, map_location="cpu")
+    print(f"[GPU {gpu_id}] Checkpoint loaded, applying state_dict...", flush=True)
     model.load_state_dict(ckpt["model"])
+    print(f"[GPU {gpu_id}] State dict loaded, eval mode...", flush=True)
     model.eval()
 
-    metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
     n = len(image_list)
+    print(f"[GPU {gpu_id}] Ready, preloading {n} images into memory...", flush=True)
     if n == 0:
-        results_queue.put((gpu_id, metrics, 0))
+        results_queue.put((gpu_id, {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}, 0))
         return
 
-    for idx, path in enumerate(image_list):
+    # Preload all images + apply degradation upfront using multi-threading
+    def _load_one(path):
         img = np.array(Image.open(path).convert("RGB"), dtype=np.uint8)
         degraded = img.copy()
         for func, sev in pipeline:
             degraded = add_distortion(degraded, severity=sev, distortion_name=func)
+        d = torch.from_numpy(degraded).permute(2, 0, 1).float().div_(255.0)
+        c = torch.from_numpy(img).permute(2, 0, 1).float().div_(255.0)
+        return d, c
 
-        d = torch.from_numpy(degraded).permute(2, 0, 1).float().div_(255.0).unsqueeze_(0).to(device)
-        c = torch.from_numpy(img).permute(2, 0, 1).float().div_(255.0).unsqueeze_(0).to(device)
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        samples = list(ex.map(_load_one, image_list))
 
+    loader = torch.utils.data.DataLoader(samples, batch_size=1, shuffle=False,
+                                          num_workers=0, pin_memory=True)
+    print(f"[GPU {gpu_id}] Preloaded {n} images, starting inference...", flush=True)
+
+    metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
+    for d, c in loader:
+        d = d.to(device, non_blocking=True)
+        c = c.to(device, non_blocking=True)
         pred = tiled_forward(model, d, TILE_SIZE, TILE_OVERLAP, device, autocast_ctx).float()
         clean_f = c.float()
-
         metrics["psnr_rgb"] += compute_psnr(pred, clean_f).item()
         py, cy = rgb_to_y(pred, clean_f)
         metrics["psnr_y"] += compute_psnr(py, cy).item()
@@ -239,23 +255,34 @@ def main():
 
     # Multi-GPU parallel evaluation via multiprocessing
     t0 = time.time()
-    ctx = mp.get_context("spawn")
-    queue = ctx.Queue()
-    processes = []
-    for i, gid in enumerate(gpu_ids):
-        img_paths = [p for p, _ in splits[i]]
-        p = ctx.Process(target=worker, args=(gid, img_paths, pipeline, queue))
-        p.start()
-        processes.append(p)
-
-    # Collect results
     all_metrics = {}
-    for _ in range(n_gpus):
-        gid, metrics, n = queue.get()
+    if n_gpus == 1:
+        # Single GPU: call worker directly, avoid spawn overhead
+        gid = gpu_ids[0]
+        img_paths = [p for p, _ in splits[0]]
+        class _Q:
+            def put(self, data):
+                self.data = data
+        q = _Q()
+        worker(gid, img_paths, pipeline, q)
+        gid, metrics, n = q.data
         all_metrics[gid] = (metrics, n)
+    else:
+        ctx = mp.get_context("spawn")
+        queue = ctx.Queue()
+        processes = []
+        for i, gid in enumerate(gpu_ids):
+            img_paths = [p for p, _ in splits[i]]
+            p = ctx.Process(target=worker, args=(gid, img_paths, pipeline, queue))
+            p.start()
+            processes.append(p)
 
-    for p in processes:
-        p.join()
+        for _ in range(n_gpus):
+            gid, metrics, n = queue.get()
+            all_metrics[gid] = (metrics, n)
+
+        for p in processes:
+            p.join()
 
     # Aggregate per dataset
     ds_metrics = defaultdict(lambda: {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0, "count": 0})

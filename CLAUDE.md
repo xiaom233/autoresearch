@@ -127,25 +127,57 @@ CUDA_VISIBLE_DEVICES=0 exp1 & CUDA_VISIBLE_DEVICES=0 exp2 &  # 并行! OOM!
 
 每个实验计划中，必须用 DFPIR (31M, CVPR'25) 作为大模型基线，与我们的小模型 (~0.45M) 对比。
 
-**启动方式**：使用 Agent 子进程调用，避免阻塞主实验流程。
+#### ✅ 正确方法：8 GPU 串行模式（推荐）
 
 ```bash
-# 用法: 对每组退化参数跑一次 DFPIR
-bash exp9/scripts/dfpir_eval.sh <params.json> [gpus] [output.json]
+# 1. 创建队列（每个退化用全部 8 GPU，串行执行）
+> dfpir_queue.txt
+for f in expN/degradation/*.json; do
+    name=$(basename $f .json)
+    [[ "$name" =~ _R[12]$|_fixed$|challenge_ids ]] && continue
+    echo "/home/zyli/anaconda3/envs/dfpir/bin/python \
+      resource/.../test_degradation.py --params $f --gpus 0,1,2,3,4,5,6,7 \
+      --output expN/results/dfpir_${name}.json \
+      > expN/logs/dfpir_${name}.log 2>&1|DFP_${name}" >> dfpir_queue.txt
+done
 
-# 示例 (单GPU):
-bash exp9/scripts/dfpir_eval.sh exp9/degradation/D1_dual.json 0 exp9/dfpir_D1.json
-
-# 示例 (多GPU, 737张图, 约4分钟):
-bash exp9/scripts/dfpir_eval.sh params.json 0,1,2,3 results/dfpir_baseline.json
+# 2. 启动专用 runner（串行取任务，每个任务自动用 8 GPU）
+bash exp12/scripts/dfpir_runner.sh dfpir_queue.txt &
 ```
+
+**前提条件**：⚠️ **全部 8 GPU 必须完全空闲**。spawn 在有任何 CUDA 进程时死锁。
+
+**性能**：每退化 ~4.2 分钟，56 退化 ≈ 4 小时。
+
+#### ✅ 备选：单 GPU direct 模式（可与训练并行）
+
+```bash
+# 队列中每个任务用单 GPU（--gpus 0 + CUDA_VISIBLE_DEVICES），每个任务前加 sleep 10 错峰
+echo "sleep 10 && CUDA_VISIBLE_DEVICES=GPU_ID ... --gpus 0 ..." >> dfpir_queue.txt
+# 启动 8 个 runner
+for gpu in 0..7; do bash exp10/scripts/gpu_runner.sh $gpu dfpir_queue.txt & done
+```
+
+#### ❌ 错误方法
+
+| 错误 | 原因 |
+|------|------|
+| 8 GPU 模式 + GPU 被占用 | spawn 死锁，进程永久挂起 |
+| 8 GPU 模式 + `CUDA_VISIBLE_DEVICES` | spawn 需要看到全部 GPU |
+| 单 GPU 模式 + 无 `sleep` 错峰 | 8 进程同时预加载 → CPU 饱和 → GPU 饿死 |
+| `fork` 替代 `spawn` | CUDA 拒绝：`Cannot re-initialize CUDA in forked subprocess` |
+
+#### 优化记录
+
+- `test_degradation.py` worker：`ThreadPoolExecutor(2)` 多线程预加载 + DataLoader pin_memory
+- 单 GPU 模式（`n_gpus==1`）direct 调用 worker，不走 spawn
+- `train.py` evaluate() 同样加入预加载 + DataLoader
 
 **关键参数**：
 - Checkpoint: `resource/.../dfpir_blind/checkpoints/dfpir_blind_step301920.pt`
 - 模型: `ChannelShuffle_skip_textguaid` (31.1M 参数)
 - 环境: `/home/zyli/anaconda3/envs/dfpir/bin/python` (torch 2.5.1+cu124)
-- 自动 tiled inference (tile=512), 多 GPU 并行
-- 预计 4-5 分钟/退化 (单GPU), ~1 分钟 (8GPU)
+- 验证集: 737 张图片，自动 tiled inference (tile=512, overlap=64)
 
 **对比格式**：实验报告中必须包含 DFPIR PSNR 作为参考上界。
 

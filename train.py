@@ -286,16 +286,26 @@ def compute_ssim(pred, target):
 @torch.no_grad()
 def evaluate(model, val_dataset, device, autocast_ctx):
     """Compute PSNR/SSIM in RGB and Y over full validation set.
-    Uses eager-mode model (uncompiled) to avoid recompilation for variable image sizes.
+    Preloads all images to memory, then uses DataLoader with batch_size=1
+    to overlap CPU→GPU transfer with GPU inference.
     """
     eval_model = getattr(model, '_orig_mod', model)  # uncompiled for variable-size eval
     eval_model.eval()
-    metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
     n = len(val_dataset)
-    for i in range(n):
-        degraded, clean = val_dataset[i]
-        degraded = degraded.unsqueeze(0).to(device)
-        clean = clean.unsqueeze(0).to(device)
+    if n == 0:
+        return {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
+
+    # Preload all degraded/clean pairs into CPU memory (avoids repeated PIL I/O)
+    print(f"  Preloading {n} validation images into memory...", flush=True)
+    samples = [val_dataset[i] for i in range(n)]
+
+    # Use DataLoader for async CPU→GPU transfer
+    loader = torch.utils.data.DataLoader(samples, batch_size=1, shuffle=False,
+                                          num_workers=0, pin_memory=True)
+    metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
+    for degraded, clean in loader:
+        degraded = degraded.to(device, non_blocking=True)
+        clean = clean.to(device, non_blocking=True)
         with autocast_ctx:
             pred = eval_model(degraded)
         pred_f = pred.float()
