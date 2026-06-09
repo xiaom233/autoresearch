@@ -75,7 +75,7 @@ Phase 4                    Phase 5                    Phase 6
 
 **Phase 3 — Baseline testing**: Test blind model (`M_blind`) on the specific degradation. Also test DFPIR all-in-one baseline. Result: baseline PSNR without specialized optimization.
 
-**Phase 4 — Blind degradation identification**：给定一张未知退化图，用 `image-degradation-simulator` skill 盲识别退化类型、严重度和顺序。输出：`predicted_params.json`。详见"盲识别挑战"章节。
+**Phase 4 — Blind degradation identification**：给定一张未知退化图，用 `image-degradation-simulator` skill 盲识别退化类型、严重度和顺序。输出：`predicted_params.json`。**推荐 `--same-image` 同图模式**（clean 为 degraded 原图，可像素级校准）。详见"盲识别挑战"章节。
 
 **Phase 5 — Targeted optimization (experiment loop)**: Use `PARAMS_PATH = "predicted_params.json"` to train a specialist model. Run experiment loop: modify `train.py`, train, evaluate, keep/discard.
 

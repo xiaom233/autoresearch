@@ -4,6 +4,17 @@ This file provides guidance to Claude Code when working with this repository.
 
 **语言偏好：优先使用中文回答。所有与用户的沟通、代码注释、commit 信息均使用中文。**
 
+## ⚠️ 关键规则
+
+1. **绝不接触 GT**：`.ground_truth/` 和 `degradation/` 全程不可读
+2. **VAL 锁定**：反思修正只改 PARAMS，VAL 永远指向 GT
+3. **同图盲识别**：挑战生成用 `--same-image`
+4. **不用 rebase**：只用 merge/push
+5. **launcher 隔离**：训练用 `bash launcher.sh`，不写完整命令
+6. **已完成的训练不重跑**
+
+详见 [WORKFLOW.md](WORKFLOW.md)
+
 ## 环境安装
 
 ```bash

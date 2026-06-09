@@ -5,7 +5,9 @@ description: Use this skill whenever the user needs to analyze degraded images, 
 
 # Image Degradation Simulator
 
-Analyze degraded images, identify present distortion types and their severity, then reproduce the degradation on clean images through iterative hypothesis, simulation, visual comparison, and refinement. This is an ill-posed inverse problem — there is no clean reference to compute PSNR/SSIM against — so the approach relies entirely on iterative visual analysis.
+Analyze degraded images, identify present distortion types and their severity, then reproduce the degradation on clean images through iterative hypothesis, simulation, visual comparison, and refinement.
+
+**同图模式优先**：实验生成挑战时使用 `--same-image` 标志（`blind_challenge.py`），clean 和 degraded 来自同一原图。这使得像素级校准成为可能，盲识别准确率远高于跨图模式。
 
 ## Core principles
 
@@ -124,19 +126,23 @@ Decision rules:
 - User explicitly says "this is the original" → **same-image mode** regardless
 - No clean source provided → **target-only mode** (same flow as cross-image Phase 1)
 
-### Same-image mode (preferred when available)
+### Same-image mode (preferred, recommended)
+
+**生成挑战**：使用 `blind_challenge.py --same-image`，clean 即为 degraded 的原图（未退化版本）。
 
 When the target and clean source are the same image, you have a massive advantage: **every metric can be calibrated**. Compute target/clean ratios for all 14 analysis modules. Content-dependent metrics become reliable:
 
 ```bash
-python ${CLAUDE_SKILL_DIR}/scripts/analyze_degradation.py --target <target> --clean <clean>
+uv run python .claude/skills/image-degradation-simulator/scripts/analyze_degradation.py --target <target> --clean <clean>
 ```
 
 The `ratios_vs_clean` section tells you exactly what changed: gradient_magnitude_ratio=0.21 means 79% sharpness loss → severe blur. laplacian_variance_ratio=0.03 means 97% detail loss → confirms heavy blur. saturation_mean shift of +50 means deliberate saturation boost.
 
-In same-image mode, you can also use MSE/PSNR during iterations as a convergence signal — pixel-perfect match IS possible if your pipeline is exactly right (as demonstrated in Round 1 tests).
+In same-image mode, you can also use MSE/PSNR during iterations as a convergence signal — pixel-perfect match IS possible if your pipeline is exactly right.
 
-### Cross-image mode (current default)
+验证同图：correlation > 0.95（`blind_challenge.py --same-image` 自动满足）
+
+### Cross-image mode (fallback)
 
 When the target and clean source are different images, follow the target-only Phase 1 below. **Never use clean source statistics as a baseline** — content differences will mislead you into false degradation detections.
 

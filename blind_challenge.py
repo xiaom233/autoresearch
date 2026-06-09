@@ -150,6 +150,8 @@ def main():
                         help="Use specific clean image (otherwise picks randomly)")
     parser.add_argument("--ref-image", type=str, default=None,
                         help="Clean REFERENCE image for skill (MUST be different from --clean-image)")
+    parser.add_argument("--same-image", action="store_true",
+                        help="Same-image mode: clean reference = original undegraded image (enables pixel-level calibration)")
     parser.add_argument("--target-only", action="store_true",
                         help="Target-only mode: NO clean reference provided (hardest test)")
     parser.add_argument("--output-dir", type=str, default=OUTPUT_DIR,
@@ -174,13 +176,14 @@ def main():
         target_path = pick_random_image(VAL_DIRS)
 
     # Pick reference image (for skill's simulation — must be DIFFERENT)
-    if args.target_only:
+    if args.same_image:
+        ref_path = target_path  # same source, undegraded
+    elif args.target_only:
         ref_path = None
     elif args.ref_image:
         ref_path = args.ref_image
-        if ref_path == target_path:
-            print("ERROR: --ref-image must differ from --clean-image. Use --target-only for no reference.")
-            sys.exit(1)
+        # Same-image mode: using the same source as reference is valid.
+        # This enables pixel-level calibration of content-dependent metrics.
     else:
         # Pick a DIFFERENT random image from a DIFFERENT dataset
         ref_path = pick_random_image(VAL_DIRS)
