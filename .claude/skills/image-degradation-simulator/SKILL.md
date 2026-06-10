@@ -126,8 +126,97 @@ The `--distortions` argument is a comma-separated list of `name:severity` pairs,
   3. 基于 ratios_vs_clean 形成假设（1个管线）
   4. uv run python apply_multi.py --input <c> --distortions "f1:s1,..." --output /tmp/t.png
   5. PYTHONPATH=<project> uv run python compare_degradation.py --target <d> --simulated /tmp/t.png --clean <c>
-  6. 如果 verdict=GOOD → 保存。否则调整假设，回到步骤4（最多5轮）
-  7. 保存到 predicted_params/{id}.json
+  6. 如果 verdict=GOOD → 进入步骤 7（保存前校验）。否则调整假设，回到步骤4（最多5轮）
+  7. ⚠️ 保存前质量校验（必须执行，见下文）→ 通过后保存
+  8. 保存到 predicted_params/{id}.json
+```
+
+⚠️ 步骤 7 是新增的强制环节。**在保存前必须执行质量校验**，不通过则标记 NEEDS_WORK 而非 GOOD。
+
+### 保存前质量校验 ⚠️ 必须执行
+
+CI pass（compare_degradation.py 的 verdict=GOOD）**不等于盲识别正确**。exp13 数据证明：CI=8/10 时函数正确率仅 56%。保存前必须执行以下检查：
+
+#### 检查 1: 管线结构一致性
+
+```
+规则 1.1: blur/noise/compression 三大类别各最多出现一次
+         如果同类别出现两次 → 标记 NEEDS_WORK，说明识别结果不合理
+
+规则 1.2: oversharpen 与 blur 不能同时存在
+         两者梯度方向相反 (锐化 vs 模糊)，如同时出现 → 识别矛盾
+
+规则 1.3: 管线最多 3 步，最少 1 步
+```
+
+#### 检查 2: 已知误识别模式 (来源: exp13 24组数据)
+
+```
+模式 1: oversharpen 误引入
+  exp13 中 Pred 出现 4 次但 GT 出现 0 次
+  → 如果管线含 oversharpen，检查原始图片是否真的有边缘光晕
+  → 如果没有肉眼可见的光晕 → 可能是 compression_jpeg 或 blur 被误识别
+  → 重新检查 compression 和 blur 类别是否被漏检
+
+模式 2: blur_glass → blur_gaussian / blur_lens 混淆
+  exp13 中 blur_glass (GT) 5次，Pred 中全部被替换
+  → 如果管线含 blur_gaussian 或 blur_lens，检查图像是否有径向模糊特征
+  → radial falloff → blur_lens; 均匀柔化 → blur_gaussian; 不规则扭曲 → blur_glass
+
+模式 3: noise_speckle → noise_gaussian 混淆
+  exp13 中 noise_speckle (GT) 2次，Pred 中全部替换
+  → 检查噪声是否有空间相关性或斑点模式
+  → 如果噪声不是纯随机均匀分布 → 考虑 spatially_correlated 或 speckle
+
+模式 4: noise 与 compression 混淆
+  noise_spatially_correlated 在跨图模式常被误判为 compression
+  → 检查 block_boundary_ratio: > 1.1 → 有 JPEG 块效应
+  → 仅 entropy 高但无块效应 → 可能是噪声
+```
+
+#### 检查 3: 视觉确认（同图模式必须）
+
+```
+对每一类退化必须有视觉证据:
+  blur:  边缘平滑? 有方向性拖影? 有径向衰减? → 确定 blur 子类型
+  noise: 噪声均匀? 有色度噪声? 有空间模式? → 确定 noise 子类型  
+  compression: 8×8 块边界? ringing? → 确认是 jpeg 还是 jpeg_2000
+  oversharpen: 边缘光晕 (halo)? → 否则可能是误识别
+  brightness/contrast/saturation: 全局统计量明显偏移? → 量化确认
+```
+
+#### 检查 4: 置信度评估
+
+```
+CI = compare_degradation.py 的 ci_pass_rate
+
+if CI >= 9 AND 所有检查通过 → GOOD (高置信)
+elif CI >= 7 AND 所有检查通过 → GOOD
+elif CI >= 7 BUT 检查 2 有可疑 → NEEDS_WORK + 注明具体可疑模式
+elif CI < 7 → NEEDS_WORK (低置信度)
+elif CI < 5 → POOR (不可用)
+```
+
+#### 校验记录
+
+校验结果写入 `reflection.json`（与 params.json 同目录）:
+
+```json
+{
+  "validation": {
+    "pipeline_consistency": true,
+    "category_check": "passed",
+    "known_patterns": ["模式2: blur_gaussian可能为blur_glass"],
+    "visual_confirmation": {
+      "blur": "confirmed: uniform gaussian-like softening",
+      "noise": "confirmed: fine grain, no spatial pattern",
+      "compression": "not applicable"
+    },
+    "ci_score": "8/10",
+    "final_verdict": "NEEDS_WORK",
+    "note": "CI=8但存在blur_glass/gaussian混淆可能，标记NEEDS_WORK"
+  }
+}
 ```
 
 **同图模式输出格式**：
