@@ -1,115 +1,175 @@
 # Reflection Mechanism — 训练策略反思修正
 
-## 核心原理
+> 来源: exp11 (~1284组 误识别分析) + exp12 (56退化 多轮修正) + exp13 (24退化 盲识别全流程)
+> 核心洞察: 盲识别质量 > 训练策略调整 > LR 微调
 
-反思的目标不是修正退化参数（exp13 场景），而是**调整训练策略**使 Spec 模型达到或超过 Ft 水平。
+---
 
-## 诊断框架
+## 一、反思的三个层次（按优先级排列）
 
-### 1. 分析 Spec 日志的诊断特征
+```
+第 1 层：盲识别修正（影响最大，-17.5 dB → +15+ dB 潜在收益）
+第 2 层：架构选择（影响中等，-5.9 dB → +3.5 dB）
+第 3 层：训练策略（影响最小，< 0.5 dB）
+```
 
-从训练日志中提取：
-- **最终 PSNR**：Spec vs Ft vs Blind baseline
-- **Loss 收敛曲线**：是否提前饱和？是否需要更多步数？
-- **退化类型**：blur/noise/compression/brightness/contrast/saturation/quantization 的组合
+**关键教训**：exp12 的 R1/R2/R3 实验证明纯训练策略调整（LR 变化）几乎无法超越原始 Ft (EPOCH=2, LR=5e-4)。
+改进应聚焦于修正退化参数（severity）或架构升级。
 
-### 2. 识别 Ft >> Spec 的根本原因
+---
 
-| 原因 | 诊断信号 | 修正方向 |
-|------|---------|---------|
-| 盲预训练特征迁移 | Ft 大幅领先，退化复杂 | 使用 Ft (LOAD_CKPT) |
-| 梯度冲突 | 退化方向相反（blur+sharpen） | 降低 LR 或 Curric |
-| 训练步数不足 | loss 仍在下降 | 增加 EPOCH_BUDGET |
-| LR 不当 | loss 震荡或下降太慢 | 调整 LR |
-| 退化严重度过高 | PSNR 绝对值低 | 降低 sev 或分阶段 |
+## 二、第一层：盲识别修正 — 用 PSNR 反推识别误差
 
-### 3. 基于 finetune_strategy.md 的原则
+盲识别错误是 PSNR 损失的**最大单一来源**。
 
-**原则 1（梯度干扰）**：blur + sharpen/contrast 组合 → 梯度冲突 → Ft 或 Curric
-**原则 2（迁移价值）**：去噪/去压缩 → 高迁移价值 → Ft 有效
-**原则 4（预训练通用性）**：盲预训练 → 通用特征 → Ft 利用已有知识
-**原则 7（策略效应量级）**：梯度干扰 >> 迁移价值 > 修复难度 > LR/loss
+### 硬编码诊断规则 (来源: exp11 ~1284 组交叉测试)
 
-## 修正决策树
+#### 规则 1：PSNR 异常检测
+```
+if PSNR_spec < M_blind_baseline - 6 dB:
+    → 高概率盲识别错误 (90% 错误案例满足此条件)
+```
+
+#### 规则 2：标量特征确认
+```
+if edge > 0.10 AND chroma > 0.03:
+    → 高置信误识别 (98% precision, 50% recall)
+```
+
+#### 规则 3：推断误差类型
+```
+if entropy > 2.0 AND color_asymmetry > 0.08:
+    → 退化类型误识别 (遗漏或错误全局退化)
+elif entropy > 2.0 AND saturation < 0.15:
+    → 可能误识别为 gamma 型退化
+elif edge_frac < 0.13 AND entropy > 2.0:
+    → 严重度偏差 (估计过高或过低)
+```
+
+#### 规则 4：架构敏感度阈值
+```
+FiLM: edge > 0.068 → 100% recall (最敏感)
+Swin: edge > 0.081 → 97% precision
+CSN:  edge > 0.086 → 97% precision
+```
+
+### 各类型盲识别错误的代价 (来源: exp11 盲验证)
+
+| 错误类型 | 平均 PSNR 损失 | 严重程度 |
+|---------|:--:|:--:|
+| **类型错误** (type wrong) | **~17.5 dB** | 最严重 |
+| 严重度错误 (sev wrong) | ~14.5 dB | 严重 |
+| 漏检全局退化 (missing global) | ~12.9 dB | 严重 |
+| 顺序错误 (order wrong) | ~10 dB | 中等 |
+
+### 容易混淆的退化对 (exp11, 基于 839 组分析)
+
+| 退化对 | PSNR Gap | 混淆原因 |
+|--------|:--:|------|
+| BS ↔ SF7 | 16-20 dB | 全局颜色变换相互混淆 |
+| L4 ↔ SF7 | 16-20 dB | brightness 识别为 saturate |
+| SF5 ↔ SF7 | 14-21 dB | 单退化内部严重混淆 |
+| L2 ↔ L6 | 15-16 dB | 相同全局类型 (contrast+noise) |
+| L2 ↔ L4 | 13 dB | 相同全局，不同步数 |
+
+### 修正方向
+
+1. **Spec << M_blind** → 盲识别可能错误，检查 predicted_params
+2. **Spec > M_blind 但 << Ft (exp12)** → 退化参数可能偏轻/偏重，调整 severity
+3. **Spec ≈ Ft ≈ M_blind** → 盲识别高度准确，无需修正退化参数
+
+---
+
+## 三、第二层：架构选择修正
+
+### 架构-退化匹配规则
+
+| 退化特征 | 推荐架构 | 避免 |
+|---------|---------|------|
+| 严重 motion blur (sev ≥ 4) | OCAB + ws=16 | MDTA |
+| 随机噪声为主 | 任意 (Swin 即可) | — |
+| contrast/brightness 全局退化 | Swin (只用 Swin) | MDTA, OCAB |
+| contrast + 结构化局部 | Swin + FiLM-GCM | ColorPre |
+| 纯 gamma/brightness_shift | Swin 基线 (无需额外) | — |
+| 盲识别不确定 (低置信度) | DualBranch 或 CSN | ColorPre (泛化差) |
+
+### 推荐附加组件
+
+| 组件 | 参数 | 适用场景 | 效果 | 风险 |
+|------|:--:|------|:--:|------|
+| ColorPre | +0.8K | 默认首选，全局退化 | 最稳定 | 跨退化泛化差 |
+| CSN | +1K | 通用，最轻量 | L5 +1.39 | 效果温和 |
+| FiLM-GCM | +26K | contrast+结构化 | L5 +3.52 | L1 NaN |
+| DualBranch | +3K | 需要鲁棒性时 | 最鲁棒 (10.1 gap) | 速度 -3% |
+
+---
+
+## 四、第三层：训练策略修正
+
+### 修正决策树
 
 ```
 Spec < Ft?
+├── 全局退化? → 废弃 Ft, 改用 Direct (来源: exp9)
 ├── Δ > 3 dB → 严重问题
-│   ├── 退化复杂（≥2种）→ Ft + 降低 LR (1e-4)
-│   └── 退化简单（1种）→ 检查训练是否崩溃，重新训练
-├── 1 dB < Δ ≤ 3 dB → 中度问题
-│   ├── 盲预训练特征可迁移 → Ft + LR=5e-4
-│   └── 梯度冲突 → Ft + LR=1e-4
-├── 0.3 dB < Δ ≤ 1 dB → 轻微问题
-│   └── Ft + 调整 LR 或 EPOCH_BUDGET
-└── Δ ≤ 0.3 dB → 基本持平，可选 Ft 或保持 Spec
+│   ├── 退化复杂 (≥2种) → Ft + LR=5e-4 (不要降 LR!)
+│   └── 退化简单 (1种) → 检查是否训练崩溃, 重跑
+├── 1 < Δ ≤ 3 dB → 中度差距
+│   └── 检查 severity 是否合理: R1 常高估 severity
+├── 0.3 < Δ ≤ 1 dB → 轻微差距
+│   └── Ft + LR=5e-4, 可能已接近最优
+└── Δ ≤ 0.3 dB → 基本持平
+    └── 不追额外训练
 ```
 
-## R1 修正格式
+### 关键教训
 
-```json
-{
-  "degradation": "D01_dual",
-  "round": 1,
-  "spec_psnr_before": 28.06,
-  "ft_psnr": 28.17,
-  "diagnosis": ["Ft ≈ Spec (Δ=0.11 dB)，盲预训练对此退化帮助有限"],
-  "suggested_action": "use_ft",
-  "ar_flags": "AR_LOAD_CKPT=exp12/experiments/M_blind/checkpoints/M_blind_step15092.pt AR_LEARNING_RATE=5e-4"
-}
-```
+1. **降 LR (5e-4→1e-4) 几乎从不帮助 Ft** — exp12 的 13 组 R1 验证了这一规律，仅 T20 例外
+2. **R1 最常见的错误是高估 severity** — 6/10 失败案例源于 severity 被错误上调
+3. **Ft (LR=5e-4, EPOCH=2) 已接近当前架构的训练策略上限** — 后续改进应来自架构升级
 
-## 训练预算公平性 ⚠️
+---
 
-**所有修正训练 (R1/R2/R3) 必须使用与基线 (Spec/Ft) 相同的 EPOCH_BUDGET=2。**
+## 五、多轮修正机制
 
-- Spec 和 Ft 基线使用 EPOCH_BUDGET=2 (15094 steps)
-- R1/R2/R3 修正训练也必须使用 EPOCH_BUDGET=2
-- **禁止**通过增加训练步数 (EPOCH_BUDGET=3) 来获得 PSNR 提升
-- PSNR 提升必须来自策略改进（LR、LOAD_CKPT、架构等），而非更多训练时间
+### R1 (首轮修正)
+- 如果 Spec << M_blind: 检查盲识别 → 修正 predicted_params
+- 如果 Spec 接近 M_blind 但 << Ft: 检查 severity → 调整参数 ±1
+- 如果全局退化用了 Ft: 切换到 Direct
+- 如果架构选择不当: 参考架构速查表更换
 
-**Why**: 若 R1 用 EPOCH=3，任何 PSNR 提升都可能只是因为多训练了 50% 步数，无法判断是策略改进还是训练时间的效果。这会导致错误的经验总结。
+### R2 (二次修正)
+- R1 后 Δ > 0.5 dB → 继续调整
+- 方向：尝试不同损失函数 (MSE/L1)、调整架构附件 (添加 CSN/ColorPre)
+- **不能增加 EPOCH**
 
-## 多轮修正机制
+### R3 (三次修正)
+- R2 后仍有明显差距 → 尝试 Curric、Cascade 等更大改动
+- 最多 3 轮，之后标记"已收敛"
 
-- **R1**：首次分析 → 提出修正 → 训练 (EPOCH=2) → 对比 PSNR
-- **R2**：R1 后 Δ > 0.5 dB → 继续调整（如改 LR、加架构特性。**不能增加 EPOCH**）
-- **R3**：R2 后仍有明显差距 → 最后尝试（如 Curric、loss function 变更。**不能增加 EPOCH**）
-- 最多 3 轮，每轮 PSNR 提升需 > 0.5 dB 才值得继续
+### 收敛判定
+- Δ < 0.3 dB → 已收敛，不值得继续
+- R1/R2 倒退 → 修正方向错误，回退到前一版本
 
-## 关键经验
+---
 
-1. **Ft 是所有退化的安全选择**——exp9 (~500 组) 证明 Ft 几乎不会显著差于 Spec
-2. **盲识别质量决定一切**——exp11 证明类型错误代价 -17.5 dB，严重度错误 -14.5 dB，漏检 -12.9 dB。盲识别准确远比训练策略重要
-3. **盲预训练的通用特征最有价值**——当退化涉及 blur + noise + compression 多类别时
-4. **Spec 优势场景稀少**——仅在退化极简单（单一轻微退化）或盲识别预测参数接近 GT 时
-5. **不要过度修正**——Δ < 0.3 dB 不值得额外训练
-6. **EPOCH_BUDGET 必须统一**——所有修正训练必须用 EPOCH=2，与基线公平对比
-7. **LR 微调难以超越 Ft**——exp12 的 R1/R2 实验证明，纯训练策略调整几乎无法超越原始 Ft (LR=5e-4)。改进应聚焦于修正退化参数或架构升级
+## 六、训练公平性规则 ⚠️
 
-## 误识别诊断阈值 (来源: exp11 ~1284 组交叉测试)
+1. **EPOCH_BUDGET 必须统一 = 2** — 与基线 Spec/Ft 一致。禁止 EPOCH=3
+2. **模块参数 ≤ 基线 × 1.05 (≤ 477K)** — 架构对比必须在同参数下
+3. **VAL_PARAMS_PATH 必须锁定为 GT** — R1 只允许修改 PARAMS (exp12 的致命错误)
+4. **PSNR 提升必须 > 0.5 dB 才值得继续下一轮**
+5. **所有对比在同一 GT 上评估** — 否则毫无意义
 
-盲识别错误的最小化比训练策略调整更关键。以下硬规则可直接用于检测盲识别可能存在的错误：
+---
 
-| 指标组合 | 阈值 | 指示 |
-|---------|------|------|
-| `edge > 0.10` AND `chroma > 0.03` | → | 98% 精度误识别 |
-| `entropy > 2.0` AND `color_asymmetry > 0.08` | → | 退化类型误判 |
-| `entropy > 2.0` AND `saturation < 0.15` | → | gamma 误判 |
-| `edge_frac < 0.13` AND `entropy > 2.0` | → | 严重度偏差 |
+## 七、全局退化处理规则 (来源: exp9 + exp10)
 
-### 常见混淆退化对 (PSNR gap 14-21 dB)
-
-| 退化对 | Gap | 注意 |
-|--------|:--:|------|
-| BS ↔ SF7 | 16-20 dB | brightness/saturation 混淆 |
-| L4 ↔ SF7 | 16-20 dB | brightness 识别为 saturate |
-| SF5 ↔ SF7 | 14-21 dB | 单退化内部的严重混淆 |
-| L2 ↔ L6 | 15-16 dB | contrast/noise 组合混淆 |
-
-### 架构鲁棒性排序 (误识别风险下)
-
-在盲识别可能不准确的退化上，选择更鲁棒的架构可减少 PSNR 损失：
-DualBranch (10.1 dB gap) > CSN (11.7) > Swin (13.2) > FiLM (13.6) > FreqMod (15.2) > ColorPre (16.0)
-
-注意：ColorPre 在自身退化上最强 (+0.81~+18.91 dB)，但跨退化泛化最差——仅在盲识别置信度极高时使用。
+| 规则 | 内容 |
+|------|------|
+| 识别 | 管线含 contrast/brightness/saturation/gamma/oversharpen |
+| 策略 | Direct (不用 Ft)，从零训练 |
+| 架构 | Swin (不用 MDTA/OCAB) |
+| 附加 | 可选 ColorPre (+0.8K) 或 CSN (+1K) |
+| 预警 | FiLM-GCM 在 brightness_HSV 上可能 NaN |
+| 验证 | exp10: L2 contrast+noise 上 Ft 崩溃 -4.51 dB |
