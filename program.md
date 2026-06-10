@@ -292,6 +292,38 @@ num_params_M:      0.5
 val_psnr_db:       25.97
 ```
 
+## 实验演进与关键结论
+
+### exp8：DFPIR 基线部署
+- DFPIR (CVPR'25, 31M) 成功部署为 all-in-one 大模型参考上界
+- 识别了 spawn 死锁问题：8 GPU 必须全部空闲
+- 成为后续所有实验的标准对比基线
+
+### exp9：退化-策略耦合 (~500 组)
+- 确认退化类型与训练策略存在交互效应
+- 三个铁律：Ft 是安全默认、Curric 方向由 blur 子类型决定、全局退化不遵循局部规律
+- 产出 `finetune_strategy.md` 七个抽象原则
+
+### exp10：退化-架构耦合 (NAS)
+- 确认退化-架构交互效应：不同退化需要不同注意力机制
+- OCAB 对 motion 模糊最优 (+1.19)，Swin 对 contrast 全局退化最优
+- 全局退化下注意力选择失误可致 PSNR 崩溃 (-5.90 dB)
+
+### exp11：盲识别鲁棒性验证 (51 组)
+- 量化盲识别错误代价：类型错 (-17.5 dB) > 严重度错 (-14.5 dB) > 漏检 (-12.9 dB)
+- 确立同图模式必要性——跨图模式无法可靠识别全局退化
+- 为 exp13 的四层隔离协议提供了实验依据
+
+### exp12：端到端验证 (56 退化)
+- 验证完整 Spec/Ft/R1/R2/R3 反思修正流程
+- 核心发现：Ft 接近训练策略最优，LR 微调难以超越；修正退化参数（severity）比调整训练策略更有效
+- 盲识别质量 > 训练策略调整的重要性
+
+### exp13：盲识别全流程 (24 退化)
+- 同图模式 + 四层隔离协议
+- 盲识别 CI pass 100% → Spec ≈ Ft（21/24 组持平）
+- 盲识别质量决定 Spec vs Ft 差距，而非训练策略
+
 ## Ideas to explore
 
 **Architecture**: Scale SwinIR, replace with U-Net/NAFNet/Restormer/HAT/DFPIR, channel/spatial attention.
