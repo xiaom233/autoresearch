@@ -23,6 +23,19 @@ Analyze degraded images, identify present distortion types and their severity, t
 
 **正确做法**：每个退化 3-5 轮，每轮 1 个假设。先 `analyze`，形成假设，`apply_multi` 模拟，`compare` 比较，根据结果调整下一轮假设。
 
+### 多退化并行处理
+
+以上规则针对**单个退化**的搜索。多个独立的退化可以并行处理（每个退化一个 Agent），但需控制并行数：
+
+| 并行数 | CPU 负载 | Token 消耗 | 推荐场景 |
+|:--:|:--:|:--:|------|
+| ≤ 4 | 低 | 可控 | 小批量 |
+| 6-8 | 中 | 中等 | **推荐**（匹配 GPU 数量） |
+| 12+ | 高 | 大 | 可能 CPU 饱和 |
+| 24+ | 极高 | 爆炸 | ❌ 不推荐 |
+
+**批量盲识别建议**：每轮 8 个 Agent 并行，每个负责 1 个退化。48 退化 = 6 轮。
+
 ## Core principles
 
 ### Visual reasoning, not brute-force enumeration
@@ -115,274 +128,240 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 
 The `--distortions` argument is a comma-separated list of `name:severity` pairs, applied in order.
 
-## 批量盲识别工作流程
 
-当需要对多个退化图做盲识别时，逐个处理，不要写脚本批量：
+## 批量盲识别工作流程 (v2 — 逻辑收敛框架)
 
-```
-对每个退化：
-  1. Read 目标图 + 参考图（视觉检查）
-  2. uv run python analyze_degradation.py --target <d> --clean <c>
-  3. ⚠️ 从 ratios_vs_clean 计算类别证据评分 (blur/noise/compression/oversharpen)
-  4. 基于 evidence + 视觉观察形成假设（1个管线）
-  5. uv run python apply_multi.py --input <c> --distortions "f1:s1,..." --output /tmp/t.png
-  6. PYTHONPATH=<project> uv run python compare_degradation.py --target <d> --simulated /tmp/t.png --clean <c>
-  7. ⚠️ 保存前质量校验（5项检查，必须执行）
-     - 检查管线结构一致性
-     - 类别证据评分 + 子类型指纹验证
-     - 管线-证据对齐判定
-     - 已知误识别模式检查
-     - 综合置信度评估 (A+B+C 三维度)
-  8. 通过 → 保存到 predicted_params/{id}.json + reflection.json
-     不通过 → 标记 NEEDS_WORK 或调整假设回到步骤4
-```
+> exp14 验证: CI 优化的 v1 流程导致 83% GOOD 误报率。CI=10/10 时函数可以完全错误。
+> v2 核心: **分阶段逻辑收敛，CI 降级为辅助，类别对齐强制验证。**
 
-⚠️ 步骤 3 和 7 是新增的。**证据评分在假设形成前和保存前各执行一次**，确保假设有数据支撑、保存前再次确认。
+### 核心思想
 
-### 保存前质量校验 ⚠️ 必须执行
-
-CI pass（compare_degradation.py 的 verdict=GOOD）**不等于盲识别正确**。exp13 数据证明：CI=8/10 时函数正确率仅 56%。保存前必须执行以下检查：
-
-#### 检查 1: 管线结构一致性
+不从组合空间中盲目搜索。分 6 阶段逐步缩小范围：
 
 ```
-规则 1.1: blur/noise/compression 三大类别各最多出现一次
-         如果同类别出现两次 → 标记 NEEDS_WORK，说明识别结果不合理
-
-规则 1.2: oversharpen 与 blur 不能同时存在
-         两者梯度方向相反 (锐化 vs 模糊)，如同时出现 → 识别矛盾
-
-规则 1.3: 管线最多 3 步，最少 1 步
+Phase 1: 类别检测 → 哪些类别存在？
+Phase 2: 函数识别 → 每个类别具体是哪个函数？
+Phase 3: 顺序确定 → 退化顺序？
+Phase 4: 严重度校准 → severity 值？
+Phase 5: 交叉验证 → 完整管线能否解释所有指标？
+Phase 6: 接受决策 → 多维度判定
 ```
 
-#### 检查 2: 类别级证据评分 (Category Evidence Score) ⚠️ 替代简单 CI
+### Phase 1: 类别检测
 
-**核心思想**：CI 把 10 个指标平等对待是错误的。应该按退化类别分组评估——blur 指标只对 blur 有判断力，noise 指标只对 noise 有判断力。
+**目标**: 确定 blur/noise/compression/global 哪些存在。不涉及具体函数。
 
-**证据评分规则**（同图模式下使用 ratios_vs_clean）：
+#### 1a: 全局退化 (最简单，优先)
 
-##### Blur 证据 (来自 analyze_degradation.py --clean)
+ratios_vs_clean 直接反映全局统计量变化：
 
-| 指标 | 强证据阈值 | 中等证据 | 无证据 |
-|------|:--:|:--:|:--:|
-| `gradient_magnitude_ratio` | < 0.5 (丢失>50%) | 0.5-0.8 | > 0.8 |
-| `laplacian_variance_ratio` | < 0.2 (丢失>80%) | 0.2-0.5 | > 0.5 |
-| `hf_lf_ratio` (target/clean) | < 0.3 | 0.3-0.6 | > 0.6 |
+| 类型 | 检测方法 | 阈值 |
+|------|---------|------|
+| brightness | per-channel mean ratio | 任一通道偏离 1.0 超过 ±0.1 |
+| contrast | std_ratio | < 0.85 或 > 1.15 |
+| saturation | saturation_mean_ratio | < 0.7 或 > 1.3 |
+| gamma | mean 变但 std 不变 | gamma_HSV/RGB |
 
-```
-blur_evidence = 强 (2+ 指标在强证据区) | 中 (1 指标在强证据区) | 弱 (无指标在强证据区)
-```
+注意: 饱和度变化也可能是 JPEG 色度子采样的副作用。如有 compression 证据需交叉验证。
 
-**如果管线含 blur 但 blur_evidence = 弱** → 误识别，标记 NEEDS_WORK
+#### 1b: Blur
 
-##### Blur 子类型指纹（验证具体的 blur 函数）
+| 指标 | 强证据 | 中证据 |
+|------|:--:|:--:|
+| gradient_magnitude_ratio | < 0.5 | 0.5-0.8 |
+| laplacian_variance_ratio | < 0.2 | 0.2-0.5 |
+| hf_lf_ratio | < 0.3 | 0.3-0.6 |
 
-| 子类型 | 必须满足的指标特征 |
-|--------|------------------|
-| `blur_gaussian` | gradient_radial_ratio ≈ 1.0 (均匀); directional_h_v_ratio ≈ 1.0 (无方向性) |
-| `blur_motion` | directional_h_v_ratio 明显偏离 1.0 (>1.3 或 <0.7) |
-| `blur_lens` | gradient_radial_ratio 明显偏离 1.0 (>1.2，边缘衰减快于中心) |
-| `blur_glass` | gradient_radial_ratio 略偏离 1.0 (1.1-1.3) + hf_lf 中度下降 |
-| `blur_zoom` | gradient_radial_ratio 明显偏离 + directional 接近 1.0 |
-| `blur_jitter` | gradient_magnitude 局部方差大 (不规则) |
+`blur_present = (强证据≥2) OR (强证据=1 AND 中证据≥2)`
 
-**验证方法**：在 compare_degradation.py 输出中检查对应的 content-dependent 指标。如果 predicted 的 blur 子类型与指标指纹不匹配 → 子类型可能错误。
+⚠️ **jitter blur 可能增加 gradient** (多重边缘叠加)。motion blur 看 h_v_ratio 与 clean 的变化(>15%)，不是绝对值。
 
-##### Noise 证据
+#### 1c: Noise
 
-| 指标 | 强证据阈值 | 中等证据 | 无证据 |
-|------|:--:|:--:|:--:|
-| `flat_region_variance_ratio` | > 3.0 | 1.5-3.0 | < 1.5 |
-| `Cr_local_std_ratio` | > 2.0 | 1.3-2.0 | < 1.3 |
-| `Cb_local_std_ratio` | > 2.0 | 1.3-2.0 | < 1.3 |
+| 指标 | 证据 |
+|------|------|
+| flat_region_variance_ratio | > 1.5 |
+| impulse_pct net increase (target-clean) | > 0.5% |
+| Cr 或 Cb local_std_ratio | > 2.0 |
 
-```
-noise_evidence = 强 | 中 | 弱
-```
+`noise_present = 任一满足`
 
-**Noise 子类型指纹**：
+⚠️ **必须用 target vs clean 的差值/比值**。clean 本身可能有高 impulse 或 flat_variance。
 
-| 子类型 | 必须满足的指标特征 |
-|--------|------------------|
-| `noise_gaussian_RGB` | Cr/Cb_local_std ≈ Y_local_std (三通道均匀) |
-| `noise_gaussian_YCrCb` | Cr/Cb_local_std >> Y_local_std (色度噪声远大于亮度) |
-| `noise_impulse` | impulse_total_pct > 0.5% (必须); impulse_pct_0 ≈ impulse_pct_255 (椒盐对称) |
-| `noise_speckle` | flat_region_variance 中等 + 视觉上的斑点模式 (非均匀分布) |
-| `noise_spatially_correlated` | flat_region_variance 高 + 空间上非独立 (邻域像素相关) |
-| `noise_poisson` | flat_region_variance 与亮度正相关 (暗区噪声大) |
+#### 1d: Compression (区分 JPEG vs JPEG2000)
 
-##### Compression 证据
+| 指标 | JPEG | JPEG2000 |
+|------|:--:|:--:|
+| block_boundary_ratio | **> 1.1** | < 1.1 |
+| bytes_per_pixel | < 1.0 | **< 0.5** |
+| unique_G vs clean | 显著下降 | 下降或不变 |
+| 视觉 ringing | 轻微 | **明显** |
 
-| 指标 | 强证据阈值 | 中等证据 | 无证据 |
-|------|:--:|:--:|:--:|
-| `block_boundary_ratio` | > 1.3 | 1.1-1.3 | < 1.1 |
-| `unique_G` | < 100 | 100-200 | > 200 |
+`compression_present = (block_boundary>1.1) OR (bytes_per_pixel<0.8)`
 
-```
-compression_evidence = 强 | 中 | 弱
-```
+⚠️ **JPEG2000 无 8×8 块**。block_boundary 检查通过 ≠ 无压缩。**bytes_per_pixel 是最可靠指标**。
 
-**Compression 子类型指纹**：
+---
 
-| 子类型 | 必须满足的指标特征 |
-|--------|------------------|
-| `compression_jpeg` | block_boundary_ratio > 1.1 (8×8 块必须); unique_G 显著 < 256 |
-| `compression_jpeg_2000` | block_boundary_ratio < 1.1 (无块效应); unique_G 中等下降 + ringing 伪影 |
+### Phase 2: 函数识别
 
-##### Oversharpen 证据（高风险类别）
+**目标**: 对每类确定具体函数。用决策树，不盲目测试。
 
-| 指标 | 必须满足 | 否则 |
-|------|:--:|------|
-| `overshoot_ratio` | **> 0.5** | oversharpen 不存在 → **误识别** |
-| `zero_crossing_density` (target/clean) | **> 1.5** | 锐化程度不足 |
-| 视觉确认 | **边缘光晕肉眼可见** | 无光晕 → 几乎肯定误识别 |
-
-**oversharpen 的严格判定**：3 个条件**全部满足**才接受。
-exp13 数据：oversharpen 在 Pred 中出现 4 次，GT 中 0 次。这是最常见的误识别模式。
-
-##### 类别-管线对齐判定
+#### 2a: Blur 决策树
 
 ```
-1. 统计 evidence 显示哪些类别存在：
-   blur_evidence ≥ 中 → blur 类别应出现在管线中
-   noise_evidence ≥ 中 → noise 类别应出现在管线中
-   compression_evidence ≥ 中 → compression 类别应出现在管线中
-
-2. 对比管线：
-   证据显示存在但管线没有 → **漏检**，标记 NEEDS_WORK
-   管线有但证据显示不存在 → **误引入**，标记 NEEDS_WORK
-   证据和管线一致 → **通过**
-
-3. 特别检查：
-   oversharpen 若在管线中 → 必须通过严格判定
-   blur_glass 若在管线中 → 验证 gradient_radial_ratio > 1.1
+1. directional_h_v_ratio 与 clean 对比变化 > 15%? → blur_motion
+2. gradient_radial_ratio > 1.3? → blur_lens (中心清晰边缘模糊)
+3. gradient_magnitude_ratio > 1.2 (梯度增加!)? → blur_jitter (多重边缘)
+4. gradient_radial_ratio 1.1-1.3?
+     laplacian_ratio < 0.1 → blur_glass
+     laplacian_ratio > 0.3 → blur_zoom
+5. gradient_radial_ratio < 0.9? → blur_zoom (中心模糊)
+6. 默认 → blur_gaussian
 ```
 
-#### 检查 3: 已知误识别模式 (来源: exp13 24组数据)
+#### 2b: Noise 决策树
 
 ```
-模式 1: oversharpen 误引入
-  exp13 中 Pred 出现 4 次但 GT 出现 0 次
-  → 如果管线含 oversharpen，检查原始图片是否真的有边缘光晕
-  → 如果没有肉眼可见的光晕 → 可能是 compression_jpeg 或 blur 被误识别
-  → 重新检查 compression 和 blur 类别是否被漏检
-
-模式 2: blur_glass → blur_gaussian / blur_lens 混淆
-  exp13 中 blur_glass (GT) 5次，Pred 中全部被替换
-  → 如果管线含 blur_gaussian 或 blur_lens，检查图像是否有径向模糊特征
-  → radial falloff → blur_lens; 均匀柔化 → blur_gaussian; 不规则扭曲 → blur_glass
-
-模式 3: noise_speckle → noise_gaussian 混淆
-  exp13 中 noise_speckle (GT) 2次，Pred 中全部替换
-  → 检查噪声是否有空间相关性或斑点模式
-  → 如果噪声不是纯随机均匀分布 → 考虑 spatially_correlated 或 speckle
-
-模式 4: noise 与 compression 混淆
-  noise_spatially_correlated 在跨图模式常被误判为 compression
-  → 检查 block_boundary_ratio: > 1.1 → 有 JPEG 块效应
-  → 仅 entropy 高但无块效应 → 可能是噪声
+1. impulse_pct(net increase) > 0.5%? → noise_impulse
+2. Cr_local_std_ratio > 2.0 AND Cb > 2.0?
+     Y 也高 → noise_gaussian_RGB
+     Y 不高 → noise_gaussian_YCrCb
+3. flat_variance_ratio > 3.0?
+     局部方差大 → noise_spatially_correlated
+     视觉斑点 → noise_speckle
+     暗区>亮区 → noise_poisson
+     均匀 → noise_gaussian_RGB
 ```
 
-#### 检查 4: 已验证的子指标排除规则 ⚠️ 实验验证
-
-以下规则经过 exp13 24 组数据验证，可靠性已知：
-
-##### ✅ 高可靠性：oversharpen 排除
+#### 2c: Compression 决策树
 
 ```
-oversharpen 在 exp13 中 4 次 Pred 出现，GT 中 0 次（100% 误引入）
-
-排除方法（简单 laplacian 检查）:
-  laplacian_neg_pct = 拉普拉斯算子中 < -50 的像素占比
-  if laplacian_neg_pct < 2%:
-      → oversharpen 几乎不存在（4/4 误识别满足此条件）
-      → 如果管线含 oversharpen，标记 NEEDS_WORK，重新检查
-
-  验证: 4/4 误识别 laplacian_neg_pct < 0.5%，GT 中无 oversharpen
+block_boundary > 1.1 → compression_jpeg
+bytes_per_pixel < 0.8 AND block_boundary < 1.1 → compression_jpeg_2000
+否则 → 标记类型不确定
 ```
 
-##### ⚠️ 已知不可靠的指标
+#### 2d: 全局退化决策树
 
 ```
-impulse_total_pct: JPEG2000 和 brightness_darken 产生大量 0/255 像素
-                   → 不能可靠区分 impulse noise
-                   → 仅当 > 5% 时才有参考价值
-
-block_boundary_ratio: 多种退化 (blur/noise/compression) 都产生类似块效应
-                      → 不能可靠区分 JPEG
-                      → 仅作辅助参考
-
-PSNR (simulated vs target): add_distortion 使用随机种子
-                            → 即使函数正确，像素也无法匹配
-                            → 不可用于质量评估！
-                            正确替代方案: CI 的纹理级对比
+saturation_ratio < 0.5 → saturate_weaken (HSV vs YCrCb 看 Cr/Cb 变化)
+saturation_ratio > 1.5 → saturate_strengthen
+mean偏移 + std不变 → brightness_*_gamma_*
+mean偏移 + std变化 → brightness_*_shift_*
+std变化 + mean不变 → contrast_strengthen/weaken
 ```
 
-#### 检查 5: 视觉确认（同图模式必须）
+---
+
+### Phase 3: 顺序确定
+
+**退化管线有物理逻辑**。不要测试 N! 种排列。
 
 ```
-对每一类退化必须有视觉证据:
-  blur:  边缘平滑? 有方向性拖影? 有径向衰减? → 确定 blur 子类型
-  noise: 噪声均匀? 有色度噪声? 有空间模式? → 确定 noise 子类型  
-  compression: 8×8 块边界? ringing? → 确认是 jpeg 还是 jpeg_2000
-  oversharpen: 边缘光晕 (halo)? → 否则可能是误识别
-  brightness/contrast/saturation: 全局统计量明显偏移? → 量化确认
-```
+默认顺序: 全局退化 → blur → noise → compression → oversharpen
 
-#### 检查 6: 综合置信度评估
-
-**三维度加权判定**（PSNR 已实验验证不可用，已移除）：
-
-```
-维度 A: 类别-管线对齐 (检查 2)
-维度 B: 子类型指纹验证 (检查 2 子项)
-维度 C: 结构一致性 (检查 1 + 检查 3 + 检查 4)
-
-综合判定:
-  A+B+C 全部 ✅ → GOOD (高置信)
-  A ✅ 但 B 或 C ⚠️ → GOOD (注明可疑点)
-  A ⚠️ 或 B ❌ → NEEDS_WORK
-  A ❌ → POOR (必须重识别)
+规则:
+  noise + blur 都在: 测试 noise→blur 和 blur→noise
+    flat_variance 低于预期 → blur 在 noise 之后(抹平了噪声)
   
-  ⚠️ 若检查4触发 oversharpen 排除规则 → 至少 NEEDS_WORK，oversharpen 需重新验证
+  compression 永远在最后 (除非有证据表明不是)
+  
+  oversharpen + noise: 检查 noise_vs_sharpen
+    如果 verdict=oversharpen → oversharpen 确实存在
+    如果 verdict=noise → impulse 增加来自噪声,非 oversharpen
+
+候选顺序 ≤ 3 种。apply → compare，选 CI 更高的。
+CI 差异 < 2 → 选更符合物理逻辑的。
 ```
 
-#### 校验记录格式
+---
 
-校验结果写入 `reflection.json`：
+### Phase 4: 严重度校准
 
+Severity 只有 5 个离散值。2 轮二分足够：
+
+| 函数 | 校准指标 |
+|------|---------|
+| blur_* | gradient_magnitude_ratio |
+| noise_gaussian | flat_region_variance_ratio |
+| noise_impulse | impulse_pct (net increase) |
+| compression_jpeg | unique_G |
+| oversharpen | overshoot_ratio |
+
+```
+1. 初始 severity = 3
+2. apply + compare, 检查校准指标
+3. 偏离 > 20%: 调整 ±1
+4. 最多 2 轮 (不要为 severity 跑 5 轮)
+```
+
+---
+
+### Phase 5: 交叉验证
+
+**在 apply+compare 之后，接受之前，必须验证**:
+
+```
+□ 每类 evidence 是否被管线中的函数解释?
+   blur_evidence=强 但 severity=1 → 不匹配
+   noise_evidence=弱 但有 noise 函数 → 可能误引入
+
+□ 是否有指标异常无法被管线解释?
+   unique_RGB 显著变化但无 compression → 遗漏
+   saturation 显著变化但无全局退化 → 遗漏
+
+□ 管线是否存在逻辑矛盾?
+   oversharpen + blur → 矛盾
+   同类别出现两次 → 违规
+
+□ 退化顺序是否物理合理?
+   compression 是否在最后?
+   noise→blur vs blur→noise 是否符合物理逻辑?
+```
+
+---
+
+### Phase 6: 接受决策
+
+**CI 降级为辅助参考** (exp14: CI=10/10 函数可完全错误)。
+
+```
+维度 A: 类别完整性 (权重最高)
+  ✅ Phase1 检测到的类别全在管线中, 无多余
+  ⚠️ 缺/多 1 个
+  ❌ 缺/多 2+
+
+维度 B: 指标一致性
+  ✅ Phase5 交叉验证全部通过
+  ⚠️ 1-2 项不通过但可解释
+  ❌ 3+ 项不通过
+
+维度 C: CI (辅助, 无否决权)
+  CI≥8 + A+B✅ → 支持 GOOD
+  CI<7 + A+B✅ → 仍可 GOOD
+
+最终:
+  A✅+B✅ → GOOD (不论 CI)
+  A✅+B⚠️ → GOOD (注明可疑)
+  A⚠️ 或 B❌ → NEEDS_WORK
+  A❌ → POOR
+```
+
+### 输出格式
+
+predicted_params.json: `{"pipeline":[{function,severity}], "analysis":{"verdict":"GOOD|NEEDS_WORK|POOR","ci_pass_rate":"N/10"}}`
+
+reflection.json 必须记录每阶段推理:
 ```json
 {
-  "validation": {
-    "category_alignment": {
-      "blur_evidence": "强",
-      "noise_evidence": "强", 
-      "compression_evidence": "无",
-      "pipeline_claims": ["blur", "noise"],
-      "missing": [],
-      "extra": [],
-      "verdict": "passed"
-    },
-    "subtype_fingerprints": {
-      "blur_gaussian": {"gradient_radial": 1.02, "directional": 0.98, "verdict": "passed"},
-      "noise_impulse": {"impulse_pct": 3.2, "verdict": "passed"}
-    },
-    "structure_check": {
-      "category_duplicate": false,
-      "oversharpen_blur_conflict": false,
-      "known_patterns_triggered": [],
-      "verdict": "passed"
-    },
-    "final_verdict": "GOOD",
-    "confidence": "high",
-    "notes": "PSNR=37.5, 所有检查通过。blur_gaussian 指纹匹配。"
-  }
+  "phase1_category_detection": {"blur": {"present": true, "evidence": [...]}, ...},
+  "phase2_function_identification": {"blur": {"decision_tree_path": "...", "selected": "..."}, ...},
+  "phase3_order_determination": {"candidates_tested": [...], "selected": "...", "reasoning": "..."},
+  "phase4_severity_calibration": [{"function": "...", "rounds": [...]}],
+  "phase5_cross_validation": {"checks": [...], "all_passed": true/false},
+  "phase6_acceptance_decision": {"dimension_a": "passed", "dimension_b": "passed", "dimension_c": "8/10", "final": "GOOD"}
 }
-```
-
-**同图模式输出格式**：
-```json
-{"pipeline": [{"function":"...","severity":N}], "analysis": {"verdict":"GOOD|NEEDS_WORK|POOR", "ci_pass_rate":"N/10"}}
 ```
 
 ## Mode Selection: Same-image vs Cross-image
