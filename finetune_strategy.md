@@ -102,6 +102,20 @@ Step 4: 步数分配
 | Phase1 迁移价值高 | 方向不重要 | Fwd/Rev 都行 |
 | 严重度 ≥ 4 | Direct 或 Ft | 预训练优势消失 |
 | 噪声瓶颈 | Fixed split | 去噪迅速饱和，多给步数无用 |
+| **全局退化 (contrast/brightness)** | **Direct** | **Ft 可能崩溃 (-4.51 dB)** |
+
+### 原则 8：全局退化不遵循局部退化规律
+
+> 来源：exp9 Phase 11-15，已验证于 L1-L6 全局退化
+
+| 属性 | 局部退化 (blur/noise/comp) | 全局退化 (brightness/contrast/saturation) |
+|------|:--:|:--:|
+| Ft 是否安全？ | ✅ 是 | ❌ 否 (L2 noise+contrast: Ft-Direct = **-4.51 dB**) |
+| Curric 是否有效？ | 有时 | 未知 |
+| 盲预训练覆盖？ | ✅ | ❌ (随机管线未包含) |
+| 推荐策略 | Ft (EPOCH=2, LR=5e-4) | **Direct** (EPOCH=2, LR=5e-4) |
+
+**判定规则**：若管线包含 contrast_strengthen/weaken、brightness_brighten/darken、saturate_strengthen/weaken、gamma_HSV/RGB → 使用 Direct，不用 Ft。
 
 ---
 

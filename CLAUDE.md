@@ -11,7 +11,11 @@ This file provides guidance to Claude Code when working with this repository.
 3. **同图盲识别**：挑战生成用 `--same-image`
 4. **不用 rebase**：只用 merge/push
 5. **launcher 隔离**：训练用 `bash launcher.sh`，不写完整命令
-6. **已完成的训练不重跑**：启动 M_blind 前先检查 checkpoint 是否存在
+6. **已完成的训练不重跑**
+7. **执行前验证文件存在**：任何脚本或文件路径使用前，先 `ls` 确认存在。绝不假设已知路径有效：启动 M_blind 前先检查 checkpoint 是否存在
+8. **全局退化不用 Ft**：管线含 contrast/brightness/saturation/gamma → 用 Direct（Ft 可能崩溃 -4.51 dB，来源：exp9）
+9. **EPOCH_BUDGET 公平性**：所有修正训练必须 EPOCH=2，与基线一致，禁止通过增加训练步数获得 PSNR 提升
+10. **架构选择参考**：严重 motion blur → OCAB + ws=16；全局退化 → 只用 Swin（避免 MDTA/OCAB）；contrast + 结构化 → FiLM-GCM（来源：exp10）
    ```bash
    ls expN/experiments/M_blind/checkpoints/*.pt && echo "已存在，跳过" || echo "需要训练"
    ```
