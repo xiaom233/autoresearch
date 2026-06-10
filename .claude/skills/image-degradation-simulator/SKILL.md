@@ -283,7 +283,57 @@ exp13 数据：oversharpen 在 Pred 中出现 4 次，GT 中 0 次。这是最�
   → 仅 entropy 高但无块效应 → 可能是噪声
 ```
 
-#### 检查 4: 视觉确认（同图模式必须）
+#### 检查 4: 像素级 PSNR 对比 ⚠️ 同图模式独有，最强信号
+
+同图模式的核心优势：**simulated 和 target 来自同一原图，可以直接算 PSNR**。这是所有质量信号中最强的一个——像素级匹配不会撒谎。
+
+##### PSNR 计算方法
+
+```python
+from PIL import Image
+import numpy as np
+target = np.array(Image.open('<degraded.png>'), dtype=np.float32)
+simulated = np.array(Image.open('<simulated.png>'), dtype=np.float32)
+mse = np.mean((target - simulated) ** 2)
+psnr = 20 * np.log10(255.0 / np.sqrt(mse)) if mse > 0 else 100.0
+```
+
+##### PSNR 阈值与解读 (同图模式, 256×256 patches)
+
+| PSNR | 含义 | 动作 |
+|------|------|------|
+| **> 40 dB** | 几乎完美匹配，管线极可能正确 | ✅ 高置信 |
+| **35-40 dB** | 非常接近，主要退化已捕获 | ✅ 可信 |
+| **30-35 dB** | 大体正确，子类型或 severity 可能有偏差 | ⚠️ 检查子类型指纹 |
+| **25-30 dB** | 部分正确，可能有 1 个退化漏检或误判 | ⚠️ 检查类别对齐 |
+| **< 25 dB** | 管线可能有严重错误 | ❌ 不应保存，继续迭代 |
+
+##### PSNR 与 CI 的交叉验证
+
+```
+PSNR > 35 AND CI ≥ 8  → 极强信号，几乎肯定正确
+PSNR > 35 BUT CI < 7  → PSNR 比 CI 更可信（CI 可能低估）
+PSNR < 30 BUT CI ≥ 8  → ⚠️ 矛盾信号！CI 高但 PSNR 低
+                         可能原因: 视觉纹理相似但函数错误
+                         例: blur_gaussian 和 blur_lens 在低分辨率下纹理相似
+                         动作: 重新检查子类型指纹，标记 NEEDS_WORK
+PSNR < 25              → 无论 CI 多高，必须继续迭代
+```
+
+##### PSNR 在迭代中的使用
+
+每一轮 `apply_multi.py` 后都应该算 PSNR，作为假设调整的指南：
+
+```
+Round N:   PSNR = 22 dB → 方向对，但严重偏差
+Round N+1: PSNR = 28 dB → 改进中，继续调整 severity
+Round N+2: PSNR = 34 dB → 接近目标，微调子类型
+Round N+3: PSNR = 38 dB → 很好，进入保存前校验
+```
+
+**PSNR 不提升或下降 → 当前调整方向错误，换假设。**
+
+#### 检查 5: 视觉确认（同图模式必须）
 
 ```
 对每一类退化必须有视觉证据:
@@ -294,12 +344,12 @@ exp13 数据：oversharpen 在 Pred 中出现 4 次，GT 中 0 次。这是最�
   brightness/contrast/saturation: 全局统计量明显偏移? → 量化确认
 ```
 
-#### 检查 5: 综合置信度评估
+#### 检查 6: 综合置信度评估
 
-**不再使用简单的 CI≥7=GOOD。使用以下加权判定**：
+**不再使用简单的 CI≥7=GOOD。使用四维度加权判定**：
 
 ```
-最终 verdict 由三个维度综合决定:
+最终 verdict 由四个维度综合决定:
 
 维度 A: 类别-管线对齐 (检查 2, 权重最高)
   ✅ 通过: 所有 evidence 类别与管线一致
@@ -316,16 +366,26 @@ exp13 数据：oversharpen 在 Pred 中出现 4 次，GT 中 0 次。这是最�
   ⚠️ 可疑: 触发 1 个已知模式
   ❌ 失败: 管线结构违规或触发 oversharpen 风险
 
+维度 D: 像素级 PSNR (检查 4, 同图模式)
+  ✅ > 35 dB: 极强信号
+  ✅ > 30 dB: 可信
+  ⚠️ 25-30 dB: 需检查
+  ❌ < 25 dB: 不可接受
+
 综合判定:
-  A+B+C 全部 ✅ → GOOD (高置信)
-  A ✅ 但 B 或 C ⚠️ → GOOD (注明可疑点)
-  A ⚠️ 或 B ❌ → NEEDS_WORK
+  A+B 通过 + D > 35 + C 通过 → GOOD (最高置信)
+  A+B 通过 + D > 30 + C 通过 → GOOD
+  A 通过 + B/C ⚠️ + D > 25 → NEEDS_WORK (注明具体可疑点)
+  A ⚠️ 或 B ❌ 或 D < 25 → NEEDS_WORK (必须修正)
   A ❌ → POOR (必须重识别)
 
-CI 作用降级为辅助参考:
-  CI 仅作为 compare_degradation.py 模拟质量的反馈
-  不再作为 verdict 的直接判据
-  仅当 A+B+C 全部通过时，CI 才作为微调置信度的参考
+⚠️ PSNR < 30 但 CI ≥ 8 的矛盾场景:
+  PSNR 比 CI 更可信。这种矛盾说明管线函数可能错误但视觉纹理相似。
+  必须标记 NEEDS_WORK，重新检查子类型指纹。
+
+CI 作用降级:
+  CI 仅作为模拟质量的辅助反馈
+  当 PSNR 和 CI 矛盾时，PSNR 具有否决权
 ```
 
 #### 校验记录格式
@@ -335,14 +395,19 @@ CI 作用降级为辅助参考:
 ```json
 {
   "validation": {
+    "psnr": {
+      "value": 37.5,
+      "threshold": ">35dB",
+      "verdict": "passed"
+    },
     "category_alignment": {
-      "blur_evidence": "强/中/弱/无",
-      "noise_evidence": "强/中/弱/无", 
-      "compression_evidence": "强/中/弱/无",
+      "blur_evidence": "强",
+      "noise_evidence": "强", 
+      "compression_evidence": "无",
       "pipeline_claims": ["blur", "noise"],
       "missing": [],
       "extra": [],
-      "verdict": "passed/suspicious/failed"
+      "verdict": "passed"
     },
     "subtype_fingerprints": {
       "blur_gaussian": {"gradient_radial": 1.02, "directional": 0.98, "verdict": "passed"},
@@ -356,7 +421,7 @@ CI 作用降级为辅助参考:
     },
     "final_verdict": "GOOD",
     "confidence": "high",
-    "notes": "所有检查通过。blur_gaussian 指纹匹配。"
+    "notes": "PSNR=37.5, 所有检查通过。blur_gaussian 指纹匹配。"
   }
 }
 ```
