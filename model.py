@@ -199,11 +199,235 @@ class OCABBlock(nn.Module):
         return x + x_norm.flatten(2).transpose(1, 2)
 
 
+class GlobalChannelModulation(nn.Module):
+    """Global channel statistics → per-channel affine modulation (FiLM-style).
+
+    For global degradations (contrast/brightness/saturation), extracts
+    global statistics via GAP and predicts per-channel scale + shift.
+    Zero-initialized for identity at training start.
+
+    Inspired by: SE-Net (Hu et al. 2018), FiLM (Perez et al. 2018),
+    HAT (Chen et al. 2023), NAFNet (Chen et al. 2022)
+    """
+    def __init__(self, dim, reduction=4):
+        super().__init__()
+        self.gap = nn.AdaptiveAvgPool2d(1)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim, dim // reduction),
+            nn.ReLU(),
+            nn.Linear(dim // reduction, dim * 2),
+        )
+        nn.init.zeros_(self.mlp[-1].weight)
+        nn.init.zeros_(self.mlp[-1].bias)
+
+    def forward(self, x, x_size):
+        B, L, C = x.shape
+        H, W = x_size
+        feat = x.transpose(1, 2).view(B, C, H, W)
+        params = self.mlp(self.gap(feat).flatten(1))
+        scale, shift = params.chunk(2, dim=1)
+        feat = feat * (1.0 + scale.unsqueeze(-1).unsqueeze(-1)) + shift.unsqueeze(-1).unsqueeze(-1)
+        return feat.flatten(2).transpose(1, 2)
+
+
+class ChannelCurve(nn.Module):
+    """Per-channel non-linear curve correction for gamma/stretch degradations.
+
+    Uses grouped 1x1 Conv (each channel processed independently) to learn
+    an arbitrary per-channel curve f_c: R→R. Applied in pixel space before
+    the main network.
+
+    For type B global degradations: brightness_gamma (y=x^γ), contrast_stretch.
+    """
+    def __init__(self, in_ch=3, hidden=8):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_ch, in_ch * hidden, 1, groups=in_ch),
+            nn.ReLU(),
+            nn.Conv2d(in_ch * hidden, in_ch, 1, groups=in_ch),
+        )
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.zeros_(self.net[-1].bias)
+
+    def forward(self, x):
+        return x + self.net(x)
+
+
+class ColorMLP(nn.Module):
+    """Per-pixel cross-channel MLP for HSV/YCrCb color space degradations.
+
+    Full 1x1 Conv (cross-channel mixing) → ReLU → 1x1 Conv. A universal
+    color-space transform approximator applied independently to each pixel.
+    Zero spatial operations — only channel interactions.
+
+    For type C global degradations: brightness_HSV, saturate_HSV/YCrCb.
+    """
+    def __init__(self, in_ch=3, hidden=16):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_ch, hidden, 1),
+            nn.ReLU(),
+            nn.Conv2d(hidden, in_ch, 1),
+        )
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.zeros_(self.net[-1].bias)
+
+    def forward(self, x):
+        return x + self.net(x)
+
+
+class FreqMod(nn.Module):
+    """Frequency-domain global modulation (per-block, based on SFHformer).
+
+    Adapted from SFHformer (ECCV 2024) FourierUnit:
+    - Real+Imag concatenation (not amplitude/phase separation)
+    - FCPE: depth-wise conv on frequency features with residual connection
+    - Simplified FDC: point-wise conv for per-frequency modulation
+    - BatchNorm for frequency feature normalization
+
+    The frequency domain naturally separates global (amplitude spectrum)
+    from local (phase spectrum) information.
+    """
+    def __init__(self, dim):
+        super().__init__()
+        c2 = dim * 2
+        self.bn = nn.BatchNorm2d(c2)
+        # FCPE: Frequency Conditional Positional Encoding
+        self.fcpe = nn.Conv2d(c2, c2, 3, padding=1, groups=c2)
+        # Frequency-domain processing: point-wise conv after BN+GELU
+        self.freq_conv = nn.Sequential(
+            nn.Conv2d(c2, c2, 1),
+            nn.GELU(),
+            nn.Conv2d(c2, c2, 1),
+        )
+        nn.init.zeros_(self.freq_conv[-1].weight)
+        nn.init.zeros_(self.freq_conv[-1].bias)
+
+    def forward(self, x, x_size):
+        B, L, C = x.shape
+        H, W = x_size
+        feat = x.transpose(1, 2).view(B, C, H, W).float()
+
+        # Disable AMP autocast for FFT operations (bfloat16 not supported)
+        with torch.amp.autocast('cuda', enabled=False):
+            # FFT → real + imag concatenation (as in SFHformer)
+            ffted = torch.fft.rfft2(feat, norm='ortho')
+            f_real = torch.unsqueeze(torch.real(ffted), dim=-1)
+            f_imag = torch.unsqueeze(torch.imag(ffted), dim=-1)
+            ffted = torch.cat((f_real, f_imag), dim=-1)
+            ffted = rearrange(ffted, 'b c h w d -> b (c d) h w').contiguous()
+
+            # BN → FCPE (DWConv residual) → frequency conv
+            ffted = self.bn(ffted)
+            ffted = self.fcpe(ffted) + ffted
+            ffted = self.freq_conv(ffted)
+
+            # Back to complex → IFFT
+            ffted = rearrange(ffted, 'b (c d) h w -> b c h w d', d=2).contiguous()
+            ffted = torch.view_as_complex(ffted)
+            out = torch.fft.irfft2(ffted, s=(H, W), norm='ortho')
+
+        return out.to(x.dtype).flatten(2).transpose(1, 2)
+
+
+class PCP(nn.Module):
+    """Shared global modulation in feature space (between RSTB stages).
+
+    Unlike per-block PCP, this is a SINGLE shared module applied between
+    RSTB stages in RestoreNet. Keeps ColorPre's low-resolution stability
+    design but in feature space, with negligible parameter overhead.
+
+    Design (in feature space, shared):
+    AdaptiveAvgPool(8x8) → Conv1x1 → ReLU → GAP → MLP → scale+shift
+    """
+    def __init__(self, dim, pool_size=8, reduction=4):
+        super().__init__()
+        self.pool = nn.AdaptiveAvgPool2d(pool_size)
+        hidden = max(dim // reduction, 8)
+        self.net = nn.Sequential(
+            nn.Conv2d(dim, hidden, 1),  # 1x1 conv for efficiency
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(hidden, dim * 2),
+        )
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.zeros_(self.net[-1].bias)
+
+    def forward(self, x, x_size):
+        B, L, C = x.shape
+        H, W = x_size
+        feat = x.transpose(1, 2).view(B, C, H, W)
+        low = self.pool(feat)
+        params = self.net(low)
+        scale, shift = params.chunk(2, dim=1)
+        feat = feat * (1.0 + scale.unsqueeze(-1).unsqueeze(-1)) + shift.unsqueeze(-1).unsqueeze(-1)
+        return feat.flatten(2).transpose(1, 2)
+
+
+class CSN(nn.Module):
+    """Channel Statistics Normalization — InstanceNorm + learnable affine.
+
+    InstanceNorm normalizes per-channel spatial mean/variance, directly
+    inverting brightness (mean shift) and contrast (variance scaling).
+    Learnable affine parameters (gamma, beta) provide optimal global stats.
+
+    IN is inherently bounded (unlike FiLM-GCM's unbounded MLP output),
+    making CSN stable against NaN while providing per-block global correction.
+    """
+    def __init__(self, dim):
+        super().__init__()
+        self.norm = nn.InstanceNorm2d(dim, affine=True)
+
+    def forward(self, x, x_size):
+        B, L, C = x.shape
+        H, W = x_size
+        feat = x.transpose(1, 2).view(B, C, H, W)
+        feat = self.norm(feat)
+        return feat.flatten(2).transpose(1, 2)
+
+
+class ColorPre(nn.Module):
+    """Low-resolution global color processing (based on CSEC design pattern).
+
+    CSEC (CVPR 2024) processes illumination at low resolution (256×256)
+    for global color/illumination estimation, then applies correction to
+    full resolution. This avoids the input-level interference with spatial
+    feature extraction that we observed with ColorMLP.
+
+    Design:
+    - Downsample input → small CNN for global color statistics
+    - Predict per-channel affine correction (scale + shift)
+    - Apply to full-resolution input via residual
+    """
+    def __init__(self, in_ch=3, hidden=16):
+        super().__init__()
+        self.down = nn.AdaptiveAvgPool2d(64)
+        self.net = nn.Sequential(
+            nn.Conv2d(in_ch, hidden, 3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(hidden, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, in_ch * 2),
+        )
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.zeros_(self.net[-1].bias)
+
+    def forward(self, x):
+        low = self.down(x)
+        params = self.net(low)  # (B, 2*in_ch)
+        scale, shift = params.chunk(2, dim=1)
+        return x * (1.0 + scale.unsqueeze(-1).unsqueeze(-1)) + shift.unsqueeze(-1).unsqueeze(-1)
+
+
 class SwinBlock(nn.Module):
-    """Swin Transformer block: window SDPA + MLP, pre-norm style."""
+    """Swin Transformer block: window SDPA + MLP + optional GCM/FreqMod, pre-norm style."""
 
     def __init__(self, dim, num_heads, window_size=8, shift_size=0, mlp_ratio=2,
-                 activation="gelu"):
+                 activation="gelu", use_gcm=False, use_freqmod=False,
+                 use_csn=False):
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
         self.attn = WindowSDPA(dim, num_heads, window_size, shift_size)
@@ -223,6 +447,9 @@ class SwinBlock(nn.Module):
                 nn.Linear(hidden, dim),
             )
             self.activation = activation
+        self.gcm = GlobalChannelModulation(dim) if use_gcm else None
+        self.freqmod = FreqMod(dim) if use_freqmod else None
+        self.csn = CSN(dim) if use_csn else None
 
     def forward(self, x, x_size):
         x = x + self.attn(self.norm1(x), x_size)
@@ -231,6 +458,12 @@ class SwinBlock(nn.Module):
             x = x + self.w3(F.silu(self.w1(x_norm)) * self.w2(x_norm))
         else:
             x = x + self.mlp(self.norm2(x))
+        if self.gcm is not None:
+            x = self.gcm(x, x_size)
+        if self.freqmod is not None:
+            x = self.freqmod(x, x_size)
+        if self.csn is not None:
+            x = self.csn(x, x_size)
         return x
 
 
@@ -242,7 +475,8 @@ class RSTB(nn.Module):
 
     def __init__(self, dim, depth, num_heads, window_size=8, mlp_ratio=2,
                  activation="gelu", window_shift_ratio=0.5, skip_type="standard",
-                 conv_kernel=3, attention_type="swin"):
+                 conv_kernel=3, attention_type="swin", use_gcm=False,
+                 use_freqmod=False, use_csn=False):
         super().__init__()
         if attention_type == "mdta":
             self.blocks = nn.ModuleList([
@@ -258,7 +492,9 @@ class RSTB(nn.Module):
             self.blocks = nn.ModuleList([
                 SwinBlock(dim, num_heads, window_size,
                           shift_size=0 if i % 2 == 0 else shift_size,
-                          mlp_ratio=mlp_ratio, activation=activation)
+                          mlp_ratio=mlp_ratio, activation=activation,
+                          use_gcm=use_gcm, use_freqmod=use_freqmod,
+                          use_csn=use_csn)
                 for i in range(depth)
             ])
         self.conv = nn.Conv2d(dim, dim, conv_kernel, 1, conv_kernel // 2)
@@ -295,10 +531,43 @@ class RestoreNet(nn.Module):
                  num_heads=(4, 4, 4, 4), window_size=8, mlp_ratio=2,
                  activation="gelu", head_dim=0, stage_config="uniform",
                  num_stages=4, window_shift_ratio=0.5, skip_type="standard",
-                 conv_kernel=3, attention_type="swin"):
+                 conv_kernel=3, attention_type="swin", use_gcm=False,
+                 use_channel_curve=False, use_color_mlp=False,
+                 use_freqmod=False, use_color_pre=False, use_dual_branch=False,
+                 use_pcp=False, use_csn=False, use_color_mlp_output=False):
         super().__init__()
         self.window_size = window_size
         self.embed_dim = embed_dim
+
+        self.channel_curve = ChannelCurve(in_ch) if use_channel_curve else None
+        self.color_mlp = ColorMLP(in_ch) if use_color_mlp else None
+        self.color_pre = ColorPre(hidden=16) if use_color_pre else None
+        self.color_mlp_output = ColorMLP(in_ch, hidden=8) if use_color_mlp_output else None
+
+        # Shared PCP: one instance applied between RSTB stages
+        self.pcp = PCP(embed_dim) if use_pcp else None
+
+        self.use_dual_branch = use_dual_branch
+        if use_dual_branch:
+            # Global branch: GAP on input → MLP → per-channel affine params
+            self.global_branch = nn.Sequential(
+                nn.AdaptiveAvgPool2d(1),
+                nn.Flatten(),
+                nn.Linear(in_ch, in_ch * 2),
+                nn.ReLU(),
+                nn.Linear(in_ch * 2, embed_dim * 2),
+            )
+            nn.init.zeros_(self.global_branch[-1].weight)
+            nn.init.zeros_(self.global_branch[-1].bias)
+            # Gating for fusing global modulation with local features
+            self.gate = nn.Sequential(
+                nn.Linear(embed_dim, embed_dim // 4),
+                nn.ReLU(),
+                nn.Linear(embed_dim // 4, embed_dim),
+                nn.Sigmoid(),
+            )
+        else:
+            self.global_branch = None
 
         if head_dim > 0:
             _num_heads = tuple(max(1, embed_dim // head_dim) for _ in range(num_stages))
@@ -339,7 +608,9 @@ class RestoreNet(nn.Module):
                 self.layers.append(nn.Conv2d(_dims[i-1], dim, 1))
             self.layers.append(
                 RSTB(dim, d, nh, window_size, mlp_ratio, activation,
-                     window_shift_ratio, skip_type, conv_kernel, attention_type)
+                     window_shift_ratio, skip_type, conv_kernel, attention_type,
+                     use_gcm=use_gcm, use_freqmod=use_freqmod,
+                     use_csn=use_csn)
             )
         self.norm = nn.LayerNorm(_dims[-1])
         self._final_dim = _dims[-1]
@@ -365,6 +636,21 @@ class RestoreNet(nn.Module):
         H_in, W_in = x.shape[2:]
         x = self._pad_to_window(x)
 
+        if self.channel_curve is not None:
+            x = self.channel_curve(x)
+        if self.color_mlp is not None:
+            x = self.color_mlp(x)
+        if self.color_pre is not None:
+            x = self.color_pre(x)
+
+        # Global branch: extract global statistics and predict modulation
+        global_scale = None
+        global_shift = None
+        if self.global_branch is not None:
+            global_params = self.global_branch(x)
+            global_scale, global_shift = global_params.chunk(2, dim=1)
+            # global_scale, global_shift: (B, embed_dim)
+
         shallow = self.conv_first(x)
         B, _, H, W = shallow.shape
 
@@ -376,6 +662,16 @@ class RestoreNet(nn.Module):
                 x_seq = layer(x_seq).flatten(2).transpose(1, 2)
             else:
                 x_seq = layer(x_seq, (H, W))
+                # Apply shared PCP after each RSTB
+                if self.pcp is not None:
+                    x_seq = self.pcp(x_seq, (H, W))
+                # Apply global modulation after each RSTB if dual branch
+                if self.global_branch is not None and global_scale is not None:
+                    feat_2d = x_seq.transpose(1, 2).view(B, -1, H, W)
+                    g = self.gate(feat_2d.mean(dim=[2, 3]))
+                    modulation = feat_2d * (1.0 + global_scale.unsqueeze(-1).unsqueeze(-1)) + global_shift.unsqueeze(-1).unsqueeze(-1)
+                    feat_2d = feat_2d + g.unsqueeze(-1).unsqueeze(-1) * (modulation - feat_2d)
+                    x_seq = feat_2d.flatten(2).transpose(1, 2)
 
         x_seq = self.norm(x_seq)
         deep_feat = x_seq.transpose(1, 2).view(B, self._final_dim, H, W)
@@ -385,5 +681,9 @@ class RestoreNet(nn.Module):
 
         out = self.conv_after_body(deep_feat) + shallow
         out = self.conv_last(out) + x[:, :3, :, :]
+
+        # Output-level color correction (after spatial restoration)
+        if self.color_mlp_output is not None:
+            out = self.color_mlp_output(out)
 
         return out[:, :, :H_in, :W_in]
