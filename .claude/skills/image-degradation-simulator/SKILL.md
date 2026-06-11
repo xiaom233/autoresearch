@@ -129,127 +129,76 @@ The `--distortions` argument is a comma-separated list of `name:severity` pairs,
 
 ## 批量盲识别工作流程 (v4 — PSNR像素匹配)
 
-> v1-v3.1: CI优化/Category证据/三轮反思。四轮实验证明 CI 无法区分相似退化类型。
-> v4 核心洞察: **确定性退化→像素完全一致。PSNR排名直接给出正确答案。**
 
-### 核心原理
+## 批量盲识别工作流程 (v4.1 — 逐层剥离 + PSNR验证)
 
-x_distortion 中 ~25/35 个函数是**完全确定性**的（无随机性）：
-- blur (6): gaussian, motion, lens, glass, zoom, jitter
-- compression (2): jpeg, jpeg_2000
-- oversharpen, pixelate, quantization (3)
-- brightness (4), contrast (4), saturation (4), gamma (4)
+> v1-v3.1: CI子指标可捕获耦合效应，但函数区分力不足。
+> v4: PSNR像素匹配区分力强，但无法处理多退化耦合。
+> v4.1: **CI诊断类型+耦合 → PSNR验证确定性 → 逐层剥离分解多退化。**
 
-只有 noise (6) 有随机性，且 seed 固定时可复现。
+### 核心洞察
 
-**这意味着：正确函数+正确severity → PSNR极高。错误函数 → PSNR明显低。**
+1. **类型和顺序耦合**：noise→blur 时噪声特征被模糊掩盖，blur→noise 时噪声保持。固定的"先类型后顺序"或"先顺序后类型"都会失败。
+2. **PSNR 和 CI 互补**：PSNR 只看像素差（强区分力，不理解耦合），CI 看纹理模式（理解耦合，弱区分力）。
+3. **逐层剥离**：不是一轮解决所有退化，而是每轮找主导退化→剥离→分析残差。
 
-exp14 验证: blur_motion:4 PSNR=33.5 dB排名#1/175, 比第二名高8.1 dB。
-
-### v4 工作流
+### v4.1 四轮剥离流程
 
 ```
-Phase 1: analyze → 类别检测 (哪些类别存在? blur? noise? compression? global?)
-Phase 2: PSNR枚举 → 对每个检测到的类别，枚举所有函数×severity，PSNR排名
-Phase 3: 多退化组合 → 取每类Top1函数，PSNR网格搜索severity组合
-Phase 4: 噪声残差 → 确定确定性部分后，从target残差分析噪声类型
-Phase 5: 保存
+Round 1 — 主导退化识别
+  目标: 找到信号最强的退化（通常是效果最明显的那个）
+  方法: analyze → 类别evidence → 决策树选函数
+        → apply单函数 → CI子指标检查耦合信号
+        → 如果是确定性函数 → PSNR验证
+        → 确定主导退化的类型和severity
+
+Round 2 — 剥离主导退化，分析残差
+  目标: 去除主导退化后，在残差中找次要退化
+  方法: simulate(clean, 主导退化) → 与target对比
+        → 残差 = target - simulated
+        → 对残差重新 analyze → 检测剩余类别
+        → 决策树选次要退化函数
+        → PSNR验证（确定性部分）
+
+Round 3 — 耦合诊断（最关键！）
+  目标: 处理类型和顺序的耦合效应
+  方法: CI子指标偏差分析:
+        
+        耦合信号诊断表:
+        overshoot↑+impulse↓+hf_lf↓ → 可能是compression+noise, 不是oversharpen
+        impulse↑+hf_lf↑+zero_cross↑ → noise类型/severity错（耦合干扰）
+        unique_G↑+block↓ → JPEG→JPEG2000（压缩类型耦合）
+        gradient↑+laplacian↑ → 缺少blur（噪声被误判为主导）
+        flat_variance↓+Cr/Cb↓ → blur在noise之后（噪声被模糊抹平）
+        
+  方法: apply完整管线 → compare → 分析每个子指标偏差方向
+        → 根据耦合诊断表推断哪个退化有误
+        → 定向修正（只改被诊断的部分）
+
+Round 4 — PSNR最终验证
+  目标: 确定性部分像素级确认
+  方法: 只对确定性退化部分计算PSNR（排除noise）
+        → PSNR > 40 dB → 确定性部分正确
+        → PSNR < 30 dB → 确定性部分有误，回到Round 2
+        → 噪声类型从残差统计特征确认
 ```
 
-### Phase 1: 类别检测 (同v3)
+### 关键原则
 
-运行 `analyze_degradation.py --target <d> --clean <c>`，检测:
-- blur, noise, compression, global 各类别是否存在
-- 使用已有阈值 (gradient_ratio, laplacian_ratio, flat_variance_ratio, 等)
+1. **PSNR 只验证确定性退化** — 不用于噪声搜索，不用于完整管线优化
+2. **CI子指标诊断耦合** — 耦合信号诊断表是处理多退化的核心工具
+3. **逐层剥离** — 不在一轮解决所有问题，每轮专注一个退化
+4. **顺序从数据推断** — 不预设顺序；耦合诊断表告诉你哪个退化被另一个掩盖
 
-### Phase 2: PSNR 枚举 (核心创新)
+### 与旧版对比
 
-对每个检测到的类别，编写Python脚本枚举所有函数×severity:
-
-```python
-import numpy as np
-from PIL import Image
-from x_distortion import add_distortion, distortions_dict
-
-target = np.array(Image.open('<degraded>').convert('RGB'), dtype=np.uint8)
-h, w = target.shape[:2]
-clean = np.array(Image.open('<clean>').convert('RGB').resize((w, h)), dtype=np.uint8)
-
-# 对 blur 类别
-for func in distortions_dict['blur']:  # gaussian, motion, lens, glass, zoom, jitter
-    for sev in [1,2,3,4,5]:
-        img = clean.copy()
-        img = add_distortion(img, severity=sev, distortion_name=func)
-        psnr = 20 * np.log10(255 / np.sqrt(np.mean((target-img)**2)))
-        print(f"{func}:{sev} PSNR={psnr:.1f}")
-
-# 对 compression 类别 (同样枚举)
-# 对 global 类别 (同样枚举)
-```
-
-**规则**:
-- PSNR 排名 #1 的函数就是正确答案
-- PSNR 边际 > 3 dB → 高置信
-- PSNR 边际 < 3 dB → 需检查 (可能是severity接近)
-
-### Phase 3: 多退化组合
-
-如果多个类别被检测到:
-1. 每类取 PSNR Top-2 函数作为候选
-2. 枚举候选组合 (最多 2×2×2=8 种)
-3. 对每种组合，网格搜索 severity (每类 5 级 → 125 组合)
-4. PSNR 最高的组合 = 最终管线
-
-**顺序处理**:
-- 默认: global → blur → noise → compression
-- 若 noise+blur 都在: 测试 noise→blur 和 blur→noise (选PSNR高的)
-
-### Phase 4: 噪声残差分析
-
-确定性部分确定后，分析残差:
-```python
-# 应用确定性部分到clean
-residual = target.astype(float) - deterministic_result.astype(float)
-# 分析残差的统计特征确定噪声类型
-```
-
-### Phase 5: 保存
-
-使用 `save_prediction.py` 保存最终管线。
-
-### 优势
-
-| 维度 | v3.1 (CI+反思) | v4 (PSNR) |
-|------|---------------|-----------|
-| JPEG vs JPEG2000 | CI盲区 | PSNR 20+ dB差异 |
-| blur子类型 | 决策树误判 | PSNR排名#1 |
-| single deg准确率 | ~60% | 预期 >90% |
-| multi deg | CI乱猜 | PSNR网格搜索 |
-| 计算成本 | 低 | 中 (每类别30秒) |
-
-    "ci_before": "6/10", "ci_after": "7/10",
-    "improvement": 1
-  },
-  "round2_correction": {
-    "diagnosis": "情况C: unique_G偏高+block_boundary偏低 → JPEG→JPEG2000",
-    "action": "compression_jpeg:3 → compression_jpeg_2000:3",
-    "ci_before": "7/10", "ci_after": "9/10",
-    "improvement": 2
-  },
-  "round3_calibration": {
-    "tested": ["gaussian:3+jp2k:2", "gaussian:3+jp2k:3", "gaussian:3+jp2k:4"],
-    "best_ci": "9/10",
-    "selected": "gaussian:3+jp2k:3"
-  },
-  "final_result": {
-    "pipeline": [{"function":"blur_gaussian","severity":3}, {"function":"compression_jpeg_2000","severity":3}],
-    "ci": "9/10",
-    "reflection_improvement": 3,
-    "verdict": "GOOD"
-  }
-}
-```
-
+| 问题 | v3.1 | v4 | v4.1 |
+|------|------|-----|------|
+| 单退化函数识别 | 决策树(~60%) | PSNR(75%) | PSNR验证(75%) |
+| 多退化耦合 | CI子指标(部分有效) | 失败(万能填充) | CI耦合诊断+逐层剥离 |
+| JPEG vs JPEG2000 | CI盲区 | PSNR可区分 | PSNR验证 |
+| noise子类型 | 决策树 | 失败(填充) | 残差分析+CI指标 |
+| 顺序确定 | 启发式 | 未处理 | 耦合诊断表推断 |
 
 ## Mode Selection: Same-image vs Cross-image
 
