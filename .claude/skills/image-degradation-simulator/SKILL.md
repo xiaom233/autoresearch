@@ -13,13 +13,13 @@ Analyze degraded images, identify present distortion types and their severity, t
 
 以下任何一条都会导致 CPU 100% 持续数小时、结果质量差、实验作废：
 
-1. **不允许写任何 Python 脚本文件**：不要用 Write/Edit 创建 `.py` 文件来做盲识别搜索。只使用已有的 Skill 脚本。
-2. **v4 例外: PSNR枚举**：对已检测到的类别，允许遍历该类别内的所有函数（如 blur 6个函数×5 severity=30个），用 PSNR 排名确定正确函数。这是确定性计算，不是盲目搜索。
-3. **禁止跨类别盲目组合**：不要 `for blur in blurs: for noise in noises: for comp in comps` 遍历所有组合。
+1. **不允许写任何 Python 脚本文件**：只使用已有的 Skill 脚本（analyze_degradation.py、apply_multi.py、compare_degradation.py、save_prediction.py）。
+2. **禁止 PSNR 枚举搜索**：PSNR 仅用于最终验证（正确管线 > 40dB）。所有函数和 severity 决策必须通过校准阈值，不通过 PSNR 排名。
+3. **禁止跨类别盲目组合**：不要遍历所有组合。
 4. **禁止 `run_in_background: true` 启动多个并行搜索**。
 5. **禁止编写子进程调用脚本**。
 
-**v4 正确做法**：analyze 检测类别 → 对每类PSNR枚举函数×severity → 排名#1即答案 → 组合各类Top1测试顺序 → 保存。
+**正确做法**：analyze检测 → 校准阈值决策函数类型+severity → apply+compare → PSNR最终验证(>40dB=正确) → 残差分析噪声 → 保存。
 
 ### 多退化并行处理
 
@@ -38,14 +38,14 @@ Analyze degraded images, identify present distortion types and their severity, t
 
 ### PSNR-based identification (v4)
 
-**核心原理**: x_distortion 中 ~25/35 个函数是完全确定性的。对确定性退化，正确函数+正确severity → PSNR极高，错误函数 → PSNR明显低。
+**核心原理**: 校准阈值直接从指标推断函数类型和 severity。PSNR 仅用于最终验证（正确管线 > 40dB）。
 
-**v4 工作流**:
-1. `analyze_degradation.py` 检测哪些类别存在 (blur? noise? compression? global?)
-2. 对每个检测到的类别，PSNR 枚举该类别内所有函数×severity (如 blur: 6×5=30次)
-3. PSNR 排名 #1 的函数即正确答案 (验证: 边际 8.1 dB)
-4. 组合各类 Top1 函数，测试顺序 (最多2种)
-5. 对噪声残差进行统计分析
+**当前工作流**:
+1. `analyze_degradation.py` 检测类别 + 计算所有指标
+2. 校准阈值速查表直接决策函数类型和 severity（不枚举!）
+3. apply + compare 验证
+4. PSNR > 40dB → 确定性部分正确
+5. 噪声从残差分布识别
 
 **与旧版的关键区别**: v1-v3 试图用 CI 和决策树区分相似函数，失败了 (JPEG vs JPEG2000, blur子类型混淆)。v4 用 PSNR 像素级匹配——正确函数 PSNR 45 dB vs 错误函数 21 dB，差异 24 dB，不存在混淆。
 
@@ -219,7 +219,7 @@ Round N:   对残差检查全局信号
 Round 0 — 全局退化优先识别（如果存在）
   全局退化最容易检测且全部确定性 → 优先处理
   方法: ratios_vs_clean 检查 mean/std/saturation 偏移
-        → PSNR 枚举确认函数+severity
+        → 校准阈值直接推断函数+severity（不枚举），PSNR 最终验证
         → 从 target 中剥离全局退化 → 继续识别剩余
 
 Round 1 — 主导退化识别
