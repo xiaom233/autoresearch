@@ -216,6 +216,21 @@ Step 6: 默认 → noise_gaussian_RGB
 
 ### 关键原则
 
+### ⚠️ 挑战函数范围（仅14个函数）
+
+`blind_challenge.py` 只从 3 类别 14 函数生成退化：
+
+| 类别 | 函数 | 确定性? |
+|------|------|:--:|
+| blur (6) | gaussian, motion, glass, lens, zoom, jitter | ✅ 全部确定性 |
+| noise (6) | gaussian_RGB, gaussian_YCrCb, speckle, spatially_correlated, poisson, impulse | ❌ 全部随机 |
+| compression (2) | jpeg, jpeg_2000 | ✅ 全部确定性 |
+
+**不存在**: brightness, contrast, saturation, gamma, oversharpen, pixelate, quantization。
+Agent 预测中包含这些函数 → **一定是误判**。
+
+### 关键原则
+
 1. **PSNR 只验证确定性退化** — 不用于噪声搜索
 2. **噪声从残差识别** — PSNR 对噪声无效，残差+分布才是正确方法
 3. **CI子指标诊断耦合** — 耦合信号诊断表是处理多退化的核心工具
