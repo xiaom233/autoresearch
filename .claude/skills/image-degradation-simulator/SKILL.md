@@ -186,11 +186,30 @@ Cr/Cb 通道变化 → YCrCb, HSV 通道变化 → HSV
 
 ⚠️ **关键**：全局退化从统计量直接推断，不需要 PSNR 枚举。这是它们和 blur/compression 的本质区别。
 
-#### 耦合注意事项
+#### 耦合分析 ⚠️ 全局退化信号被局部退化污染
 
-- **saturation 与 JPEG 色度子采样混淆**：JPEG 4:2:0 也会降低 Cr/Cb 方差，需与 saturation_weaken 区分
-- **brightness 与 contrast 互相干扰**：mean 和 std 同时变化 → 可能是 contrast+blur 而非 brightness
-- **oversharpen 的假阳性**：overshoot > 0.5 但 noise_vs_sharpen=noise → 是噪声不是 oversharpen
+局部退化会改变全局统计量，导致误判：
+
+| 局部退化 | 虚假的全局信号 | 机制 |
+|---------|-------------|------|
+| blur | std↓ → 像 contrast_weaken | 模糊抹平像素差异 |
+| noise | std↑, Cr/Cb↑ → 像 contrast+saturation | 噪声增加方差 |
+| compression JPEG | Cr/Cb↓ → 像 saturation_weaken | 色度子采样 |
+| oversharpen | mean 偏移, std↑ → 像 brightness+contrast | 锐化改变分布 |
+
+**正确流程**：先剥离局部退化 → 再检查全局信号。
+
+```
+Round N-1: 识别并剥离 blur/noise/compression（用 PSNR 验证）
+Round N:   对残差检查全局信号
+           → 如果剥离后 ratios_vs_clean 恢复正常 → 之前的"全局信号"是耦合假象
+           → 如果剥离后仍有明显偏移 → 真正的全局退化
+```
+
+**判断方法**：不直接看 target/clean 的 ratios。而是：
+1. simulate(clean, 局部退化管线) → 得到 partial
+2. 检查 partial vs target 的差异 → 这才是真正的全局退化信号
+3. 从 partial→target 的残差中推断全局退化类型和 severity
 
 ### v4.1 四轮剥离流程
 
