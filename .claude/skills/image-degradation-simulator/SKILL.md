@@ -129,240 +129,112 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 The `--distortions` argument is a comma-separated list of `name:severity` pairs, applied in order.
 
 
-## 批量盲识别工作流程 (v2 — 逻辑收敛框架)
 
-> exp14 验证: CI 优化的 v1 流程导致 83% GOOD 误报率。CI=10/10 时函数可以完全错误。
-> v2 核心: **分阶段逻辑收敛，CI 降级为辅助，类别对齐强制验证。**
+## 批量盲识别工作流程 (v3 — 确定性决策树)
 
-### 核心思想
+> v1 (CI优化): 83% GOOD 误报率。v2 (6阶段): 10% 完全正确，0% 三退化。
+> v3 核心: **确定性指标阈值决策，CI 仅做最终校验，save_prediction.py 统一格式。**
 
-不从组合空间中盲目搜索。分 6 阶段逐步缩小范围：
+### 核心原则
 
-```
-Phase 1: 类别检测 → 哪些类别存在？
-Phase 2: 函数识别 → 每个类别具体是哪个函数？
-Phase 3: 顺序确定 → 退化顺序？
-Phase 4: 严重度校准 → severity 值？
-Phase 5: 交叉验证 → 完整管线能否解释所有指标？
-Phase 6: 接受决策 → 多维度判定
-```
+1. **不猜测不迭代** — 基于增强指标阈值做确定性判断，不在 CI 优化循环中反复猜测
+2. **CI 是校验不是判据** — apply+compare 只验证管线无严重逻辑矛盾
+3. **统一输出** — 必须用 `save_prediction.py` 保存，禁止手动写 JSON
 
-### Phase 1: 类别检测
+### 增强指标 (analyze_degradation.py v3 新增)
 
-**目标**: 确定 blur/noise/compression/global 哪些存在。不涉及具体函数。
-
-#### 1a: 全局退化 (最简单，优先)
-
-ratios_vs_clean 直接反映全局统计量变化：
-
-| 类型 | 检测方法 | 阈值 |
-|------|---------|------|
-| brightness | per-channel mean ratio | 任一通道偏离 1.0 超过 ±0.1 |
-| contrast | std_ratio | < 0.85 或 > 1.15 |
-| saturation | saturation_mean_ratio | < 0.7 或 > 1.3 |
-| gamma | mean 变但 std 不变 | gamma_HSV/RGB |
-
-注意: 饱和度变化也可能是 JPEG 色度子采样的副作用。如有 compression 证据需交叉验证。
-
-#### 1b: Blur
-
-| 指标 | 强证据 | 中证据 |
-|------|:--:|:--:|
-| gradient_magnitude_ratio | < 0.5 | 0.5-0.8 |
-| laplacian_variance_ratio | < 0.2 | 0.2-0.5 |
-| hf_lf_ratio | < 0.3 | 0.3-0.6 |
-
-`blur_present = (强证据≥2) OR (强证据=1 AND 中证据≥2)`
-
-⚠️ **jitter blur 可能增加 gradient** (多重边缘叠加)。motion blur 看 h_v_ratio 与 clean 的变化(>15%)，不是绝对值。
-
-#### 1c: Noise
-
-| 指标 | 证据 |
-|------|------|
-| flat_region_variance_ratio | > 1.5 |
-| impulse_pct net increase (target-clean) | > 0.5% |
-| Cr 或 Cb local_std_ratio | > 2.0 |
-
-`noise_present = 任一满足`
-
-⚠️ **必须用 target vs clean 的差值/比值**。clean 本身可能有高 impulse 或 flat_variance。
-
-#### 1d: Compression (区分 JPEG vs JPEG2000)
-
-| 指标 | JPEG | JPEG2000 |
-|------|:--:|:--:|
-| block_boundary_ratio | **> 1.1** | < 1.1 |
-| bytes_per_pixel | < 1.0 | **< 0.5** |
-| unique_G vs clean | 显著下降 | 下降或不变 |
-| 视觉 ringing | 轻微 | **明显** |
-
-`compression_present = (block_boundary>1.1) OR (bytes_per_pixel<0.8)`
-
-⚠️ **JPEG2000 无 8×8 块**。block_boundary 检查通过 ≠ 无压缩。**bytes_per_pixel 是最可靠指标**。
-
----
-
-### Phase 2: 函数识别
-
-**目标**: 对每类确定具体函数。用决策树，不盲目测试。
-
-#### 2a: Blur 决策树
+运行 `analyze_degradation.py --target <d> --clean <c>` 后，除原有指标外，查看：
 
 ```
-1. directional_h_v_ratio 与 clean 对比变化 > 15%? → blur_motion
-2. gradient_radial_ratio > 1.3? → blur_lens (中心清晰边缘模糊)
-3. gradient_magnitude_ratio > 1.2 (梯度增加!)? → blur_jitter (多重边缘)
-4. gradient_radial_ratio 1.1-1.3?
-     laplacian_ratio < 0.1 → blur_glass
-     laplacian_ratio > 0.3 → blur_zoom
-5. gradient_radial_ratio < 0.9? → blur_zoom (中心模糊)
-6. 默认 → blur_gaussian
+jpeg2000.ringing_ratio         > 2.0 + osc 0.3-0.5 → JPEG2000 wavelet ringing
+                               > 2.0 + osc > 0.5    → jitter blur (非JPEG2000!)
+noise_subtype.var_mean_ratio   > 5.0                 → Poisson/shot noise
+noise_subtype.speckle_contrast > 0.01                → speckle noise
+noise_subtype.spatial_cluster  > 0.3                 → spatially correlated
+blur_subtype.directional_change_pct > 15%            → motion blur
+blur_subtype.h_v_ratio        与 clean 对比          → motion (看变化, 非绝对值)
+radial.gradient_radial_ratio   > 1.3                 → lens blur (中心清晰)
+                               1.1-1.3               → glass blur
+                               < 0.9                 → zoom blur
+sharpening.overshoot_ratio     > 0.5 AND noise_vs_sharpen=oversharpen → 真oversharpen
+                               > 0.5 BUT noise_vs_sharpen=noise       → 假阳性(噪声)
 ```
 
-#### 2b: Noise 决策树
+### 工作流 (每组退化)
 
 ```
-1. impulse_pct(net increase) > 0.5%? → noise_impulse
-2. Cr_local_std_ratio > 2.0 AND Cb > 2.0?
-     Y 也高 → noise_gaussian_RGB
-     Y 不高 → noise_gaussian_YCrCb
-3. flat_variance_ratio > 3.0?
-     局部方差大 → noise_spatially_correlated
-     视觉斑点 → noise_speckle
-     暗区>亮区 → noise_poisson
-     均匀 → noise_gaussian_RGB
+Step 1: 运行 analyze_degradation.py --target <d> --clean <c>
+        完整阅读所有指标，特别关注上述增强指标
+
+Step 2: 类别检测 (确定性)
+        blur_present    = gradient_ratio < 0.5 OR laplacian_ratio < 0.2 OR hf_lf < 0.3
+                         (例外: jitter blur 可能 gradient_ratio > 1.0 但 laplacian_ratio < 0.5)
+        noise_present   = flat_variance_ratio > 1.5 OR impulse_net_increase > 0.5%
+                         OR Cr/Cb_local_std_ratio > 2.0
+        compr_present   = block_boundary > 1.1 (JPEG) OR ringing_ratio > 2.0 + osc 0.3-0.5 (JPEG2000)
+                         OR bytes_per_pixel < 0.5
+        global_present  = saturation_ratio < 0.7 or > 1.3 OR per_channel_mean 偏移 > 10%
+
+Step 3: 函数识别 (确定性决策树)
+        对每个检测到的类别，按决策树选择函数:
+
+        Blur: jitter(osc>0.5+grad正常) > motion(dir_chg>15%) > lens(radial>1.3)
+              > glass(radial 1.1-1.3) > zoom(radial<0.9) > gaussian(默认)
+        Noise: impulse(net_increase>0.5%) > YCrCb(Cr/Cb高) > 
+               poisson(var_mean>5) > speckle(speckle>0.01) > 
+               spatially_corr(spatial>0.3) > gaussian_RGB(默认)
+        Compression: JPEG(block>1.1) > JPEG2000(ringing>2+osc 0.3-0.5)
+        Global: saturate_weaken/strengthen, brightness_*, contrast_* (根据ratios_vs_clean)
+
+Step 4: 顺序确定 (最多2种候选)
+        默认: global → blur → noise → compression
+        若 noise+blur 都在: 测试 noise→blur 和 blur→noise (选 CI 高的)
+
+Step 5: 严重度校准 (最多2轮)
+        初始 sev=3。apply+compare。校准指标偏离>30% → 调整 sev±1
+
+Step 6: apply+compare 校验
+        运行 apply_multi + compare_degradation
+        CI 仅用于检测严重矛盾 (CI<4 → 管线可能有结构错误)
+        CI≥4 且无逻辑矛盾 → 接受
+
+Step 7: 保存 (必须使用脚本!)
+        python /data/zyli/projects/autoresearch/.claude/skills/image-degradation-simulator/scripts/save_prediction.py \
+          exp14/predicted_params/blind_{id}.json \
+          func1:sev1 func2:sev2 \
+          --verdict GOOD --ci "8/10"
+
+        ⚠️ 禁止手动写 JSON！禁止使用 "name" 或 "type" 键名！
 ```
 
-#### 2c: Compression 决策树
+### 输出格式 (save_prediction.py 强制保证)
 
-```
-block_boundary > 1.1 → compression_jpeg
-bytes_per_pixel < 0.8 AND block_boundary < 1.1 → compression_jpeg_2000
-否则 → 标记类型不确定
-```
-
-#### 2d: 全局退化决策树
-
-```
-saturation_ratio < 0.5 → saturate_weaken (HSV vs YCrCb 看 Cr/Cb 变化)
-saturation_ratio > 1.5 → saturate_strengthen
-mean偏移 + std不变 → brightness_*_gamma_*
-mean偏移 + std变化 → brightness_*_shift_*
-std变化 + mean不变 → contrast_strengthen/weaken
+```json
+{"pipeline":[{"function":"blur_gaussian","severity":3}],
+ "analysis":{"verdict":"GOOD","ci_pass_rate":"8/10"}}
 ```
 
----
+### 反思记录
 
-### Phase 3: 顺序确定
+每组还需保存 `blind_{id}_reflection.json`，记录:
+- 关键指标值 (新增强指标)
+- 决策树路径 (每步为什么选这个函数)
+- 排除的函数及原因
+- apply+compare 校验结果
 
-**退化管线有物理逻辑**。不要测试 N! 种排列。
-
-```
-默认顺序: 全局退化 → blur → noise → compression → oversharpen
-
-规则:
-  noise + blur 都在: 测试 noise→blur 和 blur→noise
-    flat_variance 低于预期 → blur 在 noise 之后(抹平了噪声)
-  
-  compression 永远在最后 (除非有证据表明不是)
-  
-  oversharpen + noise: 检查 noise_vs_sharpen
-    如果 verdict=oversharpen → oversharpen 确实存在
-    如果 verdict=noise → impulse 增加来自噪声,非 oversharpen
-
-候选顺序 ≤ 3 种。apply → compare，选 CI 更高的。
-CI 差异 < 2 → 选更符合物理逻辑的。
-```
-
----
-
-### Phase 4: 严重度校准
-
-Severity 只有 5 个离散值。2 轮二分足够：
-
-| 函数 | 校准指标 |
-|------|---------|
-| blur_* | gradient_magnitude_ratio |
-| noise_gaussian | flat_region_variance_ratio |
-| noise_impulse | impulse_pct (net increase) |
-| compression_jpeg | unique_G |
-| oversharpen | overshoot_ratio |
-
-```
-1. 初始 severity = 3
-2. apply + compare, 检查校准指标
-3. 偏离 > 20%: 调整 ±1
-4. 最多 2 轮 (不要为 severity 跑 5 轮)
-```
-
----
-
-### Phase 5: 交叉验证
-
-**在 apply+compare 之后，接受之前，必须验证**:
-
-```
-□ 每类 evidence 是否被管线中的函数解释?
-   blur_evidence=强 但 severity=1 → 不匹配
-   noise_evidence=弱 但有 noise 函数 → 可能误引入
-
-□ 是否有指标异常无法被管线解释?
-   unique_RGB 显著变化但无 compression → 遗漏
-   saturation 显著变化但无全局退化 → 遗漏
-
-□ 管线是否存在逻辑矛盾?
-   oversharpen + blur → 矛盾
-   同类别出现两次 → 违规
-
-□ 退化顺序是否物理合理?
-   compression 是否在最后?
-   noise→blur vs blur→noise 是否符合物理逻辑?
-```
-
----
-
-### Phase 6: 接受决策
-
-**CI 降级为辅助参考** (exp14: CI=10/10 函数可完全错误)。
-
-```
-维度 A: 类别完整性 (权重最高)
-  ✅ Phase1 检测到的类别全在管线中, 无多余
-  ⚠️ 缺/多 1 个
-  ❌ 缺/多 2+
-
-维度 B: 指标一致性
-  ✅ Phase5 交叉验证全部通过
-  ⚠️ 1-2 项不通过但可解释
-  ❌ 3+ 项不通过
-
-维度 C: CI (辅助, 无否决权)
-  CI≥8 + A+B✅ → 支持 GOOD
-  CI<7 + A+B✅ → 仍可 GOOD
-
-最终:
-  A✅+B✅ → GOOD (不论 CI)
-  A✅+B⚠️ → GOOD (注明可疑)
-  A⚠️ 或 B❌ → NEEDS_WORK
-  A❌ → POOR
-```
-
-### 输出格式
-
-predicted_params.json: `{"pipeline":[{function,severity}], "analysis":{"verdict":"GOOD|NEEDS_WORK|POOR","ci_pass_rate":"N/10"}}`
-
-reflection.json 必须记录每阶段推理:
 ```json
 {
-  "phase1_category_detection": {"blur": {"present": true, "evidence": [...]}, ...},
-  "phase2_function_identification": {"blur": {"decision_tree_path": "...", "selected": "..."}, ...},
-  "phase3_order_determination": {"candidates_tested": [...], "selected": "...", "reasoning": "..."},
-  "phase4_severity_calibration": [{"function": "...", "rounds": [...]}],
-  "phase5_cross_validation": {"checks": [...], "all_passed": true/false},
-  "phase6_acceptance_decision": {"dimension_a": "passed", "dimension_b": "passed", "dimension_c": "8/10", "final": "GOOD"}
+  "key_metrics": {"ringing_ratio": 4.29, "directional_change_pct": 6.2, ...},
+  "category_detection": {"blur": true, "noise": false, "compression": true, "global": false},
+  "decision_path": {
+    "blur": "directional_change=6.2%<15%→非motion, radial=1.13<1.3→非lens→gaussian",
+    "compression": "ringing=4.29>2.0 + osc=0.44(0.3-0.5)→JPEG2000"
+  },
+  "ruled_out": ["blur_motion (dir_chg<15%)", "compression_jpeg (block<1.1)"],
+  "validation": {"ci": "8/10", "contradictions": []}
 }
 ```
+
 
 ## Mode Selection: Same-image vs Cross-image
 
