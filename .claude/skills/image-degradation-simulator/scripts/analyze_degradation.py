@@ -132,6 +132,137 @@ def compute_compression_analysis(img):
     }
 
 
+def compute_jpeg2000_analysis(img):
+    """JPEG2000-specific detection via wavelet ringing artifacts.
+
+    JPEG2000 uses wavelet compression (not DCT), so:
+    - No 8x8 block boundaries (unlike JPEG)
+    - Ringing/oscillation artifacts near edges (Gibbs phenomenon from wavelet quantization)
+    - High-frequency energy distribution differs from JPEG
+
+    Detection method:
+    1. Edge-adjacent ringing: measure oscillation amplitude near strong edges
+    2. High-frequency spatial distribution: JPEG2000 ringing is concentrated near edges,
+       while noise is uniform
+    """
+    gray = np.mean(img.astype(float), axis=2)
+
+    # Edge detection
+    gy, gx = np.gradient(gray)
+    edge_mag = np.sqrt(gx**2 + gy**2)
+    edge_mask = edge_mag > np.percentile(edge_mag, 90)
+
+    # Ringing detection: Laplacian oscillation near edges
+    laplacian = ndimage.laplace(gray)
+
+    # Dilate edge mask to capture ringing region
+    from scipy.ndimage import binary_dilation
+    edge_region = binary_dilation(edge_mask, iterations=3)
+    non_edge_region = ~edge_region
+
+    # Ringing: ratio of high-frequency energy near edges vs away from edges
+    edge_hf = np.std(np.abs(laplacian[edge_region])) if np.sum(edge_region) > 0 else 0
+    non_edge_hf = np.std(np.abs(laplacian[non_edge_region])) if np.sum(non_edge_region) > 0 else 1e-8
+    ringing_ratio = edge_hf / non_edge_hf if non_edge_hf > 0 else 1.0
+
+    # Oscillation count: number of sign changes in laplacian near edges
+    edge_laplacian = laplacian[edge_region]
+    sign_changes = np.sum(np.abs(np.diff(np.sign(edge_laplacian)))) / 2 if len(edge_laplacian) > 1 else 0
+    oscillation_density = sign_changes / len(edge_laplacian) if len(edge_laplacian) > 0 else 0
+
+    return {
+        "ringing_ratio": round(float(ringing_ratio), 4),
+        "oscillation_density": round(float(oscillation_density), 4),
+        "interpretation": {
+            "jpeg2000_ringing": "ringing_ratio > 2.0 → HF energy concentrated near edges (wavelet ringing). oscillation_density > 0.3 confirms.",
+            "noise_not_ringing": "ringing_ratio ≈ 1.0 → HF energy uniform (likely noise, not JPEG2000 ringing).",
+        }
+    }
+
+
+def compute_noise_subtype_analysis(img):
+    """Sub-type noise discrimination: Poisson, speckle, spatially correlated.
+
+    Poisson noise: variance proportional to signal intensity (photon counting).
+    Speckle noise: multiplicative, variance highest in bright regions.
+    Spatially correlated: adjacent pixel differences show spatial structure.
+    """
+    gray = np.mean(img.astype(float), axis=2)
+    h, w = gray.shape
+
+    # Signal-dependent noise: divide image into intensity bins, measure variance per bin
+    n_bins = 10
+    bin_edges = np.linspace(0, 255, n_bins + 1)
+    bin_variances = []
+    bin_means = []
+    for i in range(n_bins):
+        mask = (gray >= bin_edges[i]) & (gray < bin_edges[i+1])
+        if np.sum(mask) > 100:
+            bin_variances.append(np.var(gray[mask]))
+            bin_means.append(np.mean(gray[mask]))
+
+    # Poisson: variance ∝ mean. Spearman correlation between mean and variance
+    signal_var_corr = 0.0
+    if len(bin_means) > 3:
+        from scipy.stats import spearmanr
+        signal_var_corr, _ = spearmanr(bin_means, bin_variances)
+
+    # Speckle: ratio of variance to mean^2 (speckle contrast)
+    speckle_contrast = np.mean(bin_variances) / (np.mean(bin_means)**2 + 1e-8) if bin_means else 0
+
+    # Spatial correlation: autocorrelation of adjacent differences
+    adj_diff = np.abs(gray[1:, 1:] - gray[:-1, :-1])
+    # Measure spatial clustering of high-diff regions
+    high_diff_mask = adj_diff > np.percentile(adj_diff, 80)
+    spatial_cluster = float(np.mean(high_diff_mask)) if high_diff_mask.size > 0 else 0
+
+    return {
+        "signal_var_correlation": round(float(signal_var_corr), 4),
+        "speckle_contrast": round(float(speckle_contrast), 6),
+        "spatial_cluster_ratio": round(float(spatial_cluster), 4),
+        "interpretation": {
+            "poisson": "signal_var_correlation > 0.7 → variance proportional to signal (Poisson/shot noise).",
+            "speckle": "speckle_contrast > 0.01 → multiplicative noise pattern (speckle).",
+            "spatially_correlated": "spatial_cluster_ratio > 0.3 → noise has spatial structure, not independent."
+        }
+    }
+
+
+def compute_blur_subtype_analysis(img, directional_h_v_ratio, gradient_radial_ratio):
+    """Combined blur subtype classification based on directional and radial metrics.
+
+    Key differentiators:
+    - Gaussian: isotropic (h_v_ratio ≈ clean), uniform across frame (radial ≈ 1.0)
+    - Motion: directional (h_v_ratio significantly ≠ clean)
+    - Lens: radial falloff (radial_ratio > 1.3, center sharper)
+    - Jitter: may increase gradient magnitude (multiple overlapping edges)
+    - Glass: irregular distortion, radial_ratio 1.1-1.3
+    - Zoom: radial_ratio < 0.9 (center blur) or radial with isotropic direction
+    """
+    gray = np.mean(img.astype(float), axis=2)
+
+    # Jitter detection: measures edge duplication
+    # Jitter creates multiple slightly-offset edges → increased zero-crossing density
+    # without the overshoot of sharpening
+    laplacian = ndimage.laplace(gray)
+    zero_crossings = np.sum(np.abs(np.diff(np.sign(laplacian[::2, ::2])))) / 2  # subsampled for speed
+    zc_density = zero_crossings / (gray.size / 4)
+
+    return {
+        "zero_crossing_density": round(float(zc_density), 4),
+        "directional_h_v_ratio": round(float(directional_h_v_ratio), 4),
+        "gradient_radial_ratio": round(float(gradient_radial_ratio), 4),
+        "blur_subtype_hints": {
+            "gaussian": "h_v_ratio stable vs clean + radial ≈ 1.0 + gradient decreased",
+            "motion": "h_v_ratio significantly changed vs clean (>15%)",
+            "lens": "radial_ratio > 1.3 (center sharper than periphery)",
+            "jitter": "gradient may increase + zero_crossing elevated + no directional change",
+            "glass": "radial_ratio 1.1-1.3 + irregular local variance",
+            "zoom": "radial_ratio < 0.9 or radial with isotropic direction"
+        }
+    }
+
+
 def compute_ycrcb_analysis(img):
     """YCrCb decomposition for noise type and JPEG chroma subsampling detection.
     Y=luma, Cr/Cb=chroma. JPEG chroma subsampling suppresses Cb/Cr variance."""
@@ -436,6 +567,8 @@ def analyze(target_path, clean_path=None):
         "saturation": compute_saturation_analysis(target),
         "radial": compute_radial_analysis(target),
         "noise_vs_sharpen": compute_noise_vs_sharpen_analysis(target),
+        "jpeg2000": compute_jpeg2000_analysis(target),
+        "noise_subtype": compute_noise_subtype_analysis(target),
     }
 
     if clean_path:
@@ -463,6 +596,19 @@ def analyze(target_path, clean_path=None):
 
     # Add degradation summary with content-independence classification
     report["degradation_summary"] = generate_degradation_summary(report)
+
+    # Blur subtype analysis (requires both target metrics)
+    report["blur_subtype"] = compute_blur_subtype_analysis(
+        target,
+        report["gradient"]["directional_h_v_ratio"],
+        report["radial"]["gradient_radial_ratio"]
+    )
+    if clean_path:
+        report["blur_subtype"]["directional_h_v_ratio_clean"] = round(float(clean_report["gradient"]["directional_h_v_ratio"]), 4)
+        report["blur_subtype"]["directional_change_pct"] = round(
+            abs(report["gradient"]["directional_h_v_ratio"] - clean_report["gradient"]["directional_h_v_ratio"])
+            / (clean_report["gradient"]["directional_h_v_ratio"] + 1e-8) * 100, 2
+        )
 
     return report
 
