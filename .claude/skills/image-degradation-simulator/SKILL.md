@@ -140,9 +140,52 @@ The `--distortions` argument is a comma-separated list of `name:severity` pairs,
 3. **噪声类型从残差和分布识别**：同图模式下 target-clean 的残差直接暴露噪声特征（见下方噪声分类表）。
 4. **逐层剥离**：不是一轮解决所有退化，而是每轮找主导退化→剥离→分析残差。
 
+### 全局退化识别 (v4.1新增)
+
+全局退化直接改变像素统计分布，ratios_vs_clean 可明确检测：
+
+#### 类别检测（确定性阈值）
+
+| 类型 | 检测指标 | 强证据 | 中证据 |
+|------|---------|:--:|:--:|
+| **brightness** | per_channel_mean_ratio（R/G/B任一） | 偏离 1.0 > ±0.15 | ±0.08-0.15 |
+| **contrast** | std_ratio（target std / clean std） | < 0.7 或 > 1.3 | 0.7-0.85 或 1.15-1.3 |
+| **saturation** | saturation_mean_ratio | < 0.5 或 > 1.5 | 0.5-0.7 或 1.3-1.5 |
+| **gamma** | mean 变但 std 不变 | mean 偏移 > ±10, std_ratio ≈ 1.0 | — |
+| **oversharpen** | overshoot_ratio + noise_vs_sharpen | > 0.5 AND nvs=oversharpen | — |
+| **pixelate** | multiscale abrupt spike | 某 scale 残差 > 5× 相邻 scale | — |
+| **quantization** | unique_R/G/B all < 100 | < 32 | 32-100 |
+
+#### 函数识别（确定性 PSNR，含噪声的全局函数除外）
+
+PSNR 枚举对全局函数同样有效（全部确定性）：
+
+```
+brightness: 8 函数 × 5 sev = 40 次 PSNR → 排名 #1 = 正确函数和 severity
+contrast: 4 函数 × 5 sev = 20 次
+saturation: 4 函数 × 5 sev = 20 次
+oversharpen: 1 函数 × 5 sev = 5 次
+pixelate: 1 函数 × 5 sev = 5 次
+quantization: 3 函数 × 5 sev = 15 次
+```
+
+⚠️ **关键**：PSNR 对全局函数也有效（全部确定性）。正确函数 PSNR 极高，错误函数 PSNR 明显低。
+
+#### 耦合注意事项
+
+- **saturation 与 JPEG 色度子采样混淆**：JPEG 4:2:0 也会降低 Cr/Cb 方差，需与 saturation_weaken 区分
+- **brightness 与 contrast 互相干扰**：mean 和 std 同时变化 → 可能是 contrast+blur 而非 brightness
+- **oversharpen 的假阳性**：overshoot > 0.5 但 noise_vs_sharpen=noise → 是噪声不是 oversharpen
+
 ### v4.1 四轮剥离流程
 
 ```
+Round 0 — 全局退化优先识别（如果存在）
+  全局退化最容易检测且全部确定性 → 优先处理
+  方法: ratios_vs_clean 检查 mean/std/saturation 偏移
+        → PSNR 枚举确认函数+severity
+        → 从 target 中剥离全局退化 → 继续识别剩余
+
 Round 1 — 主导退化识别
   目标: 找到信号最强的退化（通常是效果最明显的那个）
   方法: analyze → 类别evidence → 决策树选函数
@@ -246,6 +289,7 @@ global 包含: brightness(8), contrast(4), saturation(4), oversharpen, pixelate,
 | 多退化耦合 | CI子指标 | 失败(万能填充) | CI耦合诊断+逐层剥离 |
 | JPEG vs JPEG2000 | CI盲区 | PSNR可区分 | PSNR验证 |
 | noise子类型(多退化) | 决策树 | 失败 | 待后续实验 |
+| 全局退化识别 | 无 | 无 | **新增 (Round0+PSNR)** |
 
 ## Mode Selection: Same-image vs Cross-image
 
