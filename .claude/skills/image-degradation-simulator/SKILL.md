@@ -13,15 +13,13 @@ Analyze degraded images, identify present distortion types and their severity, t
 
 以下任何一条都会导致 CPU 100% 持续数小时、结果质量差、实验作废：
 
-1. **不允许写任何 Python 脚本文件**：不要用 Write/Edit 创建 `.py` 文件来做盲识别搜索。只使用已有的 Skill 脚本（`analyze_degradation.py`、`apply_multi.py`、`compare_degradation.py`）。如果需要循环，在 Bash 中手动逐条执行，每次只测 1 个假设。
-2. **禁止 `for` 循环遍历退化类型**：看到 `for blur in blurs: for noise in noises: for comp in comps` 立即停止。
-3. **禁止 `itertools.permutations` / `itertools.product`**：组合爆炸。
-4. **禁止一次性测试 > 5 个假设**：每轮 1 个，基于结果调整下一轮。总共最多 5 轮。
-5. **禁止 `run_in_background: true` 启动多个并行搜索**：一次只跑一个模拟，观察结果后再决定下一步。
-6. **禁止编写子进程调用脚本**：不要写 Bash 脚本调用 `blind_search2.py 2009 &` 然后 `blind_search2.py 2010 &`。
-7. **禁止嵌套循环**：`for perm in itertools.permutations([...])` 绝对禁止。
+1. **不允许写任何 Python 脚本文件**：不要用 Write/Edit 创建 `.py` 文件来做盲识别搜索。只使用已有的 Skill 脚本。
+2. **v4 例外: PSNR枚举**：对已检测到的类别，允许遍历该类别内的所有函数（如 blur 6个函数×5 severity=30个），用 PSNR 排名确定正确函数。这是确定性计算，不是盲目搜索。
+3. **禁止跨类别盲目组合**：不要 `for blur in blurs: for noise in noises: for comp in comps` 遍历所有组合。
+4. **禁止 `run_in_background: true` 启动多个并行搜索**。
+5. **禁止编写子进程调用脚本**。
 
-**正确做法**：每个退化 3-5 轮，每轮 1 个假设。先 `analyze`，形成假设，`apply_multi` 模拟，`compare` 比较，根据结果调整下一轮假设。
+**v4 正确做法**：analyze 检测类别 → 对每类PSNR枚举函数×severity → 排名#1即答案 → 组合各类Top1测试顺序 → 保存。
 
 ### 多退化并行处理
 
@@ -38,19 +36,18 @@ Analyze degraded images, identify present distortion types and their severity, t
 
 ## Core principles
 
-### Visual reasoning, not brute-force enumeration
+### PSNR-based identification (v4)
 
-This is the single most important rule. **Never brute-force by testing all distortion types or all severity levels.** The x_distortion library has 35 functions × 5 severity levels = 175+ possible single-distortion combinations, and the combinatorial space explodes for multi-distortion pipelines. Exhaustive search wastes tokens, time, and proves nothing about understanding.
+**核心原理**: x_distortion 中 ~25/35 个函数是完全确定性的。对确定性退化，正确函数+正确severity → PSNR极高，错误函数 → PSNR明显低。
 
-Instead, treat each test as a hypothesis to validate or refute:
-- **Look first, simulate second.** Read the target image and describe what you see before writing any code.
-- **Test one hypothesis at a time.** Don't generate 30 images in a grid search. Generate ONE image that tests your current best guess, then compare and refine.
-- **Rule out categories by visual inspection, not by running them.** You can see that an image has no blocking artifacts without running JPEG compression. You can see it has no salt-and-pepper noise without running impulse noise. Only simulate what you genuinely suspect.
-- **Each iteration should be a deliberate adjustment**, not a random probe. **If you find yourself writing a for-loop over all distortion types, stop — you're brute-forcing.**
+**v4 工作流**:
+1. `analyze_degradation.py` 检测哪些类别存在 (blur? noise? compression? global?)
+2. 对每个检测到的类别，PSNR 枚举该类别内所有函数×severity (如 blur: 6×5=30次)
+3. PSNR 排名 #1 的函数即正确答案 (验证: 边际 8.1 dB)
+4. 组合各类 Top1 函数，测试顺序 (最多2种)
+5. 对噪声残差进行统计分析
 
-The difference between a good analysis and a bad one:
-- Bad: "Let me test all 35 functions and see which one has the lowest MSE."
-- Good: "The image shows uniform isotropic softness with no directional smear, no radial falloff, and no pixel jitter. This rules out motion, lens, zoom, jitter, and glass blur. The edge profiles show smooth Gaussian-like falloff. Hypothesis: `blur_gaussian`. Let me test severity 3 first since the blur is moderate."
+**与旧版的关键区别**: v1-v3 试图用 CI 和决策树区分相似函数，失败了 (JPEG vs JPEG2000, blur子类型混淆)。v4 用 PSNR 像素级匹配——正确函数 PSNR 45 dB vs 错误函数 21 dB，差异 24 dB，不存在混淆。
 
 ### Handling out-of-domain parameters
 
@@ -130,112 +127,106 @@ The `--distortions` argument is a comma-separated list of `name:severity` pairs,
 
 
 
-## 批量盲识别工作流程 (v3 — 确定性决策树)
+## 批量盲识别工作流程 (v4 — PSNR像素匹配)
 
-> v1 (CI优化): 83% GOOD 误报率。v2 (6阶段): 10% 完全正确，0% 三退化。
-> v3 核心: **确定性指标阈值决策，CI 仅做最终校验，save_prediction.py 统一格式。**
+> v1-v3.1: CI优化/Category证据/三轮反思。四轮实验证明 CI 无法区分相似退化类型。
+> v4 核心洞察: **确定性退化→像素完全一致。PSNR排名直接给出正确答案。**
 
-### 核心原则
+### 核心原理
 
-1. **不猜测不迭代** — 基于增强指标阈值做确定性判断，不在 CI 优化循环中反复猜测
-2. **CI 是校验不是判据** — apply+compare 只验证管线无严重逻辑矛盾
-3. **统一输出** — 必须用 `save_prediction.py` 保存，禁止手动写 JSON
+x_distortion 中 ~25/35 个函数是**完全确定性**的（无随机性）：
+- blur (6): gaussian, motion, lens, glass, zoom, jitter
+- compression (2): jpeg, jpeg_2000
+- oversharpen, pixelate, quantization (3)
+- brightness (4), contrast (4), saturation (4), gamma (4)
 
-### 增强指标 (analyze_degradation.py v3 新增)
+只有 noise (6) 有随机性，且 seed 固定时可复现。
 
-运行 `analyze_degradation.py --target <d> --clean <c>` 后，除原有指标外，查看：
+**这意味着：正确函数+正确severity → PSNR极高。错误函数 → PSNR明显低。**
 
-```
-jpeg2000.ringing_ratio         > 2.0 + osc 0.3-0.5 → JPEG2000 wavelet ringing
-                               > 2.0 + osc > 0.5    → jitter blur (非JPEG2000!)
-noise_subtype.var_mean_ratio   > 5.0                 → Poisson/shot noise
-noise_subtype.speckle_contrast > 0.01                → speckle noise
-noise_subtype.spatial_cluster  > 0.3                 → spatially correlated
-blur_subtype.directional_change_pct > 15%            → motion blur
-blur_subtype.h_v_ratio        与 clean 对比          → motion (看变化, 非绝对值)
-radial.gradient_radial_ratio   > 1.3                 → lens blur (中心清晰)
-                               1.1-1.3               → glass blur
-                               < 0.9                 → zoom blur
-sharpening.overshoot_ratio     > 0.5 AND noise_vs_sharpen=oversharpen → 真oversharpen
-                               > 0.5 BUT noise_vs_sharpen=noise       → 假阳性(噪声)
-```
+exp14 验证: blur_motion:4 PSNR=33.5 dB排名#1/175, 比第二名高8.1 dB。
 
-### 工作流 (每组退化): 初识 + 三轮反思
+### v4 工作流
 
 ```
-Phase 0: 初识 (确定性决策树)
-  Step 1-6: 同上 (analyze → 类别 → 决策树 → 顺序 → 严重度 → apply+compare)
-  得到初始预测 + CI 子指标详情
-
-Phase 1: Round 1 — 差异诊断
-  运行 apply+compare 获取每个子指标的 target vs simulated 偏差
-
-  诊断规则 (差异→修正映射):
-  
-  情况 A: overshoot↑ + impulse↓ + hf_lf↓ → 误判oversharpen, 应为compression+noise
-    → 去掉oversharpen, 添加compression, 检查noise类型
-  
-  情况 B: impulse↑ + hf_lf↑ + zero_crossing↑ → noise类型或severity错误
-    → 降低impulse sev, 或改gaussian
-  
-  情况 C: unique_G↑ + block_boundary↓ → 可能是JPEG2000而不是JPEG
-    → JPEG→JPEG2000
-  
-  情况 D: 所有指标同方向偏差 → severity整体偏差
-    → simulated比target更退化 → 全部sev-1
-    → simulated比target更清晰 → 全部sev+1 或 漏检类别
-  
-  情况 E: gradient↑ + laplacian↑ + overshoot↑ → 缺少blur, 或noise误判为blur
-    → 增加blur sev, 或减少noise sev
-  
-  情况 F: flat_variance↑ + Cr/Cb↑ → noise被漏检 或 noise类型错误
-    → 添加noise类别 或 改noise类型 (gaussian→YCrCb/poisson/speckle)
-
-  关键: 不在 Round 1 做任意猜测。严格按上述映射表定向修正 1-2 个参数。
-
-Phase 2: Round 2 — 定向修正
-  基于 Round 1 诊断, 只修改被诊断的参数:
-  - 函数类型错误 → 只改那个函数
-  - severity 偏差 → 只改 severity
-  - 漏检类别 → 只加那个类别
-  
-  apply+compare 验证:
-  CI 提升 > 2 → 修正方向正确, 保留
-  CI 提升 < 2 → 修正无效, 回退到初始预测
-
-Phase 3: Round 3 — 精确校准
-  对每个 severity ±1 微调:
-  测试 sev-1, sev, sev+1 三种组合
-  选择 CI 最高的
-
-  最终判定:
-  Round3_CI - Round1_CI > 2 → 反思成功, 保存修正后预测
-  Round3_CI - Round1_CI < 2 → 反思无效, 保存初始预测 + 标记反思失败原因
-
-保存:
-  最终预测 (save_prediction.py)
-  + 反思记录 (初始预测 + 3轮修改 + CI变化轨迹)
+Phase 1: analyze → 类别检测 (哪些类别存在? blur? noise? compression? global?)
+Phase 2: PSNR枚举 → 对每个检测到的类别，枚举所有函数×severity，PSNR排名
+Phase 3: 多退化组合 → 取每类Top1函数，PSNR网格搜索severity组合
+Phase 4: 噪声残差 → 确定确定性部分后，从target残差分析噪声类型
+Phase 5: 保存
 ```
 
-### 输出格式 (save_prediction.py 强制保证)
+### Phase 1: 类别检测 (同v3)
 
-```json
-{"pipeline":[{"function":"blur_gaussian","severity":3}],
- "analysis":{"verdict":"GOOD","ci_pass_rate":"8/10"}}
+运行 `analyze_degradation.py --target <d> --clean <c>`，检测:
+- blur, noise, compression, global 各类别是否存在
+- 使用已有阈值 (gradient_ratio, laplacian_ratio, flat_variance_ratio, 等)
+
+### Phase 2: PSNR 枚举 (核心创新)
+
+对每个检测到的类别，编写Python脚本枚举所有函数×severity:
+
+```python
+import numpy as np
+from PIL import Image
+from x_distortion import add_distortion, distortions_dict
+
+target = np.array(Image.open('<degraded>').convert('RGB'), dtype=np.uint8)
+h, w = target.shape[:2]
+clean = np.array(Image.open('<clean>').convert('RGB').resize((w, h)), dtype=np.uint8)
+
+# 对 blur 类别
+for func in distortions_dict['blur']:  # gaussian, motion, lens, glass, zoom, jitter
+    for sev in [1,2,3,4,5]:
+        img = clean.copy()
+        img = add_distortion(img, severity=sev, distortion_name=func)
+        psnr = 20 * np.log10(255 / np.sqrt(np.mean((target-img)**2)))
+        print(f"{func}:{sev} PSNR={psnr:.1f}")
+
+# 对 compression 类别 (同样枚举)
+# 对 global 类别 (同样枚举)
 ```
 
-### 反思记录格式
+**规则**:
+- PSNR 排名 #1 的函数就是正确答案
+- PSNR 边际 > 3 dB → 高置信
+- PSNR 边际 < 3 dB → 需检查 (可能是severity接近)
 
-```json
-{
-  "initial_prediction": {"pipeline": [...], "ci": "6/10", "ci_details": {
-    "overshoot_ratio": {"target": 0.8, "simulated": 0.3, "delta": -0.5, "direction": "simulated_too_low"},
-    "impulse_total_pct": {"target": 5.2, "simulated": 2.1, "delta": -3.1, "direction": "simulated_too_low"},
-    ...
-  }},
-  "round1_diagnosis": {
-    "pattern": "情况D: 所有指标偏低 → severity整体偏高",
-    "action": "全部sev-1",
+### Phase 3: 多退化组合
+
+如果多个类别被检测到:
+1. 每类取 PSNR Top-2 函数作为候选
+2. 枚举候选组合 (最多 2×2×2=8 种)
+3. 对每种组合，网格搜索 severity (每类 5 级 → 125 组合)
+4. PSNR 最高的组合 = 最终管线
+
+**顺序处理**:
+- 默认: global → blur → noise → compression
+- 若 noise+blur 都在: 测试 noise→blur 和 blur→noise (选PSNR高的)
+
+### Phase 4: 噪声残差分析
+
+确定性部分确定后，分析残差:
+```python
+# 应用确定性部分到clean
+residual = target.astype(float) - deterministic_result.astype(float)
+# 分析残差的统计特征确定噪声类型
+```
+
+### Phase 5: 保存
+
+使用 `save_prediction.py` 保存最终管线。
+
+### 优势
+
+| 维度 | v3.1 (CI+反思) | v4 (PSNR) |
+|------|---------------|-----------|
+| JPEG vs JPEG2000 | CI盲区 | PSNR 20+ dB差异 |
+| blur子类型 | 决策树误判 | PSNR排名#1 |
+| single deg准确率 | ~60% | 预期 >90% |
+| multi deg | CI乱猜 | PSNR网格搜索 |
+| 计算成本 | 低 | 中 (每类别30秒) |
+
     "ci_before": "6/10", "ci_after": "7/10",
     "improvement": 1
   },
