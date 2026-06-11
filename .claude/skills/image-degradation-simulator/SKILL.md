@@ -156,20 +156,35 @@ The `--distortions` argument is a comma-separated list of `name:severity` pairs,
 | **pixelate** | multiscale abrupt spike | 某 scale 残差 > 5× 相邻 scale | — |
 | **quantization** | unique_R/G/B all < 100 | < 32 | 32-100 |
 
-#### 函数识别（确定性 PSNR，含噪声的全局函数除外）
+#### 函数识别（直接从 ratios_vs_clean 推断，不需要 PSNR）
 
-PSNR 枚举对全局函数同样有效（全部确定性）：
+全局退化全部是确定性统计变换，ratios_vs_clean 可以直接读数，不需要枚举：
 
+**brightness**（8 函数 → 4 维区分）:
 ```
-brightness: 8 函数 × 5 sev = 40 次 PSNR → 排名 #1 = 正确函数和 severity
-contrast: 4 函数 × 5 sev = 20 次
-saturation: 4 函数 × 5 sev = 20 次
-oversharpen: 1 函数 × 5 sev = 5 次
-pixelate: 1 函数 × 5 sev = 5 次
-quantization: 3 函数 × 5 sev = 15 次
+mean_ratio < 1.0 → darken, > 1.0 → brighten
+std_ratio ≈ 1.0 → gamma (保持分布形状), std_ratio ≠ 1.0 → shift (平移分布)
+per_channel 是否一致: R/G/B 偏移相等 → shift_RGB, 不等 → shift_HSV
+→ 4 个维度直接确定 8 个函数中唯一正确的那个
 ```
 
-⚠️ **关键**：PSNR 对全局函数也有效（全部确定性）。正确函数 PSNR 极高，错误函数 PSNR 明显低。
+**contrast**（4 函数 → 2 维区分）:
+```
+std_ratio < 1.0 → weaken, > 1.0 → strengthen
+分布形状: stretch 改变尾部, scale 均匀缩放
+```
+
+**saturation**（4 函数）:
+```
+saturation_ratio < 1.0 → weaken, > 1.0 → strengthen
+Cr/Cb 通道变化 → YCrCb, HSV 通道变化 → HSV
+```
+
+**oversharpen**: overshoot_ratio > 0.5 **AND** noise_vs_sharpen=oversharpen
+**pixelate**: multiscale 某 scale 残差 > 5× 相邻 scale
+**quantization**: unique_R/G/B 直接显示量化级别数
+
+⚠️ **关键**：全局退化从统计量直接推断，不需要 PSNR 枚举。这是它们和 blur/compression 的本质区别。
 
 #### 耦合注意事项
 
