@@ -160,51 +160,61 @@ sharpening.overshoot_ratio     > 0.5 AND noise_vs_sharpen=oversharpen → 真ove
                                > 0.5 BUT noise_vs_sharpen=noise       → 假阳性(噪声)
 ```
 
-### 工作流 (每组退化)
+### 工作流 (每组退化): 初识 + 三轮反思
 
 ```
-Step 1: 运行 analyze_degradation.py --target <d> --clean <c>
-        完整阅读所有指标，特别关注上述增强指标
+Phase 0: 初识 (确定性决策树)
+  Step 1-6: 同上 (analyze → 类别 → 决策树 → 顺序 → 严重度 → apply+compare)
+  得到初始预测 + CI 子指标详情
 
-Step 2: 类别检测 (确定性)
-        blur_present    = gradient_ratio < 0.5 OR laplacian_ratio < 0.2 OR hf_lf < 0.3
-                         (例外: jitter blur 可能 gradient_ratio > 1.0 但 laplacian_ratio < 0.5)
-        noise_present   = flat_variance_ratio > 1.5 OR impulse_net_increase > 0.5%
-                         OR Cr/Cb_local_std_ratio > 2.0
-        compr_present   = block_boundary > 1.1 (JPEG) OR ringing_ratio > 2.0 + osc 0.3-0.5 (JPEG2000)
-                         OR bytes_per_pixel < 0.5
-        global_present  = saturation_ratio < 0.7 or > 1.3 OR per_channel_mean 偏移 > 10%
+Phase 1: Round 1 — 差异诊断
+  运行 apply+compare 获取每个子指标的 target vs simulated 偏差
 
-Step 3: 函数识别 (确定性决策树)
-        对每个检测到的类别，按决策树选择函数:
+  诊断规则 (差异→修正映射):
+  
+  情况 A: overshoot↑ + impulse↓ + hf_lf↓ → 误判oversharpen, 应为compression+noise
+    → 去掉oversharpen, 添加compression, 检查noise类型
+  
+  情况 B: impulse↑ + hf_lf↑ + zero_crossing↑ → noise类型或severity错误
+    → 降低impulse sev, 或改gaussian
+  
+  情况 C: unique_G↑ + block_boundary↓ → 可能是JPEG2000而不是JPEG
+    → JPEG→JPEG2000
+  
+  情况 D: 所有指标同方向偏差 → severity整体偏差
+    → simulated比target更退化 → 全部sev-1
+    → simulated比target更清晰 → 全部sev+1 或 漏检类别
+  
+  情况 E: gradient↑ + laplacian↑ + overshoot↑ → 缺少blur, 或noise误判为blur
+    → 增加blur sev, 或减少noise sev
+  
+  情况 F: flat_variance↑ + Cr/Cb↑ → noise被漏检 或 noise类型错误
+    → 添加noise类别 或 改noise类型 (gaussian→YCrCb/poisson/speckle)
 
-        Blur: jitter(osc>0.5+grad正常) > motion(dir_chg>15%) > lens(radial>1.3)
-              > glass(radial 1.1-1.3) > zoom(radial<0.9) > gaussian(默认)
-        Noise: impulse(net_increase>0.5%) > YCrCb(Cr/Cb高) > 
-               poisson(var_mean>5) > speckle(speckle>0.01) > 
-               spatially_corr(spatial>0.3) > gaussian_RGB(默认)
-        Compression: JPEG(block>1.1) > JPEG2000(ringing>2+osc 0.3-0.5)
-        Global: saturate_weaken/strengthen, brightness_*, contrast_* (根据ratios_vs_clean)
+  关键: 不在 Round 1 做任意猜测。严格按上述映射表定向修正 1-2 个参数。
 
-Step 4: 顺序确定 (最多2种候选)
-        默认: global → blur → noise → compression
-        若 noise+blur 都在: 测试 noise→blur 和 blur→noise (选 CI 高的)
+Phase 2: Round 2 — 定向修正
+  基于 Round 1 诊断, 只修改被诊断的参数:
+  - 函数类型错误 → 只改那个函数
+  - severity 偏差 → 只改 severity
+  - 漏检类别 → 只加那个类别
+  
+  apply+compare 验证:
+  CI 提升 > 2 → 修正方向正确, 保留
+  CI 提升 < 2 → 修正无效, 回退到初始预测
 
-Step 5: 严重度校准 (最多2轮)
-        初始 sev=3。apply+compare。校准指标偏离>30% → 调整 sev±1
+Phase 3: Round 3 — 精确校准
+  对每个 severity ±1 微调:
+  测试 sev-1, sev, sev+1 三种组合
+  选择 CI 最高的
 
-Step 6: apply+compare 校验
-        运行 apply_multi + compare_degradation
-        CI 仅用于检测严重矛盾 (CI<4 → 管线可能有结构错误)
-        CI≥4 且无逻辑矛盾 → 接受
+  最终判定:
+  Round3_CI - Round1_CI > 2 → 反思成功, 保存修正后预测
+  Round3_CI - Round1_CI < 2 → 反思无效, 保存初始预测 + 标记反思失败原因
 
-Step 7: 保存 (必须使用脚本!)
-        python /data/zyli/projects/autoresearch/.claude/skills/image-degradation-simulator/scripts/save_prediction.py \
-          exp14/predicted_params/blind_{id}.json \
-          func1:sev1 func2:sev2 \
-          --verdict GOOD --ci "8/10"
-
-        ⚠️ 禁止手动写 JSON！禁止使用 "name" 或 "type" 键名！
+保存:
+  最终预测 (save_prediction.py)
+  + 反思记录 (初始预测 + 3轮修改 + CI变化轨迹)
 ```
 
 ### 输出格式 (save_prediction.py 强制保证)
@@ -214,24 +224,38 @@ Step 7: 保存 (必须使用脚本!)
  "analysis":{"verdict":"GOOD","ci_pass_rate":"8/10"}}
 ```
 
-### 反思记录
-
-每组还需保存 `blind_{id}_reflection.json`，记录:
-- 关键指标值 (新增强指标)
-- 决策树路径 (每步为什么选这个函数)
-- 排除的函数及原因
-- apply+compare 校验结果
+### 反思记录格式
 
 ```json
 {
-  "key_metrics": {"ringing_ratio": 4.29, "directional_change_pct": 6.2, ...},
-  "category_detection": {"blur": true, "noise": false, "compression": true, "global": false},
-  "decision_path": {
-    "blur": "directional_change=6.2%<15%→非motion, radial=1.13<1.3→非lens→gaussian",
-    "compression": "ringing=4.29>2.0 + osc=0.44(0.3-0.5)→JPEG2000"
+  "initial_prediction": {"pipeline": [...], "ci": "6/10", "ci_details": {
+    "overshoot_ratio": {"target": 0.8, "simulated": 0.3, "delta": -0.5, "direction": "simulated_too_low"},
+    "impulse_total_pct": {"target": 5.2, "simulated": 2.1, "delta": -3.1, "direction": "simulated_too_low"},
+    ...
+  }},
+  "round1_diagnosis": {
+    "pattern": "情况D: 所有指标偏低 → severity整体偏高",
+    "action": "全部sev-1",
+    "ci_before": "6/10", "ci_after": "7/10",
+    "improvement": 1
   },
-  "ruled_out": ["blur_motion (dir_chg<15%)", "compression_jpeg (block<1.1)"],
-  "validation": {"ci": "8/10", "contradictions": []}
+  "round2_correction": {
+    "diagnosis": "情况C: unique_G偏高+block_boundary偏低 → JPEG→JPEG2000",
+    "action": "compression_jpeg:3 → compression_jpeg_2000:3",
+    "ci_before": "7/10", "ci_after": "9/10",
+    "improvement": 2
+  },
+  "round3_calibration": {
+    "tested": ["gaussian:3+jp2k:2", "gaussian:3+jp2k:3", "gaussian:3+jp2k:4"],
+    "best_ci": "9/10",
+    "selected": "gaussian:3+jp2k:3"
+  },
+  "final_result": {
+    "pipeline": [{"function":"blur_gaussian","severity":3}, {"function":"compression_jpeg_2000","severity":3}],
+    "ci": "9/10",
+    "reflection_improvement": 3,
+    "verdict": "GOOD"
+  }
 }
 ```
 
