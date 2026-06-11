@@ -146,17 +146,63 @@ Step 2: 校准阈值直接决策 (不枚举!):
   ├── compression? block>1.1→JPEG, ringing>2+osc0.3-0.5→JP2K
   └── 其他: oversharpen(gm_r>2+osr>50+nvs), quantization(uG<50), pixelate(multiscale跳变)
 
-Step 3: 逐层剥离 (处理耦合):
-  Round A: 剥离确定性退化 (blur, compression, global)
-           → PSNR验证确定性部分 (>40dB)
-  Round B: 残差 = target - deterministic_sim
-           → 从残差分析噪声类型 (不会被blur掩盖!)
-  Round C: 耦合诊断 (v4.1 CI子指标偏差表)
-           → 检查是否有被掩盖的退化
+Step 3: 逐层剥离 (处理耦合 — 最关键!):
+
+  Round A — 识别并剥离确定性退化:
+    1. 用校准阈值确定 blur/compression/global 的函数类型
+    2. simulate(clean, 确定性管线) → deterministic_sim
+    3. PSNR(deterministic_sim, target) > 30dB → 确定性部分正确
+       如果 < 30dB → 函数类型或severity有误, 调整后重试
+
+  Round B — 从残差分析噪声 (核心创新!):
+    1. residual = target - deterministic_sim  (去除blur/compression影响)
+    2. 在 residual 上重新计算噪声指标:
+       - flat_variance(residual) → 真实噪声方差(不被blur掩盖)
+       - impulse_pct(residual) → 真实脉冲噪声(不被compression混淆)
+       - var vs intensity bins → Poisson检测(强度-方差正相关)
+       - spatial autocorr → spatially_correlated检测
+       - Cr/Cb vs Y std → YCrCb噪声检测
+    3. 根据6类噪声判别表确定噪声类型和severity
+
+  Round C — 耦合诊断:
+    1. apply(clean, 完整管线) → full_sim
+    2. compare(full_sim, target) → CI子指标偏差
+    3. 检查: overshoot↑? impulse↓? hf_lf↑? → 确定是否有漏检/误引入
+    4. 如果残差Round B未检测到噪声 → noise可能不存在, 从管线移除
+
+  关键: noise 不在 target 上看, 在 residual 上看!
 
 Step 4: PSNR最终验证 (不搜索!):
   → 完整管线 PSNR > 40dB → 确定性部分确认
   → 噪声部分从残差统计特征确认
+```
+
+### 逐层剥离示例
+
+```
+GT: blur_gaussian:3 → noise_poisson:2 → compression_jpeg:2
+
+错误做法 (v4.1):
+  在target上直接看 noise 指标
+  → flat_variance 被 blur:3 抹平 → "无 noise" ❌
+  → 预测: blur_gaussian:3 + compression_jpeg:2 (漏检noise!)
+
+正确做法 (v5):
+  Round A: gm_r=0.32→blur:3, block_boundary>1.1→JPEG:2
+           deterministic_sim = apply(clean, blur:3 + JPEG:2)
+           PSNR=35dB → 确定性部分正确 ✅
+  
+  Round B: residual = target - deterministic_sim
+           在 residual 上:
+           - flat_variance(residual) = 850 (显著, 不是0!)
+           - var vs intensity: 正相关 → Poisson! ✅
+           → noise_poisson:2
+  
+  Round C: apply(clean, blur:3 + poisson:2 + JPEG:2) → full_sim
+           compare(full_sim, target) → CI子指标全部通过
+           PSNR=42dB → 确认 ✅
+  
+  最终: blur_gaussian:3 + noise_poisson:2 + compression_jpeg:2 ✅
 ```
 
 ### 关键改进 (vs v4.1 + calib v2)
