@@ -67,6 +67,19 @@ DEG_CATEGORIES = {
     "compression": [
         "compression_jpeg", "compression_jpeg_2000",
     ],
+    "global": [
+        "brightness_brighten_shfit_HSV", "brightness_brighten_shfit_RGB",
+        "brightness_brighten_gamma_HSV", "brightness_brighten_gamma_RGB",
+        "brightness_darken_shfit_HSV", "brightness_darken_shfit_RGB",
+        "brightness_darken_gamma_HSV", "brightness_darken_gamma_RGB",
+        "contrast_strengthen_scale", "contrast_strengthen_stretch",
+        "contrast_weaken_scale", "contrast_weaken_stretch",
+        "saturate_strengthen_HSV", "saturate_strengthen_YCrCb",
+        "saturate_weaken_HSV", "saturate_weaken_YCrCb",
+        "oversharpen",
+        "pixelate",
+        "quantization_otsu", "quantization_median", "quantization_hist",
+    ],
 }
 
 
@@ -101,10 +114,10 @@ def pick_random_image(val_dirs):
 
 
 def generate_random_pipeline(num_degs=None):
-    """Generate a random degradation pipeline (blur/noise/compression categories).
+    """Generate a random degradation pipeline (blur/noise/compression/global categories).
 
     Args:
-        num_degs: if None, randomly choose 1/2/3 with equal probability.
+        num_degs: if None, randomly choose 1/2/3/4 with equal probability.
                   if int, use exactly that many degradations.
 
     Returns:
@@ -112,7 +125,7 @@ def generate_random_pipeline(num_degs=None):
                          "severity": 3}, ...]
     """
     if num_degs is None:
-        n = random.choices([1, 2, 3], weights=[0.33, 0.33, 0.34])[0]
+        n = random.choices([1, 2, 3, 4], weights=[0.25, 0.25, 0.25, 0.25])[0]
     else:
         n = max(1, min(num_degs, len(DEG_CATEGORIES)))
 

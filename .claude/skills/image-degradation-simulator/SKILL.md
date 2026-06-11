@@ -216,18 +216,18 @@ Step 6: 默认 → noise_gaussian_RGB
 
 ### 关键原则
 
-### ⚠️ 挑战函数范围（仅14个函数）
+### ⚠️ 挑战函数范围（4类别 35 函数）
 
-`blind_challenge.py` 只从 3 类别 14 函数生成退化：
+`blind_challenge.py` 从 4 类别生成退化管线（每类最多1个函数，最多4步）：
 
-| 类别 | 函数 | 确定性? |
-|------|------|:--:|
-| blur (6) | gaussian, motion, glass, lens, zoom, jitter | ✅ 全部确定性 |
-| noise (6) | gaussian_RGB, gaussian_YCrCb, speckle, spatially_correlated, poisson, impulse | ❌ 全部随机 |
-| compression (2) | jpeg, jpeg_2000 | ✅ 全部确定性 |
+| 类别 | 函数数 | 确定性? |
+|------|:--:|:--:|
+| blur | 6 | ✅ 全部确定性 |
+| noise | 6 | ❌ 全部随机 |
+| compression | 2 | ✅ 全部确定性 |
+| global | 21 | ✅ 全部确定性（除 pixelate 和 quantization 外） |
 
-**不存在**: brightness, contrast, saturation, gamma, oversharpen, pixelate, quantization。
-Agent 预测中包含这些函数 → **一定是误判**。
+global 包含: brightness(8), contrast(4), saturation(4), oversharpen, pixelate, quantization(3)
 
 ### 关键原则
 
