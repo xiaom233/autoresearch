@@ -14,12 +14,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-sys.path.insert(0, '/mnt/zyli/projects/X-Distortion-main')
-# Reuse analysis functions
-from x_distortion.helper import *  # noqa - needed for analyze_degradation imports
-
-# Import analyze functions
-sys.path.insert(0, '/mnt/zyli/projects/X-Distortion-main/.claude/skills/image-degradation-simulator/scripts')
+# Import analyze functions from same directory
 from analyze_degradation import (
     compute_basic_stats, compute_gradient_analysis, compute_noise_analysis,
     compute_compression_analysis, compute_ycrcb_analysis, compute_sharpening_analysis,

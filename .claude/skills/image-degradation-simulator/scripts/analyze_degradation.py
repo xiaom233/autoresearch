@@ -170,11 +170,17 @@ def compute_jpeg2000_analysis(img):
     sign_changes = np.sum(np.abs(np.diff(np.sign(edge_laplacian)))) / 2 if len(edge_laplacian) > 1 else 0
     oscillation_density = sign_changes / len(edge_laplacian) if len(edge_laplacian) > 0 else 0
 
+    # Cross-validation: jitter blur also creates edge-adjacent HF (multiple edges)
+    # JPEG2000 should also show compression artifacts (bytes_per_pixel or unique color change)
+    # Jitter blur: gradient normal or increased, no compression artifacts
+    # Use oscillation_density threshold: jitter has higher oscillation (>0.5) than JPEG2000 ringing (0.3-0.5)
+
     return {
         "ringing_ratio": round(float(ringing_ratio), 4),
         "oscillation_density": round(float(oscillation_density), 4),
         "interpretation": {
-            "jpeg2000_ringing": "ringing_ratio > 2.0 → HF energy concentrated near edges (wavelet ringing). oscillation_density > 0.3 confirms.",
+            "jpeg2000_ringing": "ringing_ratio > 2.0 AND oscillation_density 0.3-0.5 → wavelet ringing (JPEG2000).",
+            "jitter_not_jpeg2000": "ringing_ratio > 2.0 AND oscillation_density > 0.5 → likely jitter blur (edge duplication), not JPEG2000.",
             "noise_not_ringing": "ringing_ratio ≈ 1.0 → HF energy uniform (likely noise, not JPEG2000 ringing).",
         }
     }
@@ -216,12 +222,19 @@ def compute_noise_subtype_analysis(img):
     high_diff_mask = adj_diff > np.percentile(adj_diff, 80)
     spatial_cluster = float(np.mean(high_diff_mask)) if high_diff_mask.size > 0 else 0
 
+    # Poisson: additional check - ratio of var/mean across bins (Poisson has var≈mean)
+    var_mean_ratios = []
+    if bin_means and bin_variances:
+        var_mean_ratios = [v/(m+1e-8) for v,m in zip(bin_variances, bin_means) if m > 0]
+    avg_var_mean_ratio = float(np.mean(var_mean_ratios)) if var_mean_ratios else 0
+
     return {
         "signal_var_correlation": round(float(signal_var_corr), 4),
+        "var_mean_ratio": round(avg_var_mean_ratio, 4),
         "speckle_contrast": round(float(speckle_contrast), 6),
         "spatial_cluster_ratio": round(float(spatial_cluster), 4),
         "interpretation": {
-            "poisson": "signal_var_correlation > 0.7 → variance proportional to signal (Poisson/shot noise).",
+            "poisson": "signal_var_correlation > 0.5 OR var_mean_ratio > 5 → variance linked to signal intensity (Poisson/shot noise characteristic).",
             "speckle": "speckle_contrast > 0.01 → multiplicative noise pattern (speckle).",
             "spatially_correlated": "spatial_cluster_ratio > 0.3 → noise has spatial structure, not independent."
         }
