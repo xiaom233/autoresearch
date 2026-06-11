@@ -137,44 +137,60 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 
 ### 核心流程 (每组退化)
 
+⚠️ **强制执行顺序，不可跳步。**
+
 ```
-Step 1: analyze_degradation.py → 获取所有指标
-Step 2: 校准阈值直接决策 (不枚举!):
-  ├── 全局退化? ratios_vs_clean检查 mean/std/sat → 直接读数
-  ├── blur? gm_r<0.6 → 子类型: dir_chg>15%→motion, radial>1.3→lens, gm_r>1.0→jitter
-  ├── noise? fv_r>1.5 → 子类型: imp>0.5%+osr>50→impulse, spatial osr≈0→spatial, var_mean>5→poisson
-  ├── compression? block>1.1→JPEG, ringing>2+osc0.3-0.5→JP2K
-  └── 其他: oversharpen(gm_r>2+osr>50+nvs), quantization(uG<50), pixelate(multiscale跳变)
+Step 1: analyze_degradation.py --target <d> --clean <c>
+        → 获取所有指标 (ratios_vs_clean, 校准指标, 噪声子类型)
 
-Step 3: 逐层剥离 (处理耦合 — 最关键!):
+Step 2: 确定性退化决策 (⚠️ 不含 noise!)
+        仅处理确定性类别，用校准阈值直接决策:
+        ├── blur: gm_r<0.6 → 子类型决策树
+        │   dir_chg>15%→motion, radial>1.3→lens, gm_r>1.0→jitter
+        │   radial 1.1-1.3→glass, radial<0.9→zoom, 默认→gaussian
+        ├── compression: block>1.1→JPEG, ringing>2+osc0.3-0.5→JP2K
+        ├── global: ratios_vs_clean 检查 mean/std/sat
+        ├── oversharpen: gm_r>2.0 AND osr>50 AND nvs=oversharpen
+        ├── quantization: uG<50
+        └── pixelate: multiscale 残差>5×
+        
+        ❌ 不要在这一步猜测 noise 类型！
+        ✅ 只确定 blur/compression/global/oversharpen/quantization/pixelate
 
-  Round A — 识别并剥离确定性退化:
-    1. 用校准阈值确定 blur/compression/global 的函数类型
-    2. simulate(clean, 确定性管线) → deterministic_sim
-    3. PSNR(deterministic_sim, target) > 30dB → 确定性部分正确
-       如果 < 30dB → 函数类型或severity有误, 调整后重试
+Step 3: Round A — 剥离确定性退化 [必须执行]
+        deterministic_sim = apply(clean, 所有确定性退化)
+        PSNR(deterministic_sim, target) 计算:
+          > 35dB → ✅ 确定性部分正确, 继续
+          < 35dB → 函数或severity有误, 调整后重新计算
 
-  Round B — 从残差分析噪声 (核心创新!):
-    1. residual = target - deterministic_sim  (去除blur/compression影响)
-    2. 在 residual 上重新计算噪声指标:
-       - flat_variance(residual) → 真实噪声方差(不被blur掩盖)
-       - impulse_pct(residual) → 真实脉冲噪声(不被compression混淆)
-       - var vs intensity bins → Poisson检测(强度-方差正相关)
-       - spatial autocorr → spatially_correlated检测
-       - Cr/Cb vs Y std → YCrCb噪声检测
-    3. 根据6类噪声判别表确定噪声类型和severity
+Step 4: Round B — 残差噪声分析 [必须执行，不可跳过]
+        residual = target - deterministic_sim
+        ⚠️ 即使你认为"没有noise"，也必须检查残差
+    
+        在 residual 上计算:
+        a. impulse_net = impulse_pct(residual) - impulse_pct(clean同区域)
+           > 0.5% → noise_impulse
+        b. var_by_intensity: 将residual像素按clean强度分10个bin, 每bin算方差
+           方差与强度正相关(r>0.5) OR var_mean_ratio>5 → noise_poisson
+        c. speckle_contrast > 0.01 → noise_speckle
+        d. spatial_autocorr > 0.3 → noise_spatially_correlated
+        e. Cr_std/Y_std > 2.0 OR Cb_std/Y_std > 2.0 → noise_gaussian_YCrCb
+        f. 以上都不触发 → noise_gaussian_RGB (或无机noise!)
+        
+        severity 从残差指标幅度确定 (如 impulse pct=5%→sev≈3)
 
-  Round C — 耦合诊断:
-    1. apply(clean, 完整管线) → full_sim
-    2. compare(full_sim, target) → CI子指标偏差
-    3. 检查: overshoot↑? impulse↓? hf_lf↑? → 确定是否有漏检/误引入
-    4. 如果残差Round B未检测到噪声 → noise可能不存在, 从管线移除
+Step 5: Round C — 完整管线验证 [必须执行]
+        full_sim = apply(clean, 确定性退化 + noise(如有))
+        compare(full_sim, target) → CI子指标
+        检查: 所有子指标偏差 < 30%?
+        如果有 >3个子指标失败 → 回到Step 2检查是否有漏检类别
 
-  关键: noise 不在 target 上看, 在 residual 上看!
-
-Step 4: PSNR最终验证 (不搜索!):
-  → 完整管线 PSNR > 40dB → 确定性部分确认
-  → 噪声部分从残差统计特征确认
+Step 6: 保存前检查清单 [全部打勾才能保存]
+        □ Step 2 未使用 PSNR 枚举
+        □ Step 3 deterministic_sim PSNR 已计算
+        □ Step 4 residual 噪声指标已计算 (有/无 noise 都要记录)
+        □ Step 5 CI 子指标偏差已检查
+        □ save_prediction.py 保存
 ```
 
 ### 逐层剥离示例
@@ -204,6 +220,15 @@ GT: blur_gaussian:3 → noise_poisson:2 → compression_jpeg:2
   
   最终: blur_gaussian:3 + noise_poisson:2 + compression_jpeg:2 ✅
 ```
+
+### 为什么 Step 2 不含 noise？
+
+noise 指标在 target 上被 blur/compression 严重污染：
+- blur 降低 flat_variance → noise 看起来比实际弱
+- compression 产生 impulse 样式的极端像素 → 假阳性
+- blur+noise 耦合 → overshoot 信号来自 noise 还是 blur？
+
+**只有剥离确定性退化后，residual 中的 noise 信号才是真实的。**
 
 ### 关键改进 (vs v4.1 + calib v2)
 
