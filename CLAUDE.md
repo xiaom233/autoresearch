@@ -16,6 +16,8 @@ This file provides guidance to Claude Code when working with this repository.
 8. **全局退化不用 Ft**：管线含 contrast/brightness/saturation/gamma → 用 Direct（Ft 可能崩溃 -4.51 dB，来源：exp9）
 9. **EPOCH_BUDGET 公平性**：所有修正训练必须 EPOCH=2，与基线一致，禁止通过增加训练步数获得 PSNR 提升
 10. **架构选择参考**：严重 motion blur → OCAB + ws=16；全局退化 → 只用 Swin（避免 MDTA/OCAB）；contrast + 结构化 → FiLM-GCM（来源：exp10）
+11. **禁止删除实验数据**：`expN/` 下的关键数据（predicted_params/、reflection/、logs/、results/、checkpoints/）绝对不可删除。除非用户明确允许。误删不可恢复（git 不追踪实验文件）。
+12. **预测结果不覆盖**：save_prediction.py 自动版本化（_v2, _v3...），禁止手动覆盖已有预测文件。每次盲识别创建新文件，保留历史对比。
    ```bash
    ls expN/experiments/M_blind/checkpoints/*.pt && echo "已存在，跳过" || echo "需要训练"
    ```

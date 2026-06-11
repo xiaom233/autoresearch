@@ -32,6 +32,14 @@ def main():
     }
 
     os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
+    # Auto-version: never overwrite existing files
+    if os.path.exists(output):
+        base = output.replace('.json', '')
+        v = 2
+        while os.path.exists(f"{base}_v{v}.json"):
+            v += 1
+        output = f"{base}_v{v}.json"
+        print(f"[versioned] {output}")
     with open(output, 'w') as f:
         json.dump(result, f, ensure_ascii=False)
     print(f"Saved: {output}")
