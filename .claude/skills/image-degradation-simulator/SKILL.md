@@ -130,127 +130,44 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
   --output <output_path>
 ```
 
-The `--distortions` argument is a comma-separated list of `name:severity` pairs, applied in order.
+## 批量盲识别工作流程 (v5 — 校准阈值 + 逐层剥离)
 
+> v4.1: 45%函数匹配, CI诊断耦合有效。calib v2: oversharpen FP仅1次, 阈值精确。
+> v5: **校准阈值决策函数类型 → 逐层剥离处理耦合 → PSNR最终验证。**
 
-
-## 批量盲识别工作流程 (v4.1 — 逐层剥离 + PSNR验证)
-
-> v1-v3.1: CI子指标可捕获耦合效应，但函数区分力不足。
-> v4: PSNR像素匹配区分力强，但无法处理多退化耦合。
-> v4.1: **CI诊断类型+耦合 → PSNR验证确定性 → 逐层剥离分解多退化。**
-
-### 核心洞察
-
-1. **类型和顺序耦合**：noise→blur 时噪声特征被模糊掩盖，blur→noise 时噪声保持。固定流程失败。
-2. **PSNR 只验证确定性退化**：噪声函数有随机性，PSNR 在噪声上天然偏低。**不能用 PSNR 识别噪声类型。**
-3. **噪声类型从残差和分布识别**：同图模式下 target-clean 的残差直接暴露噪声特征（见下方噪声分类表）。
-4. **逐层剥离**：不是一轮解决所有退化，而是每轮找主导退化→剥离→分析残差。
-
-### 校准阈值速查表 (100图校准, Layer 1)
-
-以下阈值来自 100 张 DIV2K 图像的系统校准。`_r` 后缀表示 target/clean 比值。
-
-#### Blur 子类型识别
-
-| 函数 | gm_r(sev3) | gm_r(sev5) | 唯一信号 |
-|------|:--:|:--:|------|
-| gaussian | 0.32 | 0.23 | — |
-| lens | 0.40 | 0.26 | radial_ratio > 1.3 |
-| motion | 0.47 | 0.39 | dir_change > 15% |
-| glass | 0.40 | 0.29 | radial 1.1-1.3 |
-| zoom | 0.53 | 0.40 | radial < 0.9 |
-| **jitter** | **1.29** | **1.60** | **gm_r > 1.0!** (唯一梯度增加的blur) |
-
-检测: blur_present = gm_r < 0.6 OR lap_r < 0.5 (例外: jitter 是 gm_r > 1.0 AND lap_r > 2.0)
-
-#### Noise 子类型识别
-
-| 函数 | imp(sev3) | osr(sev3) | 唯一信号 |
-|------|:--:|:--:|------|
-| gaussian_RGB | 1799 | 462 | 通道独立, Cr/Y≈1.0 |
-| gaussian_YCrCb | 2303 | 710 | Cr/Y_std > 2.0 |
-| impulse | 743 | 941 | imp > 500 AND osr > 500 |
-| poisson | 534 | 62 | var_mean_ratio > 5 |
-| speckle | 255 | 695 | speckle_contrast > 0.01 |
-| spatially_corr | 505 | 0 | osr ≈ 0 (唯一!) |
-
-检测: noise_present = fv_r > 1.5 OR imp_net > 0.5% OR Cr/Cb_std_r > 2.0
-
-#### Compression
-
-| 函数 | gm_r(sev3) | uG(sev3) | 唯一信号 |
-|------|:--:|:--:|------|
-| JPEG | 0.84 | 1× | block_boundary > 1.1 |
-| JPEG2000 | 0.44 | 1× | ringing_ratio > 2.0, osc 0.3-0.5 |
-
-检测: JPEG = block > 1.1. JPEG2000 = ringing > 2.0 AND osc 0.3-0.5 (注意: jitter blur 也会触发 ringing > 2.0, 用 osc > 0.5 区分)
-
-#### 全局退化 (全部从 ratios_vs_clean 直接推断)
-
-**brightness**: 8 函数. gamma vs shift: gamma 保持 min=0,max=255; shift 改变极值. RGB vs HSV: per_channel 一致→RGB, 不一致→HSV
-**contrast**: scale 精确: std_r = 1 - sev×0.2 (weaken) 或 1 + sev×0.2 (strengthen). stretch 更可变
-**saturation**: weaken(sev5) → sat_r = 0.00. strengthen_HSV(sev5) → sat_r = 4.55×. YCrCb → R_mean 不变
-**oversharpen**: gm_r > 2.0 AND osr > 50 (校准阈值). 必须同时满足 noise_vs_sharpen=oversharpen
-**pixelate**: multiscale 残差 > 5× 相邻 scale. gm_r = 0.5-0.8
-**quantization**: uG < 50 → 量化确认
-
-#### 耦合分析 ⚠️ 全局退化信号被局部退化污染
-
-局部退化会改变全局统计量，导致误判：
-
-| 局部退化 | 虚假的全局信号 | 机制 |
-|---------|-------------|------|
-| blur | std↓ → 像 contrast_weaken | 模糊抹平像素差异 |
-| noise | std↑, Cr/Cb↑ → 像 contrast+saturation | 噪声增加方差 |
-| compression JPEG | Cr/Cb↓ → 像 saturation_weaken | 色度子采样 |
-| oversharpen | mean 偏移, std↑ → 像 brightness+contrast | 锐化改变分布 |
-
-**正确流程**：先剥离局部退化 → 再检查全局信号。
+### 核心流程 (每组退化)
 
 ```
-Round N-1: 识别并剥离 blur/noise/compression（用 PSNR 验证）
-Round N:   对残差检查全局信号
-           → 如果剥离后 ratios_vs_clean 恢复正常 → 之前的"全局信号"是耦合假象
-           → 如果剥离后仍有明显偏移 → 真正的全局退化
+Step 1: analyze_degradation.py → 获取所有指标
+Step 2: 校准阈值直接决策 (不枚举!):
+  ├── 全局退化? ratios_vs_clean检查 mean/std/sat → 直接读数
+  ├── blur? gm_r<0.6 → 子类型: dir_chg>15%→motion, radial>1.3→lens, gm_r>1.0→jitter
+  ├── noise? fv_r>1.5 → 子类型: imp>0.5%+osr>50→impulse, spatial osr≈0→spatial, var_mean>5→poisson
+  ├── compression? block>1.1→JPEG, ringing>2+osc0.3-0.5→JP2K
+  └── 其他: oversharpen(gm_r>2+osr>50+nvs), quantization(uG<50), pixelate(multiscale跳变)
+
+Step 3: 逐层剥离 (处理耦合):
+  Round A: 剥离确定性退化 (blur, compression, global)
+           → PSNR验证确定性部分 (>40dB)
+  Round B: 残差 = target - deterministic_sim
+           → 从残差分析噪声类型 (不会被blur掩盖!)
+  Round C: 耦合诊断 (v4.1 CI子指标偏差表)
+           → 检查是否有被掩盖的退化
+
+Step 4: PSNR最终验证 (不搜索!):
+  → 完整管线 PSNR > 40dB → 确定性部分确认
+  → 噪声部分从残差统计特征确认
 ```
 
-**判断方法**：不直接看 target/clean 的 ratios。而是：
-1. simulate(clean, 局部退化管线) → 得到 partial
-2. 检查 partial vs target 的差异 → 这才是真正的全局退化信号
-3. 从 partial→target 的残差中推断全局退化类型和 severity
+### 关键改进 (vs v4.1 + calib v2)
 
-### v4.1 四轮剥离流程
+| 问题 | v4.1 | calib v2 | v5 |
+|------|------|---------|-----|
+| noise漏检(20例) | CI诊断但模糊 | 阈值不清 | **先剥离blur→残差分析noise** |
+| Poisson误判(5例) | 无检测 | 阈值不准 | **残差强度-方差相关** |
+| oversharpen误入 | 2次 | 1次 | gm_r>2+osr>50+nvs三重确认 |
+| global漏检(7例) | 无 | 部分 | **剥离局部后再检查ratios** |
 
-```
-Round 0 — 全局退化优先识别（如果存在）
-  全局退化最容易检测且全部确定性 → 优先处理
-  方法: ratios_vs_clean 检查 mean/std/saturation 偏移
-        → 校准阈值直接推断函数+severity（不枚举），PSNR 最终验证
-        → 从 target 中剥离全局退化 → 继续识别剩余
-
-Round 1 — 主导退化识别
-  目标: 找到信号最强的退化（通常是效果最明显的那个）
-  方法: analyze → 类别evidence → 决策树选函数
-        → apply单函数 → CI子指标检查耦合信号
-        → 如果是确定性函数 → PSNR验证
-        → 确定主导退化的类型和severity
-
-Round 2 — 剥离主导退化，分析残差
-  目标: 去除主导退化后，在残差中找次要退化
-  方法: simulate(clean, 主导退化) → 与target对比
-        → 残差 = target - simulated
-        → 对残差重新 analyze → 检测剩余类别
-        → 决策树选次要退化函数
-        → PSNR验证（确定性部分）
-
-Round 3 — 耦合诊断（最关键！）
-  目标: 处理类型和顺序的耦合效应
-  方法: CI子指标偏差分析:
-        
-        耦合信号诊断表:
-        overshoot↑+impulse↓+hf_lf↓ → 可能是compression+noise, 不是oversharpen
-        impulse↑+hf_lf↑+zero_cross↑ → noise类型/severity错（耦合干扰）
         unique_G↑+block↓ → JPEG→JPEG2000（压缩类型耦合）
         gradient↑+laplacian↑ → 缺少blur（噪声被误判为主导）
         flat_variance↓+Cr/Cb↓ → blur在noise之后（噪声被模糊抹平）
