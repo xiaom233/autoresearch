@@ -140,61 +140,53 @@ The `--distortions` argument is a comma-separated list of `name:severity` pairs,
 3. **噪声类型从残差和分布识别**：同图模式下 target-clean 的残差直接暴露噪声特征（见下方噪声分类表）。
 4. **逐层剥离**：不是一轮解决所有退化，而是每轮找主导退化→剥离→分析残差。
 
-### 全局退化识别 (v4.1新增)
+### 校准阈值速查表 (100图校准, Layer 1)
 
-全局退化直接改变像素统计分布，ratios_vs_clean 可明确检测：
+以下阈值来自 100 张 DIV2K 图像的系统校准。`_r` 后缀表示 target/clean 比值。
 
-#### 类别检测（确定性阈值）
+#### Blur 子类型识别
 
-| 类型 | 检测指标 | 强证据 | 中证据 |
-|------|---------|:--:|:--:|
-| **brightness** | per_channel_mean_ratio（R/G/B任一） | 偏离 1.0 > ±0.15 | ±0.08-0.15 |
-| **contrast** | std_ratio（target std / clean std） | < 0.7 或 > 1.3 | 0.7-0.85 或 1.15-1.3 |
-| **saturation** | saturation_mean_ratio | < 0.5 或 > 1.5 | 0.5-0.7 或 1.3-1.5 |
-| **gamma** | mean 变但 std 不变 | mean 偏移 > ±10, std_ratio ≈ 1.0 | — |
-| **oversharpen** | overshoot_ratio + noise_vs_sharpen | > 0.5 AND nvs=oversharpen | — |
-| **pixelate** | multiscale abrupt spike | 某 scale 残差 > 5× 相邻 scale | — |
-| **quantization** | unique_R/G/B all < 100 | < 32 | 32-100 |
+| 函数 | gm_r(sev3) | gm_r(sev5) | 唯一信号 |
+|------|:--:|:--:|------|
+| gaussian | 0.32 | 0.23 | — |
+| lens | 0.40 | 0.26 | radial_ratio > 1.3 |
+| motion | 0.47 | 0.39 | dir_change > 15% |
+| glass | 0.40 | 0.29 | radial 1.1-1.3 |
+| zoom | 0.53 | 0.40 | radial < 0.9 |
+| **jitter** | **1.29** | **1.60** | **gm_r > 1.0!** (唯一梯度增加的blur) |
 
-#### 函数识别（直接从现有指标推断，不需要 PSNR）
+检测: blur_present = gm_r < 0.6 OR lap_r < 0.5 (例外: jitter 是 gm_r > 1.0 AND lap_r > 2.0)
 
-现有 `analyze_degradation.py` 输出已包含所有需要的信号。直接从 target vs clean 对比中推断：
+#### Noise 子类型识别
 
-**brightness**（8 函数 → 2 步区分）:
-```
-Step 1: brighten or darken?
-  per_channel mean_ratio > 1.0 for all channels → brighten
-  per_channel mean_ratio < 1.0 for all channels → darken
+| 函数 | imp(sev3) | osr(sev3) | 唯一信号 |
+|------|:--:|:--:|------|
+| gaussian_RGB | 1799 | 462 | 通道独立, Cr/Y≈1.0 |
+| gaussian_YCrCb | 2303 | 710 | Cr/Y_std > 2.0 |
+| impulse | 743 | 941 | imp > 500 AND osr > 500 |
+| poisson | 534 | 62 | var_mean_ratio > 5 |
+| speckle | 255 | 695 | speckle_contrast > 0.01 |
+| spatially_corr | 505 | 0 | osr ≈ 0 (唯一!) |
 
-Step 2: shift or gamma?
-  target min≈0 AND max≈255 → gamma (保持极值)
-  target min>0 OR max<255 → shift (平移分布)
-  gamma保持黑/白点, shift截断
+检测: noise_present = fv_r > 1.5 OR imp_net > 0.5% OR Cr/Cb_std_r > 2.0
 
-Step 3: RGB or HSV?
-  per_channel R/G/B mean_ratio 接近 → RGB (均匀)
-  per_channel 显著不同 → HSV (V通道变化更大)
-```
+#### Compression
 
-**contrast**（4 函数 → 直接判断）:
-```
-std_ratio < 0.85 → contrast_weaken
-std_ratio > 1.15 → contrast_strengthen
-scale vs stretch: 看 min/max, scale保持极值, stretch改变
-```
+| 函数 | gm_r(sev3) | uG(sev3) | 唯一信号 |
+|------|:--:|:--:|------|
+| JPEG | 0.84 | 1× | block_boundary > 1.1 |
+| JPEG2000 | 0.44 | 1× | ringing_ratio > 2.0, osc 0.3-0.5 |
 
-**saturation**（4 函数 → 直接判断）:
-```
-saturation_ratio < 0.5 → weaken, > 1.5 → strengthen
-HSV vs YCrCb: R通道mean在HSV中大幅变化(如0.20×), YCrCb中不变(~1.0×)
-```
+检测: JPEG = block > 1.1. JPEG2000 = ringing > 2.0 AND osc 0.3-0.5 (注意: jitter blur 也会触发 ringing > 2.0, 用 osc > 0.5 区分)
 
-**oversharpen**: overshoot_ratio > 0.5 **AND** noise_vs_sharpen=oversharpen
-**pixelate**: multiscale 某 scale 残差 > 5×
-**quantization**: unique_G < 100 → 量化; uG值反映severity
+#### 全局退化 (全部从 ratios_vs_clean 直接推断)
 
-⚠️ **不需要 PSNR 枚举。** 所有全局退化的类型和 severity 直接从现有指标读取。
-但必须在**剥离局部退化后**再检查这些指标,避免耦合假象。
+**brightness**: 8 函数. gamma vs shift: gamma 保持 min=0,max=255; shift 改变极值. RGB vs HSV: per_channel 一致→RGB, 不一致→HSV
+**contrast**: scale 精确: std_r = 1 - sev×0.2 (weaken) 或 1 + sev×0.2 (strengthen). stretch 更可变
+**saturation**: weaken(sev5) → sat_r = 0.00. strengthen_HSV(sev5) → sat_r = 4.55×. YCrCb → R_mean 不变
+**oversharpen**: gm_r > 2.0 AND osr > 50 (校准阈值). 必须同时满足 noise_vs_sharpen=oversharpen
+**pixelate**: multiscale 残差 > 5× 相邻 scale. gm_r = 0.5-0.8
+**quantization**: uG < 50 → 量化确认
 
 #### 耦合分析 ⚠️ 全局退化信号被局部退化污染
 
