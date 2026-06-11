@@ -156,35 +156,45 @@ The `--distortions` argument is a comma-separated list of `name:severity` pairs,
 | **pixelate** | multiscale abrupt spike | 某 scale 残差 > 5× 相邻 scale | — |
 | **quantization** | unique_R/G/B all < 100 | < 32 | 32-100 |
 
-#### 函数识别（直接从 ratios_vs_clean 推断，不需要 PSNR）
+#### 函数识别（直接从现有指标推断，不需要 PSNR）
 
-全局退化全部是确定性统计变换，ratios_vs_clean 可以直接读数，不需要枚举：
+现有 `analyze_degradation.py` 输出已包含所有需要的信号。直接从 target vs clean 对比中推断：
 
-**brightness**（8 函数 → 4 维区分）:
+**brightness**（8 函数 → 2 步区分）:
 ```
-mean_ratio < 1.0 → darken, > 1.0 → brighten
-std_ratio ≈ 1.0 → gamma (保持分布形状), std_ratio ≠ 1.0 → shift (平移分布)
-per_channel 是否一致: R/G/B 偏移相等 → shift_RGB, 不等 → shift_HSV
-→ 4 个维度直接确定 8 个函数中唯一正确的那个
+Step 1: brighten or darken?
+  per_channel mean_ratio > 1.0 for all channels → brighten
+  per_channel mean_ratio < 1.0 for all channels → darken
+
+Step 2: shift or gamma?
+  target min≈0 AND max≈255 → gamma (保持极值)
+  target min>0 OR max<255 → shift (平移分布)
+  gamma保持黑/白点, shift截断
+
+Step 3: RGB or HSV?
+  per_channel R/G/B mean_ratio 接近 → RGB (均匀)
+  per_channel 显著不同 → HSV (V通道变化更大)
 ```
 
-**contrast**（4 函数 → 2 维区分）:
+**contrast**（4 函数 → 直接判断）:
 ```
-std_ratio < 1.0 → weaken, > 1.0 → strengthen
-分布形状: stretch 改变尾部, scale 均匀缩放
+std_ratio < 0.85 → contrast_weaken
+std_ratio > 1.15 → contrast_strengthen
+scale vs stretch: 看 min/max, scale保持极值, stretch改变
 ```
 
-**saturation**（4 函数）:
+**saturation**（4 函数 → 直接判断）:
 ```
-saturation_ratio < 1.0 → weaken, > 1.0 → strengthen
-Cr/Cb 通道变化 → YCrCb, HSV 通道变化 → HSV
+saturation_ratio < 0.5 → weaken, > 1.5 → strengthen
+HSV vs YCrCb: R通道mean在HSV中大幅变化(如0.20×), YCrCb中不变(~1.0×)
 ```
 
 **oversharpen**: overshoot_ratio > 0.5 **AND** noise_vs_sharpen=oversharpen
-**pixelate**: multiscale 某 scale 残差 > 5× 相邻 scale
-**quantization**: unique_R/G/B 直接显示量化级别数
+**pixelate**: multiscale 某 scale 残差 > 5×
+**quantization**: unique_G < 100 → 量化; uG值反映severity
 
-⚠️ **关键**：全局退化从统计量直接推断，不需要 PSNR 枚举。这是它们和 blur/compression 的本质区别。
+⚠️ **不需要 PSNR 枚举。** 所有全局退化的类型和 severity 直接从现有指标读取。
+但必须在**剥离局部退化后**再检查这些指标,避免耦合假象。
 
 #### 耦合分析 ⚠️ 全局退化信号被局部退化污染
 
