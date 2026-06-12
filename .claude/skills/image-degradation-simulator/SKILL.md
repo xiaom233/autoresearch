@@ -61,49 +61,14 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 □ 4. 指标超过阈值 → 信任指标，不要用"直觉"否定
 ```
 
-### D. 保存强制守门（save_prediction.py 工具强制，v9.1 新增）
-
-**Agent 不再能跳过检查——工具本身拒绝保存不合格结果。**
+### D. 保存前自检
 
 ```
-用法:
-  # 确定性退化（需 PSNR）:
-  save_prediction.py output.json blur:3 --verdict GOOD --psnr 52.3
-
-  # 含噪声（需 evidence 文件含 noise_checks）:
-  echo '{"noise_checks":{...}}' > /tmp/ev.json
-  save_prediction.py output.json blur:3,noise:2 --verdict GOOD --evidence /tmp/ev.json
-
-  # 不确定时:
-  save_prediction.py output.json blur:3 --verdict NEEDS_WORK
-```
-
-**GOOD 会被拒绝的情况**:
-```
-✗ 确定性退化无 PSNR → 拒绝
-✗ 含 noise 无 noise_checks(6项数值) → 拒绝  
-✗ quantization + var_slope > 1.0 → 拒绝（Poisson 嫌疑）
-⚠ 双退化 PSNR<35 无 compression → 警告（掩盖推理）
-```
-
-**NEEDS_WORK 始终允许保存。--force 强制跳过。**
-
-**evidence JSON 格式**:
-```json
-{
-    "psnr_db": 45.2,
-    "noise_checks": {
-        "impulse_pct": 0.12,
-        "speckle_vm_slope": -0.003,
-        "poisson_var_slope": 0.5,
-        "spatial_corr": 0.08,
-        "ycrcb_rgb_ratio": 1.05,
-        "gaussian": true
-    },
-    "var_slope_on_residual": 0.3,
-    "radial_ratio": 1.05,
-    "dir_change_pct": 2.1
-}
+□ 1. 如果预测包含 quantization → 残差 var_slope < 1.0 已确认?
+□ 2. 如果预测 noise 子类型 → 6 项检查全部完成并记录?
+□ 3. 如果预测 blur 子类型 → radial_ratio / dir_change 数值已记录?
+□ 4. 确定性退化 PSNR > 40dB 或非确定性退化有充分指标证据?
+□ 5. reflection.json 包含完整的 6 项噪声检查数值?
 ```
 
 ### 多退化并行处理
@@ -220,9 +185,7 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 > v6: detect_degradation.py 自动决策 + decision_flow 披露。v7: 强化 Round A/C 残差验证，三级反思机制。
 > v8: exp17 盲化评估（35 单退化）→ 强制检查清单 + 噪声残差先行 + 阈值修正 + 失败案例。
 > v9: exp17 双退化评估（20 双退化）→ 掩盖推理 + compression 定向补充验证。
-> v9.1: Poisson双阈值/色彩空间/brightness子类型作为从属注释（不改变v9核心结构）。
 > 校准阈值来自 100 张 DIV2K 图像的系统校准 (exp15/scripts/calibrate_thresholds.py)。
-> exp17 盲化基准：单退化 88.6%，双退化 v9=45%，v10=20%(回退)。
 > exp17 盲化基准：单退化 88.6%（31/35），双退化 30%（6/20），掩盖推理预期双退化提升至 ~70%。
 
 ### 核心流程 (每组退化)
@@ -264,12 +227,10 @@ Step 4: Round B — 残差噪声分析 [主要验证手段]
         b. vm_slope > 0.01 → noise_speckle
            ⚠️ sev=1 时 speckle 信号弱: vm_slope 可能 < 0.01
               补充检查: speckle_contrast > 0.005 → sev=1 speckle 可能
-        c. var_slope > 1.0 + vm_slope≈0 → noise_poisson（纯噪声）
+        c. var_slope > 1.0 + vm_slope≈0 → noise_poisson
            ⚠️ var_slope 必须在 RESIDUAL 上测量 (不是 target!)
            ⚠️ Poisson 会在 target 上降低 unique_G, 容易和 quantization 混淆
               判定 quantization 前必须先排除 Poisson（残差 var_slope < 1.0）
-           💡 JPEG 耦合后 var_slope 被压到 0.5-0.8 但 corr 仍 > 0.7
-              → 如果 corr > 0.7 AND var_slope > 0.5 → 仍可能是 Poisson（JPEG耦合）
         d. spatial_corr 0.15-0.5 → noise_spatially_correlated
            ⚠️ exp17: spatial_corr=0.233 在范围内但 Agent 跳过了检查
               此检查不可跳过! 即使分布"看起来像 Gaussian"也要记录数值
@@ -383,8 +344,8 @@ Round A: det_sim = blur:4 → PSNR=22dB ❌
 | quantization | uG | < 25 **AND** 残差 var_slope < 1.0（必须排除 Poisson!）| exp17 修正 |
 | oversharpen | gm_ratio + lap_edge_ratio | > 1.4 + > 2.5 | calibration |
 | contrast | std_ratio + proportional check | < 0.70 (weaken) / > 1.3 (strengthen) | source code |
-| brightness | mean_shift_pct | abs > 0.08. 💡子类型: S通道不变→HSV,变→RGB; R²>0.99→shift,<0.95→gamma | source code + exp17 |
-| saturation | sat_ratio | < 0.65 (weaken) / > 1.6 (strengthen). 💡与YCrCb区分: Cr/Cb残差均匀偏移→饱和度, 随机波动→YCrCb噪声 | source code + exp17 |
+| brightness | mean_shift_pct | abs > 0.08 | source code |
+| saturation | sat_ratio | < 0.65 (weaken) / > 1.6 (strengthen) | source code |
 | noise_impulse | exact_0+255 pixel fraction | > 0.3% | calibration |
 | noise_speckle | vm_slope on residual | > 0.01 (sev≥2); sev=1 时 > 0.005 或 speckle_contrast > 0.005 | exp17 修正 |
 | noise_poisson | var_slope on **residual** | > 1.0 + vm_slope≈0（⚠️ 必须在残差上测!）| exp17 修正 |
