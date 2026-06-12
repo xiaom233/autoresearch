@@ -184,9 +184,9 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 
 > v6: detect_degradation.py 自动决策 + decision_flow 披露。v7: 强化 Round A/C 残差验证，三级反思机制。
 > v8: exp17 盲化评估（35 单退化）→ 强制检查清单 + 噪声残差先行 + 阈值修正 + 失败案例。
+> v9: exp17 双退化评估（20 双退化）→ 掩盖推理 + compression 定向补充验证。
 > 校准阈值来自 100 张 DIV2K 图像的系统校准 (exp15/scripts/calibrate_thresholds.py)。
-> detector 基线：单退化 80% 类别准确率。残差验证 + 反思解决剩余 20%。
-> exp17 盲化基准：函数 85.7%（30/35），噪声子类型是最大短板（50%）。
+> exp17 盲化基准：单退化 88.6%（31/35），双退化 30%（6/20），掩盖推理预期双退化提升至 ~70%。
 
 ### 核心流程 (每组退化)
 
@@ -412,6 +412,45 @@ Agent 看到: gm_ratio=0.85 > 0.75 → "不是 blur"
 根因: blur 阈值 0.75 对 mild blur 不够敏感。
 预防: gm_ratio 0.75-0.85 标记为 mild blur 可能, 检查 lap_ratio 辅助确认。
 ```
+
+### exp17 双退化评估 — 掩盖推理 (v9 新增)
+
+exp17 对 20 个随机双退化进行盲化评估。结果：两函数全对 30%，但 **Agent 方向 100% 正确**（至少猜对一个类别）。核心发现：
+
+**compression 是"最容易被掩盖的退化"** — 14 个失败中 11 个是 compression 漏检。
+
+掩盖机制（强退化 → 破坏弱退化特征）：
+
+| 主导退化 | 掩盖 compression 的机制 |
+|----------|----------------------|
+| global (brightness/contrast/saturation) | 像素值重映射 → 8×8 块边界消失；clipping → DCT 模式不可见 |
+| noise (impulse/poisson/YCrCb) | 随机像素破坏 8×8 规律性；ringing 被噪声淹没 |
+| blur (gaussian:5) | 平滑抹掉 block_boundary；ringing 被模糊消除 |
+
+**启发式规则（掩盖推理）**：
+
+```
+双退化识别完成后，强制追加一步"掩盖检查"：
+
+□ 如果已识别出 1 个退化但不是 compression →
+   剥离该退化 → 残差上强制测试:
+   a. compression_jpeg (sev 1-5, 先测 sev 1)
+   b. compression_jpeg_2000 (sev 1-5, 先测 sev 1)
+   
+   为什么 sev=1 优先？低严重度 compression 最容易被掩盖，
+   高严重度会产生明显 artifact 不太可能漏检。
+   
+   验证方法: PSNR（compression 是确定性的，PSNR > 50dB 即确认）
+   
+□ 如果残差 block_boundary < 1.1 但 PSNR 验证发现 JPEG 匹配 →
+   "掩盖确认" — 记录到 reflection.json
+```
+
+**为什么不是枚举**：只在已识别出至少一个退化后，对"最容易被掩盖的类别 (compression)"做定向补充测试。最多增加 10 次 PSNR 验证（2 函数 × 5 严重度），不是遍历组合。
+
+**预期效果**：修复 11/14 的 compression 漏检，双退化准确率从 30% → ~70%。
+
+**剩余不可修复**：含 noise 且 noise 子类型错误的 3 个案例（speckle↔gaussian↔impulse 混淆）。噪声子类型只能靠 Phase 5 训练 + Phase 6 反思。
 
 ### 关键改进 (vs v4.1 + calib v2)
 
