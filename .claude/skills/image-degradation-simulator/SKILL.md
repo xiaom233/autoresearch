@@ -130,10 +130,11 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
   --output <output_path>
 ```
 
-## 批量盲识别工作流程 (v6 — detect + 校准阈值 + 逐层剥离 + Agent审查)
+## 批量盲识别工作流程 (v7 — detect + 残差验证 + 三级反思)
 
-> v5: 45%函数匹配, 校准阈值+逐层剥离。v6: detect_degradation.py 自动决策 + decision_flow 向 Agent 披露证据链。
+> v6: detect_degradation.py 自动决策 + decision_flow 披露。v7: 强化 Round A/C 残差验证，三级反思机制。
 > 校准阈值来自 100 张 DIV2K 图像的系统校准 (exp15/scripts/calibrate_thresholds.py)。
+> detector 基线：单退化 80% 类别准确率。残差验证 + 反思解决剩余 20%。
 
 ### 核心流程 (每组退化)
 
@@ -141,60 +142,102 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 
 ```
 Step 1: detect_degradation.py → 自动决策 + decision_flow
-        python exp15/scripts/detect_degradation.py  # 或在代码中 import detect()
-        → pipeline: [{step, category, function, severity, confidence, rationale}]
-        → decision_flow: 每层每个决策的指标值、阈值、是否通过
-        → verification_steps: 建议的验证步骤
-        → uncertainty: {round_a_guess, round_b_guess, needs_work}
+        → pipeline, uncertainty, evidence, verification_steps
 
 Step 2: Agent 审查 decision_flow [必须执行]
-        检查每个决策的 evidence:
-        ├── 指标值是否明显偏离阈值? → 调整 severity
-        ├── 多个指标 FAIL 但决策仍是 "detected"? → 可能是 FP，降级或移除
-        ├── 指标 PASS 但决策是 "none"? → 可能漏检，检查 round_a/b_guess
-        └── 确认或调整 pipeline 后进入 Step 3
+        ├── 低置信度 (conf=low) 的检测 → 标记为"待验证"
+        ├── 指标接近阈值的检测 → 标记为"边界"
+        ├── uncertainty.needs_work=True → 预期需要反思
+        └── 形成"初始假设"进入 Round A
 
-Step 3: Round A — 剥离确定性退化 [必须执行]
-        deterministic_sim = apply(clean, 所有非 noise 退化)
-        PSNR(deterministic_sim, target):
-          > 35dB → ✅ 确定性部分正确, 继续
-          < 35dB → 函数或 severity 有误:
-            1. 检查 decision_flow 中对应决策的 evidence
-            2. 参考 round_a_guess 尝试一个修正
-            3. 重新计算 PSNR → 仍失败则标记 NEEDS_WORK
+Step 3: Round A — 残差验证确定性退化 [核心]
+        ├── 3a. 应用 pipeline 中所有非 noise 退化到 clean → det_sim
+        ├── 3b. 计算 residual_A = target - det_sim
+        ├── 3c. PSNR(target, det_sim) 判定:
+        │     > 40dB → ✅ 确定性部分完全正确 (含 exact severity)
+        │     35-40dB → ✅ 类别正确, severity 可能有偏差
+        │     25-35dB → ⚠️ 有 FP 或漏检
+        │     < 25dB → ❌ 严重错误, 回到 Step 2
+        ├── 3d. 残差诊断 (检查 residual_A 的模式):
+        │     ├── 残差有明显 8×8 块状 → JPEG 被漏检
+        │     ├── 残差有随机噪声模式 → noise 被漏检
+        │     ├── 残差有结构性边缘 → blur severity 或类型有误
+        │     ├── 残差有整体亮度/色彩偏移 → global 有误
+        │     └── 残差均匀且无结构 → 仅有 noise 差异, 确定性部分正确
+        └── 3e. 如果 PSNR < 35dB, 根据残差模式修正:
+              1. 读 decision_flow 找最弱的决策 (conf=low 或 指标靠近阈值)
+              2. 尝试移除该 FP 或调整 severity
+              3. 重算 PSNR, 最多 1 次修正
 
-Step 4: Round B — 残差噪声分析 [必须执行，不可跳过]
-        residual = target - deterministic_sim
-        ⚠️ 即使你认为"没有noise"，也必须检查残差
-
-        噪声判别顺序 (v6 更新 — speckle 优先):
+Step 4: Round B — 残差噪声分析 [必须执行]
+        residual = target - det_sim (来自 Round A 验证后的确定性模拟)
+        噪声判别顺序:
         a. impulse_pct(net) > 0.3% → noise_impulse
-        b. vm_slope > 0.01 (var/mean 随强度增加) → noise_speckle
+        b. vm_slope > 0.01 → noise_speckle
         c. var_slope > 1.0 + vm_slope≈0 → noise_poisson
         d. spatial_corr 0.15-0.5 → noise_spatially_correlated
         e. rgb_std_ratio > 1.4 OR Cr/Y_std > 1.3 → noise_gaussian_YCrCb
         f. 以上都不触发 + res_std > 8 → noise_gaussian_RGB (低置信)
-        g. 否则 → 无 noise (或 noise 被确定性退化完全遮蔽)
+        g. 否则 → 无 noise
 
-        severity 从校准后的 res_std 查表确定
+        如果 detector 的 noise 预测与 Round B 分析不一致:
+        → 以 Round B 残差分析为准 (det_sim 已通过 Round A 验证)
 
-Step 5: Round C — 完整管线验证 [必须执行]
-        full_sim = apply(clean, 确定性退化 + noise(如有))
-        compare(full_sim, target) → CI 子指标
-        PSNR > 40dB → ✅ 管线正确
-        检查: 所有子指标偏差 < 30%?
-        如果有 > 3 个子指标失败:
-          1. 参考 round_a_guess / round_b_guess 尝试修正
-          2. 最多再试 1 轮 → 仍失败则标记 NEEDS_WORK
+Step 5: Round C — 完整管线 PSNR 验证
+        full_sim = apply(clean, 确定性退化 + noise)
+        PSNR(target, full_sim):
+          > 40dB → ✅ 保存 GOOD
+          35-40dB → ⚠️ 保存 NEEDS_WORK (severity 偏差或 minor miss)
+          < 35dB → ❌ 进入反思
 
-Step 6: 保存前检查清单 [全部打勾才能保存]
-        □ Step 1 detect 输出已审查 decision_flow
-        □ Step 2 Agent 已确认每个决策
-        □ Step 3 deterministic_sim PSNR 已计算 (> 35dB 或 NEEDS_WORK)
-        □ Step 4 residual 噪声指标已计算
-        □ Step 5 CI 子指标偏差已检查
-        □ 最多 3 轮反思 (Round A 修正 + Round B 修正 + 完整重试 = 3 轮)
-        □ save_prediction.py 保存
+Step 6: 三级反思机制 [最多 3 轮]
+        第 1 级 — 移除 FP:
+          对每个低置信度 (conf=low) 的检测, 尝试移除并重算 PSNR
+          如果 PSNR 提升 > 2dB → 确认 FP, 移除
+        
+        第 2 级 — 添加漏检:
+          按 uncertainty.round_a_guess → round_b_guess 顺序
+          逐个尝试添加到 pipeline, 重算 PSNR
+          如果 PSNR 提升 > 2dB → 确认漏检, 添加
+        
+        第 3 级 — 完整重试:
+          前两级都失败 → 标记 NEEDS_WORK, 进入 Phase 5 训练
+          Phase 6: 比较 M_specialist vs M_blind PSNR:
+            specialist >> blind → 盲识别正确, 模型学到了特定退化
+            specialist ≈ blind → 盲识别有误, 训练未提供有效退化信号
+            → 深度反思: 检查 specialist 的 validation 输出, 分析未恢复的退化模式
+
+Step 7: 保存
+        save_prediction.py 保存 pipeline + verdict
+        附带 decision_flow + 反思记录 → reflection.json
+```
+
+### 残差诊断速查表
+
+| residual_A 模式 | 诊断 | 修正 |
+|------|------|------|
+| 8×8 块状结构 | JPEG 漏检 (块边界在残差中可见) | 添加 compression_jpeg |
+| 随机均匀分布 + res_std > 8 | noise 漏检 | 添加 noise, 从残差分布判断类型 |
+| 边缘区域强信号 | blur severity 有误 | 调整 blur severity ±1 |
+| 整体亮度/色彩偏移 | global (brightness/contrast/saturation) 有误 | 检查 decision_flow 中 global 决策 |
+| 均匀无结构 + res_std < 5 | ✅ 确定性部分正确, 残差仅为 noise | 进入 Round B |
+
+### 反思三级示例
+
+```
+案例: GT=[jpeg:3, noise_gauss:2, blur:4], Pred=[blur:4]
+
+Round A: det_sim = blur:4 → PSNR=22dB ❌
+残差诊断: residual_A 显示 8×8 块状 + 均匀噪声
+→ 残差模式提示: JPEG + noise 漏检
+
+第 1 级反思 (移除 FP): blur 是唯一检测, 高置信 → 不移除
+第 2 级反思 (添加漏检):
+  尝试 guess_a=compression_jpeg sev 2-4
+  → full_sim = blur:4 + jpeg:3 → PSNR=32dB ↑10dB ✅
+  尝试 guess_b=noise_gaussian_RGB sev 1-2
+  → full_sim = blur:4 + jpeg:3 + noise:2 → PSNR=42dB ↑10dB ✅
+→ 管线修正成功, 保存 GOOD
 ```
 
 ### 校准阈值速查表 (100 DIV2K 校准, exp15)
@@ -326,17 +369,17 @@ Step 6: 默认 → noise_gaussian_RGB (低置信)
 
 global 包含: brightness(8), contrast(4), saturation(4), oversharpen, pixelate, quantization(3)
 
-### 关键原则
+### 关键原则 (v7)
 
 1. **detect 自动决策 + Agent 审查** — detect_degradation.py 给出 pipeline + decision_flow，Agent 审查 evidence 后确认或调整
-2. **PSNR 只验证确定性退化** — 不用于噪声搜索
-3. **噪声从残差识别** — PSNR 对噪声无效，残差+分布才是正确方法。判别顺序: impulse → speckle → Poisson → spatial → YCrCb → gaussian
-4. **decision_flow 向 Agent 披露** — 每个决策的证据链（指标值、阈值、是否通过）完整透明，Agent 可据此独立判断
-5. **逐层剥离** — 不在一轮解决所有问题，每轮专注一个退化
-6. **最多 3 轮反思** — Round A (1次调整) + Round B (1次调整) + 完整重试 (1次) = 3 轮
-7. **训练后反思更可靠** — 3 轮仍 NEEDS_WORK → Phase 5 训练 → Phase 6 Spec vs M_blind PSNR 差触发深度反思
-8. **blur 子类型简化** — 仅区分 motion (方向性) / jitter (gm↑+lap↓) / gaussian (默认)。lens/glass/zoom 因 radial_ratio 内容依赖太强已移除
-9. **顺序从数据推断** — 默认: compression → quantization → global → blur → noise。耦合证据可调整
+2. **残差验证是核心** — Round A 的 residual_A 模式直接诊断漏检/FP: 8×8块→JPEG漏检, 随机→noise漏检, 边缘结构→blur有误
+3. **PSNR 只验证确定性退化** — 不用于噪声搜索。阈值: >40dB 完美, 35-40dB 类别正确, 25-35dB 有FP/漏检, <25dB 严重错误
+4. **噪声从残差识别** — PSNR 对噪声无效，残差+分布才是正确方法。判别顺序: impulse → speckle → Poisson → spatial → YCrCb → gaussian
+5. **decision_flow 向 Agent 披露** — 每个决策的证据链完整透明，Agent 可据此独立判断
+6. **三级反思** — L1 移除FP → L2 添加漏检 → L3 训练后反思。每级最多 1 次尝试
+7. **训练后反思最可靠** — L1+L2 失败 → NEEDS_WORK → Phase 5 训练 → Phase 6 Spec vs M_blind PSNR 差触发深度反思
+8. **blur 子类型简化** — 仅区分 motion / jitter / gaussian
+9. **顺序从数据推断** — 默认: compression → quantization → global → blur → noise
 
 ### 与旧版对比
 
