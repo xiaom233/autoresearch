@@ -61,14 +61,49 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 □ 4. 指标超过阈值 → 信任指标，不要用"直觉"否定
 ```
 
-### D. 保存前自检
+### D. 保存强制守门（save_prediction.py 工具强制，v9.1 新增）
+
+**Agent 不再能跳过检查——工具本身拒绝保存不合格结果。**
 
 ```
-□ 1. 如果预测包含 quantization → 残差 var_slope < 1.0 已确认?
-□ 2. 如果预测 noise 子类型 → 6 项检查全部完成并记录?
-□ 3. 如果预测 blur 子类型 → radial_ratio / dir_change 数值已记录?
-□ 4. 确定性退化 PSNR > 40dB 或非确定性退化有充分指标证据?
-□ 5. reflection.json 包含完整的 6 项噪声检查数值?
+用法:
+  # 确定性退化（需 PSNR）:
+  save_prediction.py output.json blur:3 --verdict GOOD --psnr 52.3
+
+  # 含噪声（需 evidence 文件含 noise_checks）:
+  echo '{"noise_checks":{...}}' > /tmp/ev.json
+  save_prediction.py output.json blur:3,noise:2 --verdict GOOD --evidence /tmp/ev.json
+
+  # 不确定时:
+  save_prediction.py output.json blur:3 --verdict NEEDS_WORK
+```
+
+**GOOD 会被拒绝的情况**:
+```
+✗ 确定性退化无 PSNR → 拒绝
+✗ 含 noise 无 noise_checks(6项数值) → 拒绝  
+✗ quantization + var_slope > 1.0 → 拒绝（Poisson 嫌疑）
+⚠ 双退化 PSNR<35 无 compression → 警告（掩盖推理）
+```
+
+**NEEDS_WORK 始终允许保存。--force 强制跳过。**
+
+**evidence JSON 格式**:
+```json
+{
+    "psnr_db": 45.2,
+    "noise_checks": {
+        "impulse_pct": 0.12,
+        "speckle_vm_slope": -0.003,
+        "poisson_var_slope": 0.5,
+        "spatial_corr": 0.08,
+        "ycrcb_rgb_ratio": 1.05,
+        "gaussian": true
+    },
+    "var_slope_on_residual": 0.3,
+    "radial_ratio": 1.05,
+    "dir_change_pct": 2.1
+}
 ```
 
 ### 多退化并行处理
