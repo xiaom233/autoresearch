@@ -21,6 +21,56 @@ Analyze degraded images, identify present distortion types and their severity, t
 
 **正确做法**：analyze检测 → 校准阈值决策函数类型+severity → apply+compare → PSNR最终验证(>40dB=正确) → 残差分析噪声 → 保存。
 
+## 🔴 强制检查清单（保存预测前必须逐项确认，不可跳过）
+
+exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指标问题，而是 **Agent 跳过了应该执行的检查步骤**。此清单强制完成每一步。
+
+### A. 残差先行原则 ⚠️ exp17 头号教训
+
+**在 target 上看到 unique_G 减少或 extreme% 升高时，绝不能直接下结论。必须先算残差。**
+
+```
+❌ 错误: 看到 unique_G < 25 → "quantization!"
+✅ 正确: 看到 unique_G < 25 → 先算 residual = target - clean
+         → residual 上 var_slope > 1.0 → "Poisson 噪声，不是 quantization"
+```
+
+**强制规则**: 任何关于 quantization 的判定，必须在计算残差并确认 `var_slope < 1.0`（排除 Poisson）之后才能做出。
+
+### B. 噪声判别步骤强制顺序（不可跳步）
+
+对每个残差，**必须按顺序执行全部 6 项检查**，记录每项结果后再下结论：
+
+```
+□ 1. impulse:     extreme% = ___ (> 0.3%? → impulse)
+□ 2. speckle:      vm_slope = ___ (> 0.01? → speckle; sev=1 时 > 0.005 也考虑)
+□ 3. poisson:     var_slope = ___ (> 1.0 AND vm_slope≈0? → poisson)
+□ 4. spatial:     spatial_corr = ___ (0.15-0.5? → spatially_correlated)
+□ 5. YCrCb:       rgb_ratio = ___ (> 1.4? → YCrCb)
+□ 6. gaussian:    以上都不满足 → gaussian_RGB
+```
+
+**在 reflection.json 中必须记录这 6 项的数值**，不能只写"判断为 gaussian"。
+
+### C. Blur 判定强制规则
+
+```
+□ 1. gm_ratio < 0.85 → blur 可能存在（mild blur 区 0.75-0.85 不能排除）
+□ 2. radial_ratio > 2.0 → 必须优先考虑 lens blur，不能归因于"图像内容"
+□ 3. 非确定性 blur (glass/jitter) PSNR 不会 > 40dB，不要反复调 severity 追求高 PSNR
+□ 4. 指标超过阈值 → 信任指标，不要用"直觉"否定
+```
+
+### D. 保存前自检
+
+```
+□ 1. 如果预测包含 quantization → 残差 var_slope < 1.0 已确认?
+□ 2. 如果预测 noise 子类型 → 6 项检查全部完成并记录?
+□ 3. 如果预测 blur 子类型 → radial_ratio / dir_change 数值已记录?
+□ 4. 确定性退化 PSNR > 40dB 或非确定性退化有充分指标证据?
+□ 5. reflection.json 包含完整的 6 项噪声检查数值?
+```
+
 ### 多退化并行处理
 
 以上规则针对**单个退化**的搜索。多个独立的退化可以并行处理，按退化复杂度分配：
@@ -133,8 +183,10 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 ## 批量盲识别工作流程 (v7 — detect + 残差验证 + 三级反思)
 
 > v6: detect_degradation.py 自动决策 + decision_flow 披露。v7: 强化 Round A/C 残差验证，三级反思机制。
+> v8: exp17 盲化评估（35 单退化）→ 强制检查清单 + 噪声残差先行 + 阈值修正 + 失败案例。
 > 校准阈值来自 100 张 DIV2K 图像的系统校准 (exp15/scripts/calibrate_thresholds.py)。
 > detector 基线：单退化 80% 类别准确率。残差验证 + 反思解决剩余 20%。
+> exp17 盲化基准：函数 85.7%（30/35），噪声子类型是最大短板（50%）。
 
 ### 核心流程 (每组退化)
 
@@ -150,62 +202,77 @@ Step 2: Agent 审查 decision_flow [必须执行]
         ├── uncertainty.needs_work=True → 预期需要反思
         └── 形成"初始假设"进入 Round A
 
-Step 3: Round A — 残差验证确定性退化 [核心]
-        ├── 3a. 应用 pipeline 中所有非 noise 退化到 clean → det_sim
-        ├── 3b. 计算 residual_A = target - det_sim
-        ├── 3c. PSNR(target, det_sim) 判定:
-        │     > 40dB → ✅ 确定性部分完全正确 (含 exact severity)
-        │     35-40dB → ✅ 类别正确, severity 可能有偏差
-        │     25-35dB → ⚠️ 有 FP 或漏检
-        │     < 25dB → ❌ 严重错误, 回到 Step 2
-        ├── 3d. 残差诊断 (检查 residual_A 的模式):
-        │     ├── 残差有明显 8×8 块状 → JPEG 被漏检
-        │     ├── 残差有随机噪声模式 → noise 被漏检
-        │     ├── 残差有结构性边缘 → blur severity 或类型有误
-        │     ├── 残差有整体亮度/色彩偏移 → global 有误
-        │     └── 残差均匀且无结构 → 仅有 noise 差异, 确定性部分正确
-        └── 3e. 如果 PSNR < 35dB, 根据残差模式修正:
-              1. 读 decision_flow 找最弱的决策 (conf=low 或 指标靠近阈值)
-              2. 尝试移除该 FP 或调整 severity
-              3. 重算 PSNR, 最多 1 次修正
+Step 3: Round A — 确定性部分 PSNR 验证 [仅验证非 noise 退化]
+        ⚠️ 不包含 noise！ noise 随机种子不同, PSNR 无效。
+        ├── 3a. det_sim = apply(clean, 所有非 noise 退化)
+        ├── 3b. PSNR(target, det_sim):
+        │     > 40dB → ✅ 确定性部分完全正确
+        │     30-40dB → ✅ 类别正确, severity 可能有偏差
+        │     15-30dB → ⚠️ 有 FP 或漏检, 检查 residual_A 模式
+        │     < 15dB → ❌ 严重错误
+        └── 3c. 残差诊断 (检查 residual_A 的模式):
+              ├── 8×8 块状 → JPEG 漏检
+              ├── 随机噪声模式 → noise 存在
+              ├── 结构性边缘 → blur 有误
+              └── 亮度/色彩偏移 → global 有误
 
-Step 4: Round B — 残差噪声分析 [必须执行]
-        residual = target - det_sim (来自 Round A 验证后的确定性模拟)
-        噪声判别顺序:
+Step 4: Round B — 残差噪声分析 [主要验证手段]
+        ⚠️ 包含 noise 时, PSNR 无效! 残差分析是主要验证手段。
+        ⚠️ exp17 教训: 噪声指标必须在 RESIDUAL 上测量! target 上的指标被图像内容污染。
+           - target 上 var_slope=0.06 → 残差上 var_slope=1.72（差异 28 倍!）
+           - 在 target 上看 unique_G/extreme% 判断噪声 = 错误
+        residual = target - det_sim（单退化时 det_sim = clean）
+        噪声判别顺序（必须逐项检查并记录数值，不可跳步）:
         a. impulse_pct(net) > 0.3% → noise_impulse
         b. vm_slope > 0.01 → noise_speckle
+           ⚠️ sev=1 时 speckle 信号弱: vm_slope 可能 < 0.01
+              补充检查: speckle_contrast > 0.005 → sev=1 speckle 可能
         c. var_slope > 1.0 + vm_slope≈0 → noise_poisson
+           ⚠️ var_slope 必须在 RESIDUAL 上测量 (不是 target!)
+           ⚠️ Poisson 会在 target 上降低 unique_G, 容易和 quantization 混淆
+              判定 quantization 前必须先排除 Poisson（残差 var_slope < 1.0）
         d. spatial_corr 0.15-0.5 → noise_spatially_correlated
+           ⚠️ exp17: spatial_corr=0.233 在范围内但 Agent 跳过了检查
+              此检查不可跳过! 即使分布"看起来像 Gaussian"也要记录数值
         e. rgb_std_ratio > 1.4 OR Cr/Y_std > 1.3 → noise_gaussian_YCrCb
-        f. 以上都不触发 + res_std > 8 → noise_gaussian_RGB (低置信)
+        f. 以上都不触发 + res_std > 8 → noise_gaussian_RGB
         g. 否则 → 无 noise
 
-        如果 detector 的 noise 预测与 Round B 分析不一致:
-        → 以 Round B 残差分析为准 (det_sim 已通过 Round A 验证)
+        严重度: 残差 std 与校准阈值 closest match:
+          gaussian_RGB: [12.4, 24.0, 34.8, 44.8, 53.9]
+          gaussian_YCrCb: [20.6, 31.2, 43.5, 56.5, 68.9]
+          speckle: [15.2, 22.3, 29.0, 35.5, 41.5]
+          spatially_correlated: [10.9, 12.8, 14.8, 17.5, 20.3]
+          poisson: [16.9, 19.5, 23.6, 29.4, 37.1]
+          impulse: extreme_pct [0.01, 0.03, 0.05, 0.07, 0.10] → sev 1-5
+        验证: 添加 noise 后 residual std 应显著降低 (与 res_std 对比)
 
-Step 5: Round C — 完整管线 PSNR 验证
-        full_sim = apply(clean, 确定性退化 + noise)
-        PSNR(target, full_sim):
-          > 40dB → ✅ 保存 GOOD
-          35-40dB → ⚠️ 保存 NEEDS_WORK (severity 偏差或 minor miss)
-          < 35dB → ❌ 进入反思
+Step 5: Round C — 保存判定
+        ├── Round A PSNR > 40dB AND Round B 噪声匹配 → GOOD
+        ├── Round A PSNR > 30dB AND Round B 噪声部分匹配 → NEEDS_WORK
+        └── Round A PSNR < 30dB → 进入反思
 
-Step 6: 三级反思机制 [最多 3 轮]
-        第 1 级 — 移除 FP:
-          对每个低置信度 (conf=low) 的检测, 尝试移除并重算 PSNR
-          如果 PSNR 提升 > 2dB → 确认 FP, 移除
+Step 6: 反思修正 [最多 3 轮，每轮可多步]
+        每轮反思 = Agent 审视 decision_flow + reflection_hints → 多步修正 → PSNR 验证
         
-        第 2 级 — 添加漏检:
-          按 uncertainty.round_a_guess → round_b_guess 顺序
-          逐个尝试添加到 pipeline, 重算 PSNR
-          如果 PSNR 提升 > 2dB → 确认漏检, 添加
+        一轮内可同时执行:
+        ├── 移除 FP (从 hints 中找到冲突/可疑的检测, 移除)
+        ├── 添加漏检 (从 uncertainty.guesses 或 hints 中选择)
+        ├── 调整 severity (基于 decision_flow 中指标与阈值的距离)
+        ├── 调整顺序 (根据耦合诊断: blur在JPEG后→块消失, 调整顺序)
+        └── 替换误诊 (如 quantization→JPEG, 一个函数换成另一个)
         
-        第 3 级 — 完整重试:
-          前两级都失败 → 标记 NEEDS_WORK, 进入 Phase 5 训练
-          Phase 6: 比较 M_specialist vs M_blind PSNR:
-            specialist >> blind → 盲识别正确, 模型学到了特定退化
-            specialist ≈ blind → 盲识别有误, 训练未提供有效退化信号
-            → 深度反思: 检查 specialist 的 validation 输出, 分析未恢复的退化模式
+        修正后: apply → PSNR 验证
+          PSNR 提升 > 2dB → ✅ 修正有效, 保留
+          PSNR 不变或下降 → ❌ 回退, 进入下一轮反思
+          如果 PSNR > 40dB → 直接保存 GOOD
+        
+        3 轮仍低 → 保存 NEEDS_WORK → Phase 5 训练 → Phase 6 对比反思
+        
+        每轮反思记录到 reflection.json:
+        - 本轮改了什么 (remove/add/adjust/reorder/replace)
+        - PSNR 变化
+        - 决策依据 (引用了哪个 hint 或 evidence)
 
 Step 7: 保存
         save_prediction.py 保存 pipeline + verdict
@@ -240,23 +307,28 @@ Round A: det_sim = blur:4 → PSNR=22dB ❌
 → 管线修正成功, 保存 GOOD
 ```
 
-### 校准阈值速查表 (100 DIV2K 校准, exp15)
+### 校准阈值速查表 (100 DIV2K 校准 + exp17 盲化评估修正, exp15+17)
 
 | 检测项 | 指标 | 阈值 | 来源 |
 |--------|------|------|------|
-| blur 存在 | gm_ratio | < 0.75 OR lap_ratio < 0.55 | calibration |
+| blur 存在 | gm_ratio | < 0.85 (mild zone 0.75-0.85 标记为"可能 blur") | exp17 修正 |
+| blur 确认 | gm_ratio + lap_ratio | < 0.75 OR lap_ratio < 0.55 | calibration |
 | blur severity | gm_ratio | [0.60, 0.40, 0.32, 0.27] → sev 1-5 | calibration |
 | blur_motion | dir_change + patch_ratio_std | > 20% + std > 0.38 | calibration |
+| blur_lens | gradient_radial_ratio | > 2.0 → 强制 lens（不要归因于内容!）; > 1.3 → 候选 | exp17 修正 |
+| blur_zoom | gradient_radial_ratio | < 0.9 | calibration |
 | blur_jitter | gm_ratio + lap_ratio | gm > 1.0 AND lap < 0.7 | source code |
 | JPEG | block_norm + specificity | > 1.10 + > 1.2 | calibration |
 | JPEG2000 | uG_ratio + zc_ratio | < 0.85 + > 1.3 (medium conf) | calibration |
-| quantization | uG | < 25 | calibration |
+| quantization | uG | < 25 **AND** 残差 var_slope < 1.0（必须排除 Poisson!）| exp17 修正 |
 | oversharpen | gm_ratio + lap_edge_ratio | > 1.4 + > 2.5 | calibration |
 | contrast | std_ratio + proportional check | < 0.70 (weaken) / > 1.3 (strengthen) | source code |
 | brightness | mean_shift_pct | abs > 0.08 | source code |
 | saturation | sat_ratio | < 0.65 (weaken) / > 1.6 (strengthen) | source code |
 | noise_impulse | exact_0+255 pixel fraction | > 0.3% | calibration |
-| noise_speckle | vm_slope | > 0.01 | calibration |
+| noise_speckle | vm_slope on residual | > 0.01 (sev≥2); sev=1 时 > 0.005 或 speckle_contrast > 0.005 | exp17 修正 |
+| noise_poisson | var_slope on **residual** | > 1.0 + vm_slope≈0（⚠️ 必须在残差上测!）| exp17 修正 |
+| noise_spatially_correlated | spatial_corr on residual | 0.15-0.5（⚠️ 必须检查，不可跳过!）| exp17 修正 |
 | noise_YCrCb | rgb_std_ratio | > 1.4 | calibration |
 
 ### 逐层剥离示例
@@ -295,6 +367,51 @@ noise 指标在 target 上被 blur/compression 严重污染：
 - blur+noise 耦合 → overshoot 信号来自 noise 还是 blur？
 
 **只有剥离确定性退化后，residual 中的 noise 信号才是真实的。**
+
+### exp17 盲化评估 — 失败案例与预防 (v8 新增)
+
+exp17 对 35 个单退化进行盲化评估（目录名盲 ID，Agent 完全不知退化类型）。3 个失败案例的教训：
+
+**案例 1: Poisson:4 → 误判为 quantization_otsu:1** 🔴 最严重
+```
+Agent 看到: unique_G 减少 + extreme% 升高 → "是 quantization!"
+实际情况: 噪声将像素推至极端值, unique_G 被动减少。
+          残差上 var_slope=1.72 >> 1.0 → 明确的 Poisson 信号!
+根因: Agent 在 target 上直接用 unique_G 判断, 没有先算残差。
+预防: 强制规则 → 判定 quantization 前必须确认残差 var_slope < 1.0。
+```
+
+**案例 2: spatially_correlated:4 → 误判为 gaussian_RGB:2**
+```
+Agent 看到: 残差分布对称 + 通道 std 相似 → "gaussian!"
+实际情况: spatial_corr=0.233 明确在 0.15-0.5 范围内。
+根因: Agent 跳过了 spatial_corr 检查步骤, 凭"直觉"判为 gaussian。
+预防: 噪声 6 项检查必须逐项执行并记录数值, 不可跳步。
+```
+
+**案例 3: speckle:1 → 误判为 gaussian_RGB:1**
+```
+Agent 看到: vm_slope < 0.01 → "不是 speckle"
+实际情况: sev=1 的 speckle_contrast=0.14, vm_slope 信号被内容淹没。
+根因: vm_slope 阈值 0.01 对 sev=1 过高。
+预防: sev=1 时降低阈值到 0.005, 或检查 speckle_contrast > 0.005。
+```
+
+**案例 4: lens:4 → 误判为 gaussian:3** (blur 子类型)
+```
+Agent 看到: radial_ratio=3.17 → "应该是中心构图导致的, 不是 lens blur"
+实际情况: radial_ratio=3.17 就是 lens blur!
+根因: Agent 用"直觉"否定了指标。radial_ratio > 2.0 不可能是纯内容造成的。
+预防: 强制规则 → radial_ratio > 2.0 必须优先判定 lens。
+```
+
+**案例 5: zoom:1 → 误判为 noise** (blur 漏检)
+```
+Agent 看到: gm_ratio=0.85 > 0.75 → "不是 blur"
+实际情况: sev=1 的 zoom blur 很 mild, gm_ratio 刚好高于阈值。
+根因: blur 阈值 0.75 对 mild blur 不够敏感。
+预防: gm_ratio 0.75-0.85 标记为 mild blur 可能, 检查 lap_ratio 辅助确认。
+```
 
 ### 关键改进 (vs v4.1 + calib v2)
 
@@ -376,7 +493,7 @@ global 包含: brightness(8), contrast(4), saturation(4), oversharpen, pixelate,
 3. **PSNR 只验证确定性退化** — 不用于噪声搜索。阈值: >40dB 完美, 35-40dB 类别正确, 25-35dB 有FP/漏检, <25dB 严重错误
 4. **噪声从残差识别** — PSNR 对噪声无效，残差+分布才是正确方法。判别顺序: impulse → speckle → Poisson → spatial → YCrCb → gaussian
 5. **decision_flow 向 Agent 披露** — 每个决策的证据链完整透明，Agent 可据此独立判断
-6. **三级反思** — L1 移除FP → L2 添加漏检 → L3 训练后反思。每级最多 1 次尝试
+6. **反思 = 综合审视 + 多步修正** — 每轮可同时 移除FP + 添加漏检 + 调整severity + 调整顺序 + 替换误诊。改完后一次 PSNR 验证。最多 3 轮
 7. **训练后反思最可靠** — L1+L2 失败 → NEEDS_WORK → Phase 5 训练 → Phase 6 Spec vs M_blind PSNR 差触发深度反思
 8. **blur 子类型简化** — 仅区分 motion / jitter / gaussian
 9. **顺序从数据推断** — 默认: compression → quantization → global → blur → noise
