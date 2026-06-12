@@ -130,68 +130,91 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
   --output <output_path>
 ```
 
-## 批量盲识别工作流程 (v5 — 校准阈值 + 逐层剥离)
+## 批量盲识别工作流程 (v6 — detect + 校准阈值 + 逐层剥离 + Agent审查)
 
-> v4.1: 45%函数匹配, CI诊断耦合有效。calib v2: oversharpen FP仅1次, 阈值精确。
-> v5: **校准阈值决策函数类型 → 逐层剥离处理耦合 → PSNR最终验证。**
+> v5: 45%函数匹配, 校准阈值+逐层剥离。v6: detect_degradation.py 自动决策 + decision_flow 向 Agent 披露证据链。
+> 校准阈值来自 100 张 DIV2K 图像的系统校准 (exp15/scripts/calibrate_thresholds.py)。
 
 ### 核心流程 (每组退化)
 
-⚠️ **强制执行顺序，不可跳步。**
+⚠️ **强制执行顺序，不可跳步。最多 3 轮反思。**
 
 ```
-Step 1: analyze_degradation.py --target <d> --clean <c>
-        → 获取所有指标 (ratios_vs_clean, 校准指标, 噪声子类型)
+Step 1: detect_degradation.py → 自动决策 + decision_flow
+        python exp15/scripts/detect_degradation.py  # 或在代码中 import detect()
+        → pipeline: [{step, category, function, severity, confidence, rationale}]
+        → decision_flow: 每层每个决策的指标值、阈值、是否通过
+        → verification_steps: 建议的验证步骤
+        → uncertainty: {round_a_guess, round_b_guess, needs_work}
 
-Step 2: 确定性退化决策 (⚠️ 不含 noise!)
-        仅处理确定性类别，用校准阈值直接决策:
-        ├── blur: gm_r<0.6 → 子类型决策树
-        │   dir_chg>15%→motion, radial>1.3→lens, gm_r>1.0→jitter
-        │   radial 1.1-1.3→glass, radial<0.9→zoom, 默认→gaussian
-        ├── compression: block>1.1→JPEG, ringing>2+osc0.3-0.5→JP2K
-        ├── global: ratios_vs_clean 检查 mean/std/sat
-        ├── oversharpen: gm_r>2.0 AND osr>50 AND nvs=oversharpen
-        ├── quantization: uG<50
-        └── pixelate: multiscale 残差>5×
-        
-        ❌ 不要在这一步猜测 noise 类型！
-        ✅ 只确定 blur/compression/global/oversharpen/quantization/pixelate
+Step 2: Agent 审查 decision_flow [必须执行]
+        检查每个决策的 evidence:
+        ├── 指标值是否明显偏离阈值? → 调整 severity
+        ├── 多个指标 FAIL 但决策仍是 "detected"? → 可能是 FP，降级或移除
+        ├── 指标 PASS 但决策是 "none"? → 可能漏检，检查 round_a/b_guess
+        └── 确认或调整 pipeline 后进入 Step 3
 
 Step 3: Round A — 剥离确定性退化 [必须执行]
-        deterministic_sim = apply(clean, 所有确定性退化)
-        PSNR(deterministic_sim, target) 计算:
+        deterministic_sim = apply(clean, 所有非 noise 退化)
+        PSNR(deterministic_sim, target):
           > 35dB → ✅ 确定性部分正确, 继续
-          < 35dB → 函数或severity有误, 调整后重新计算
+          < 35dB → 函数或 severity 有误:
+            1. 检查 decision_flow 中对应决策的 evidence
+            2. 参考 round_a_guess 尝试一个修正
+            3. 重新计算 PSNR → 仍失败则标记 NEEDS_WORK
 
 Step 4: Round B — 残差噪声分析 [必须执行，不可跳过]
         residual = target - deterministic_sim
         ⚠️ 即使你认为"没有noise"，也必须检查残差
-    
-        在 residual 上计算:
-        a. impulse_net = impulse_pct(residual) - impulse_pct(clean同区域)
-           > 0.5% → noise_impulse
-        b. var_by_intensity: 将residual像素按clean强度分10个bin, 每bin算方差
-           方差与强度正相关(r>0.5) OR var_mean_ratio>5 → noise_poisson
-        c. speckle_contrast > 0.01 → noise_speckle
-        d. spatial_autocorr > 0.3 → noise_spatially_correlated
-        e. Cr_std/Y_std > 2.0 OR Cb_std/Y_std > 2.0 → noise_gaussian_YCrCb
-        f. 以上都不触发 → noise_gaussian_RGB (或无机noise!)
-        
-        severity 从残差指标幅度确定 (如 impulse pct=5%→sev≈3)
+
+        噪声判别顺序 (v6 更新 — speckle 优先):
+        a. impulse_pct(net) > 0.3% → noise_impulse
+        b. vm_slope > 0.01 (var/mean 随强度增加) → noise_speckle
+        c. var_slope > 1.0 + vm_slope≈0 → noise_poisson
+        d. spatial_corr 0.15-0.5 → noise_spatially_correlated
+        e. rgb_std_ratio > 1.4 OR Cr/Y_std > 1.3 → noise_gaussian_YCrCb
+        f. 以上都不触发 + res_std > 8 → noise_gaussian_RGB (低置信)
+        g. 否则 → 无 noise (或 noise 被确定性退化完全遮蔽)
+
+        severity 从校准后的 res_std 查表确定
 
 Step 5: Round C — 完整管线验证 [必须执行]
         full_sim = apply(clean, 确定性退化 + noise(如有))
-        compare(full_sim, target) → CI子指标
+        compare(full_sim, target) → CI 子指标
+        PSNR > 40dB → ✅ 管线正确
         检查: 所有子指标偏差 < 30%?
-        如果有 >3个子指标失败 → 回到Step 2检查是否有漏检类别
+        如果有 > 3 个子指标失败:
+          1. 参考 round_a_guess / round_b_guess 尝试修正
+          2. 最多再试 1 轮 → 仍失败则标记 NEEDS_WORK
 
 Step 6: 保存前检查清单 [全部打勾才能保存]
-        □ Step 2 未使用 PSNR 枚举
-        □ Step 3 deterministic_sim PSNR 已计算
-        □ Step 4 residual 噪声指标已计算 (有/无 noise 都要记录)
+        □ Step 1 detect 输出已审查 decision_flow
+        □ Step 2 Agent 已确认每个决策
+        □ Step 3 deterministic_sim PSNR 已计算 (> 35dB 或 NEEDS_WORK)
+        □ Step 4 residual 噪声指标已计算
         □ Step 5 CI 子指标偏差已检查
+        □ 最多 3 轮反思 (Round A 修正 + Round B 修正 + 完整重试 = 3 轮)
         □ save_prediction.py 保存
 ```
+
+### 校准阈值速查表 (100 DIV2K 校准, exp15)
+
+| 检测项 | 指标 | 阈值 | 来源 |
+|--------|------|------|------|
+| blur 存在 | gm_ratio | < 0.75 OR lap_ratio < 0.55 | calibration |
+| blur severity | gm_ratio | [0.60, 0.40, 0.32, 0.27] → sev 1-5 | calibration |
+| blur_motion | dir_change + patch_ratio_std | > 20% + std > 0.38 | calibration |
+| blur_jitter | gm_ratio + lap_ratio | gm > 1.0 AND lap < 0.7 | source code |
+| JPEG | block_norm + specificity | > 1.10 + > 1.2 | calibration |
+| JPEG2000 | uG_ratio + zc_ratio | < 0.85 + > 1.3 (medium conf) | calibration |
+| quantization | uG | < 25 | calibration |
+| oversharpen | gm_ratio + lap_edge_ratio | > 1.4 + > 2.5 | calibration |
+| contrast | std_ratio + proportional check | < 0.70 (weaken) / > 1.3 (strengthen) | source code |
+| brightness | mean_shift_pct | abs > 0.08 | source code |
+| saturation | sat_ratio | < 0.65 (weaken) / > 1.6 (strengthen) | source code |
+| noise_impulse | exact_0+255 pixel fraction | > 0.3% | calibration |
+| noise_speckle | vm_slope | > 0.01 | calibration |
+| noise_YCrCb | rgb_std_ratio | > 1.4 | calibration |
 
 ### 逐层剥离示例
 
@@ -266,21 +289,21 @@ PSNR 对噪声函数天然偏低（随机种子不同导致像素无法匹配）
 | 噪声类型 | 残差特征 | 分布特征 | 关键验证 |
 |---------|---------|---------|---------|
 | **Gaussian RGB** | 方差为常数，与像素强度无关 | 正态分布，对称 | 分 10 个强度 bin → 每 bin 方差接近 |
-| **Gaussian YCrCb** | **Cr/Cb 通道方差 >> Y 通道** | Cr/Cb 正态分布 | Cr_local_std / Y_local_std > 2.0 |
-| **Poisson** | **方差 ∝ 强度**（暗区噪声小，亮区大） | 低强度偏斜，高强度近正态 | 强度-方差 Spearman 相关 > 0.5 |
-| **Speckle** | **方差 ∝ 强度²**（乘性） | Gamma 分布 | speckle_contrast > 0.01 |
-| **Impulse** | 稀疏极端像素 (0 和 255) | 两端尖峰 | impulse_pct(net) > 0.5% |
-| **Spatially Correlated** | 邻域像素残差相关 | 空间自相关高 | spatial_cluster_ratio > 0.3 |
+| **Gaussian YCrCb** | **RGB 通道噪声不均** (B > G > R) | Cr/Cb 正态分布 | rgb_std_ratio > 1.4 OR Cr/Y_std > 1.3 |
+| **Poisson** | **方差 ∝ 强度**（暗区噪声小，亮区大） | 低强度偏斜，高强度近正态 | var_slope > 1.0 + vm_slope≈0 |
+| **Speckle** | **方差 ∝ 强度²**（乘性，vm_slope > 0） | Gamma 分布 | vm_slope > 0.01 |
+| **Impulse** | 稀疏极端像素 (0 和 255) | 两端尖峰 | exact_0+255 像素比例 > 0.3% |
+| **Spatially Correlated** | 邻域像素残差相关 | 空间自相关高 | spatial_corr 0.15-0.5 |
 
-#### 判别流程
+#### 判别流程 (v6 — speckle 优先)
 
 ```
-Step 1: 检查 impulse → impulse_pct(net) > 0.5% → noise_impulse
-Step 2: 检查 YCrCb → Cr/Y_std > 2.0 → noise_gaussian_YCrCb
-Step 3: 检查 Poisson → 强度-方差 正相关 → noise_poisson
-Step 4: 检查 Speckle → speckle_contrast > 0.01 → noise_speckle
-Step 5: 检查 Spatial → spatial_cluster > 0.3 → noise_spatially_correlated
-Step 6: 默认 → noise_gaussian_RGB
+Step 1: 检查 impulse → impulse_pct(net) > 0.3% → noise_impulse
+Step 2: 检查 Speckle → vm_slope > 0.01 (var/mean 随强度上升) → noise_speckle
+Step 3: 检查 Poisson → var_slope > 1.0 + vm_slope≈0 → noise_poisson
+Step 4: 检查 Spatial → spatial_corr 0.15-0.5 → noise_spatially_correlated
+Step 5: 检查 YCrCb → rgb_std_ratio > 1.4 OR Cr/Y_std > 1.3 → noise_gaussian_YCrCb
+Step 6: 默认 → noise_gaussian_RGB (低置信)
 ```
 
 #### 多退化含噪声时的注意事项
@@ -305,18 +328,27 @@ global 包含: brightness(8), contrast(4), saturation(4), oversharpen, pixelate,
 
 ### 关键原则
 
-1. **PSNR 只验证确定性退化** — 不用于噪声搜索
-2. **噪声从残差识别** — PSNR 对噪声无效，残差+分布才是正确方法
-3. **CI子指标诊断耦合** — 耦合信号诊断表是处理多退化的核心工具
-4. **逐层剥离** — 不在一轮解决所有问题，每轮专注一个退化
-5. **顺序从数据推断** — 不预设顺序；耦合诊断表告诉你哪个退化被另一个掩盖
+1. **detect 自动决策 + Agent 审查** — detect_degradation.py 给出 pipeline + decision_flow，Agent 审查 evidence 后确认或调整
+2. **PSNR 只验证确定性退化** — 不用于噪声搜索
+3. **噪声从残差识别** — PSNR 对噪声无效，残差+分布才是正确方法。判别顺序: impulse → speckle → Poisson → spatial → YCrCb → gaussian
+4. **decision_flow 向 Agent 披露** — 每个决策的证据链（指标值、阈值、是否通过）完整透明，Agent 可据此独立判断
+5. **逐层剥离** — 不在一轮解决所有问题，每轮专注一个退化
+6. **最多 3 轮反思** — Round A (1次调整) + Round B (1次调整) + 完整重试 (1次) = 3 轮
+7. **训练后反思更可靠** — 3 轮仍 NEEDS_WORK → Phase 5 训练 → Phase 6 Spec vs M_blind PSNR 差触发深度反思
+8. **blur 子类型简化** — 仅区分 motion (方向性) / jitter (gm↑+lap↓) / gaussian (默认)。lens/glass/zoom 因 radial_ratio 内容依赖太强已移除
+9. **顺序从数据推断** — 默认: compression → quantization → global → blur → noise。耦合证据可调整
 
 ### 与旧版对比
 
-| 问题 | v3.1 | v4 | v4.1 |
+| 问题 | v4.1 | v5 | v6 (当前) |
 |------|------|-----|------|
-| 单退化确定函数 | 决策树(~60%) | PSNR(75%) | PSNR验证(75%) |
-| **单退化噪声** | 决策树(失败) | PSNR(失败) | **残差+分布判别** |
+| 单退化确定函数 | PSNR验证(75%) | 校准阈值 | **detect自动决策(84%单退化)** |
+| 单退化噪声 | 残差+分布 | 残差+分布 | **残差+校准阈值+RGB ratio** |
+| JPEG vs JPEG2000 | CI盲区 | PSNR可区分 | **block_norm+特异性+zc_ringing** |
+| 全局退化识别 | 无 | PSNR验证 | **色彩空间映射+校准阈值** |
+| blur子类型 | 决策树(radial) | 决策树(radial) | **简化: motion/jitter/gaussian** |
+| 多退化耦合 | CI诊断 | 逐层剥离 | **逐层剥离+耦合修正+guesses** |
+| Agent可见性 | 原始指标 | 原始指标 | **decision_flow完整证据链** |
 | 多退化耦合 | CI子指标 | 失败(万能填充) | CI耦合诊断+逐层剥离 |
 | JPEG vs JPEG2000 | CI盲区 | PSNR可区分 | PSNR验证 |
 | noise子类型(多退化) | 决策树 | 失败 | 待后续实验 |
