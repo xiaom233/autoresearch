@@ -52,33 +52,13 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 
 **在 reflection.json 中必须记录这 6 项的数值**，不能只写"判断为 gaussian"。
 
-### C. Blur + Global 强制规则 (v10 扩展)
+### C. Blur 判定强制规则
 
-**Blur**:
 ```
 □ 1. gm_ratio < 0.85 → blur 可能存在（mild blur 区 0.75-0.85 不能排除）
 □ 2. radial_ratio > 2.0 → 必须优先考虑 lens blur，不能归因于"图像内容"
 □ 3. 非确定性 blur (glass/jitter) PSNR 不会 > 40dB，不要反复调 severity 追求高 PSNR
 □ 4. 指标超过阈值 → 信任指标，不要用"直觉"否定
-```
-
-**Brightness 子类型判别 (v10 新增)**:
-```
-Step 1 — HSV vs RGB: 在 HSV 空间检查 S 通道是否变化
-  S_target ≈ S_clean → HSV 方法 (shift_HSV / gamma_HSV)
-  S_target ≠ S_clean → RGB 方法 (shift_RGB / gamma_RGB)
-
-Step 2 — shift vs gamma: 线性拟合 clean vs target (逐像素)
-  R² > 0.99 → shift（线性变换: target = clean + constant 或 target = clean * factor）
-  R² < 0.95 → gamma（非线性变换: target = 255 * (clean/255)^gamma）
-```
-
-**Saturation vs YCrCb 噪声判别 (v10 新增)**:
-```
-sat_ratio < 0.65 or > 1.6 → 饱和度变化 或 YCrCb 噪声
-区分方法: 检查 Cr/Cb 残差的空间分布
-  Cr/Cb 残差 mean 偏离 0 且 std 小 → 饱和度变化（均匀偏移）
-  Cr/Cb 残差 mean ≈ 0 且 std 大 → YCrCb 噪声（随机波动）
 ```
 
 ### D. 保存前自检
@@ -205,9 +185,9 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 > v6: detect_degradation.py 自动决策 + decision_flow 披露。v7: 强化 Round A/C 残差验证，三级反思机制。
 > v8: exp17 盲化评估（35 单退化）→ 强制检查清单 + 噪声残差先行 + 阈值修正 + 失败案例。
 > v9: exp17 双退化评估（20 双退化）→ 掩盖推理 + compression 定向补充验证。
-> v10: Poisson 双阈值 (corr+slope) + 色彩空间特征 (Cr/Y uniform vs random) + brightness 子类型 (S通道+R²)。
+> v9.1: Poisson双阈值/色彩空间/brightness子类型作为从属注释（不改变v9核心结构）。
 > 校准阈值来自 100 张 DIV2K 图像的系统校准 (exp15/scripts/calibrate_thresholds.py)。
-> exp17 盲化基准：单退化 88.6%，双退化 v9→45%，v10 目标 55%+。
+> exp17 盲化基准：单退化 88.6%，双退化 v9=45%，v10=20%(回退)。
 > exp17 盲化基准：单退化 88.6%（31/35），双退化 30%（6/20），掩盖推理预期双退化提升至 ~70%。
 
 ### 核心流程 (每组退化)
@@ -249,14 +229,12 @@ Step 4: Round B — 残差噪声分析 [主要验证手段]
         b. vm_slope > 0.01 → noise_speckle
            ⚠️ sev=1 时 speckle 信号弱: vm_slope 可能 < 0.01
               补充检查: speckle_contrast > 0.005 → sev=1 speckle 可能
-        c. Poisson 双阈值检测（v10）:
+        c. var_slope > 1.0 + vm_slope≈0 → noise_poisson（纯噪声）
            ⚠️ var_slope 必须在 RESIDUAL 上测量 (不是 target!)
-           纯噪声: var_slope > 1.0 + vm_slope≈0 → noise_poisson ✅
-           JPEG耦合后: var_slope 被压到 0.5-0.8 但 corr 仍 > 0.7
-           → 双阈值: corr > 0.7 AND var_slope > 0.5 → 疑似 Poisson
-           → 验证: 如果也看到 unique_G 降低 + extreme% 升高 →
-              ⚠️ 优先级: Poisson > quantization!（Poisson 会伪装成 quantization）
-              判定 quantization 前必须先排除 Poisson（残差 corr < 0.7 或 var_slope < 0.5）
+           ⚠️ Poisson 会在 target 上降低 unique_G, 容易和 quantization 混淆
+              判定 quantization 前必须先排除 Poisson（残差 var_slope < 1.0）
+           💡 JPEG 耦合后 var_slope 被压到 0.5-0.8 但 corr 仍 > 0.7
+              → 如果 corr > 0.7 AND var_slope > 0.5 → 仍可能是 Poisson（JPEG耦合）
         d. spatial_corr 0.15-0.5 → noise_spatially_correlated
            ⚠️ exp17: spatial_corr=0.233 在范围内但 Agent 跳过了检查
               此检查不可跳过! 即使分布"看起来像 Gaussian"也要记录数值
@@ -370,15 +348,13 @@ Round A: det_sim = blur:4 → PSNR=22dB ❌
 | quantization | uG | < 25 **AND** 残差 var_slope < 1.0（必须排除 Poisson!）| exp17 修正 |
 | oversharpen | gm_ratio + lap_edge_ratio | > 1.4 + > 2.5 | calibration |
 | contrast | std_ratio + proportional check | < 0.70 (weaken) / > 1.3 (strengthen) | source code |
-| brightness | mean_shift_pct | abs > 0.08 | source code |
-| saturation | sat_ratio | < 0.65 (weaken) / > 1.6 (strengthen) | source code |
+| brightness | mean_shift_pct | abs > 0.08. 💡子类型: S通道不变→HSV,变→RGB; R²>0.99→shift,<0.95→gamma | source code + exp17 |
+| saturation | sat_ratio | < 0.65 (weaken) / > 1.6 (strengthen). 💡与YCrCb区分: Cr/Cb残差均匀偏移→饱和度, 随机波动→YCrCb噪声 | source code + exp17 |
 | noise_impulse | exact_0+255 pixel fraction | > 0.3% | calibration |
 | noise_speckle | vm_slope on residual | > 0.01 (sev≥2); sev=1 时 > 0.005 或 speckle_contrast > 0.005 | exp17 修正 |
-| noise_poisson | var_slope + corr on **residual** | var_slope > 1.0（纯噪声）OR (corr > 0.7 AND var_slope > 0.5)（JPEG耦合后）| exp17 v10 双阈值 |
+| noise_poisson | var_slope on **residual** | > 1.0 + vm_slope≈0（⚠️ 必须在残差上测!）| exp17 修正 |
 | noise_spatially_correlated | spatial_corr on residual | 0.15-0.5（⚠️ 必须检查，不可跳过!）| exp17 修正 |
-| noise_YCrCb | rgb_std_ratio + Cr/Y_std + spatial check | > 1.4 OR Cr/Y_std > 1.3. ⚠️ 与饱和度变化区分: Cr/Cb残差随机→YCrCb噪声; Cr/Cb残差均匀偏移→饱和度变化 | exp17 v10 |
-| saturation | sat_ratio + Cr/Cb uniformity | < 0.65 (weaken) / > 1.6 (strengthen). ⚠️ 必须检查Cr/Cb残差是均匀偏移(饱和度)还是随机(YCrCb噪声) | exp17 v10 |
-| brightness 子类型 | S通道 + 线性拟合R² | S不变→HSV方法, S变→RGB方法; R²>0.99→shift, R²<0.95→gamma | exp17 v10 |
+| noise_YCrCb | rgb_std_ratio | > 1.4 | calibration |
 
 ### 逐层剥离示例
 
