@@ -252,8 +252,23 @@ Step 5: Round C — 保存判定
         ├── Round A PSNR > 30dB AND Round B 噪声部分匹配 → NEEDS_WORK
         └── Round A PSNR < 30dB → 进入反思
 
-Step 6: 反思修正 [最多 3 轮，每轮可多步]
+Step 6: 反思修正 [最多 3 轮，每轮可多步。⚠️ 启发式原则]
         每轮反思 = Agent 审视 decision_flow + reflection_hints → 多步修正 → PSNR 验证
+        
+        **核心原则：反思是启发式的，不是枚举式的。**
+        很多复杂退化无法仅靠指标发现——强退化会掩盖弱退化的特征（exp17: compression 被 global/blur/noise 掩盖 11/14 失败）。
+        反思的任务不是"找到阈值匹配的退化"，而是"猜想什么退化可能被掩盖了"。
+        
+        启发式猜想优先级:
+        1. PSNR < 30dB → 当前管线有漏检或误判 → 检查残差模式
+        2. 残差 8×8 块 → JPEG 被掩盖（即使 block_boundary < 1.1）
+        3. 残差随机噪声 → noise 被掩盖
+        4. 找到强 deterministic 退化但残差仍有结构 →
+           最大嫌疑是 compression（最容易被掩盖的退化）
+           → 强制测试 JPEG + JPEG2000（PSNR 验证，> 50dB 确认）
+        5. 指标在两类模糊（Poisson↔quantization, JPEG2000↔jitter, speckle↔gaussian sev=1）→
+           两类都测，PSNR/残差匹配决定
+        6. 单退化 PSNR 好但添加第二个退化 PSNR 反而降 → 顺序可能反了
         
         一轮内可同时执行:
         ├── 移除 FP (从 hints 中找到冲突/可疑的检测, 移除)
