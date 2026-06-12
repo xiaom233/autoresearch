@@ -255,27 +255,33 @@ Step 5: Round C — 保存判定
 Step 6: 反思修正 [最多 3 轮，每轮可多步。⚠️ 启发式原则]
         每轮反思 = Agent 审视 decision_flow + reflection_hints → 多步修正 → PSNR 验证
         
-        **核心原则：反思是启发式的，不是枚举式的。**
-        很多复杂退化无法仅靠指标发现——强退化会掩盖弱退化的特征（exp17: compression 被 global/blur/noise 掩盖 11/14 失败）。
-        反思的任务不是"找到阈值匹配的退化"，而是"猜想什么退化可能被掩盖了"。
+        **核心原则：反思分为两层——先常规修正，后启发式猜想。**
+
+        **第一层（优先）：常规修正** — 换 severity、换子类型、调顺序。
+        这些是必要的反思内容，90% 的问题在这一层解决。
+        一轮内可同时执行:
+        ├── 调整 severity (基于 decision_flow 中指标与阈值的距离)
+        ├── 替换误诊 (如 quantization↔JPEG, 一个函数换成另一个)
+        ├── 调整顺序 (根据耦合诊断: blur在JPEG后→块消失, 调整顺序)
+        ├── 移除 FP (从 hints 中找到冲突/可疑的检测, 移除)
+        └── 添加漏检 (从 uncertainty.guesses 或 hints 中选择)
+
+        **第二层（仅在常规修正失败时）：启发式猜想** — 猜想什么退化可能被掩盖。
+        触发条件: 常规修正后 PSNR 仍然 < 35dB，且找到的退化数 < 预期数。
+        很多复杂退化无法仅靠指标发现——强退化会掩盖弱退化的特征
+        （exp17: compression 被 global/blur/noise 掩盖 11/14 失败）。
         
         启发式猜想优先级:
-        1. PSNR < 30dB → 当前管线有漏检或误判 → 检查残差模式
-        2. 残差 8×8 块 → JPEG 被掩盖（即使 block_boundary < 1.1）
-        3. 残差随机噪声 → noise 被掩盖
-        4. 找到强 deterministic 退化但残差仍有结构 →
+        1. 残差 8×8 块 → JPEG 被掩盖（即使 block_boundary < 1.1）
+        2. 残差随机噪声 → noise 被掩盖
+        3. 找到强 deterministic 退化但残差仍有结构 →
            最大嫌疑是 compression（最容易被掩盖的退化）
-           → 强制测试 JPEG + JPEG2000（PSNR 验证，> 50dB 确认）
-        5. 指标在两类模糊（Poisson↔quantization, JPEG2000↔jitter, speckle↔gaussian sev=1）→
+           → 测试 JPEG + JPEG2000（PSNR > 50dB 才追加）
+        4. 指标在两类模糊（Poisson↔quantization, JPEG2000↔jitter, speckle↔gaussian sev=1）→
            两类都测，PSNR/残差匹配决定
-        6. 单退化 PSNR 好但添加第二个退化 PSNR 反而降 → 顺序可能反了
+        5. 添加退化后 PSNR 反而降 → 顺序可能反了
         
-        一轮内可同时执行:
-        ├── 移除 FP (从 hints 中找到冲突/可疑的检测, 移除)
-        ├── 添加漏检 (从 uncertainty.guesses 或 hints 中选择)
-        ├── 调整 severity (基于 decision_flow 中指标与阈值的距离)
-        ├── 调整顺序 (根据耦合诊断: blur在JPEG后→块消失, 调整顺序)
-        └── 替换误诊 (如 quantization→JPEG, 一个函数换成另一个)
+        ⚠️ 启发式猜想不能替代常规修正。PSNR > 40dB 时直接保存，不触发。
         
         修正后: apply → PSNR 验证
           PSNR 提升 > 2dB → ✅ 修正有效, 保留
@@ -442,23 +448,27 @@ exp17 对 20 个随机双退化进行盲化评估。结果：两函数全对 30%
 | noise (impulse/poisson/YCrCb) | 随机像素破坏 8×8 规律性；ringing 被噪声淹没 |
 | blur (gaussian:5) | 平滑抹掉 block_boundary；ringing 被模糊消除 |
 
-**启发式规则（掩盖推理）**：
+**启发式规则（掩盖推理）⚠️ 触发条件：PSNR < 35dB 且已识别退化数不足且不含 compression**：
+
+掩盖推理不替代常规反思（换 severity/换子类型/调顺序）。常规反思优先执行，
+仅在常规修正无法将 PSNR 提升到 35dB 以上时，才启动掩盖推理。
 
 ```
-双退化识别完成后，强制追加一步"掩盖检查"：
+触发条件（3 条全部满足才执行）:
+  1. 当前管线 PSNR < 35dB（确实有问题，不是 fine-tune 范围）
+  2. 已识别退化数 < 预期退化数（如双退化只找到 1 个，单退化全对则跳过）
+  3. 已识别的退化中不含 compression（compression 已被找到则跳过）
 
-□ 如果已识别出 1 个退化但不是 compression →
-   剥离该退化 → 残差上强制测试:
-   a. compression_jpeg (sev 1-5, 先测 sev 1)
-   b. compression_jpeg_2000 (sev 1-5, 先测 sev 1)
-   
-   为什么 sev=1 优先？低严重度 compression 最容易被掩盖，
-   高严重度会产生明显 artifact 不太可能漏检。
-   
-   验证方法: PSNR（compression 是确定性的，PSNR > 50dB 即确认）
-   
-□ 如果残差 block_boundary < 1.1 但 PSNR 验证发现 JPEG 匹配 →
-   "掩盖确认" — 记录到 reflection.json
+满足条件 → 掩盖检查:
+  □ 剥离已知退化 → 残差上测试 compression_jpeg + compression_jpeg_2000
+    （先测 sev=1，低严重度最容易被掩盖）
+    验证: PSNR > 50dB 才追加（compression 是确定性的）
+    追加后 PSNR 提升 > 5dB → "掩盖确认"
+
+不满足条件 → 跳过掩盖检查:
+  - 单退化 PSNR > 40dB → 已做对，不需要
+  - 已找到所有退化 → 不需要
+  - 已有 compression → 不需要
 ```
 
 **为什么不是枚举**：只在已识别出至少一个退化后，对"最容易被掩盖的类别 (compression)"做定向补充测试。最多增加 10 次 PSNR 验证（2 函数 × 5 严重度），不是遍历组合。
