@@ -233,42 +233,81 @@ expN/
 
 根目录仅保留核心文件：`train.py`、`prepare.py`、`blind_challenge.py`、`evaluate_blind_challenge.py`、`setup_challenge.sh`。
 
-## GPU 并行调度（scripts/）
+## GPU 并行调度
 
-基于 exp10/gpu_runner.sh + exp12/dfpir_runner.sh 模式。核心工具在 `scripts/`：
+基于 exp10/gpu_runner.sh + exp12/dfpir_runner.sh 模式。核心工具：
 
-```
-scripts/
-├── gen_tasks.py       ← 生成任务队列文件（自动跳过已完成）
-└── gpu_runner.sh      ← Per-GPU runner，flock 原子取任务
-```
+| 工具 | 路径 | 用途 |
+|------|------|------|
+| 任务生成器 | `scripts/gen_tasks.py` | 从 Phase 4 预测生成训练队列，自动跳过已完成 |
+| GPU Runner | `scripts/gpu_runner.sh` | Per-GPU 原子取任务，flock 防争抢 |
 
-### 使用流程
+### 完整实验流程
 
 ```bash
-# 1. 生成任务文件（跳过已完成的 checkpoint 和 results.tsv 记录）
+# === Phase 5: Specialist 训练 ===
+
+# 1. 生成任务文件
 .venv/bin/python3 scripts/gen_tasks.py \
   --exp exp17 \
   --task-file exp17/scripts/phase5_tasks.txt \
   --epoch-budget 2
+  # 可选: --extra-env "AR_ATTENTION_TYPE=swin"  附加环境变量
 
-# 2. 启动 8 GPU runner（每个 GPU 一个独立进程）
+# 2. 启动 8 GPU runner（每个 GPU 独立进程，并行 8 个实验）
 for gpu in 0 1 2 3 4 5 6 7; do
-  bash scripts/gpu_runner.sh $gpu exp17/scripts/phase5_tasks.txt &
+  nohup bash scripts/gpu_runner.sh $gpu exp17/scripts/phase5_tasks.txt exp17/logs > /dev/null 2>&1 &
 done
 
 # 3. 监控
-tail -f exp17/logs/gpu0_runner.log
-grep val_psnr_db exp17/logs/exp17_blind_*.log
-cat exp17/results/results.tsv
+tail -f exp17/logs/gpu0_runner.log                    # runner 状态
+grep val_psnr_db exp17/logs/exp17_blind_*.log          # PSNR 汇总
+cat exp17/results/results.tsv                           # 完成清单
+nvidia-smi                                               # GPU 利用率
+
+# 4. 停止（迁移或紧急情况）
+touch /tmp/stop_exp17_scheduler                         # 软停（完成当前任务后停）
+# 或:
+pkill -f "gpu_runner"                                    # 立即停止
 ```
+
+### DFPIR 基线评估（Phase 3）
+
+```bash
+# DFPIR 使用全部 8 GPU（串行），必须在 GPU 完全空闲时运行
+# 1. 生成 DFPIR 队列
+> exp17/scripts/dfpir_queue.txt
+for f in exp17/degradation/blind_*_params.json; do
+    name=$(basename $f _params.json)
+    echo "/home/zyli/anaconda3/envs/dfpir/bin/python \
+      resource/.../test_degradation.py \
+      --params $f --gpus 0,1,2,3,4,5,6,7 \
+      --output exp17/results/dfpir_${name}.json \
+      > exp17/logs/dfpir_${name}.log 2>&1|DFP_${name}" >> exp17/scripts/dfpir_queue.txt
+done
+
+# 2. 串行执行（每个任务用全部 8 GPU）
+bash scripts/gpu_runner.sh 0 exp17/scripts/dfpir_queue.txt exp17/logs &
+# ⚠️ 仅启动 1 个 runner（DFPIR 用全部 GPU，不能并行）
+```
+
+### 任务文件格式
+
+每行一个任务，竖线分隔命令和名称：
+```
+CUDA_VISIBLE_DEVICES=GPU_ID AR_PARAMS_PATH=... .venv/bin/python3 train.py > log 2>&1|任务名
+```
+`GPU_ID` 占位符由 runner 自动替换为实际 GPU 编号。
 
 ### 关键设计
 
-- **原子取任务**: `flock` 锁文件，8 个 runner 同时竞争但无争抢
-- **GPU 绑定**: 任务命令含 `CUDA_VISIBLE_DEVICES=GPU_ID`，runner 自动替换
-- **断点续跑**: `gen_tasks.py` 检查 `results.tsv` 和 checkpoint，已完成自动跳过
-- **任务格式**: `CMD|NAME`（竖线分隔），与 exp10/11/12 兼容
+| 特性 | 实现 |
+|------|------|
+| **原子取任务** | `flock` 锁文件，8 个 runner 同时竞争但无争抢 |
+| **GPU 绑定** | `CUDA_VISIBLE_DEVICES=GPU_ID`，runner 自动替换 |
+| **断点续跑** | `gen_tasks.py` 检查 `results.tsv` + checkpoint，跳过已完成 |
+| **自动接续** | runner 取空队列自动退出；重新运行 `gen_tasks.py` + runner 即可接续 |
+| **崩溃恢复** | 中途杀 runner → 当前任务丢失但已完成的不受影响 → 重新 gen_tasks + 启动 runner |
 
 ## The experiment loop
 

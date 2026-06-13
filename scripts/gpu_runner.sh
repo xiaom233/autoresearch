@@ -1,17 +1,18 @@
 #!/bin/bash
 # Per-GPU sequential runner — 每 GPU 一个独立进程，flock 原子取任务
-# 基于 exp10/scripts/gpu_runner.sh
-# 用法: bash scripts/gpu_runner.sh <GPU_ID> <TASK_FILE>
+# 基于 exp10/scripts/gpu_runner.sh + exp12/scripts/dfpir_runner.sh
+# 用法: bash scripts/gpu_runner.sh <GPU_ID> <TASK_FILE> [LOG_DIR]
 set -euo pipefail
 
 GPU=$1
 TASK_FILE=$2
+LOG_DIR="${3:-logs}"
 LOCK_FILE="${TASK_FILE}.lock"
-LOG="exp17/logs/gpu${GPU}_runner.log"
+RUNNER_LOG="${LOG_DIR}/gpu${GPU}_runner.log"
 
-mkdir -p "$(dirname "$LOG")"
+mkdir -p "$(dirname "$RUNNER_LOG")"
 
-echo "[$(date +%H:%M)] GPU$GPU runner started" >> "$LOG"
+echo "[$(date +%H:%M)] GPU$GPU runner started, task_file=$TASK_FILE" >> "$RUNNER_LOG"
 
 while true; do
   # 原子弹出任务
@@ -24,19 +25,19 @@ while true; do
   ")
 
   if [ -z "$task" ]; then
-    echo "[$(date +%H:%M)] GPU$GPU: queue empty, exiting" >> "$LOG"
+    echo "[$(date +%H:%M)] GPU$GPU: queue empty, exiting" >> "$RUNNER_LOG"
     break
   fi
 
   cmd=$(echo "$task" | cut -d'|' -f1 | sed "s/GPU_ID/$GPU/g")
   name=$(echo "$task" | cut -d'|' -f2)
 
-  echo "[$(date +%H:%M)] GPU$GPU: $name START" | tee -a "$LOG"
+  echo "[$(date +%H:%M)] GPU$GPU: $name START" | tee -a "$RUNNER_LOG"
   CUDA_VISIBLE_DEVICES=$GPU eval "$cmd"
   rc=$?
   if [ $rc -eq 0 ]; then
-    echo "[$(date +%H:%M)] GPU$GPU: $name DONE" | tee -a "$LOG"
+    echo "[$(date +%H:%M)] GPU$GPU: $name DONE" | tee -a "$RUNNER_LOG"
   else
-    echo "[$(date +%H:%M)] GPU$GPU: $name FAILED(rc=$rc)" | tee -a "$LOG"
+    echo "[$(date +%H:%M)] GPU$GPU: $name FAILED(rc=$rc)" | tee -a "$RUNNER_LOG"
   fi
 done
