@@ -233,6 +233,43 @@ expN/
 
 根目录仅保留核心文件：`train.py`、`prepare.py`、`blind_challenge.py`、`evaluate_blind_challenge.py`、`setup_challenge.sh`。
 
+## GPU 并行调度（scripts/）
+
+基于 exp10/gpu_runner.sh + exp12/dfpir_runner.sh 模式。核心工具在 `scripts/`：
+
+```
+scripts/
+├── gen_tasks.py       ← 生成任务队列文件（自动跳过已完成）
+└── gpu_runner.sh      ← Per-GPU runner，flock 原子取任务
+```
+
+### 使用流程
+
+```bash
+# 1. 生成任务文件（跳过已完成的 checkpoint 和 results.tsv 记录）
+.venv/bin/python3 scripts/gen_tasks.py \
+  --exp exp17 \
+  --task-file exp17/scripts/phase5_tasks.txt \
+  --epoch-budget 2
+
+# 2. 启动 8 GPU runner（每个 GPU 一个独立进程）
+for gpu in 0 1 2 3 4 5 6 7; do
+  bash scripts/gpu_runner.sh $gpu exp17/scripts/phase5_tasks.txt &
+done
+
+# 3. 监控
+tail -f exp17/logs/gpu0_runner.log
+grep val_psnr_db exp17/logs/exp17_blind_*.log
+cat exp17/results/results.tsv
+```
+
+### 关键设计
+
+- **原子取任务**: `flock` 锁文件，8 个 runner 同时竞争但无争抢
+- **GPU 绑定**: 任务命令含 `CUDA_VISIBLE_DEVICES=GPU_ID`，runner 自动替换
+- **断点续跑**: `gen_tasks.py` 检查 `results.tsv` 和 checkpoint，已完成自动跳过
+- **任务格式**: `CMD|NAME`（竖线分隔），与 exp10/11/12 兼容
+
 ## The experiment loop
 
 1. Read `train.py` for full context
