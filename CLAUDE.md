@@ -23,15 +23,183 @@ This file provides guidance to Claude Code when working with this repository.
    ```
    如果已有 checkpoint（含 val_psnr_db 的训练日志），绝不重新训练
 
-### 子 Agent 盲识别约束 🔴
+### 子 Agent 盲识别协议 🔴 强制执行
 
-子 Agent 做盲识别时**绝对禁止**：
-- 写 Python 脚本用 `for` 循环遍历退化类型
-- 使用 `itertools.permutations` / `itertools.product`
-- 一次性测试 > 5 个假设
-- 嵌套循环测试 severity × type × order
+**盲识别必须通过 Skill `image-degradation-simulator` 启动子 Agent 执行。禁止用脚本或 auto_pipeline 直接生成预测。**
 
-**正确**：每退化 3-5 次迭代，基于上一次结果调整假设。
+#### 核心定位
+
+```
+盲识别的目标不是"找到唯一正确答案"——
+而是输出一个带不确定性量化的候选列表，供训练后 PSNR 做最终仲裁。
+
+原因:
+  1. 确定性退化 (blur, compression, contrast): PSNR 可验证 (>40dB = 正确)
+  2. 随机退化 (noise): PSNR 不可用 → 统计分布匹配
+  3. 混合退化 (blur+noise+jpeg): 退化耦合，无法逐级剥离验证
+     - noise→blur: 模糊改变了噪声统计
+     - blur→noise: 噪声干扰了 PSNR
+     - jpeg→contrast: 拉伸改变了块效应
+  4. 唯一的可靠判据: 训练后 PSNR (Spec < M_blind - 3dB → 盲识别错误)
+```
+
+来源: exp17 — 16 Agent 盲识别，平均 CI=8.2/10，函数正确率仅 6%。
+
+#### 分类型判断框架
+
+```
+退化分类:
+  Tier 1 — 确定性单步 (blur, compression, contrast, brightness, quantize 单独):
+    判据: PSNR >= 40dB → GOOD, 30-40dB → 调严重度, < 30dB → 换函数
+
+  Tier 2 — 随机单步 (noise 单独):
+    判据: 残差统计匹配 (SKILL.md §B 6步检查)
+    - impulse: extreme_pct 误差 < 10%
+    - gaussian: flat_region_var 误差 < 15%
+    - speckle: var_mean_slope 误差 < 0.01
+    - poisson: var_slope ~1.0 + vm_slope ~0
+    - spatial_corr: spatial_correlation 误差 < 0.05
+
+  Tier 3 — 混合退化 (多步, 含 noise, 退化耦合):
+    判据: 多假设 PSNR 排名 + 统计匹配 + 证据一致性
+    目标: 输出 ranked candidates → 训练 PSNR 做最终仲裁
+    ⚠️ Tier 3 不接受 GOOD verdict — 必须是 UNCERTAIN 或 LIKELY
+```
+
+#### 强制工作流
+
+```
+1. analyze_degradation.py --target <d> --clean <c>
+2. 分类:
+   - 纯确定性? → Tier 1 (PSNR 验证)
+   - 含 noise? → 先判 noise (残差统计), 再判其余 (PSNR)
+   - 多步混合? → Tier 3 (候选排名)
+
+3. 生成 3-5 个覆盖不同函数族的假设
+   ⚠️ blur: gaussian/lens/zoom/glass 至少测 3 种
+   ⚠️ noise: gaussian/speckle/poisson/impulse 至少测 2 种
+   ⚠️ compression: jpeg/jpeg2000 至少测 2 种
+
+4. 逐个模拟 + 评估:
+   Tier 1/2: apply → PSNR 或统计匹配
+   Tier 3: apply → PSNR + 统计 → 因耦合不可靠, 标记 UNCERTAIN
+
+5. 输出 ranked candidates:
+   | PSNR gap | verdict | 行动 |
+   |:--:|------|------|
+   | >= 10 dB | LIKELY | 主预测, 保留亚军为 alternative |
+   | 3-10 dB | UNCERTAIN | 前 2 候选都保留 |
+   | < 3 dB | UNCERTAIN | 前 3 候选都保留 |
+   | max < 30 dB | POOR | 全部候选保留, 训练后决定 |
+
+6. 保存:
+   predicted_params.json: 主预测 + alternatives (含 PSNR/统计分)
+   reflection.json: psnr_ranking + evidence_consistency + coupling_notes
+```
+
+#### 强制交付物
+
+| 文件 | 关键字段 |
+|------|------|
+| `predicted_params.json` | `{"pipeline":[...], "alternatives":[{pipeline, psnr, stats}], "analysis":{"verdict":"LIKELY|UNCERTAIN|POOR", "tier":1|2|3, "psnr":N, "psnr_gap":N}}` |
+| `reflection.json` | `initial_analysis` + `psnr_ranking` + `statistical_checks`(噪声) + `coupling_analysis`(Tier3) + `iterations` + `final_decision` |
+
+#### 判定标准
+
+| verdict | 条件 | 含义 |
+|------|------|------|
+| LIKELY | Tier 1/2, PSNR >= 40 或统计匹配 | 高置信度, 可训练 |
+| UNCERTAIN | Tier 3, 或多候选 PSNR 接近 | 不确定, 训练 PSNR 仲裁 |
+| POOR | 所有候选 PSNR < 30 或统计不匹配 | 盲识别失败, 需重做 |
+
+**🔴 禁止**：
+- Tier 3 混合退化标 GOOD（退化耦合, 无法可靠验证）
+- 用 CI 替代 PSNR/统计匹配做函数选择
+- PSNR gap < 10 dB 声称确定
+- 只测一种 blur/noise/compression 子类型
+- 不记录全量 PSNR 排名表和耦合分析
+
+### 🔴 Phase 5 前置守门：盲识别质量强制检查
+
+**在启动任何 Phase 5 训练之前，必须先通过此检查。不通过 → 禁止训练 → 必须用 Agent 重做盲识别。**
+
+#### 检查脚本
+
+```bash
+python3 -c "
+import json, os, sys
+
+exp = 'expN'  # 替换为当前实验
+phase4 = f'{exp}/challenges/phase4'
+errors = []
+
+for bid in sorted(os.listdir(phase4)):
+    d = os.path.join(phase4, bid)
+    if not os.path.isdir(d): continue
+    pf = os.path.join(d, 'predicted_params.json')
+    rf = os.path.join(d, 'reflection.json')
+    
+    if not os.path.exists(pf):
+        errors.append(f'{bid}: 缺少 predicted_params.json')
+        continue
+    
+    pred = json.load(open(pf))
+    analysis = pred.get('analysis', {})
+    ci = analysis.get('ci_pass_rate', '0/10')
+    verdict = analysis.get('verdict', 'N/A')
+    ci_num = int(ci.split('/')[0])
+    
+    # 检查 1: reflection.json 必须存在
+    if not os.path.exists(rf):
+        errors.append(f'{bid}: 缺少 reflection.json → 未做 Agent 迭代推理')
+    
+    # 检查 2: CI=0 但 verdict=GOOD → 自相矛盾
+    if ci_num == 0 and verdict == 'GOOD':
+        errors.append(f'{bid}: CI=0/10 + GOOD → 脚本生成的无效结果, 必须 Agent 重做')
+    
+    # 检查 3: CI < 5 且 verdict != POOR
+    if ci_num < 5 and verdict != 'POOR':
+        errors.append(f'{bid}: CI={ci} + {verdict} → 严重不匹配, 必须重做')
+    
+    # 检查 4: reflection 内容完整性
+    if os.path.exists(rf):
+        ref = json.load(open(rf))
+        if 'initial_analysis' not in ref:
+            errors.append(f'{bid}: reflection 缺少 initial_analysis')
+        if 'iterations' not in ref:
+            errors.append(f'{bid}: reflection 缺少 iterations')
+        if len(ref.get('iterations', [])) == 0 and ci_num < 7:
+            errors.append(f'{bid}: CI={ci} < 7 但无迭代记录 → 未按协议执行')
+
+if errors:
+    print(f'❌ 守门失败 ({len(errors)} 个问题):')
+    for e in errors: print(f'  - {e}')
+    print()
+    print('必须重新进行 Agent 盲识别: Skill(skill=\"image-degradation-simulator\", args=\"...\")')
+    sys.exit(1)
+else:
+    print(f'✅ 守门通过: {len(os.listdir(phase4))} 挑战全部合格')
+"
+```
+
+#### 守门规则汇总
+
+| 检查项 | 条件 | 动作 |
+|------|------|------|
+| CI=0 | 脚本垃圾, 未做 Agent 分析 | ❌ 禁止训练, Agent 重做 |
+| CI gap < 2 + verdict=GOOD | CI 无法可靠区分候选 | ❌ 禁止训练, 补全 CI 排名 |
+| 缺少 hypothesis_ranking | 无全量 CI 对比表 | ❌ 禁止训练, Agent 重做 |
+| verdict=CONFLICT | CI 胜者与证据不一致 | ⚠️ 可训练, PSNR 判定 |
+| CI gap < 3 无 alternatives | 只有一个候选无备份 | ⚠️ 警告, 训练后需验证 |
+| CI gap >= 3 + GOOD + evidence_consistency | 高质量识别 | ✅ 通过 |
+
+**核心改变（vs 旧版）**:
+- CI 不再作为绝对值阈值（>=7 通过）→ 改用 CI gap (胜者-亚军差距) 判断可靠性
+- 新增 evidence_consistency 检查 → CI 胜者必须与初始分析一致
+- 新增 alternatives 机制 → CI 接近的候选保留, 训练后 PSNR 做最终仲裁
+- verdict 新增 UNCERTAIN (CI差距小) 和 CONFLICT (证据矛盾)
+
+**来源**: exp17 教训 — 16 Agent 平均 CI=8.2/10, 函数正确率 6%. CI 衡量视觉相似性, 不衡量函数正确性.
 
 ## 环境安装
 
@@ -84,7 +252,7 @@ uv run train.py > run.log 2>&1   # training with log capture
 
 ## 盲识别挑战（Phase 4 数据隔离）⚠️
 
-详见 [program.md](program.md) 完整协议。关键规则：
+详见 [program.md](program.md) 完整协议。**盲识别必须通过 Skill + 子 Agent 执行**（见上方「子 Agent 盲识别协议」），禁止脚本直接生成。
 
 ### Phase 执行顺序 ⚠️ 最优先
 
@@ -242,6 +410,9 @@ expN/
 | 任务生成器 | `scripts/gen_tasks.py` | 从 Phase 4 预测生成训练队列，自动跳过已完成 |
 | GPU Runner | `scripts/gpu_runner.sh` | Per-GPU 原子取任务，flock 防争抢 |
 
+⚠️ **auto_pipeline 限制**: `auto_pipeline.py` 只能处理 Phase 3 (params 导出)、Phase 5 (训练)、DFPIR 评估。**绝对禁止** auto_pipeline 做 Phase 4 盲识别——必须由 Agent 通过 Skill 执行。
+（来源: exp17 — 脚本生成的盲识别 75% 函数错误，全部 CI=0/10，0 reflection 文件）
+
 ### 完整实验流程
 
 ```bash
@@ -308,6 +479,40 @@ CUDA_VISIBLE_DEVICES=GPU_ID AR_PARAMS_PATH=... .venv/bin/python3 train.py > log 
 | **断点续跑** | `gen_tasks.py` 检查 `results.tsv` + checkpoint，跳过已完成 |
 | **自动接续** | runner 取空队列自动退出；重新运行 `gen_tasks.py` + runner 即可接续 |
 | **崩溃恢复** | 中途杀 runner → 当前任务丢失但已完成的不受影响 → 重新 gen_tasks + 启动 runner |
+
+### GT 退化重评估（Phase 5 后）
+
+⚠️ **Phase 5 Specialist 训练的 VAL_PARAMS 使用盲识别预测（不泄露 GT），但评估对比时必须以 GT 退化为准。**
+
+```bash
+# === 重评估所有 specialist checkpoint（用 GT 退化） ===
+
+# 1. 创建 GT 退化 params（从 mapping 文件提取，仅用于 VAL）
+python3 -c "
+import json, os
+m = json.load(open('/tmp/expN_p4_mapping.json'))
+os.makedirs('expN/degradation_gt', exist_ok=True)
+for bid, info in m.items():
+    json.dump({'pipeline': info['pipeline']}, open(f'expN/degradation_gt/{bid}_params.json', 'w'))
+"
+
+# 2. 评估脚本: expN/scripts/reeval_with_gt.py
+#   - 遍历所有 checkpoint（含 _v2 等变体）
+#   - 从 EXP_META 日志提取模型架构（attention_type, use_color_pre 等）
+#   - 用 GT params 构建 ValDataset，调用 evaluate_all()
+#   - 输出: expN/results/reeval_gt.json（每个 checkpoint 的 PSNR_RGB/Y + SSIM）
+#   - 验证集: Set5, Set14, B100, Urban100, Manga109, DIV2K_valid_HR
+
+# 3. 排队（DFPIR 完成后执行，仅需 1 GPU）
+echo "CUDA_VISIBLE_DEVICES=0 .venv/bin/python3 expN/scripts/reeval_with_gt.py > expN/logs/reeval_gt.log 2>&1|REEVAL_GT" >> expN/scripts/dfpir_queue.txt
+# re-eval 任务加到 DFPIR 队列末尾，DFPIR 全部完成后自动执行
+```
+
+**评估脚本关键参数**：
+- 模型架构：从训练日志 `EXP_META` 提取 `model.attention_type`, `model.color_pre`, `model.pcp` 等
+- Checkpoint：取 `experiments/expN_{bid}{suffix}/checkpoints/` 下 step 最大的 .pt 文件
+- 评估退化：`/tmp/expN_p4_mapping.json` 中的 GT pipeline（仅用于 VAL，不用于训练）
+- 验证集：与 train.py 一致的 6 个标准 benchmark
 
 ## The experiment loop
 

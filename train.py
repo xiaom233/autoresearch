@@ -150,10 +150,22 @@ CHANNEL_MIX = "none"         # 通道混合: "none", "se", "eca", "layerscale", 
 STAGE_CONFIG = "uniform"     # 层级配置: "uniform", "ascending", "descending", "pyramid"
 NUM_STAGES = 4               # RSTB 层级数量
 
+# 结构优化组件开关（exp10 验证）
+USE_GCM = False               # FiLM-GCM: 全局通道调制 (contrast+结构化 +3.52 dB, +26K)
+USE_CSN = False               # CSN: 通道 Shuffle 归一化 (通用稳定, +1K)
+USE_COLOR_PRE = False         # ColorPre: 低分辨率颜色预处理 (通用稳, +0.8K)
+USE_COLOR_MLP = False         # ColorMLP: 逐像素颜色 MLP (brightness_HSV, +0.1K)
+USE_PCP = False               # PCP shared: 层级间通道扰动 (待充分验证, +3K)
+USE_FREQMOD = False           # FreqMod: FFT 频域调制 (❌ 已废弃, SF8 -9.67, +276K)
+USE_CHANNEL_CURVE = False     # ChannelCurve: 通道曲线校正 (stretch +0.38, +0.1K)
+USE_DUAL_BRANCH = False       # DualBranch: 全局分支调制 (鲁棒性最强, +3K)
+USE_COLOR_MLP_OUTPUT = False  # ColorMLP Output: 输出层颜色校正 (+0.1K)
+
 # Logging
 LOG_INTERVAL = 25            # steps between PSNR logging
 CKPT_PREFIX = "ckpt"         # 多实验并行时 checkpoint 文件名前缀
 QUIET_PIPELINE = 0            # 1=抑制 prepare.py 打印退化管线（防盲识别泄露）
+LOAD_CKPT = None              # 盲预训练 checkpoint 路径（用于 Ft 微调）
 
 # Environment variable overrides for parallel experiments
 for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNING_RATE",
@@ -166,8 +178,12 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
            "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX",
            "WINDOW_SHIFT_RATIO", "HEAD_DIM", "NORM_TYPE", "SKIP_RSTB",
            "CONV_KERNEL", "CHANNEL_MIX", "STAGE_CONFIG", "NUM_STAGES", "QUIET_PIPELINE",
+           "LOAD_CKPT",
            "CURRICULUM_CONFIG", "REPLAY_RATIO", "FREEZE_STAGES", "PHASE2_LR_MULT",
-           "ADAPTIVE_SWITCH", "ADAPTIVE_THRESHOLD"):
+           "ADAPTIVE_SWITCH", "ADAPTIVE_THRESHOLD",
+           "USE_GCM", "USE_CSN", "USE_COLOR_PRE", "USE_COLOR_MLP",
+           "USE_PCP", "USE_FREQMOD", "USE_CHANNEL_CURVE", "USE_DUAL_BRANCH",
+           "USE_COLOR_MLP_OUTPUT"):
     _env = os.environ.get(f"AR_{_v}")
     if _env is not None:
         if _v in ("PARAMS_PATH", "VAL_PARAMS_PATH"):
@@ -175,7 +191,7 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
         elif _v in ("LR_SCHEDULE", "LOSS_FN", "AMP_DTYPE",
                   "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX", "ATTENTION_TYPE",
                   "NORM_TYPE", "SKIP_RSTB", "CHANNEL_MIX", "STAGE_CONFIG",
-                  "CURRICULUM_CONFIG", "MIXED_WARMUP"):
+                  "CURRICULUM_CONFIG", "MIXED_WARMUP", "LOAD_CKPT"):
             globals()[_v] = _env
         else:
             globals()[_v] = eval(_env)
@@ -364,7 +380,13 @@ def main():
         "val_params_path": VAL_PARAMS_PATH,
         "curriculum_config": CURRICULUM_CONFIG,
         "mixed_warmup": MIXED_WARMUP,
-        "model": {"embed_dim": EMBED_DIM, "depths": list(DEPTHS)},
+        "model": {"embed_dim": EMBED_DIM, "depths": list(DEPTHS),
+                  "attention_type": ATTENTION_TYPE, "activation": ACTIVATION,
+                  "window_size": WINDOW_SIZE,
+                  "gcm": USE_GCM, "csn": USE_CSN,
+                  "color_pre": USE_COLOR_PRE, "color_mlp": USE_COLOR_MLP,
+                  "pcp": USE_PCP, "dual_branch": USE_DUAL_BRANCH,
+                  "channel_curve": USE_CHANNEL_CURVE},
         "training": {"epoch_budget": EPOCH_BUDGET, "batch_size": BATCH_SIZE,
                     "lr": LEARNING_RATE, "loss_fn": LOSS_FN},
     }
@@ -391,10 +413,21 @@ def main():
                         activation=ACTIVATION, head_dim=HEAD_DIM,
                         stage_config=STAGE_CONFIG, num_stages=NUM_STAGES,
                         window_shift_ratio=WINDOW_SHIFT_RATIO, skip_type=SKIP_RSTB,
-                        conv_kernel=CONV_KERNEL, attention_type=ATTENTION_TYPE)
+                        conv_kernel=CONV_KERNEL, attention_type=ATTENTION_TYPE,
+                        use_gcm=USE_GCM, use_csn=USE_CSN,
+                        use_color_pre=USE_COLOR_PRE, use_color_mlp=USE_COLOR_MLP,
+                        use_pcp=USE_PCP, use_freqmod=USE_FREQMOD,
+                        use_channel_curve=USE_CHANNEL_CURVE, use_dual_branch=USE_DUAL_BRANCH,
+                        use_color_mlp_output=USE_COLOR_MLP_OUTPUT)
     model.to(device)
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Model params: {num_params:,}")
+
+    # 盲预训练 checkpoint 加载（用于 Ft 微调）
+    if LOAD_CKPT:
+        ckpt = torch.load(LOAD_CKPT, map_location=device, weights_only=True)
+        model.load_state_dict(ckpt["model"])
+        print(f"Loaded: {LOAD_CKPT} (step={ckpt.get('step', '?')})", flush=True)
 
     model = torch.compile(model, dynamic=False)
 

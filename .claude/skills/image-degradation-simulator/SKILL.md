@@ -247,10 +247,21 @@ Step 4: Round B — 残差噪声分析 [主要验证手段]
           impulse: extreme_pct [0.01, 0.03, 0.05, 0.07, 0.10] → sev 1-5
         验证: 添加 noise 后 residual std 应显著降低 (与 res_std 对比)
 
-Step 5: Round C — 保存判定
-        ├── Round A PSNR > 40dB AND Round B 噪声匹配 → GOOD
-        ├── Round A PSNR > 30dB AND Round B 噪声部分匹配 → NEEDS_WORK
-        └── Round A PSNR < 30dB → 进入反思
+Step 5: Round C — 保存判定 (分类型)
+        ├── Tier 1 (确定性单步: blur/compression/contrast 单独):
+        │   ├── PSNR >= 40dB → LIKELY (函数+严重度正确)
+        │   ├── PSNR 30-40dB → 调 severity
+        │   └── PSNR < 30dB → 换函数族
+        ├── Tier 2 (噪声单独):
+        │   └── 统计匹配 (Step 4 §B 6项检查) → LIKELY
+        ├── Tier 3 (混合退化, 含噪声, 多步):
+        │   ├── 输出 ranked candidates (全量 PSNR 排名)
+        │   ├── verdict 必须是 UNCERTAIN (退化耦合, 无法可靠验证)
+        │   └── 必须保存 alternatives (前 2-3 候选)
+        └── 所有 Tier:
+            ├── PSNR gap >= 10dB → 胜者显著, 亚军为 alternative
+            ├── PSNR gap < 10dB → UNCERTAIN, 多个候选保留
+            └── max PSNR < 30dB → POOR, 全部保留供训练验证
 
 Step 6: 反思修正 [最多 3 轮，每轮可多步。⚠️ 启发式原则]
         每轮反思 = Agent 审视 decision_flow + reflection_hints → 多步修正 → PSNR 验证

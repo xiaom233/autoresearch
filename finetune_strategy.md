@@ -101,9 +101,9 @@ LR/loss 微调 → 影响最小                    (< 0.3 dB, loss 函数之间�
 
 | 退化类型 | 最佳注意力 | Δ vs Swin | 备注 |
 |---------|:--------:|:--:|------|
-| motion 结构化模糊 | **OCAB** (空间) | +1.19 | ws=16 + SwiGLU (+1.47) |
+| motion 结构化模糊 | **OCAB** (空间) | +1.19 | ws=16 (+0.29); SwiGLU (+1.47); OCAB+ws16 (+1.72) |
 | noise 随机噪声 | 任意 | ~0 | 噪声不关心注意力 |
-| contrast 全局退化 | **Swin** | +5.90 | MDTA/OCAB 崩溃 |
+| contrast 全局退化 | **Swin** | +9.78~10.38 | MDTA/OCAB 崩溃 (L2: Swin 28.70 vs MDTA 18.92, OCAB 18.32) |
 | saturate 全局 | Swin | 基线 | 无明显胜者 |
 | brightness+blur | Swin | 基线 | MDTA/OCAB 无优势 |
 
@@ -111,38 +111,89 @@ LR/loss 微调 → 影响最小                    (< 0.3 dB, loss 函数之间�
 
 | 场景 | 推荐组件 | 参数 | 效果 | 风险 |
 |------|------|:--:|:--:|------|
-| contrast+结构化局部 | **FiLM-GCM** | +26K | L5 +3.52 | L1 NaN (HSV 极端统计量 + blur 平滑 → 尺度参数发散) |
-| contrast 通用 | **ColorPre** | +0.8K | L2 +0.81, 最稳 | 跨退化泛化差 |
-| contrast+噪声 | **CSN** | +1K | L5 +1.39 | 最轻量 |
-| brightness 系列 | ColorMLP | +0.1K | 修复 NaN | 特定场景 (L6 -0.52) |
-| 默认安全 | ColorPre | +0.8K | 全稳定 | 推荐首选 |
+| contrast+结构化局部 | **FiLM-GCM** | +26K | L5 +3.52 | L1 后期发散但 best ckpt 可用 (-0.09~-0.30) |
+| contrast+噪声 | **ColorPre** | +0.8K | L2 +0.81, L5 +2.56 | 跨退化泛化差 (见鲁棒性) |
+| contrast+噪声 (轻量) | **CSN** | +1K | L5 +1.39 | 最轻量，最稳定 |
+| 通用鲁棒 | **DualBranch** | +3K | L5 +3.27, L2 +0.78 | 鲁棒性排序第一 |
+| 强空间结构 (L6/SF8) | **PCP shared** | +3K | L6 +4.21, SF8 +9.00 | 部分退化不如 Swin (SF9 -1.26) |
+| brightness_HSV | ColorMLP | +0.1K | L1 +0.28 (修复 NaN) | L6 -0.52 |
+| stretch | ChannelCurve | +0.1K | stretch +0.38 | gamma 无效 |
+| 默认安全首选 | ColorPre | +0.8K | 全稳定 | 推荐首选 |
 
-### 状态待定组件
+### 各退化类型最佳方案 (来源: exp10 Phase 1-4)
 
-| 组件 | 参数 | 状态 |
-|------|:--:|------|
-| PCP shared | +3K | 待验证 (非"不如 CSN") |
-| DualBranch | +3K | 备选，最鲁棒架构 |
+退化类型定义见 exp9/degradation/，下表汇总跨 8 组件的对比结果：
 
-### 废弃或限制组件
+| 退化 | 管线 | 最佳组件 | Δ PSNR | 次选 |
+|------|------|------|:--:|------|
+| L1 | blur(3)+brightness_HSV(3) | ColorMLP | +0.28 | CSN -0.07 (稳定) |
+| L2 | contrast(3)+noise_poisson(3) | ColorPre | +0.81 | FiLM +0.79 |
+| L4 | brightness_HSV(3)+noise(3)+blur(3) | FiLM-GCM | -0.06 | 都无所谓 |
+| L5 | contrast(3)+motion(5)+jpeg(1) | **FiLM-GCM** | **+3.52** | DualBranch +3.27 |
+| L6 | contrast(3)+blur_gauss(3)+jpeg2000(1) | **PCP shared** | **+4.21** (vs CSN) | FiLM +0.22 |
+| SF1 | contrast_pure(3) | ColorPre | +18.91 | DualBranch +13.36 |
+| SF5 | saturate_HSV(3) | ColorPre | +0.03 | DualBranch -0.05 |
+| SF7 | contrast(3)+saturate(5)+brightness_HSV(5) | Swin 基线 | — | PCP +0.04 (vs CSN) |
+| SF8 | gamma(3)+saturate(3) | **PCP shared** | **+9.00** (vs CSN) | Swin 41.32 |
+| SF9 | contrast(3)+saturate(3)+gamma(3) | Swin 基线 | 47.04 | PCP 45.78 |
+| BS | brightness_shift_RGB(3) | ColorPre | +0.03 | 太简单，不需要 |
+| bHSV | brightness_HSV(1) | PCP | +0.08 (vs Swin) | CSN 差 -3.62 |
 
-| 组件 | 原因 |
-|------|------|
-| FreqMod (+276K) | SF8 -9.67；参数膨胀 61%；bfloat16 不兼容 |
-| PCP per-block (+91K) | 参数不公平 (+20%，超出 ≤1.05× 限制) |
-| FiLM-GCM (+26K) | 超出 ≤477K 参数限制，需减小 EMBED_DIM 重新验证 |
+### 组件详细验证结果 (来源: exp10 Phase 4)
+
+**PCP shared (+3K) vs CSN (+1K) vs Swin 基线：**
+
+| 退化 | Swin | CSN | PCP | PCP vs CSN |
+|------|:--:|:--:|:--:|:--:|
+| bHSV | 32.13 | 28.51 | **32.21** | +3.70 |
+| L1 | — | 23.14 | **23.27** | +0.13 |
+| L2 | — | 29.01 | **29.41** | +0.40 |
+| L5 | — | 21.12 | **23.01** | +1.89 |
+| L6 | — | 22.38 | **26.59** | +4.21 |
+| SF8 | — | 32.64 | **41.64** | +9.00 |
+| SF9 | **47.04** | 35.31 | 45.78 | +10.47 |
+
+PCP 在 L6、SF8 上有异常大幅领先 CSN，但 SF9 反而不如 Swin 基线。场景依赖性极强。
+
+**DualBranch (+3K) vs Swin 基线：**
+
+| 退化 | Swin | DualBranch | Δ |
+|------|:--:|:--:|:--:|
+| L2 | 28.64 | 29.42 | +0.78 |
+| L5 | 19.73 | 22.33 | +2.60 |
+| SF1 | 27.15 | 40.51 | +13.36 |
+| SF8 | 41.32 | 40.93 | -0.39 |
+
+DualBranch 在 L5/SF1 上大幅超越 Swin，且无 NaN 风险，鲁棒性最好。
+
+**FiLM-GCM (+26K) lr=5e-4 重跑：**
+
+| 退化 | Swin (lr5e4) | FiLM (lr5e4) | Δ |
+|------|:--:|:--:|:--:|
+| L1 | 23.21 | 23.12 | -0.09 |
+| L5 | 19.73 | 23.25 | **+3.52** |
+| L6 | 26.98 | 27.20 | +0.22 |
+
+lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 
 ### 参数公平性规则 (来源: exp10 原则 6)
 
 - 模块总参数 ≤ 基线 × 1.05 (≤ 477K)
 - 满足的模块：CSN (+1K), ColorPre (+0.8K), DualBranch (+3K), PCP-shared (+3K), ColorMLP (+0.1K), ChannelCurve (+0.1K)
-- 超出需重新对齐的：FiLM-GCM (+26K)
+- 超出需重新对齐的：FiLM-GCM (+26K, 5.7%) — 但 +3.52 dB 远超 5.7% 参数可解释范围
 
-### 架构鲁棒性排序 (盲识别可能出错时)
+### 废弃组件
+
+| 组件 | 原因 |
+|------|------|
+| FreqMod (+276K) | SF8 -9.67；参数膨胀 61%；bfloat16 不兼容 |
+| PCP per-block (+91K) | 参数不公平 (+20%，超出 ≤1.05× 限制)，PCP shared 已替代 |
+
+### 架构鲁棒性排序 (盲识别可能出错时，越低越好)
 
 DualBranch (10.1 dB gap) > CSN (11.7) > Swin (13.2) > FiLM (13.6) > FreqMod (15.2) > ColorPre (16.0)
 
-ColorPre 在自身退化上最强 (+0.81~+18.91 dB)，但跨退化泛化最差——仅在盲识别置信度极高时使用。
+**关键警告**：ColorPre 在自身退化上最强 (+0.81~+18.91 dB)，但跨退化泛化最差——盲识别错误时退化可能完全失效。仅在盲识别置信度极高时使用。盲识别不确定时优先 **DualBranch** 或 **CSN**。
 
 ---
 
@@ -196,5 +247,10 @@ Step 5: 步数分配
 | 严重度 ≥ 4 (局部) | Ft | 5e-4 | 预训练优势缩小但仍安全 |
 | 严重度 ≤ 3 (局部) | Ft | 5e-4 | Ft 优势 +0.3~+5 dB |
 | noise_impulse | 任意 | 5e-4 | 极易修，策略不重要 |
-| 架构: 严重motion(sev≥5) | OCAB+ws=16+SwiGLU | — | +2.66 组合收益 |
+| 架构: 严重motion(sev≥5) | OCAB (+1.19) 或 OCAB+ws16 (+1.72) | — | SwiGLU 独立 +1.47, 无三合一组合实验 |
 | 架构: contrast | Swin | — | 不用 MDTA/OCAB |
+| 架构: contrast+结构化 | FiLM-GCM (lr=5e-4) | — | +3.52, L1 无收益但无 NaN |
+| 架构: 盲识别不确定 | DualBranch 或 CSN | — | 鲁棒性最好，跨退化泛化强 |
+| 架构: 默认安全首选 | ColorPre (+0.8K) | — | 全稳定，但跨退化泛化差 |
+| 架构: 含 gamma/stretch | ChannelCurve or PCP | — | gamma 不需要额外组件，stretch +0.38 |
+| 架构: brightness_HSV | ColorMLP (+0.1K) | — | 防 NaN，其他场景不用 |
