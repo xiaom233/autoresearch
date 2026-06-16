@@ -75,17 +75,22 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 
 以下规律从 32 组盲识别实验中系统提取，用于辅助 Agent 判断"退化是否存在"，而非精确识别子类型。
 
-#### 退化存在性判断
+#### 退化存在性判断 (区分纯退化 vs 混合退化)
 
-| 退化 | 信号 | 阈值 | 召回率 | 误报率 | 可靠性 |
-|------|------|------|:--:|:--:|:--:|
-| **blur 存在** | `gm_ratio` | < 0.85 | 76% | 18% | ⭐⭐⭐ 最可靠 |
-| **motion blur** | `anisotropy_ratio` + `h_v_ratio≠1` | > 4.0 + >30%偏差 | 100% | 0% | ⭐⭐⭐ 仅motion |
-| **compression 存在** | `unique_G` | < 200 | 100% | 0% | ⭐⭐⭐ 从不误报 |
-| **quantization** | `unique_G` | < 25 | 100% | 0% | ⭐⭐⭐ |
-| **noise 存在** | `overshoot_ratio` | > 0.5 | 93% | 7% | ⭐⭐ 噪声普遍抬高 overshoot |
-| **global 存在** | `saturation_mean` | < 50 | 83% | 11% | ⭐⭐ 去饱和=全局退化信号 |
-| **global 存在** | `Cr_variance` | < 100 | 83% | 11% | ⭐⭐ 色度平坦=全局退化 |
+⚠️ **关键发现**: 信号可靠性在混合退化中急剧下降。必须分场景使用。
+
+| 退化 | 信号 | 阈值 | 纯退化 | 混合退化 | 结论 |
+|------|------|------|:--:|:--:|------|
+| **comp/quant 存在** | `unique_G` | < 200 | N/A | 召回33% **FP=0%** | ⭐⭐⭐ 从不误报, 误报率0% |
+| **global 存在** | `Cr_variance` | < 100 | N/A | **召回100%** FP=17% | ⭐⭐⭐ 混合中仍可靠 |
+| **blur 存在** | `gm_ratio` | < 0.85 | 召回100% | 召回71% FP=20% | ⭐⭐ 混合中下降 |
+| **noise 存在** | `overshoot_ratio` | > 0.5 | 不可用 | 召回35% **FP=90%** | ❌ 混合中完全失效 |
+| **global 存在** | `saturation_mean` | < 50 | 不可用 | 召回33% FP=33% | ❌ 混合中失效 |
+
+**混合退化中信号污染的原因**:
+- `gm_ratio`: noise/compression 增加梯度 → 掩盖 blur 的梯度下降 → 漏检
+- `overshoot_ratio`: compression 也产生 overshoot → noise 不存在时也 > 0.5 → 大量误报
+- `saturation_mean`: 多步退化互相抵消/增强饱和效果 → 不可靠
 
 #### 不可靠的信号 (不要用于判断)
 
@@ -103,14 +108,13 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 10/32 混合 (noise+blur)     → 最困难, PSNR + 统计都不可靠
 ```
 
-#### 关键推论
+#### 关键推论 (仅使用混合退化中验证过的信号)
 
-1. **先判断有无 noise** (overshoot_ratio > 0.5 = 噪声很可能存在)
-   → 无 noise: PSNR 主判据, 确定性退化可精确识别
-   → 有 noise: PSNR 仅用于确定性部分, 噪声用统计匹配
-2. **unique_G < 200 → 一定有 compression 或 quantization** (从不误报)
-3. **global 退化信号**: saturation_mean < 50 或 Cr_var < 100 → 考虑 brightness/contrast/saturate
-4. **blur 存在性**: gm_ratio < 0.85 最可靠, 但 24% 漏检 (mild blur 可能 > 0.85)
+1. **unique_G < 200 → 一定有 compression 或 quantization** (FP=0%, 纯/混合均可靠)
+2. **Cr_variance < 100 → 一定有 global 退化** (混合中召回100%, FP=17%)
+3. **gm_ratio < 0.85 → blur 很可能存在** (混合中召回71%, 但 noise/comp 可能掩盖)
+4. **overshoot_ratio 在混合退化中不可用于判断 noise** (FP=90%!)
+5. **纯退化 (1步) 中信号远更可靠** → 先判断退化步数, 单步退化 PSNR 直接可用
 
 ### D. 保存前自检
 
