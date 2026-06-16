@@ -560,6 +560,215 @@ def compute_frequency_analysis(img):
     }
 
 
+# ======================================================================
+# MTF (Modulation Transfer Function) analysis for blur type classification
+# ======================================================================
+
+def compute_mtf_analysis(img):
+    """Radial average of FFT power spectrum → MTF curve.
+
+    The MTF (Modulation Transfer Function) describes how much contrast
+    is preserved at each spatial frequency. Different blur types have
+    distinct MTF shapes:
+      - Gaussian: smooth exp(-f^2) rolloff
+      - Motion: directional sinc oscillations
+      - Lens/Defocus: jinc function with zeros
+
+    Returns mtf50_freq and mtf10_freq — content-independent blur severity metrics.
+    """
+    gray = np.mean(img, axis=2)
+    h, w = gray.shape
+    f = np.fft.fftshift(np.fft.fft2(gray))
+    ps = np.abs(f) ** 2
+
+    cy, cx = h // 2, w // 2
+    y, x = np.ogrid[:h, :w]
+    r = np.sqrt((y - cy)**2 + (x - cx)**2)
+
+    # Radial binning: 50 bins from DC to Nyquist
+    r_max = min(cy, cx)
+    n_bins = 50
+    bin_edges = np.linspace(0, r_max, n_bins + 1)
+    mtf_curve = np.zeros(n_bins)
+    for i in range(n_bins):
+        mask = (r >= bin_edges[i]) & (r < bin_edges[i+1])
+        if mask.any():
+            mtf_curve[i] = ps[mask].mean()
+
+    # Normalize to DC=1
+    mtf_curve = mtf_curve / (mtf_curve[0] + 1e-8)
+
+    # Find MTF50 and MTF10 frequencies
+    freq_axis = (bin_edges[:-1] + bin_edges[1:]) / 2 / r_max
+    mtf50_freq = float(freq_axis[np.argmin(np.abs(mtf_curve - 0.5))])
+    mtf10_freq = float(freq_axis[np.argmin(np.abs(mtf_curve - 0.1))])
+
+    return {
+        "mtf_curve": mtf_curve[:10].tolist(),  # first 10 bins for compactness
+        "mtf50_freq": round(mtf50_freq, 4),
+        "mtf10_freq": round(mtf10_freq, 4),
+        "power_at_nyquist": round(float(mtf_curve[-1]), 4),
+        "n_bins": n_bins,
+    }
+
+
+def compute_angular_fft(img):
+    """Angular binning of FFT magnitude → directional blur detection.
+
+    Motion blur creates a line of suppressed frequencies perpendicular
+    to the motion direction. This function bins the FFT magnitude by
+    angle to find the direction of minimum energy (the blur direction).
+    Returns anisotropy_ratio: > 2.0 strongly suggests motion blur.
+    """
+    gray = np.mean(img, axis=2)
+    h, w = gray.shape
+    f = np.fft.fftshift(np.fft.fft2(gray))
+    mag = np.abs(f)
+
+    cy, cx = h // 2, w // 2
+    y, x = np.ogrid[:h, :w]
+    r = np.sqrt((y - cy)**2 + (x - cx)**2)
+    theta = np.arctan2(y - cy, x - cx)  # [-π, π]
+
+    # Exclude DC region (r < 5 pixels)
+    valid = r > 5
+
+    # Angular binning: 36 bins of 10 degrees each
+    n_angular = 36
+    theta_bins = np.linspace(-np.pi, np.pi, n_angular + 1)
+    angular_energy = np.zeros(n_angular)
+    for i in range(n_angular):
+        mask = valid & (theta >= theta_bins[i]) & (theta < theta_bins[i+1])
+        if mask.any():
+            angular_energy[i] = mag[mask].mean()
+
+    # Normalize
+    angular_energy = angular_energy / (angular_energy.max() + 1e-8)
+
+    # Anisotropy: ratio of max to min energy
+    anisotropy_ratio = float(angular_energy.max() / (angular_energy.min() + 1e-8))
+
+    # Dominant direction: angle of MINIMUM energy (blur suppresses frequencies
+    # perpendicular to the motion direction)
+    min_idx = int(np.argmin(angular_energy))
+    dominant_direction = float(np.degrees(theta_bins[min_idx] + theta_bins[min_idx+1]) / 2)
+
+    return {
+        "angular_energy": angular_energy.tolist(),
+        "anisotropy_ratio": round(anisotropy_ratio, 3),
+        "dominant_direction_deg": round(dominant_direction, 1),
+        "interpretation": f"anisotropy_ratio={anisotropy_ratio:.1f}: "
+            f"{'Strongly suggests motion blur at ~' + str(round(dominant_direction)) + '°' if anisotropy_ratio > 2.0 else 'Isotropic blur (Gaussian/Lens/Glass)'}",
+    }
+
+
+def compute_ps_ratio(target, clean):
+    """Power spectrum ratio: target / clean → isolate blur kernel frequency response.
+
+    Only meaningful in same-image mode (target and clean are the same scene).
+    Removes image content from the frequency analysis, leaving only the
+    degradation's effect on the power spectrum.
+    """
+    t_gray = np.mean(target, axis=2)
+    c_gray = np.mean(clean, axis=2)
+
+    ft = np.fft.fftshift(np.fft.fft2(t_gray))
+    fc = np.fft.fftshift(np.fft.fft2(c_gray))
+
+    ps_t = np.abs(ft) ** 2
+    ps_c = np.abs(fc) ** 2 + 1e-8  # avoid division by zero
+
+    h, w = t_gray.shape
+    cy, cx = h // 2, w // 2
+    y, x = np.ogrid[:h, :w]
+    r = np.sqrt((y - cy)**2 + (x - cx)**2)
+
+    # Radial average of ratio
+    r_max = min(cy, cx)
+    n_bins = 30
+    bin_edges = np.linspace(0, r_max, n_bins + 1)
+    ps_ratio_radial = np.zeros(n_bins)
+    for i in range(n_bins):
+        mask = (r >= bin_edges[i]) & (r < bin_edges[i+1])
+        if mask.any():
+            ps_ratio_radial[i] = (ps_t[mask].mean() / ps_c[mask].mean())
+
+    # MTF50 from the ratio
+    freq_axis = (bin_edges[:-1] + bin_edges[1:]) / 2 / r_max
+    if ps_ratio_radial.max() > 0:
+        ps_ratio_radial_norm = ps_ratio_radial / ps_ratio_radial[0]
+        mtf50_idx = np.argmin(np.abs(ps_ratio_radial_norm - 0.5))
+        mtf50_from_ratio = float(freq_axis[mtf50_idx])
+    else:
+        mtf50_from_ratio = 0.0
+
+    return {
+        "ps_ratio_radial": ps_ratio_radial[:10].tolist(),
+        "mtf50_from_ratio": round(mtf50_from_ratio, 4),
+        "requires_same_image": True,
+    }
+
+
+def classify_blur_from_mtf(mtf_data, angular_data, grad_data, radial_data):
+    """Synthesize MTF fitting + angular FFT + spatial metrics → blur type.
+
+    Decision priority:
+    1. anisotropy_ratio > 2.0 → motion blur (directional frequency suppression)
+    2. radial MTF shape + radial_ratio → lens vs gaussian
+    3. Fall back to spatial metrics if MTF inconclusive
+    """
+    anisotropy = angular_data.get("anisotropy_ratio", 1.0) if angular_data else 1.0
+    mtf50 = mtf_data.get("mtf50_freq", 0) if mtf_data else 0
+    radial_ratio = radial_data.get("gradient_radial_ratio", 1.0) if radial_data else 1.0
+    h_v_ratio = grad_data.get("directional_h_v_ratio", 1.0) if grad_data else 1.0
+
+    candidates = []
+
+    # 1. Motion blur check — requires BOTH angular FFT anisotropy AND spatial h_v_ratio
+    #    to avoid false positives from JPEG/saturate/color-space artifacts
+    h_v_is_directional = abs(h_v_ratio - 1.0) > 0.3  # >30% deviation from isotropic
+    if anisotropy > 4.0 and h_v_is_directional:
+        direction = angular_data.get("dominant_direction_deg", 0)
+        candidates.append({
+            "type": "blur_motion",
+            "confidence": "high" if anisotropy > 6.0 else "medium",
+            "evidence": f"Angular FFT anisotropy={anisotropy:.1f} + h_v_ratio={h_v_ratio:.2f}, direction~{direction:.0f}°",
+        })
+
+    # 2. Lens vs Gaussian from radial_ratio + MTF
+    if radial_ratio > 2.0:
+        candidates.append({
+            "type": "blur_lens",
+            "confidence": "high" if radial_ratio > 4.0 else "medium",
+            "evidence": f"Radial gradient ratio={radial_ratio:.1f} (center sharper than edge)",
+        })
+
+    # Gaussian is the default isotropic blur (when no motion detected)
+    if not candidates or (anisotropy <= 4.0 and not h_v_is_directional):
+        candidates.append({
+            "type": "blur_gaussian",
+            "confidence": "high" if radial_ratio < 1.3 and anisotropy < 3.0 else "medium",
+            "evidence": f"Isotropic FFT (anisotropy={anisotropy:.1f}), h_v_ratio={h_v_ratio:.2f}, radial_ratio={radial_ratio:.1f}",
+        })
+
+    # Severity estimation from MTF50
+    severity_hint = None
+    if mtf50 > 0:
+        if mtf50 > 0.8: severity_hint = 1
+        elif mtf50 > 0.5: severity_hint = 2
+        elif mtf50 > 0.3: severity_hint = 3
+        elif mtf50 > 0.15: severity_hint = 4
+        else: severity_hint = 5
+
+    return {
+        "candidates": candidates[:3],
+        "best_guess": candidates[0]["type"] if candidates else "unknown",
+        "anisotropy_ratio": round(anisotropy, 3),
+        "mtf50_freq": round(mtf50, 4),
+        "severity_hint": severity_hint,
+    }
+
+
 def analyze(target_path, clean_path=None):
     """Run full degradation analysis."""
     target = np.array(Image.open(target_path).convert("RGB"), dtype=np.float32)
@@ -582,6 +791,8 @@ def analyze(target_path, clean_path=None):
         "noise_vs_sharpen": compute_noise_vs_sharpen_analysis(target),
         "jpeg2000": compute_jpeg2000_analysis(target),
         "noise_subtype": compute_noise_subtype_analysis(target),
+        "mtf": compute_mtf_analysis(target),
+        "angular_fft": compute_angular_fft(target),
     }
 
     if clean_path:
@@ -605,16 +816,26 @@ def analyze(target_path, clean_path=None):
                 "clean_unique_RGB": clean_report["compression"]["unique_RGB_estimate"],
             },
         }
+        # PS ratio (requires same-image)
+        report["ps_ratio"] = compute_ps_ratio(target, clean)
+        report["mtf_clean"] = compute_mtf_analysis(clean)
         report["clean_reference"] = clean_report
 
     # Add degradation summary with content-independence classification
     report["degradation_summary"] = generate_degradation_summary(report)
 
-    # Blur subtype analysis (requires both target metrics)
+    # Blur subtype analysis — now MTF-enhanced: combines spatial + frequency
     report["blur_subtype"] = compute_blur_subtype_analysis(
         target,
         report["gradient"]["directional_h_v_ratio"],
         report["radial"]["gradient_radial_ratio"]
+    )
+    # MTF-based blur classification
+    report["blur_mtf"] = classify_blur_from_mtf(
+        report.get("mtf", {}),
+        report.get("angular_fft", {}),
+        report.get("gradient", {}),
+        report.get("radial", {})
     )
     if clean_path:
         report["blur_subtype"]["directional_h_v_ratio_clean"] = round(float(clean_report["gradient"]["directional_h_v_ratio"]), 4)

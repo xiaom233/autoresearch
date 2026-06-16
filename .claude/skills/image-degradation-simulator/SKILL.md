@@ -210,7 +210,9 @@ Step 3: Round A — 确定性部分 PSNR 验证 [仅验证非 noise 退化]
         │     30-40dB → ✅ 类别正确, severity 可能有偏差
         │     15-30dB → ⚠️ 有 FP 或漏检, 检查 residual_A 模式
         │     < 15dB → ❌ 严重错误
-        └── 3c. 残差诊断 (检查 residual_A 的模式):
+        └── 3c. 残差诊断:
+              🆕 model_diagnosis.py --target <t> --clean <c> → 自动检测漏检模式
+              或手动检查 residual_A 的模式:
               ├── 8×8 块状 → JPEG 漏检
               ├── 随机噪声模式 → noise 存在
               ├── 结构性边缘 → blur 有误
@@ -219,6 +221,8 @@ Step 3: Round A — 确定性部分 PSNR 验证 [仅验证非 noise 退化]
 Step 4: Round B — 残差噪声分析 [主要验证手段]
         ⚠️ 包含 noise 时, PSNR 无效! 残差分析是主要验证手段。
         ⚠️ exp17 教训: 噪声指标必须在 RESIDUAL 上测量! target 上的指标被图像内容污染。
+        🆕 noise_prior.py --target <t> --clean <c> → wavelet σ 估计 + 类型分类 + severity 映射
+           (同图模式用 residual=target-clean, 更精确; blur 存在时 σ 可能低估)
            - target 上 var_slope=0.06 → 残差上 var_slope=1.72（差异 28 倍!）
            - 在 target 上看 unique_G/extreme% 判断噪声 = 错误
         residual = target - det_sim（单退化时 det_sim = clean）
