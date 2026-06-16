@@ -239,12 +239,14 @@ Step 2: 残差诊断
                 spatial_corr → correlated; rgb_ratio → YCrCb
 
 Step 3: 分层修正
-        ├── 确定性修正: PSNR 对比不同 blur/compression 候选
-        │   → PSNR gap >= 10dB → 换候选 ✅
-        │   → PSNR gap < 3dB → 所有候选同样差 → 放弃反思
-        └── 噪声修正: 仅用 statistical_checks (extreme%, var_slope, spatial_corr)
-            → 绝对不用 PSNR 选噪声! (随机 seed 导致 PSNR 无意义)
-            → 6步检查: impulse → speckle → poisson → spatial → YCrCb → gaussian
+        ├── 确定性修正: 
+        │   → 优先检查盲识别阶段保存的 alternatives (已在候选列表中)
+        │   → PSNR gap >= 10dB vs 当前预测 → 换候选 ✅
+        │   → PSNR gap < 3dB → 两个候选同样可能, 选训练PSNR更好的
+        │   → 典型的不可区分对: blur_gaussian↔lens, JPEG↔JPEG2000(mild)
+        └── 噪声修正: 仅用 statistical_checks
+            → 检查 alternatives 中是否有不同噪声类型的候选
+            → 绝对不用 PSNR 选噪声!
 
 Step 4: 反思终止条件
         ├── 确定性 PSNR gap < 3dB AND 噪声统计全部不匹配 → BEYOND_CAPABILITY
