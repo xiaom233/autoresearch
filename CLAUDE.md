@@ -6,6 +6,12 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## ⚠️ 关键规则
 
+0. **Phase 切换时重读文档**：每个 Phase 开始前，必须重新阅读对应的协议文档：
+   - Phase 4 (盲识别): 重读 `SKILL.md` + `CLAUDE.md` §子 Agent 盲识别协议
+   - Phase 5 (训练): 重读 `CLAUDE.md` §GPU 并行调度 + `finetune_strategy.md`
+   - Phase 3b (DFPIR): 重读 `CLAUDE.md` §DFPIR 基线评估
+   - GT 重评估: 重读 `CLAUDE.md` §GT 退化重评估
+   - 反思: 重读 `REFLECTION_MECHANISM.md`
 1. **绝不接触 GT**：`.ground_truth/` 和 `degradation/` 全程不可读
 2. **VAL 锁定**：反思修正只改 PARAMS，VAL 永远指向 GT
 3. **同图盲识别**：挑战生成用 `--same-image`
