@@ -494,82 +494,67 @@ expN/
 
 ## GPU 并行调度
 
-基于 exp10/gpu_runner.sh + exp12/dfpir_runner.sh 模式。核心工具：
+基于 Python 原子锁调度器，替代旧的 bash gpu_runner.sh（flock 竞态问题）。
+
+### 核心工具
 
 | 工具 | 路径 | 用途 |
 |------|------|------|
-| 任务生成器 | `scripts/gen_tasks.py` | 从 Phase 4 预测生成训练队列，自动跳过已完成 |
-| GPU Runner | `scripts/gpu_runner.sh` | Per-GPU 原子取任务，flock 防争抢 |
-
-⚠️ **auto_pipeline 限制**: `auto_pipeline.py` 只能处理 Phase 3 (params 导出)、Phase 5 (训练)、DFPIR 评估。**绝对禁止** auto_pipeline 做 Phase 4 盲识别——必须由 Agent 通过 Skill 执行。
-（来源: exp17 — 脚本生成的盲识别 75% 函数错误，全部 CI=0/10，0 reflection 文件）
+| GPU 调度器 | `scripts/gpu_scheduler.py` | 通用任务生成 + 多 GPU 并行执行 |
+| DFPIR 串行 | `expN/scripts/dfpir_serial.sh` | DFPIR 8 GPU 串行模式 |
 
 ### 完整实验流程
 
 ```bash
 # === Phase 5: Specialist 训练 ===
 
-# 1. 生成任务文件
-.venv/bin/python3 scripts/gen_tasks.py \
-  --exp exp17 \
-  --task-file exp17/scripts/phase5_tasks.txt \
+# 1. 生成任务文件 (自动跳过已完成, 导出 params)
+.venv/bin/python3 scripts/gpu_scheduler.py gen \
+  --exp exp18 \
+  --task-file exp18/scripts/phase5_tasks.jsonl \
+  --ckpt-prefix exp18/experiments/exp18_v2 \
   --epoch-budget 2
-  # 可选: --extra-env "AR_ATTENTION_TYPE=swin"  附加环境变量
+  # 可选: --extra-env "AR_ATTENTION_TYPE=ocab AR_WINDOW_SIZE=16 AR_USE_COLOR_PRE=1"
 
-# 2. 启动 8 GPU runner（每个 GPU 独立进程，并行 8 个实验）
-for gpu in 0 1 2 3 4 5 6 7; do
-  nohup bash scripts/gpu_runner.sh $gpu exp17/scripts/phase5_tasks.txt exp17/logs > /dev/null 2>&1 &
-done
+# 2. 启动 8 GPU worker 并行执行
+.venv/bin/python3 scripts/gpu_scheduler.py run \
+  --task-file exp18/scripts/phase5_tasks.jsonl \
+  --gpus 0,1,2,3,4,5,6,7
 
-# 3. 监控
-tail -f exp17/logs/gpu0_runner.log                    # runner 状态
-grep val_psnr_db exp17/logs/exp17_blind_*.log          # PSNR 汇总
-cat exp17/results/results.tsv                           # 完成清单
-nvidia-smi                                               # GPU 利用率
+# 3. 查看状态
+.venv/bin/python3 scripts/gpu_scheduler.py status \
+  --task-file exp18/scripts/phase5_tasks.jsonl
 
-# 4. 停止（迁移或紧急情况）
-touch /tmp/stop_exp17_scheduler                         # 软停（完成当前任务后停）
-# 或:
-pkill -f "gpu_runner"                                    # 立即停止
+# 4. 停止 (软停: 完成当前任务后停)
+touch /tmp/stop_exp18 && .venv/bin/python3 scripts/gpu_scheduler.py run \
+  --task-file exp18/scripts/phase5_tasks.jsonl --stop-file /tmp/stop_exp18
+
+# 5. 紧急停止
+pkill -f "gpu_scheduler.py"
 ```
 
-### DFPIR 基线评估（Phase 3）
+### 通用任务格式 (JSON Lines)
 
-```bash
-# DFPIR 使用全部 8 GPU（串行），必须在 GPU 完全空闲时运行
-# 1. 生成 DFPIR 队列
-> exp17/scripts/dfpir_queue.txt
-for f in exp17/degradation/blind_*_params.json; do
-    name=$(basename $f _params.json)
-    echo "/home/zyli/anaconda3/envs/dfpir/bin/python \
-      resource/.../test_degradation.py \
-      --params $f --gpus 0,1,2,3,4,5,6,7 \
-      --output exp17/results/dfpir_${name}.json \
-      > exp17/logs/dfpir_${name}.log 2>&1|DFP_${name}" >> exp17/scripts/dfpir_queue.txt
-done
-
-# 2. 串行执行（每个任务用全部 8 GPU）
-bash scripts/gpu_runner.sh 0 exp17/scripts/dfpir_queue.txt exp17/logs &
-# ⚠️ 仅启动 1 个 runner（DFPIR 用全部 GPU，不能并行）
+每行一个任务, 支持任意命令:
+```jsonl
+{"id": "blind_0001", "cmd": "CUDA_VISIBLE_DEVICES=GPU_ID AR_... .venv/bin/python3 train.py > log 2>&1", "status": "pending", "claimed_by": null}
 ```
 
-### 任务文件格式
-
-每行一个任务，竖线分隔命令和名称：
-```
-CUDA_VISIBLE_DEVICES=GPU_ID AR_PARAMS_PATH=... .venv/bin/python3 train.py > log 2>&1|任务名
-```
-`GPU_ID` 占位符由 runner 自动替换为实际 GPU 编号。
+`GPU_ID` 占位符由 scheduler 自动替换为实际 GPU 编号。
 
 ### 关键设计
 
 | 特性 | 实现 |
 |------|------|
-| **原子取任务** | `flock` 锁文件，8 个 runner 同时竞争但无争抢 |
-| **GPU 绑定** | `CUDA_VISIBLE_DEVICES=GPU_ID`，runner 自动替换 |
-| **断点续跑** | `gen_tasks.py` 检查 `results.tsv` + checkpoint，跳过已完成 |
-| **自动接续** | runner 取空队列自动退出；重新运行 `gen_tasks.py` + runner 即可接续 |
-| **崩溃恢复** | 中途杀 runner → 当前任务丢失但已完成的不受影响 → 重新 gen_tasks + 启动 runner |
+| **原子取任务** | `O_CREAT|O_EXCL` 创建 .claim 锁文件, 无竞态 |
+| **GPU 绑定** | `GPU_ID` 占位符自动替换 |
+| **断点续跑** | `gen` 命令检查 checkpoint + val_psnr_db, 自动跳过 |
+| **幂等** | 同一队列多次运行不重复执行已完成任务 |
+| **状态追踪** | pending → claimed → running → done/failed |
+| **通用性** | 支持任意命令, 不限于 train.py |
+
+⚠️ **auto_pipeline 限制**: `auto_pipeline.py` 只能处理 Phase 3 (params 导出)、Phase 5 (训练)、DFPIR 评估。**绝对禁止** auto_pipeline 做 Phase 4 盲识别——必须由 Agent 通过 Skill 执行。
+（来源: exp17 — 脚本生成的盲识别 75% 函数错误，全部 CI=0/10，0 reflection 文件）
 
 ### GT 退化重评估（Phase 5 后）
 
