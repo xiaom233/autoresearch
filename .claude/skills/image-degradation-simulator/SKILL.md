@@ -71,6 +71,47 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 □ 5. 指标超过阈值 → 信任指标，不要用"直觉"否定
 ```
 
+### C2. 经验信号速查表 (来源: exp17+exp18, 32 cases)
+
+以下规律从 32 组盲识别实验中系统提取，用于辅助 Agent 判断"退化是否存在"，而非精确识别子类型。
+
+#### 退化存在性判断
+
+| 退化 | 信号 | 阈值 | 召回率 | 误报率 | 可靠性 |
+|------|------|------|:--:|:--:|:--:|
+| **blur 存在** | `gm_ratio` | < 0.85 | 76% | 18% | ⭐⭐⭐ 最可靠 |
+| **motion blur** | `anisotropy_ratio` + `h_v_ratio≠1` | > 4.0 + >30%偏差 | 100% | 0% | ⭐⭐⭐ 仅motion |
+| **compression 存在** | `unique_G` | < 200 | 100% | 0% | ⭐⭐⭐ 从不误报 |
+| **quantization** | `unique_G` | < 25 | 100% | 0% | ⭐⭐⭐ |
+| **noise 存在** | `overshoot_ratio` | > 0.5 | 93% | 7% | ⭐⭐ 噪声普遍抬高 overshoot |
+| **global 存在** | `saturation_mean` | < 50 | 83% | 11% | ⭐⭐ 去饱和=全局退化信号 |
+| **global 存在** | `Cr_variance` | < 100 | 83% | 11% | ⭐⭐ 色度平坦=全局退化 |
+
+#### 不可靠的信号 (不要用于判断)
+
+| 信号 | 原因 |
+|------|------|
+| `flat_region_variance` 判断 noise | 噪声/无噪声均值差仅 30%，大量重叠 |
+| `laplacian_variance_ratio` 判断 blur severity | 混合退化时噪声/锐化拉高 laplacian，sev=4 反而 > sev=2 |
+| `radial_ratio` 判断 lens blur | 内容依赖 (clean 图本身 radial_ratio 可达 5) |
+
+#### PSNR 适用范围
+
+```
+14/32 纯确定性退化 (无 noise) → PSNR 判据可用
+18/32 含 noise             → PSNR 对噪声部分无效, 需统计匹配
+10/32 混合 (noise+blur)     → 最困难, PSNR + 统计都不可靠
+```
+
+#### 关键推论
+
+1. **先判断有无 noise** (overshoot_ratio > 0.5 = 噪声很可能存在)
+   → 无 noise: PSNR 主判据, 确定性退化可精确识别
+   → 有 noise: PSNR 仅用于确定性部分, 噪声用统计匹配
+2. **unique_G < 200 → 一定有 compression 或 quantization** (从不误报)
+3. **global 退化信号**: saturation_mean < 50 或 Cr_var < 100 → 考虑 brightness/contrast/saturate
+4. **blur 存在性**: gm_ratio < 0.85 最可靠, 但 24% 漏检 (mild blur 可能 > 0.85)
+
 ### D. 保存前自检
 
 ```
