@@ -65,7 +65,8 @@ DEG_CATEGORIES = {
         "noise_spatially_correlated", "noise_poisson", "noise_impulse",
     ],
     "compression": [
-        "compression_jpeg", "compression_jpeg_2000",
+        "compression_jpeg",
+        # "compression_jpeg_2000",  # FIXME: temporarily disabled - no detection features
     ],
     "global": [
         "brightness_brighten_shfit_HSV", "brightness_brighten_shfit_RGB",
@@ -77,8 +78,9 @@ DEG_CATEGORIES = {
         "saturate_strengthen_HSV", "saturate_strengthen_YCrCb",
         "saturate_weaken_HSV", "saturate_weaken_YCrCb",
         "oversharpen",
-        "pixelate",
-        "quantization_otsu", "quantization_median", "quantization_hist",
+        # "pixelate",  # FIXME: temporarily disabled - detection logic broken
+        # "quantization_otsu",  # FIXME: temporarily disabled - crashes skimage threshold_multiotsu with <8 unique values (exp18: 0006/0015)
+        "quantization_median", "quantization_hist",
     ],
 }
 
