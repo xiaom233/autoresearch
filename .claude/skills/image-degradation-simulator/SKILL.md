@@ -271,11 +271,12 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
     ✅ PSNR > 40dB         → 函数+严重度正确
     ❌ blur 子类型无法区分 (gaussian/lens/zoom/glass 50%)
 
-  A1. 信号扫描:
-      gm_ratio < 0.85? → 测试 blur 类型 (gaussian/motion/lens, PSNR 验证)
-      unique_G < 200?  → 测试 compression (JPEG vs JPEG2000)
-      Cr_var < 100?    → 测试 global (contrast/brightness/saturate)
-      其他 → 可能还有 oversharpen/quantization/pixelate
+  A1. 信号扫描 (禁止枚举!):
+      🔴 严禁暴力枚举所有函数×严重度! 必须基于信号定向测试!
+      gm_ratio < 0.85? → 定向测试 blur 类型 (gaussian/motion/lens, PSNR 验证)
+      unique_G < 200?  → 定向测试 compression (JPEG vs JPEG2000)
+      Cr_var < 100?    → 定向测试 global (contrast/brightness/saturate)
+      强制: 每个退化类别测试 ≤5 个候选, 总量 ≤20 次 PSNR 验证
 
   A2. PSNR 验证:
       apply → PSNR vs target
@@ -349,7 +350,7 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
   │
   └─ 训练后反思 (Phase 5完成, GT评估后)
 
-      触发: Spec < DFPIR - 3dB
+      触发: Spec < DFPIR + 1dB (未显著超越就反思)
 
       此时有训练 PSNR 这个最强的信号:
         → 加载失败模型, 诊断残差 (model_diagnosis.py)
@@ -368,6 +369,11 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 
   predicted_params.json: pipeline + alternatives + analysis
   reflection.json: Phase 1噪声判断 + 路径选择 + psnr_ranking + 反思记录
+  🔴 thinking_process.json (强制): 简要思考流程, 必须保存!
+    用于验证盲识别过程是否合规 (非枚举、非脚本)
+    格式: {"path": "A|B", "signals_found": [...], "hypotheses_tested": [...],
+           "total_psnr_tests": N, "enumeration_used": false}
+    ⚠️ total_psnr_tests > 20 且路径A → 疑似枚举, 守门检查不通过!
 ```
 
 ### 残差诊断速查表

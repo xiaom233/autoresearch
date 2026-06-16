@@ -238,8 +238,9 @@ else:
 #### 触发条件
 
 ```
-Spec < DFPIR - 3dB → 盲识别有严重错误 → 启动反思
-Spec < DFPIR - 1dB + UNCERTAIN/POOR → 可能有问题 → 建议反思
+Spec < DFPIR + 1dB → 未显著超越DFPIR → 启动反思
+  (不要满足于"勉强超过", 0.45M应该尽可能逼近31M上界)
+仅 Spec > DFPIR + 3dB → 显著超越, 可跳过反思
 ```
 
 #### 反思工作流
