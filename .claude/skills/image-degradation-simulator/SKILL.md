@@ -39,14 +39,21 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 
 ### B. 噪声判别步骤强制顺序（不可跳步）
 
-对每个残差，**必须按顺序执行全部 6 项检查**，记录每项结果后再下结论：
+对每个残差，**必须按顺序执行全部 6 项检查**，记录每项结果后再下结论。可辅助使用 wavelet 噪声先验：
 
 ```
+🆕 0. wavelet:      noise_prior.py --target <t> --clean <c> (同图模式)
+      → 仅以下两项已验证可靠 (exp18测试 10/10):
+        - gaussian_RGB vs gaussian_YCrCb: 通道 σ 比 > 1.4 → YCrCb ✅
+        - 纯噪声 σ 估计: sev=1~2 范围内 ±30% (blur存在时低估, 不可靠)
+      → 不可用于: speckle/poisson 检测 (0/10), 混合退化噪声估计
+
 □ 1. impulse:     extreme% = ___ (> 0.3%? → impulse)
 □ 2. speckle:      vm_slope = ___ (> 0.01? → speckle; sev=1 时 > 0.005 也考虑)
 □ 3. poisson:     var_slope = ___ (> 1.0 AND vm_slope≈0? → poisson)
 □ 4. spatial:     spatial_corr = ___ (0.15-0.5? → spatially_correlated)
 □ 5. YCrCb:       rgb_ratio = ___ (> 1.4? → YCrCb)
+                   🆕 辅助: noise_prior σ_per_channel max/min ratio > 1.4 → YCrCb ✅
 □ 6. gaussian:    以上都不满足 → gaussian_RGB
 ```
 
@@ -56,9 +63,12 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 
 ```
 □ 1. gm_ratio < 0.85 → blur 可能存在（mild blur 区 0.75-0.85 不能排除）
-□ 2. radial_ratio > 2.0 → 必须优先考虑 lens blur，不能归因于"图像内容"
-□ 3. 非确定性 blur (glass/jitter) PSNR 不会 > 40dB，不要反复调 severity 追求高 PSNR
-□ 4. 指标超过阈值 → 信任指标，不要用"直觉"否定
+□ 2. 🆕 angular_fft.anisotropy_ratio > 4.0 AND h_v_ratio ≠ 1.0 (>30%偏差) → motion blur
+     来源: exp18测试 5/5 motion正确, MTF频域分析对motion最可靠
+□ 3. radial_ratio > 2.0 → lens blur 候选，但需 PSNR 验证 (⚠️ 内容依赖, 非可靠判据)
+     exp18测试: gaussian↔lens MTF无法区分 (两者MTF曲线形状相同)
+□ 4. 非确定性 blur (glass/jitter) PSNR 不会 > 40dB，不要反复调 severity 追求高 PSNR
+□ 5. 指标超过阈值 → 信任指标，不要用"直觉"否定
 ```
 
 ### D. 保存前自检

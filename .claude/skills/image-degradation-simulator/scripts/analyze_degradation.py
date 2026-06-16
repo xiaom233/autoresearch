@@ -709,49 +709,94 @@ def compute_ps_ratio(target, clean):
     }
 
 
-def classify_blur_from_mtf(mtf_data, angular_data, grad_data, radial_data):
-    """Synthesize MTF fitting + angular FFT + spatial metrics → blur type.
+def classify_blur_from_mtf(mtf_data, angular_data, grad_data, radial_data, clean_mtf=None):
+    """Synthesize MTF + angular FFT + spatial metrics → blur type.
+
+    Uses MTF curve shape comparison when clean reference MTF is available.
+    Falls back to spatial metrics when clean reference is unavailable.
 
     Decision priority:
-    1. anisotropy_ratio > 2.0 → motion blur (directional frequency suppression)
-    2. radial MTF shape + radial_ratio → lens vs gaussian
-    3. Fall back to spatial metrics if MTF inconclusive
+    1. anisotropy > 4.0 + h_v_ratio significantly ≠ 1.0 → motion blur
+    2. MTF curve correlation with known blur types → gaussian/lens/zoom
+    3. Spatial gradient metrics as tiebreaker
     """
     anisotropy = angular_data.get("anisotropy_ratio", 1.0) if angular_data else 1.0
     mtf50 = mtf_data.get("mtf50_freq", 0) if mtf_data else 0
     radial_ratio = radial_data.get("gradient_radial_ratio", 1.0) if radial_data else 1.0
     h_v_ratio = grad_data.get("directional_h_v_ratio", 1.0) if grad_data else 1.0
+    mtf_curve = mtf_data.get("mtf_curve", []) if mtf_data else []
 
     candidates = []
+    h_v_is_directional = abs(h_v_ratio - 1.0) > 0.3
 
-    # 1. Motion blur check — requires BOTH angular FFT anisotropy AND spatial h_v_ratio
-    #    to avoid false positives from JPEG/saturate/color-space artifacts
-    h_v_is_directional = abs(h_v_ratio - 1.0) > 0.3  # >30% deviation from isotropic
+    # 1. Motion blur: requires BOTH angular anisotropy AND directional h_v
     if anisotropy > 4.0 and h_v_is_directional:
-        direction = angular_data.get("dominant_direction_deg", 0)
         candidates.append({
             "type": "blur_motion",
             "confidence": "high" if anisotropy > 6.0 else "medium",
-            "evidence": f"Angular FFT anisotropy={anisotropy:.1f} + h_v_ratio={h_v_ratio:.2f}, direction~{direction:.0f}°",
+            "score": anisotropy,
+            "evidence": f"Angular anisotropy={anisotropy:.1f} + h_v={h_v_ratio:.2f}",
         })
 
-    # 2. Lens vs Gaussian from radial_ratio + MTF
-    if radial_ratio > 2.0:
+    # 2. Compare MTF curve with clean reference to isolate blur kernel
+    if clean_mtf and mtf_curve:
+        clean_curve = clean_mtf.get("mtf_curve", [])
+        if clean_curve and len(clean_curve) == len(mtf_curve):
+            # The blur kernel MTF ≈ target_MTF / clean_MTF
+            kernel_mtf = [t / (c + 1e-8) for t, c in zip(mtf_curve, clean_curve)]
+            # Normalize
+            if kernel_mtf[0] > 0:
+                kernel_mtf = [k / kernel_mtf[0] for k in kernel_mtf]
+
+            # MTF curve shape heuristics:
+            # - Gaussian: smooth monotonic decay, no zero crossings
+            # - Lens/Defocus: faster initial drop then flattens (more low-freq attenuation)
+            # - Zoom: similar to Gaussian but steeper at high freqs
+            mid_val = kernel_mtf[len(kernel_mtf)//2] if len(kernel_mtf) > 2 else 0.5
+            high_val = kernel_mtf[-1] if kernel_mtf else 0
+
+            # Compute "gaussian-ness": how smoothly the curve decays
+            # A pure Gaussian MTF follows exp(-f^2). Check if values
+            # form a smooth convex curve.
+            diffs = [kernel_mtf[i] - kernel_mtf[i+1] for i in range(len(kernel_mtf)-1)]
+            is_smooth = all(d > 0 for d in diffs)  # monotonically decreasing
+
+            if is_smooth:
+                # Gaussian: gradual decay
+                if mid_val > 0.3:
+                    candidates.append({
+                        "type": "blur_gaussian",
+                        "confidence": "high" if high_val > 0.05 else "medium",
+                        "score": mid_val + high_val,
+                        "evidence": f"MTF kernel: smooth decay, mid={mid_val:.2f}, high={high_val:.2f}",
+                    })
+                # Lens/Defocus: fast initial drop
+                else:
+                    candidates.append({
+                        "type": "blur_lens",
+                        "confidence": "medium",
+                        "score": 1.0 - mid_val,
+                        "evidence": f"MTF kernel: fast drop, mid={mid_val:.2f}",
+                    })
+
+    # 3. If no MTF-based candidates, fall back to spatial metrics
+    if not candidates:
+        if radial_ratio > 1.5 and anisotropy < 4.0:
+            candidates.append({
+                "type": "blur_lens", "confidence": "low",
+                "score": radial_ratio,
+                "evidence": f"Radial ratio={radial_ratio:.1f} (spatial only, low confidence)",
+            })
         candidates.append({
-            "type": "blur_lens",
-            "confidence": "high" if radial_ratio > 4.0 else "medium",
-            "evidence": f"Radial gradient ratio={radial_ratio:.1f} (center sharper than edge)",
+            "type": "blur_gaussian", "confidence": "low",
+            "score": 0.5,
+            "evidence": f"Default isotropic (aniso={anisotropy:.1f}, h_v={h_v_ratio:.2f})",
         })
 
-    # Gaussian is the default isotropic blur (when no motion detected)
-    if not candidates or (anisotropy <= 4.0 and not h_v_is_directional):
-        candidates.append({
-            "type": "blur_gaussian",
-            "confidence": "high" if radial_ratio < 1.3 and anisotropy < 3.0 else "medium",
-            "evidence": f"Isotropic FFT (anisotropy={anisotropy:.1f}), h_v_ratio={h_v_ratio:.2f}, radial_ratio={radial_ratio:.1f}",
-        })
+    # Best guess: highest confidence or highest score
+    candidates.sort(key=lambda c: (c["confidence"] == "high", c.get("score", 0)), reverse=True)
 
-    # Severity estimation from MTF50
+    # Severity from MTF50
     severity_hint = None
     if mtf50 > 0:
         if mtf50 > 0.8: severity_hint = 1
@@ -766,6 +811,7 @@ def classify_blur_from_mtf(mtf_data, angular_data, grad_data, radial_data):
         "anisotropy_ratio": round(anisotropy, 3),
         "mtf50_freq": round(mtf50, 4),
         "severity_hint": severity_hint,
+        "method": "mtf_comparison" if clean_mtf else "spatial_fallback",
     }
 
 
@@ -835,7 +881,8 @@ def analyze(target_path, clean_path=None):
         report.get("mtf", {}),
         report.get("angular_fft", {}),
         report.get("gradient", {}),
-        report.get("radial", {})
+        report.get("radial", {}),
+        clean_mtf=report.get("mtf_clean", None) if clean_path else None,
     )
     if clean_path:
         report["blur_subtype"]["directional_h_v_ratio_clean"] = round(float(clean_report["gradient"]["directional_h_v_ratio"]), 4)

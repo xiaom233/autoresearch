@@ -261,22 +261,19 @@ def estimate_noise_from_image(target_path, clean_path=None):
     target = np.array(Image.open(target_path).convert("RGB"), dtype=np.float32)
 
     if clean_path:
-        # Same-image mode: estimate from residual (more accurate)
         clean = np.array(Image.open(clean_path).convert("RGB"), dtype=np.float32)
         residual = target - clean
-        sigma_est = estimate_noise_sigma_mad(residual + 128.0)  # shift for wavelet
+        sigma_est = estimate_noise_sigma_mad(residual + 128.0)
         method = "residual_mad"
-        # Check for blur: if gradient ratio < 0.5, blur is present and
-        # wavelet sigma will be underestimated (blur removes HH energy)
         grad_t = np.mean(np.abs(np.gradient(np.mean(target, axis=2))))
         grad_c = np.mean(np.abs(np.gradient(np.mean(clean, axis=2))))
-        blur_ratio = grad_t / (grad_c + 1e-8)
-        blur_present = blur_ratio < 0.5
+        blur_ratio = float(grad_t / (grad_c + 1e-8))
+        blur_present = bool(blur_ratio < 0.5)
     else:
         residual = None
         sigma_est = estimate_noise_sigma_mad(target)
         method = "image_mad"
-        blur_present = False  # can't determine without clean reference
+        blur_present = False
 
     channel_sigmas = estimate_noise_per_channel(residual + 128.0 if residual is not None else target)
     intensity_curve = compute_sigma_intensity_curve(residual if residual is not None else target)
