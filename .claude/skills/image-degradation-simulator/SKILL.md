@@ -243,131 +243,109 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 > 校准阈值来自 100 张 DIV2K 图像的系统校准 (exp15/scripts/calibrate_thresholds.py)。
 > exp17 盲化基准：单退化 88.6%（31/35），双退化 30%（6/20），掩盖推理预期双退化提升至 ~70%。
 
-### 核心流程 (每组退化)
+### 核心流程 (v10 — 噪声优先, 两条路径)
 
-⚠️ **强制执行顺序，不可跳步。最多 3 轮反思。**
+⚠️ **强制执行顺序。整个流程只有两个阶段: 噪声判断 → 分路径执行。**
+
+来源: 1140 cases大规模合成 + exp17/exp18 32组真实退化
 
 ```
-Step 1: detect_degradation.py → 自动决策 + decision_flow
-        → pipeline, uncertainty, evidence, verification_steps
+┌─────────────────────────────────────────────────────────────┐
+│ Phase 1: 噪声判断 (必须先做, 决定后续所有策略)                │
+│                                                             │
+│   residual = target - clean (同图模式)                       │
+│   噪声判别: SKILL.md §B 6步检查 + noise_prior.py (辅助)     │
+│                                                             │
+│   → 无 noise: 进入 路径 A (高置信)                           │
+│   → 有 noise: 进入 路径 B (低置信)                           │
+└─────────────────────────────────────────────────────────────┘
 
-Step 2: Agent 审查 decision_flow [必须执行]
-        ├── 低置信度 (conf=low) 的检测 → 标记为"待验证"
-        ├── 指标接近阈值的检测 → 标记为"边界"
-        ├── uncertainty.needs_work=True → 预期需要反思
-        └── 形成"初始假设"进入 Round A
+═══════════════════════════════════════════════════════════════
+路径 A: 纯确定性退化 ⭐ 高置信 (PSNR 可用)
+═══════════════════════════════════════════════════════════════
 
-Step 3: Round A — 确定性部分 PSNR 验证 [仅验证非 noise 退化]
-        ⚠️ 不包含 noise！ noise 随机种子不同, PSNR 无效。
-        ├── 3a. det_sim = apply(clean, 所有非 noise 退化)
-        ├── 3b. PSNR(target, det_sim):
-        │     > 40dB → ✅ 确定性部分完全正确
-        │     30-40dB → ✅ 类别正确, severity 可能有偏差
-        │     15-30dB → ⚠️ 有 FP 或漏检, 检查 residual_A 模式
-        │     < 15dB → ❌ 严重错误
-        └── 3c. 残差诊断:
-              🆕 model_diagnosis.py --target <t> --clean <c> → 自动检测漏检模式
-              或手动检查 residual_A 的模式:
-              ├── 8×8 块状 → JPEG 漏检
-              ├── 随机噪声模式 → noise 存在
-              ├── 结构性边缘 → blur 有误
-              └── 亮度/色彩偏移 → global 有误
+  信号可靠性 (大规模验证):
+    ✅ gm_ratio < 0.85     → blur 存在 (83%召回, 0%FP)
+    ✅ unique_G < 200      → compression/quant 存在 (0%FP)
+    ✅ Cr_variance < 100   → global 退化存在 (100%召回)
+    ✅ PSNR > 40dB         → 函数+严重度正确
+    ❌ blur 子类型无法区分 (gaussian/lens/zoom/glass 50%)
 
-Step 4: Round B — 残差噪声分析 [主要验证手段]
-        ⚠️ 包含 noise 时, PSNR 无效! 残差分析是主要验证手段。
-        ⚠️ exp17 教训: 噪声指标必须在 RESIDUAL 上测量! target 上的指标被图像内容污染。
-        🆕 noise_prior.py --target <t> --clean <c> → wavelet σ 估计 + 类型分类 + severity 映射
-           (同图模式用 residual=target-clean, 更精确; blur 存在时 σ 可能低估)
-           - target 上 var_slope=0.06 → 残差上 var_slope=1.72（差异 28 倍!）
-           - 在 target 上看 unique_G/extreme% 判断噪声 = 错误
-        residual = target - det_sim（单退化时 det_sim = clean）
-        噪声判别顺序（必须逐项检查并记录数值，不可跳步）:
-        a. impulse_pct(net) > 0.3% → noise_impulse
-        b. vm_slope > 0.01 → noise_speckle
-           ⚠️ sev=1 时 speckle 信号弱: vm_slope 可能 < 0.01
-              补充检查: speckle_contrast > 0.005 → sev=1 speckle 可能
-        c. var_slope > 1.0 + vm_slope≈0 → noise_poisson
-           ⚠️ var_slope 必须在 RESIDUAL 上测量 (不是 target!)
-           ⚠️ Poisson 会在 target 上降低 unique_G, 容易和 quantization 混淆
-              判定 quantization 前必须先排除 Poisson（残差 var_slope < 1.0）
-        d. spatial_corr 0.15-0.5 → noise_spatially_correlated
-           ⚠️ exp17: spatial_corr=0.233 在范围内但 Agent 跳过了检查
-              此检查不可跳过! 即使分布"看起来像 Gaussian"也要记录数值
-        e. rgb_std_ratio > 1.4 OR Cr/Y_std > 1.3 → noise_gaussian_YCrCb
-        f. 以上都不触发 + res_std > 8 → noise_gaussian_RGB
-        g. 否则 → 无 noise
+  A1. 信号扫描:
+      gm_ratio < 0.85? → 测试 blur 类型 (gaussian/motion/lens, PSNR 验证)
+      unique_G < 200?  → 测试 compression (JPEG vs JPEG2000)
+      Cr_var < 100?    → 测试 global (contrast/brightness/saturate)
+      其他 → 可能还有 oversharpen/quantization/pixelate
 
-        严重度: 残差 std 与校准阈值 closest match:
-          gaussian_RGB: [12.4, 24.0, 34.8, 44.8, 53.9]
-          gaussian_YCrCb: [20.6, 31.2, 43.5, 56.5, 68.9]
-          speckle: [15.2, 22.3, 29.0, 35.5, 41.5]
-          spatially_correlated: [10.9, 12.8, 14.8, 17.5, 20.3]
-          poisson: [16.9, 19.5, 23.6, 29.4, 37.1]
-          impulse: extreme_pct [0.01, 0.03, 0.05, 0.07, 0.10] → sev 1-5
-        验证: 添加 noise 后 residual std 应显著降低 (与 res_std 对比)
+  A2. PSNR 验证:
+      apply → PSNR vs target
+      > 40dB → ✅ 正确
+      30-40dB → 调 severity
+      < 30dB → 换函数族
+      PSNR gap > 10dB between candidates → 胜者显著
 
-Step 5: Round C — 保存判定 (分类型)
-        ├── Tier 1 (确定性单步: blur/compression/contrast 单独):
-        │   ├── PSNR >= 40dB → LIKELY (函数+严重度正确)
-        │   ├── PSNR 30-40dB → 调 severity
-        │   └── PSNR < 30dB → 换函数族
-        ├── Tier 2 (噪声单独):
-        │   └── 统计匹配 (Step 4 §B 6项检查) → LIKELY
-        ├── Tier 3 (混合退化, 含噪声, 多步):
-        │   ├── 输出 ranked candidates (全量 PSNR 排名)
-        │   ├── verdict 必须是 UNCERTAIN (退化耦合, 无法可靠验证)
-        │   └── 必须保存 alternatives (前 2-3 候选)
-        └── 所有 Tier:
-            ├── PSNR gap >= 10dB → 胜者显著, 亚军为 alternative
-            ├── PSNR gap < 10dB → UNCERTAIN, 多个候选保留
-            └── max PSNR < 30dB → POOR, 全部保留供训练验证
+  A3. 保存:
+      verdict = LIKELY (PSNR >= 40 + gap >= 10) 或 GOOD
+      alternatives: PSNR >= 30 的不同函数族候选
+      所有候选 PSNR < 30 → POOR
 
-Step 6: 反思修正 [最多 3 轮，每轮可多步。⚠️ 启发式原则]
-        每轮反思 = Agent 审视 decision_flow + reflection_hints → 多步修正 → PSNR 验证
-        
-        **核心原则：反思分为两层——先常规修正，后启发式猜想。**
+═══════════════════════════════════════════════════════════════
+路径 B: 含噪声退化 ⚠️ 低置信 (PSNR 对噪声无效)
+═══════════════════════════════════════════════════════════════
 
-        **第一层（优先）：常规修正** — 换 severity、换子类型、调顺序。
-        这些是必要的反思内容，90% 的问题在这一层解决。
-        一轮内可同时执行:
-        ├── 调整 severity (基于 decision_flow 中指标与阈值的距离)
-        ├── 替换误诊 (如 quantization↔JPEG, 一个函数换成另一个)
-        ├── 调整顺序 (根据耦合诊断: blur在JPEG后→块消失, 调整顺序)
-        ├── 移除 FP (从 hints 中找到冲突/可疑的检测, 移除)
-        └── 添加漏检 (从 uncertainty.guesses 或 hints 中选择)
+  信号可靠性:
+    ✅ unique_G < 200       → 仍可靠 (0%FP)
+    ✅ Cr_variance < 100    → 仍可靠 (100%召回)
+    ❌ gm_ratio             → 不可用 (噪声增加梯度, 召回1%)
+    ❌ overshoot_ratio      → 不可用 (FP=90%)
+    ❌ PSNR 对噪声部分      → 无效 (随机seed)
 
-        **第二层（仅在常规修正失败时）：启发式猜想** — 猜想什么退化可能被掩盖。
-        触发条件: 常规修正后 PSNR 仍然 < 35dB，且找到的退化数 < 预期数。
-        很多复杂退化无法仅靠指标发现——强退化会掩盖弱退化的特征
-        （exp17: compression 被 global/blur/noise 掩盖 11/14 失败）。
-        
-        启发式猜想优先级:
-        1. 残差 8×8 块 → JPEG 被掩盖（即使 block_boundary < 1.1）
-        2. 残差随机噪声 → noise 被掩盖
-        3. 找到强 deterministic 退化但残差仍有结构 →
-           最大嫌疑是 compression（最容易被掩盖的退化）
-           → 测试 JPEG + JPEG2000（PSNR > 50dB 才追加）
-        4. 指标在两类模糊（Poisson↔quantization, JPEG2000↔jitter, speckle↔gaussian sev=1）→
-           两类都测，PSNR/残差匹配决定
-        5. 添加退化后 PSNR 反而降 → 顺序可能反了
-        
-        ⚠️ 启发式猜想不能替代常规修正。PSNR > 40dB 时直接保存，不触发。
-        
-        修正后: apply → PSNR 验证
-          PSNR 提升 > 2dB → ✅ 修正有效, 保留
-          PSNR 不变或下降 → ❌ 回退, 进入下一轮反思
-          如果 PSNR > 40dB → 直接保存 GOOD
-        
-        3 轮仍低 → 保存 NEEDS_WORK → Phase 5 训练 → Phase 6 对比反思
-        
-        每轮反思记录到 reflection.json:
-        - 本轮改了什么 (remove/add/adjust/reorder/replace)
-        - PSNR 变化
-        - 决策依据 (引用了哪个 hint 或 evidence)
+  B1. 噪声识别 (用统计, 不用 PSNR):
+      §B 6步检查 (impulse→speckle→poisson→spatial→YCrCb→gaussian)
+      严重度: 残差 std 与校准阈值 closest match
+      辅助: noise_prior.py wavelet σ 估计 (仅 gaussian_RGB/YCrCb 区分可靠)
 
-Step 7: 保存
-        save_prediction.py 保存 pipeline + verdict
-        附带 decision_flow + 反思记录 → reflection.json
+  B2. 确定性部分识别 (剥离噪声后):
+      det_sim = apply(clean, 非noise退化)
+      残差 = target - det_sim → 统计验证噪声假设
+      PSNR(target, det_sim) → 验证确定性部分
+      ⚠️ 不要用 PSNR 选噪声! 不要用 gm_ratio!
+
+  B3. 保存:
+      verdict = UNCERTAIN (必须, 退化耦合无法可靠验证)
+      alternatives: 至少 3 个 PSNR >= 30 的确定性候选 + 不同噪声类型候选
+      所有候选 PSNR < 30 → POOR, 全部保留供训练验证
+
+═══════════════════════════════════════════════════════════════
+反思 (训练后, 最多 3 轮)
+═══════════════════════════════════════════════════════════════
+
+  触发: Spec < DFPIR - 3dB
+
+  R1. 先重检 Phase 1 噪声判断: 噪声存在性判断是否错误?
+      → 路径A误判为路径B? → 重新按路径A执行
+      → 路径B误判为路径A? → 重新按路径B执行
+
+  R2. 修正确定性部分:
+      优先测试 alternatives 中不同函数族的候选
+      PSNR gap >= 10dB → 换候选
+      PSNR gap < 3dB → 两个候选同样可能, 选训练PSNR更好的
+
+  R3. 修正噪声部分 (仅用统计, 不用 PSNR!):
+      重新执行 §B 6步检查
+      检查 alternatives 中不同噪声类型的候选
+
+  R4. 终止条件:
+      所有候选 PSNR < 20dB → BEYOND_CAPABILITY, 放弃
+      R2修正后 PSNR提升 < 2dB → 放弃
+      噪声统计全部不匹配 → 放弃
+
+═══════════════════════════════════════════════════════════════
+保存
+═══════════════════════════════════════════════════════════════
+
+  predicted_params.json: pipeline + alternatives + analysis
+  reflection.json: Phase 1噪声判断 + 路径选择 + psnr_ranking + 反思记录
 ```
 
 ### 残差诊断速查表
