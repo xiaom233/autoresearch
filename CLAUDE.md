@@ -201,6 +201,77 @@ else:
 
 **来源**: exp17 教训 — 16 Agent 平均 CI=8.2/10, 函数正确率 6%. CI 衡量视觉相似性, 不衡量函数正确性.
 
+### 🔴 训练后反思协议：用失败模型诊断盲识别错误
+
+**来源**: exp17 R2 — 反思平均 +1.06 dB, 但对噪声假设无效 (0009 -1.41, 0014 -2.31).
+核心发现: 确定性退化和噪声必须用不同判据, 且失败模型本身就是最好的诊断工具.
+
+#### 核心原则
+
+```
+1. PSNR 对确定性退化可靠, 对噪声完全不可靠
+2. 失败模型是诊断工具: 它学会了修什么, 就说明训练管线里有什么是对的
+3. 残差分析区分"确定性部分错" vs "噪声部分错"
+```
+
+#### 触发条件
+
+```
+Spec < DFPIR - 3dB → 盲识别有严重错误 → 启动反思
+Spec < DFPIR - 1dB + UNCERTAIN/POOR → 可能有问题 → 建议反思
+```
+
+#### 反思工作流
+
+```
+Step 1: 加载失败模型, 用 CLEAN 图像做推理
+        pred = model(clean)  # 模型尝试修复 clean 图像
+        → 如果模型把 clean 修坏了: 说明训练退化 ≠ 真实退化
+        → pred 上的残差分析: 哪些特征被模型改变了?
+
+Step 2: 残差诊断
+        residual = target - model_output_on_clean
+        ├── 残差有结构 (8×8块, 边缘模式) → 确定性部分错误
+        │   └── 重新 PSNR 测试 blur/compression 类型 (不用 PSNR 选噪声!)
+        └── 残差仅随机分布 → 确定性部分正确, 噪声识别错
+            └── 用 SKILL.md §B 6步统计检查 (不用 PSNR!)
+                extreme% → impulse; var_slope → poisson/speckle
+                spatial_corr → correlated; rgb_ratio → YCrCb
+
+Step 3: 分层修正
+        ├── 确定性修正: PSNR 对比不同 blur/compression 候选
+        │   → PSNR gap >= 10dB → 换候选 ✅
+        │   → PSNR gap < 3dB → 所有候选同样差 → 放弃反思
+        └── 噪声修正: 仅用 statistical_checks (extreme%, var_slope, spatial_corr)
+            → 绝对不用 PSNR 选噪声! (随机 seed 导致 PSNR 无意义)
+            → 6步检查: impulse → speckle → poisson → spatial → YCrCb → gaussian
+
+Step 4: 反思终止条件
+        ├── 确定性 PSNR gap < 3dB AND 噪声统计全部不匹配 → BEYOND_CAPABILITY
+        │   不浪费 GPU 做无谓反思
+        ├── 确定性修正成功 (PSNR提升 > 2dB) → 重训练
+        └── 噪声修正成功 (统计匹配改善) → 重训练
+
+Step 5: 重训练 → GT评估 → 仍失败 → 标记 BEYOND_CAPABILITY, 接受 R1 结果
+```
+
+#### 判据分离规则
+
+| 退化类型 | 主判据 | 禁用判据 | 原因 |
+|------|------|------|------|
+| blur/compression/contrast | PSNR (>40dB=正确) | — | 确定性, PSNR可靠 |
+| noise 类型 | 统计匹配 (6步检查) | PSNR | 随机seed, PSNR无意义 |
+| noise 严重度 | 残差 std 校准表 | PSNR | 同上 |
+
+#### 不启动反思的情况
+
+- 所有候选 PSNR < 20dB (噪声主导, 无可靠信号)
+- PSNR gap < 3dB 且无统计差异 (参数简并, 无法区分)
+- 退化超出小模型容量 (即使正确识别, PSNR 也不可能接近 DFPIR)
+
+**来源**: exp17 R2 — 0001(确定性修正 +0.56), 0016(去噪修正 +7.41) 成功;
+0009/0014(噪声假设用PSNR调整) 退步 -1.41/-2.31.
+
 ## 环境安装
 
 ```bash
