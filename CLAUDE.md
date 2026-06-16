@@ -93,16 +93,31 @@ This file provides guidance to Claude Code when working with this repository.
    | max < 30 dB | POOR | 全部候选保留, 训练后决定 |
 
 6. 保存:
-   predicted_params.json: 主预测 + alternatives (含 PSNR/统计分)
-   reflection.json: psnr_ranking + evidence_consistency + coupling_notes
+   predicted_params.json: 主预测 + alternatives (仅保留有价值的)
+   reflection.json: psnr_ranking(全量) + evidence_consistency + coupling_notes
+
+#### Alternatives 质量要求 🔴
+
+```
+❌ 错误做法: 保存 PSNR 最高的 3 个, 即使 PSNR 都 < 30
+   → exp18 验证: 0/16 GT命中, 全是垃圾数据
+
+✅ 正确做法:
+   1. 仅保存 PSNR >= 30 (确定性) 或 统计匹配 (噪声) 的候选
+   2. 强制覆盖不同函数族: 即使 PSNR 更低, 至少保留1个不同 blur/noise/compression 类型的候选
+   3. 所有候选 PSNR < 30 → alternatives 留空, verdict=POOR
+      低PSNR的alternatives没有意义 (都是错误方向)
+   4. PSNR >= 30 且 gap < 10dB → 至少保存 PSNR 最高的跨族候选
 ```
 
 #### 强制交付物
 
 | 文件 | 关键字段 |
 |------|------|
-| `predicted_params.json` | `{"pipeline":[...], "alternatives":[{pipeline, psnr, stats}], "analysis":{"verdict":"LIKELY|UNCERTAIN|POOR", "tier":1|2|3, "psnr":N, "psnr_gap":N}}` |
-| `reflection.json` | `initial_analysis` + `psnr_ranking` + `statistical_checks`(噪声) + `coupling_analysis`(Tier3) + `iterations` + `final_decision` |
+| `predicted_params.json` | `{"pipeline":[...], "alternatives":[{pipeline, psnr, stats, function_family}], "analysis":{"verdict":"LIKELY|UNCERTAIN|POOR", "tier":1|2|3, "psnr":N, "psnr_gap":N}}` |
+| `reflection.json` | `initial_analysis` + `psnr_ranking`(全量,含PSNR<30的也要记录) + `statistical_checks` + `coupling_analysis` + `iterations` + `final_decision` |
+
+注意: reflection.json 记录全量 PSNR 排名 (含低分的), 但 predicted_params.json 的 alternatives 仅保留 >= 30 的高质量候选.
 
 #### 判定标准
 
@@ -239,14 +254,17 @@ Step 2: 残差诊断
                 spatial_corr → correlated; rgb_ratio → YCrCb
 
 Step 3: 分层修正
-        ├── 确定性修正: 
-        │   → 优先检查盲识别阶段保存的 alternatives (已在候选列表中)
-        │   → PSNR gap >= 10dB vs 当前预测 → 换候选 ✅
-        │   → PSNR gap < 3dB → 两个候选同样可能, 选训练PSNR更好的
-        │   → 典型的不可区分对: blur_gaussian↔lens, JPEG↔JPEG2000(mild)
+        ├── 先检查 alternatives 是否为空:
+        │   → 为空 (所有候选 PSNR < 30) → 盲识别完全失败
+        │   → 检查 psnr_ranking (全量表) 中是否有不同函数族的候选
+        │   → 没有 → BEYOND_CAPABILITY, 放弃反思
+        ├── 确定性修正:
+        │   → 优先测试 alternatives 中不同函数族的候选
+        │   → PSNR gap >= 10dB vs 当前 → 换候选 ✅
+        │   → 典型的不可区分对: blur_gaussian↔lens (PSNR都>40)
         └── 噪声修正: 仅用 statistical_checks
             → 检查 alternatives 中是否有不同噪声类型的候选
-            → 绝对不用 PSNR 选噪声!
+            → 绝对不用 PSNR 选噪声
 
 Step 4: 反思终止条件
         ├── 确定性 PSNR gap < 3dB AND 噪声统计全部不匹配 → BEYOND_CAPABILITY
