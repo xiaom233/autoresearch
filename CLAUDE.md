@@ -9,7 +9,7 @@ This file provides guidance to Claude Code when working with this repository.
 0. **Phase 切换时重读文档**：每个 Phase 开始前，必须重新阅读对应的协议文档：
    - Phase 4 (盲识别): 重读 `SKILL.md` + `CLAUDE.md` §子 Agent 盲识别协议
    - Phase 5 (训练): 重读 `CLAUDE.md` §GPU 并行调度 + `finetune_strategy.md`
-   - Phase 3b (DFPIR): 重读 `CLAUDE.md` §DFPIR 基线评估
+   - Phase 6 (DFPIR 对比): 重读 `CLAUDE.md` §DFPIR 基线评估 (仅在全部流程结束后)
    - GT 重评估: 重读 `CLAUDE.md` §GT 退化重评估
    - 反思: 重读 `REFLECTION_MECHANISM.md`
 1. **绝不接触 GT**：`.ground_truth/` 和 `degradation/` 全程不可读
@@ -238,9 +238,24 @@ else:
 #### 触发条件
 
 ```
-Spec < DFPIR + 1dB → 未显著超越DFPIR → 启动反思
-  (不要满足于"勉强超过", 0.45M应该尽可能逼近31M上界)
-仅 Spec > DFPIR + 3dB → 显著超越, 可跳过反思
+触发条件 (自参照，全程不对比外部模型):
+  首次反思 (R0→R1):
+    - verdict = POOR → 盲识别失败, 必须反思
+    - verdict = UNCERTAIN → 盲识别不确定, 优先反思
+    - verdict = LIKELY/GOOD + GT重评估 PSNR < 35 → 退化严重度可能误判, 反思
+    - verdict = LIKELY/GOOD + GT重评估 PSNR >= 35 → 跳过反思 (高置信+高PSNR)
+
+  迭代反思 (Rn→Rn+1):
+    - 上次修正带来 PSNR 提升 > 2dB → 可继续 (可能还有改善空间)
+    - 提升 1-2dB 且未耗尽 alternatives → 最后尝试1次
+    - 提升 < 1dB 且已 ≥ 2 轮 → 终止 (收益递减)
+    - alternatives 耗尽 → 终止
+
+  不启动反思:
+    - 盲识别 verdict=GOOD/LIKELY + GT PSNR >= 35 (高置信 + 高PSNR, 大概率正确)
+    - 所有候选 PSNR < 20 (噪声主导, 无可靠信号)
+    - 已修正 ≥ 3 轮且提升 < 1dB (收益递减)
+    - 退化超出小模型容量 (即使正确识别也难以恢复)
 ```
 
 #### 反思工作流
@@ -294,7 +309,8 @@ Step 5: 重训练 → GT评估 → 仍失败 → 标记 BEYOND_CAPABILITY, 接�
 
 - 所有候选 PSNR < 20dB (噪声主导, 无可靠信号)
 - PSNR gap < 3dB 且无统计差异 (参数简并, 无法区分)
-- 退化超出小模型容量 (即使正确识别, PSNR 也不可能接近 DFPIR)
+- 退化超出小模型容量 (即使正确识别也难以恢复)
+- verdict=GOOD/LIKELY + GT重评估 PSNR >= 35 (高置信 + 高PSNR)
 
 **来源**: exp17 R2 — 0001(确定性修正 +0.56), 0016(去噪修正 +7.41) 成功;
 0009/0014(噪声假设用PSNR调整) 退步 -1.41/-2.31.
@@ -418,9 +434,11 @@ CUDA_VISIBLE_DEVICES=0 exp1 ; CUDA_VISIBLE_DEVICES=0 exp2  # 顺序执行
 CUDA_VISIBLE_DEVICES=0 exp1 & CUDA_VISIBLE_DEVICES=0 exp2 &  # 并行! OOM!
 ```
 
-### DFPIR 大模型基线对比 ⚠️ 所有实验计划必须包含
+### DFPIR 大模型基线对比 ⚠️ Phase 6 — 全部流程结束后的最后一步
 
-每个实验计划中，必须用 DFPIR (31M, CVPR'25) 作为大模型基线，与我们的小模型 (~0.45M) 对比。
+**🔴 关键原则：DFPIR 是外部模型，仅在实验全部结束后用于最终对比。全程不接触、不对比 DFPIR 或其他外部模型。反思、盲识别、架构选择均不得参考 DFPIR 结果。**
+
+每个实验计划中，在 Phase 5 训练 + GT 重评估全部完成后，用 DFPIR (31M, CVPR'25) 做最终对比。
 
 #### ✅ 正确方法：8 GPU 串行模式（推荐）
 
@@ -586,9 +604,9 @@ for bid, info in m.items():
 #   - 输出: expN/results/reeval_gt.json（每个 checkpoint 的 PSNR_RGB/Y + SSIM）
 #   - 验证集: Set5, Set14, B100, Urban100, Manga109, DIV2K_valid_HR
 
-# 3. 排队（DFPIR 完成后执行，仅需 1 GPU）
-echo "CUDA_VISIBLE_DEVICES=0 .venv/bin/python3 expN/scripts/reeval_with_gt.py > expN/logs/reeval_gt.log 2>&1|REEVAL_GT" >> expN/scripts/dfpir_queue.txt
-# re-eval 任务加到 DFPIR 队列末尾，DFPIR 全部完成后自动执行
+# 3. 训练完成后立即执行 GT 重评估 (不等待 DFPIR)
+echo "CUDA_VISIBLE_DEVICES=0 .venv/bin/python3 expN/scripts/reeval_with_gt.py > expN/logs/reeval_gt.log 2>&1|REEVAL_GT" >> expN/scripts/reeval_tasks.txt
+# GT 重评估独立运行，不依赖 DFPIR 完成。DFPIR 在所有流程结束后单独执行。
 ```
 
 **评估脚本关键参数**：

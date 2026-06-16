@@ -13,13 +13,13 @@ Analyze degraded images, identify present distortion types and their severity, t
 
 以下任何一条都会导致 CPU 100% 持续数小时、结果质量差、实验作废：
 
-1. **不允许写任何 Python 脚本文件**：只使用已有的 Skill 脚本（analyze_degradation.py、apply_multi.py、compare_degradation.py、save_prediction.py）。
+1. **不允许写任何 Python 脚本文件**：只使用已有的 Skill 脚本（global_degradation_analyzer.py、analyze_degradation.py、noise_prior.py、apply_multi.py、compare_degradation.py、save_prediction.py、model_diagnosis.py）。
 2. **禁止 PSNR 枚举搜索**：PSNR 仅用于最终验证（正确管线 > 40dB）。所有函数和 severity 决策必须通过校准阈值，不通过 PSNR 排名。
 3. **禁止跨类别盲目组合**：不要遍历所有组合。
 4. **禁止 `run_in_background: true` 启动多个并行搜索**。
 5. **禁止编写子进程调用脚本**。
 
-**正确做法**：analyze检测 → 校准阈值决策函数类型+severity → apply+compare → PSNR最终验证(>40dB=正确) → 残差分析噪声 → 保存。
+**正确做法**：Phase 0 全局退化预检(histogram+色域) → normalize → Phase 1 噪声判断 → analyze检测 → 校准阈值决策函数类型+severity → apply+compare → PSNR最终验证(>40dB=正确) → 残差分析噪声 → 保存。
 
 ## 🔴 强制检查清单（保存预测前必须逐项确认，不可跳过）
 
@@ -245,13 +245,34 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 
 ### 核心流程 (v10 — 噪声优先, 两条路径)
 
-⚠️ **强制执行顺序。整个流程只有两个阶段: 噪声判断 → 分路径执行。**
+⚠️ **强制执行顺序。整个流程三个阶段: 全局退化预检 → 噪声判断 → 分路径执行。**
 
 来源: 1140 cases大规模合成 + exp17/exp18 32组真实退化
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Phase 1: 噪声判断 (必须先做, 决定后续所有策略)                │
+│ Phase 0: 全局退化预检 (先于噪声判断, 利用 clean 参照)         │
+│                                                             │
+│   工具: global_degradation_analyzer.py                       │
+│   方法: histogram 匹配 + 逐通道均值 + YCrCb/HSV 色域分析    │
+│                                                             │
+│   检测精度 (exp18 验证, σ=10噪声下鲁棒):                     │
+│     ✅ brightness 检出 100%, 方向 100%, sev±1=95%, FP=0%    │
+│     ✅ contrast   检出  96%, 方向  96%, sev±1=76%, FP=0%    │
+│     ✅ saturation 检出  93%, 方向  90%, sev±1=74%, FP=0%    │
+│     ⚠️ gamma 仍困难 (非线性, 与brightness+contrast耦合)      │
+│                                                             │
+│   检测到全局退化:                                            │
+│     → 记录类型 + 方向 + 预估 severity                        │
+│     → 先做逆变换 normalize (消除全局退化)                    │
+│     → 再用 normalized 图像进入 Phase 1                       │
+│     → 最终管线前置全局退化步骤                               │
+│                                                             │
+│   未检测到: 直接进入 Phase 1                                 │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ Phase 1: 噪声判断 (全局退化消除后进行, 决定后续所有策略)      │
 │                                                             │
 │   residual = target - clean (同图模式)                       │
 │   噪声判别: SKILL.md §B 6步检查 + noise_prior.py (辅助)     │
@@ -264,18 +285,19 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 路径 A: 纯确定性退化 ⭐ 高置信 (PSNR 可用)
 ═══════════════════════════════════════════════════════════════
 
+  注意: 全局退化已在 Phase 0 预检并 normalize, 此阶段只需验证 blur/compression。
+
   信号可靠性 (大规模验证):
-    ✅ gm_ratio < 0.85     → blur 存在 (83%召回, 0%FP)
+    ✅ gm_ratio < 0.85     → blur 存在 (83%召回, 0%FP in pure)
     ✅ unique_G < 200      → compression/quant 存在 (0%FP)
-    ✅ Cr_variance < 100   → global 退化存在 (100%召回)
     ✅ PSNR > 40dB         → 函数+严重度正确
     ❌ blur 子类型无法区分 (gaussian/lens/zoom/glass 50%)
+    ❌ gm_ratio 在混合退化中仅 1% 召回 (已被 Phase 0 的 normalize 改善)
 
   A1. 信号扫描 (禁止枚举!):
       🔴 严禁暴力枚举所有函数×严重度! 必须基于信号定向测试!
       gm_ratio < 0.85? → 定向测试 blur 类型 (gaussian/motion/lens, PSNR 验证)
       unique_G < 200?  → 定向测试 compression (JPEG vs JPEG2000)
-      Cr_var < 100?    → 定向测试 global (contrast/brightness/saturate)
       强制: 每个退化类别测试 ≤5 个候选, 总量 ≤20 次 PSNR 验证
 
   A2. PSNR 验证:
@@ -294,9 +316,10 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 路径 B: 含噪声退化 ⚠️ 低置信 (PSNR 对噪声无效)
 ═══════════════════════════════════════════════════════════════
 
+  注意: 全局退化已在 Phase 0 预检并 normalize, 此阶段专注 noise + 确定性退化。
+
   信号可靠性:
     ✅ unique_G < 200       → 仍可靠 (0%FP)
-    ✅ Cr_variance < 100    → 仍可靠 (100%召回)
     ❌ gm_ratio             → 不可用 (噪声增加梯度, 召回1%)
     ❌ overshoot_ratio      → 不可用 (FP=90%)
     ❌ PSNR 对噪声部分      → 无效 (随机seed)
@@ -350,7 +373,10 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
   │
   └─ 训练后反思 (Phase 5完成, GT评估后)
 
-      触发: Spec < DFPIR + 1dB (未显著超越就反思)
+      触发 (自参照，不依赖外部模型):
+        - verdict = POOR/UNCERTAIN → 反思
+        - GT重评估 PSNR < 35 → 反思
+        - GT重评估 PSNR >= 35 + verdict = GOOD/LIKELY → 跳过
 
       此时有训练 PSNR 这个最强的信号:
         → 加载失败模型, 诊断残差 (model_diagnosis.py)
