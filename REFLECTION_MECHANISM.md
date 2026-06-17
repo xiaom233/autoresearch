@@ -93,9 +93,37 @@ PSNR 测试不同 blur 子类型可以找到改善方向，但增益通常在 0.
 
 所有 noise 类型的 PSNR 都受随机种子影响。不能用 PSNR 选择 noise 类型——必须使用 §B 统计检查。
 
+### 初次复原残差分析 — 最强反思信号
+
+R0 训练完成后，模型在预测退化上训练了 2 epoch。用这个模型对 target 做推理：
+
+```
+model(target) → pred  # 模型尝试修复 target
+residual = target - pred  # 模型没能修复的部分
+
+residual 特征 → 漏检/误判信号:
+  - 8×8 block boundary > 1.2    → 漏了 compression_jpeg
+  - DCT zero_ratio > 0.6        → 漏了 compression
+  - sigma > 5 + spatial_corr低  → 漏了 noise 或 noise 类型/severity 错
+  - spatial_corr > 0.3 + gm低   → 漏了 blur 或 blur 子类型错
+  - mean_shift > 5              → 漏了 brightness
+  - percentile spread异常       → 漏了 contrast
+  - 高频 ringing               → 可能误判了 oversharpen
+```
+
+**为什么比 raw residual 更好**：raw 残差 = target - clean，包含所有退化。模型复原残差 = target - model(target)，只包含**模型没修掉的部分**。模型修掉的 = 预测正确的部分。模型没修的 = 漏检/误判的部分。
+
+**使用方式**：反思 Agent 加载 R0 checkpoint → 对 target 推理 → 分析 residual → 把 residual 特征和 transfer knowledge 结合判断。
+
 ### 反思 Agent 使用指南
 
-当分析 R0 预测时，参考以上规律判断优先级：
+当分析 R0 预测时，综合以下三类信息做决策：
+
+1. **初次复原残差**（最优先）→ 模型没修掉什么？
+2. **退化迁移知识**（本节的 severity/子类型代价表）→ 如果错了代价多大？
+3. **PSNR 定向测试**（验证假设）→ JPEG 测试 100% 可靠，blur 边际，noise 不可用
+
+优先级排序：
 
 1. 如果 R0 含 **brightness_gamma** → 优先检查 severity 是否精确（±1 代价 17dB）
 2. 如果 R0 含 **noise_impulse** → 绝不替换为其他 noise 类型（代价 21dB）
