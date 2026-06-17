@@ -157,10 +157,19 @@ def step1_compression(target, clean):
         result["subtype"] = "JPEG"
         result["confidence"] = "low"
         result["note"] = "DCT signal present but may be degraded by noise/blur"
+        result["should_still_test"] = True
+        result["suggested_action"] = "PSNR-test JPEG at severity 1-3 despite weak signal"
     elif ug_detected:
         result["verdict"] = "COMPRESSION_DETECTED"
         result["subtype"] = "QUANTIZATION_OR_JPEG2000"
         result["confidence"] = "medium"
+
+    # Always suggest testing if verdict is not high-confidence YES
+    if result["verdict"] == "NO_COMPRESSION":
+        result["should_still_test"] = True
+        result["suggested_action"] = "Test 1-2 JPEG candidates via PSNR — mild JPEG can evade block_boundary detection"
+    elif result["confidence"] != "high":
+        result["should_still_test"] = True
 
     result["_for_step4"] = {
         "block_uniformity": round(block_boundary, 4),
@@ -326,9 +335,11 @@ def step3_blur(target, clean, noise_info):
     blur_threshold = 0.72 if has_noise else 0.62
 
     if gm_ratio > blur_threshold:
-        result["verdict"] = "NO_BLUR"
-        result["confidence"] = "high" if not has_noise else "medium"
-        result["note"] = f"gm_ratio={gm_ratio:.3f} > {blur_threshold}" if has_noise else None
+        result["verdict"] = "BLUR_UNLIKELY"
+        result["confidence"] = "medium" if has_noise else "high"
+        result["should_still_test"] = True  # Agent should still PSNR-test blur candidates
+        result["note"] = f"gm_ratio={gm_ratio:.3f} > {blur_threshold}" + (" (noise present, signal may be masked)" if has_noise else "")
+        result["suggested_action"] = "Test 2-3 blur candidates via PSNR despite gm_ratio signal — noise/blur coupling can mask blur"
         return result
 
     # Blur detected — use MTF for sub-type
