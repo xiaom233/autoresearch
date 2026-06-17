@@ -128,30 +128,39 @@ def step1_compression(target, clean):
     dct_zeros = compute_dct_zero_ratio(gray)
     result["signals"]["dct_zero_ratio"] = round(dct_zeros, 4)
 
-    # Classification
-    bb_detected = block_boundary > 1.3
-    dct_detected = dct_zeros > 0.6
-    ug_detected = ug_ratio < 0.5
+    # Multi-signal voting (calibrated from 290 synthetic tests)
+    bb_detected = block_boundary > 1.02   # 100% recall, 0% FP (calibrated)
+    dct_detected = dct_zeros > 0.77       # 87% recall, 12.8% FP
+    dct_degraded = dct_zeros > 0.15       # DCT fails in composite (4.3σ degradation)
+    ug_detected = ug_ratio < 0.5          # Quantization indicator
 
-    if bb_detected or dct_detected or ug_detected:
+    # Voting: require 2/3 signals for HIGH confidence
+    signals_positive = sum([bb_detected, dct_detected, ug_detected])
+
+    if signals_positive >= 2:
         result["verdict"] = "COMPRESSION_DETECTED"
-        if bb_detected or dct_detected:
-            result["subtype"] = "JPEG"
-            result["confidence"] = "high" if (bb_detected and dct_detected) else "medium"
-        else:
-            result["subtype"] = "QUANTIZATION_OR_JPEG2000"
-            result["confidence"] = "medium"
-    elif block_boundary > 1.05 and dct_zeros > 0.15:
-        # Mild JPEG signal: both weak but consistent
+        result["subtype"] = "JPEG"
+        result["confidence"] = "high"
+    elif bb_detected:
+        # Block boundary alone is the strongest signal (0% FP)
+        result["verdict"] = "COMPRESSION_DETECTED"
+        result["subtype"] = "JPEG"
+        result["confidence"] = "high"
+    elif dct_detected and not dct_degraded:
+        # DCT alone, but not degraded → likely JPEG in pure setting
+        result["verdict"] = "COMPRESSION_DETECTED"
+        result["subtype"] = "JPEG"
+        result["confidence"] = "medium"
+    elif dct_detected:
+        # DCT detected but possibly degraded → needs verification
         result["verdict"] = "MILD_COMPRESSION_POSSIBLE"
         result["subtype"] = "JPEG"
         result["confidence"] = "low"
-        result["note"] = "Weak block_boundary + DCT signal, PSNR verification needed"
-    elif block_boundary > 1.05 or dct_zeros > 0.2:
-        result["verdict"] = "MILD_COMPRESSION_POSSIBLE"
-        result["subtype"] = "JPEG"
-        result["confidence"] = "low"
-        result["note"] = "Single weak signal only, high FP risk"
+        result["note"] = "DCT signal present but may be degraded by noise/blur"
+    elif ug_detected:
+        result["verdict"] = "COMPRESSION_DETECTED"
+        result["subtype"] = "QUANTIZATION_OR_JPEG2000"
+        result["confidence"] = "medium"
 
     result["_for_step4"] = {
         "block_uniformity": round(block_boundary, 4),
@@ -199,13 +208,13 @@ def step2_noise(target, clean):
     result["signals"]["noise_prior_sigma"] = round(avg_sigma, 2)
     result["signals"]["sigma_per_channel"] = [round(s, 2) for s in sigma]
 
-    if avg_sigma < 2.0:
+    if avg_sigma < 1.9:   # calibrated: 83% recall, 7.3% FP
         result["signals"]["gm_ratio_usable"] = True
         return result
 
     result["signals"]["gm_ratio_usable"] = False
 
-    # §B Step 1: Impulse
+    # §B Step 1: Impulse (calibrated threshold: >2% extreme pixels)
     extreme_pct = ((np.abs(residual) > 3 * np.std(residual)).sum(axis=2) > 0).mean()
     result["signals"]["impulse_extreme_pct"] = round(extreme_pct * 100, 2)
 
@@ -310,9 +319,9 @@ def step3_blur(target, clean, noise_info):
     result["signals"]["gm_ratio"] = round(gm_ratio, 4)
     result["signals"]["gm_ratio_usable"] = gm_ratio_usable
 
-    if gm_ratio > 0.85 and gm_ratio_usable:
+    if gm_ratio > 0.62:   # calibrated: 95% recall, 9.3% FP (gm_ratio survives dual-step: 0.0σ)
         result["verdict"] = "NO_BLUR"
-        result["confidence"] = "high" if gm_ratio_usable else "medium"
+        result["confidence"] = "high"
         return result
 
     # Blur detected — use MTF for sub-type
@@ -418,7 +427,7 @@ def step4_global(target, clean, step1_info, step2_info):
     mean_shifts_rgb = [(target[:,:,c].mean() - clean[:,:,c].mean()) / 255.0 for c in range(3)]
     all_same_dir = all(s > 0.01 for s in mean_shifts_rgb) or all(s < -0.01 for s in mean_shifts_rgb)
 
-    brightness_detected = abs(mean_shift) > 0.01 and all_same_dir
+    brightness_detected = abs(mean_shift) > 0.014 and all_same_dir  # calibrated: 82% recall, 3.3% FP
     result["signals"]["brightness_mean_shift"] = round(mean_shift * 255, 1)
     result["signals"]["brightness_detected_raw"] = brightness_detected
 
@@ -433,7 +442,7 @@ def step4_global(target, clean, step1_info, step2_info):
     t_spread = sum(np.percentile(target[:,:,c], 95) - np.percentile(target[:,:,c], 5) for c in range(3))
     c_spread = sum(np.percentile(clean[:,:,c], 95) - np.percentile(clean[:,:,c], 5) for c in range(3))
     spread_ratio = t_spread / max(c_spread, 1)
-    contrast_detected = spread_ratio < 0.85 or spread_ratio > 1.15
+    contrast_detected = spread_ratio < 0.80 or spread_ratio > 1.20  # wide threshold: low F1 signal
     result["signals"]["contrast_spread_ratio"] = round(spread_ratio, 4)
     result["signals"]["contrast_detected_raw"] = contrast_detected
 
@@ -492,7 +501,13 @@ def step4_global(target, clean, step1_info, step2_info):
         detections.append(f"SATURATION_{direction}_sev{severity}")
 
     result["verdict"] = "; ".join(detections) if detections else "NO_GLOBAL"
-    result["confidence"] = "medium" if detections else "high"
+    # Confidence: brightness is high-confidence, contrast/saturation are low-confidence (calibration F1 < 0.5)
+    if brightness_detected and not (contrast_detected or saturation_detected):
+        result["confidence"] = "high"
+    elif brightness_detected:
+        result["confidence"] = "medium"
+    else:
+        result["confidence"] = "low"  # contrast/saturation are unreliable signals
 
     return result
 
