@@ -711,6 +711,35 @@ def run_full_analysis(target_path, clean_path):
     report["failure_risks"] = risks
     report["recommended_reflection"] = reflections
 
+    # --- Architecture recommendation (来源: finetune_strategy.md exp9/10/12) ---
+    has_contrast = any('contrast' in s.lower() for s in detections)
+    has_motion = any('motion' in s.lower() for s in detections)
+    has_brightness = any('brightness' in s.lower() for s in detections)
+    is_multi_step = len(detections) >= 2
+    is_uncertain = report["summary"].get("confidence", "medium") != "high" if False else is_multi_step
+
+    arch = {"attention_type": "swin", "window_size": 8, "extra_flags": []}
+
+    if has_contrast:
+        # contrast → Swin mandatory (MDTA/OCAB crash -9.78 dB)
+        arch["attention_type"] = "swin"
+        arch["note"] = "Swin required: contrast detected (MDTA/OCAB would crash)"
+    elif has_motion and not has_contrast:
+        # motion blur → OCAB + ws=16 (+1.72 dB over Swin)
+        arch["attention_type"] = "ocab"
+        arch["window_size"] = 16
+        arch["note"] = "OCAB+ws16: motion blur detected (+1.72 dB over Swin)"
+    elif is_multi_step or is_uncertain:
+        # Uncertain/multi-step → DualBranch (robustness #1)
+        arch["extra_flags"] = ["AR_USE_DUAL_BRANCH=1"]
+        arch["note"] = "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+    else:
+        # Simple single-step → can try optimization
+        arch["extra_flags"] = ["AR_USE_DUAL_BRANCH=1"]
+        arch["note"] = "DualBranch: default for single-step"
+
+    report["recommended_architecture"] = arch
+
     report["summary"] = OrderedDict([
         ("detected_degradations", detections),
         ("recommended_search_order", recommended_search),
@@ -718,6 +747,7 @@ def run_full_analysis(target_path, clean_path):
         ("confidence", "high" if len(detections) <= 1 else "medium"),
         ("failure_risks", risks),
         ("reflection_strategies", reflections),
+        ("recommended_architecture", arch),
     ])
 
     return report
