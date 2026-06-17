@@ -37,6 +37,8 @@ This file provides guidance to Claude Code when working with this repository.
 
 **盲识别必须通过 Skill `image-degradation-simulator` 启动子 Agent 执行。禁止用脚本或 auto_pipeline 直接生成预测。**
 
+**🔴 子 Agent 每完成一个退化的识别后，必须重新读取 SKILL.md（来源：exp22 v12 Agent 未严格遵循 Step 1→4 顺序，退化到旧习惯）。每次开始分析新的 challenge 前，先 `Read` SKILL.md 确认当前协议，防止长时间运行后遗忘流程。**
+
 #### 核心定位
 
 ```
