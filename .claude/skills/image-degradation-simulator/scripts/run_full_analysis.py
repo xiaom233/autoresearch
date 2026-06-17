@@ -129,10 +129,10 @@ def step1_compression(target, clean):
     result["signals"]["dct_zero_ratio"] = round(dct_zeros, 4)
 
     # Multi-signal voting (calibrated from 290 synthetic tests)
-    bb_detected = block_boundary > 1.02   # 100% recall, 0% FP (calibrated)
+    bb_detected = block_boundary > 1.05   # 1.5% deviation threshold (no natural image triggers)
     dct_detected = dct_zeros > 0.77       # 87% recall, 12.8% FP
     dct_degraded = dct_zeros > 0.15       # DCT fails in composite (4.3σ degradation)
-    ug_detected = ug_ratio < 0.5          # Quantization indicator
+    ug_detected = ug_ratio < 0.3 and ug_target < 50  # Only severe quantization
 
     # Voting: require 2/3 signals for HIGH confidence
     signals_positive = sum([bb_detected, dct_detected, ug_detected])
@@ -319,9 +319,16 @@ def step3_blur(target, clean, noise_info):
     result["signals"]["gm_ratio"] = round(gm_ratio, 4)
     result["signals"]["gm_ratio_usable"] = gm_ratio_usable
 
-    if gm_ratio > 0.62:   # calibrated: 95% recall, 9.3% FP (gm_ratio survives dual-step: 0.0σ)
+    # Calibrated thresholds:
+    #   pure: gm_ratio < 0.62 (95% recall, 9.3% FP)
+    #   with noise: gm_ratio < 0.72 (noise increases gradient, signal shifts ~5%)
+    has_noise = noise_info.get("verdict", "NO_NOISE") != "NO_NOISE"
+    blur_threshold = 0.72 if has_noise else 0.62
+
+    if gm_ratio > blur_threshold:
         result["verdict"] = "NO_BLUR"
-        result["confidence"] = "high"
+        result["confidence"] = "high" if not has_noise else "medium"
+        result["note"] = f"gm_ratio={gm_ratio:.3f} > {blur_threshold}" if has_noise else None
         return result
 
     # Blur detected — use MTF for sub-type
