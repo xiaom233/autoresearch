@@ -674,39 +674,47 @@ def run_full_analysis(target_path, clean_path):
     bb = s1["signals"]["block_boundary"]
     dct = s1["signals"]["dct_zero_ratio"]
 
-    # Risk 1a: Blur missed because noise elevates gradient
-    if has_noise and not has_blur and gm < 1.0:
-        risks.append("MISS_blur_BY_NOISE")
-        reflections.append("PSNR test blur candidates (gaussian/lens/glass, sev 1-3) — noise may mask blur signal")
-    # Risk 1b: Noise dominates gradient
-    if has_noise and not has_blur and gm >= 1.0:
-        risks.append("MISS_blur_NOISE_DOMINATES")
-        reflections.append("PSNR test blur candidates despite gm>1.0 — strong noise can completely hide blur")
+    # --- Reflection strategies (来源: 7-case reflection experiment, 71% success) ---
+    # JPEG: 3/3 success, 2/3 pixel-perfect match. PSNR verification is reliable for compression.
+    # Blur: 2/2 improvement but marginal (+0.1~2.0dB). PSNR gap between blur subtypes <3dB.
+    # Noise: PSNR-based reflection fails. Must use statistical checks instead.
+    # Global: PSNR-based reflection fails. Already well-identified (90% recall, 2% FP).
 
-    # Risk 2: Mild blur undetected
-    if not has_noise and not has_blur and 0.60 < gm < 0.85:
-        risks.append("MISS_blur_MILD")
-        reflections.append("PSNR test blur(sev=1-2) — mild blur may be below detection threshold")
-
-    # Risk 3: Compression missed in noise
+    # Risk 1: Missing compression — HIGH priority, PSNR verification works
     if has_noise and not has_comp and bb < 1.05:
         risks.append("MISS_comp_BY_NOISE")
-        reflections.append("PSNR test JPEG(sev=1-3) — noise fills DCT zeros and randomizes block boundaries")
+        reflections.append("PSNR test JPEG(sev 1-5): 3/3 success in reflection experiment, 2x pixel-perfect match found")
+    elif not has_comp:
+        risks.append("MISS_comp_POSSIBLE")
+        reflections.append("PSNR test 2-3 JPEG candidates — compression is deterministic, PSNR verification reliable")
 
-    # Risk 4: Compression FP
-    if has_comp and s1["confidence"] in ["low", "medium"]:
-        risks.append("FP_comp_risk")
-        reflections.append("Cross-check: PSNR test compression vs non-compression candidates")
+    # Risk 2: Missing blur — MEDIUM priority, PSNR works but gains marginal
+    if has_noise and not has_blur:
+        risks.append("MISS_blur_BY_NOISE")
+        reflections.append("PSNR test 3 blur candidates (gaussian/lens/glass sev 1-3). Gains marginal (+0.1~2.0dB) but may find match")
+    elif not has_blur and gm < 0.85:
+        risks.append("MISS_blur_MILD")
+        reflections.append("PSNR test 3 blur candidates at sev 1-2. Mild blur detectable by PSNR")
+
+    # Risk 3: Noise type may be wrong — use statistical checks, NOT PSNR
+    if has_noise and s2["confidence"] in ["low", "medium"]:
+        risks.append("NOISE_TYPE_UNCERTAIN")
+        reflections.append("Re-run §B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)")
+
+    # Risk 4: Global FP check — PSNR verification
+    if s4["verdict"] != "NO_GLOBAL" and s4["confidence"] in ["low", "medium"]:
+        risks.append("FP_global_risk")
+        reflections.append("PSNR verify: test if adding global degradation improves over non-global. Global is already 90% accurate")
 
     # Risk 5: Blur FP
     if has_blur and has_noise and s3["confidence"] in ["low", "medium"]:
         risks.append("FP_blur_risk")
-        reflections.append(f"Verify: PSNR test if blur candidate actually improves over noise-only")
+        reflections.append("PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline")
 
-    # Risk 6: Global FP
-    if s4["confidence"] in ["low", "medium"] and s4["verdict"] != "NO_GLOBAL":
-        risks.append("FP_global_risk")
-        reflections.append("PSNR verify global candidates — low F1 signal, high FP risk")
+    # Risk 6: Compression FP
+    if has_comp and s1["confidence"] in ["low", "medium"]:
+        risks.append("FP_comp_risk")
+        reflections.append("PSNR test compression vs non-compression candidates — low confidence detection")
 
     report["failure_risks"] = risks
     report["recommended_reflection"] = reflections
