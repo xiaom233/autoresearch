@@ -101,6 +101,25 @@ for bid in challenges:
             errors.append(f'{bid}: reflection.json 格式错误')
             continue
 
+    # 0: Thinking process must exist (anti-enumeration / anti-script safeguard)
+    tp_file = os.path.join(d, 'thinking_process.json')
+    if not os.path.exists(tp_file):
+        errors.append(f'{bid}: 缺少 thinking_process.json (盲识别过程不可验证)')
+    else:
+        try:
+            tp = json.load(open(tp_file))
+            psnr_tests = tp.get('total_psnr_tests', 0)
+            is_enum = tp.get('enumeration_used', False)
+            path = tp.get('path', '?')
+            if is_enum:
+                errors.append(f'{bid}: thinking_process 标记为枚举 → 禁止')
+            if path == 'A' and psnr_tests > 50:
+                errors.append(f'{bid}: 路径A 但 PSNR测试{psnr_tests}次 > 50 → 疑似枚举')
+            elif path == 'A' and psnr_tests > 20:
+                warnings.append(f'{bid}: 路径A PSNR测试{psnr_tests}次 (20-50, 需确认非枚举)')
+        except:
+            errors.append(f'{bid}: thinking_process.json 格式错误')
+
     # === CHECKS ===
 
     # 1: Script garbage detection — CI=0 only suspicious if no PSNR, no stats, no reflection
