@@ -575,11 +575,64 @@ def run_full_analysis(target_path, clean_path):
     else:
         recommended_search.append("global: none detected")
 
+    # --- Failure Risk Analysis ---
+    risks = []
+    reflections = []
+
+    s1 = report["step1_compression"]; s2 = report["step2_noise"]
+    s3 = report["step3_blur"]; s4 = report["step4_global"]
+
+    has_noise = s2["verdict"] != "NO_NOISE"
+    has_blur = s3["verdict"] != "NO_BLUR"
+    has_comp = s1["verdict"] != "NO_COMPRESSION" and "MILD" not in s1["verdict"]
+    gm = s3["signals"]["gm_ratio"]
+    bb = s1["signals"]["block_boundary"]
+    dct = s1["signals"]["dct_zero_ratio"]
+
+    # Risk 1a: Blur missed because noise elevates gradient (gm_ratio still below 1)
+    if has_noise and not has_blur and gm < 1.0:
+        risks.append("MISS_blur_BY_NOISE")
+        reflections.append("Train(noise_only) → model denoise → re-run Step3 blur detection on residual")
+    # Risk 1b: Noise gradient dominates — blur completely invisible (gm > 1)
+    if has_noise and not has_blur and gm >= 1.0:
+        risks.append("MISS_blur_NOISE_DOMINATES")
+        reflections.append("Train(noise_only) → model denoise → re-run Step3 (only way to detect blur under strong noise)")
+
+    # Risk 2: Mild blur undetected (gm_ratio 0.62-0.85, no noise)
+    if not has_noise and not has_blur and 0.60 < gm < 0.85:
+        risks.append("MISS_blur_MILD")
+        reflections.append("Train(blur_candidate) → val_psnr_db confirmation → if PSNR improves, blur exists")
+
+    # Risk 3: Compression missed because noise fills DCT/blurs blocks
+    if has_noise and not has_comp and bb < 1.05:
+        risks.append("MISS_comp_BY_NOISE")
+        reflections.append("Train(compression_candidate) → check 8×8 block pattern in model residual")
+
+    # Risk 4: Compression is false positive (low confidence)
+    if has_comp and s1["confidence"] in ["low", "medium"]:
+        risks.append("FP_comp_risk")
+        reflections.append("PSNR verify compression candidates — low confidence, may be FP")
+
+    # Risk 5: Blur is false positive (noise+texture misidentified)
+    if has_blur and has_noise and s3["confidence"] in ["low", "medium"]:
+        risks.append("FP_blur_risk")
+        reflections.append(f"Verify gm_ratio={gm:.3f} vs noise+blur threshold — may be noise artifact")
+
+    # Risk 6: Global detection has false positive risk
+    if s4["confidence"] in ["low", "medium"] and s4["verdict"] != "NO_GLOBAL":
+        risks.append("FP_global_risk")
+        reflections.append("Cross-validate global signals with PSNR testing — low F1 signal")
+
+    report["failure_risks"] = risks
+    report["recommended_reflection"] = reflections
+
     report["summary"] = OrderedDict([
         ("detected_degradations", detections),
         ("recommended_search_order", recommended_search),
         ("total_expected_steps", max(1, len(detections))),
         ("confidence", "high" if len(detections) <= 1 else "medium"),
+        ("failure_risks", risks),
+        ("reflection_strategies", reflections),
     ])
 
     return report
