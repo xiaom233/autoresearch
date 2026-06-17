@@ -674,39 +674,39 @@ def run_full_analysis(target_path, clean_path):
     bb = s1["signals"]["block_boundary"]
     dct = s1["signals"]["dct_zero_ratio"]
 
-    # Risk 1a: Blur missed because noise elevates gradient (gm_ratio still below 1)
+    # Risk 1a: Blur missed because noise elevates gradient
     if has_noise and not has_blur and gm < 1.0:
         risks.append("MISS_blur_BY_NOISE")
-        reflections.append("Train(noise_only) → model denoise → re-run Step3 blur detection on residual")
-    # Risk 1b: Noise gradient dominates — blur completely invisible (gm > 1)
+        reflections.append("PSNR test blur candidates (gaussian/lens/glass, sev 1-3) — noise may mask blur signal")
+    # Risk 1b: Noise dominates gradient
     if has_noise and not has_blur and gm >= 1.0:
         risks.append("MISS_blur_NOISE_DOMINATES")
-        reflections.append("Train(noise_only) → model denoise → re-run Step3 (only way to detect blur under strong noise)")
+        reflections.append("PSNR test blur candidates despite gm>1.0 — strong noise can completely hide blur")
 
-    # Risk 2: Mild blur undetected (gm_ratio 0.62-0.85, no noise)
+    # Risk 2: Mild blur undetected
     if not has_noise and not has_blur and 0.60 < gm < 0.85:
         risks.append("MISS_blur_MILD")
-        reflections.append("Train(blur_candidate) → val_psnr_db confirmation → if PSNR improves, blur exists")
+        reflections.append("PSNR test blur(sev=1-2) — mild blur may be below detection threshold")
 
-    # Risk 3: Compression missed because noise fills DCT/blurs blocks
+    # Risk 3: Compression missed in noise
     if has_noise and not has_comp and bb < 1.05:
         risks.append("MISS_comp_BY_NOISE")
-        reflections.append("Train(compression_candidate) → check 8×8 block pattern in model residual")
+        reflections.append("PSNR test JPEG(sev=1-3) — noise fills DCT zeros and randomizes block boundaries")
 
-    # Risk 4: Compression is false positive (low confidence)
+    # Risk 4: Compression FP
     if has_comp and s1["confidence"] in ["low", "medium"]:
         risks.append("FP_comp_risk")
-        reflections.append("PSNR verify compression candidates — low confidence, may be FP")
+        reflections.append("Cross-check: PSNR test compression vs non-compression candidates")
 
-    # Risk 5: Blur is false positive (noise+texture misidentified)
+    # Risk 5: Blur FP
     if has_blur and has_noise and s3["confidence"] in ["low", "medium"]:
         risks.append("FP_blur_risk")
-        reflections.append(f"Verify gm_ratio={gm:.3f} vs noise+blur threshold — may be noise artifact")
+        reflections.append(f"Verify: PSNR test if blur candidate actually improves over noise-only")
 
-    # Risk 6: Global detection has false positive risk
+    # Risk 6: Global FP
     if s4["confidence"] in ["low", "medium"] and s4["verdict"] != "NO_GLOBAL":
         risks.append("FP_global_risk")
-        reflections.append("Cross-validate global signals with PSNR testing — low F1 signal")
+        reflections.append("PSNR verify global candidates — low F1 signal, high FP risk")
 
     report["failure_risks"] = risks
     report["recommended_reflection"] = reflections
