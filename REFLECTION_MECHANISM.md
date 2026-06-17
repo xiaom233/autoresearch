@@ -52,7 +52,60 @@
 
 ---
 
-## 二、训练驱动两阶段反思 (来源: exp21 双步反思失效审计)
+## 二、退化迁移知识库 (来源: 288模型迁移实验, 42 specialists × cross-testing)
+
+反思 Agent 应基于以下经验规律判断哪些候选值得测试，哪些不值得。
+
+### Severity 偏差的代价
+
+不同退化对 severity 错误的容忍度差异巨大：
+
+| 退化类型 | sev±1 PSNR 损失 | 反思建议 |
+|------|:--:|------|
+| **JPEG** | -0.2 dB | 几乎无损失。sev 偏差不需要优先修正 |
+| **blur (gaussian/lens)** | +0~-3 dB | 可接受。sev 偏差不是主要问题 |
+| **noise (gaussian/speckle)** | -1~-3 dB | 可接受 |
+| **brightness_gamma** | **-17 dB** | 致命。gamma 的 severity 必须精确，优先修正 |
+
+### 子类型互换的代价
+
+如果 R0 预测了 `blur_gaussian(3)`，但真实退化是 `blur_lens(3)`，模型迁移损失：
+
+| 互换方向 | 损失 | 规律 |
+|------|:--:|------|
+| **gaussian ↔ lens** (sev≥3) | 1-4 dB | 几乎可互换。lens 模型在 gaussian 目标上有时甚至更好 |
+| **gaussian/lens → glass** | 2-7 dB | 场景依赖。sev=3 时较接近，sev=1 时差距大 |
+| **gaussian/lens → zoom** | 1-5 dB | zoom 专家反而表现更差！其他 blur 模型在 zoom 上更好 |
+| **glass → gaussian/lens** (sev=1) | 5-8 dB | 低严重度时不可互换 |
+| **poisson ↔ speckle** | 1-3 dB | 相对安全 |
+| **gaussian_RGB ↔ YCrCb** | 1-5 dB | 可测试，但非优先 |
+| **impulse → 任何其他 noise** | **21 dB** | 绝对不可互换。impulse 专家极度专一 |
+
+### JPEG 反思 100% 可靠
+
+基于 7-case 受控实验：当怀疑缺失 compression 时，PSNR 测试 JPEG(1-5) 的成功率是 100%（3/3 找到正确答案，2/3 像素级完美匹配）。compression 是确定性退化，PSNR 验证完全可靠。
+
+### Blur 反思边际有效
+
+PSNR 测试不同 blur 子类型可以找到改善方向，但增益通常在 0.1-2.0 dB 范围。blur 子类型之间的 PSNR 差距 <3dB，不可靠地区分。
+
+### Noise 反思不可用 PSNR
+
+所有 noise 类型的 PSNR 都受随机种子影响。不能用 PSNR 选择 noise 类型——必须使用 §B 统计检查。
+
+### 反思 Agent 使用指南
+
+当分析 R0 预测时，参考以上规律判断优先级：
+
+1. 如果 R0 含 **brightness_gamma** → 优先检查 severity 是否精确（±1 代价 17dB）
+2. 如果 R0 含 **noise_impulse** → 绝不替换为其他 noise 类型（代价 21dB）
+3. 如果 R0 预测 **blur_gaussian** 且 alternatives 含 **blur_lens** → 安全 swap，直接换（代价 <4dB）
+4. 如果怀疑缺失 **compression_jpeg** → 100% 值得 PSNR 测试
+5. 如果 R0 含 **blur_zoom** → 考虑换成 gaussian/lens——其他模型在 zoom 上可能更好
+
+---
+
+## 三、训练驱动两阶段反思 (来源: exp21 双步反思失效审计)
 
 ### 问题
 
