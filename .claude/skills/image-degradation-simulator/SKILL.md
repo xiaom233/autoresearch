@@ -264,34 +264,53 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 2: Noise 检测 (noise统计不受低频blur影响)                │
 │                                                             │
-│   noise_prior.py + §B 6步检查                               │
-│   判据: wavelet MAD σ > 2 → 有噪声                          │
-│   子类型: §B 6步 (impulse→speckle→poisson→spatial→YCrCb→   │
-│           gaussian)                                         │
-│   Severity: σ 值与校准表匹配                                 │
+│   判据: wavelet MAD σ > 1.9 → 有噪声 (83%召回, 7.3%FP)      │
+│   例外: σ 低但 spatial_corr > 0.15 或 extreme_pct > 2 也进入  │
 │                                                             │
-│   记录: noise=YES/NO, type, σ, spatial_corr                 │
-│   传给后续: noise σ=32 会撑开percentile → contrast假阳性     │
-│            noise会增加Cr/Cb方差 → saturation假阳性           │
+│   子类型 — Tier 1 直方图 (56-case验证, 置信度高):             │
+│     YCrCb:   rgb_ratio > 1.4 + skew≈0                       │
+│     Impulse: avg_kurt > 5 OR extreme_pct > 5%               │
+│     Speckle: avg_skew < -0.5 + vm_slope > 0.001             │
+│     Gaussian_RGB: |skew|<0.3 + kurt<3                       │
+│                                                             │
+│   子类型 — Tier 2 辅助信号猜测 (直方图歧义, confidence=       │
+│     speculative, Agent 必须用 §B 统计检查验证):              │
+│     Poisson:  var_slope > 0.5 + vm_slope≈0 (方差∝强度)       │
+│              ⚠️ Speckle 也有高 var_slope, 用 vm_slope 区分    │
+│     Spatially_Correlated: spatial_corr > 自适应阈值           │
+│              σ<5→sc>0.30, σ5-15→sc>0.25, σ>15→sc>0.40       │
+│              ⚠️ blur 也会抬高 sc, σ 自适应阈值部分缓解         │
+│                                                             │
+│   Severity: 按类型分别映射 σ→sev (Poisson/SC 用专属映射表)     │
+│                                                             │
+│   记录: noise=YES/NO, type, confidence, σ, subjective_guess  │
+│   传给后续: noise σ 会撑开 percentile → contrast假阳性        │
+│            noise 会增加 Cr/Cb 方差 → saturation假阳性         │
 │   ⚠️ 不做去噪! 只记录参数                                   │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 3: Blur 检测 (已知 noise/compression 状态)              │
 │                                                             │
-│   ⚠️ 有 noise? → gm_ratio 不可靠 (1%召回)                    │
-│     → 改用 MTF 频域信号:                                    │
+│   ⚠️ 有 noise? → gm_ratio 完全失效 (noise sev=1 就能让       │
+│     blur sev=5 的 gm_ratio 从 0.20 跳到 2.06, 不可恢复)       │
+│     → 改用 spectral_slope (对数功率谱斜率):                   │
+│        原理: noise 均匀增加所有频率能量 → 斜率几乎不变 (±0.03) │
+│              blur 衰减高频 → 斜率变陡 (sev5: -1.1→-1.8)       │
+│        判据: slope_ratio > 1.08 (目标比clean陡峭→有blur)      │
+│        severity: slope_ratio 1.08/1.18/1.30/1.50 → sev 2-5   │
+│                                                             │
+│   子类型 (MTF 频域信号, 噪声也会降低精度但仍有区分度):         │
 │        - lens:    MTF 局部极小值 (Bessel零点)               │
 │        - zoom:    gm_ratio(center)/gm_ratio(corner) > 1.3  │
 │        - glass:   MTF bin-to-bin 粗糙度                    │
-│        - motion:  angular_FFT anisotropy > 4.0 + dir>30%    │
-│        - gaussian: MTF 平滑单调衰减, 空间均匀               │
-│        - jitter:  gm_ratio > 0.85, 无motion各项异性         │
+│        - motion:  angular_FFT anisotropy > 4.0              │
+│        - gaussian: MTF 平滑单调衰减, 默认                   │
 │                                                             │
 │   ✅ 无 noise → gm_ratio 可用 (83%召回, 0%FP)                │
+│     阈值: 纯 blur < 0.62; 有 noise 时 gm 不用, 改用 slope    │
 │                                                             │
-│   记录: blur=YES/NO, 子类型, sev, 信号来源                   │
-│   传给后续: blur会平滑JPEG 8×8块 → global假阳性更难识别       │
+│   记录: blur=YES/NO, 子类型, sev, 信号来源(gm/slope)         │
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -624,21 +643,39 @@ PSNR 对噪声函数天然偏低（随机种子不同导致像素无法匹配）
 | **Impulse** | 稀疏极端像素 (0 和 255) | 两端尖峰 | exact_0+255 像素比例 > 0.3% |
 | **Spatially Correlated** | 邻域像素残差相关 | 空间自相关高 | spatial_corr 0.15-0.5 |
 
-#### 判别流程 (v6 — speckle 优先)
+#### 判别流程 (v14 — 双 Tier: 直方图确定 + 辅助信号猜测)
 
+**Tier 1 直方图分类** (56-case validated: gaussian_RGB 100%, impulse 72%, YCrCb 66%):
 ```
-Step 1: 检查 impulse → impulse_pct(net) > 0.3% → noise_impulse
-Step 2: 检查 Speckle → vm_slope > 0.01 (var/mean 随强度上升) → noise_speckle
-Step 3: 检查 Poisson → var_slope > 1.0 + vm_slope≈0 → noise_poisson
-Step 4: 检查 Spatial → spatial_corr 0.15-0.5 → noise_spatially_correlated
-Step 5: 检查 YCrCb → rgb_std_ratio > 1.4 OR Cr/Y_std > 1.3 → noise_gaussian_YCrCb
-Step 6: 默认 → noise_gaussian_RGB (低置信)
+Step 1: 检查 YCrCb → rgb_ratio > 1.4 + skew≈0 → noise_gaussian_YCrCb
+Step 2: 检查 Impulse → avg_kurt > 5 OR extreme_pct > 5% → noise_impulse
+Step 3: 检查 Speckle → avg_skew < -0.5 + vm_slope > 0.001 → noise_speckle
+Step 4: 检查 Gaussian_RGB → |skew| < 0.3 + kurt < 3 → noise_gaussian_RGB (高置信)
 ```
 
-#### 多退化含噪声时的注意事项
+**Tier 2 辅助信号猜测** (直方图歧义时 — 置信度 = speculative):
+```
+Step 5: 检查 Poisson → var_slope > 0.5 + vm_slope ≈ 0 (方差∝强度, 纯Poisson ≥1.8)
+         注意: Speckle 也有高 var_slope (≥2.9), 用 vm_slope 区分 (speckle vm_slope > 0.001)
+Step 6: 检查 Spatially_Correlated → spatial_corr > 阈值 (sigma自适应):
+         - sigma < 5:  sc > 0.30 (低噪声: 高 sc 更可靠)
+         - sigma 5-15: sc > 0.25
+         - sigma > 15: sc > 0.40 (强噪声+blur 可能抬高 sc, 提高阈值)
+         ⚠️ 跨图模式: sc 被内容差异污染 (平均 0.52), 阈值升至 0.50
+Step 7: 默认 → noise_gaussian_RGB (低置信)
+```
 
-多退化时残差被其他退化污染。复合退化含 noise 的情况后续构造专门实验解决。
-当前：先识别确定性退化 → 剥离 → 残差分析噪声。
+**Tier 2 的限制**:
+- Poisson/spatially_correlated 标记为 confidence="speculative"
+- 在 `subjective_guess` 字段中记录触发信号
+- Agent 必须通过 §B 统计检查或 PSNR 对比验证猜测
+
+#### 复合退化中的噪声识别
+
+复合退化 (blur+noise) 残差被 blur 污染:
+- blur 会抬高 spatial_corr → 可能误判为 spatially_correlated
+- sigma 自适应阈值部分缓解, 但不能完全消除
+- Agent: 如果 blur 被检测到, 对 SC 猜测保持怀疑, 优先 Trust 直方图分类
 
 ### 关键原则
 

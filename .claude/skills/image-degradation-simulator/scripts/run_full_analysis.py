@@ -217,17 +217,15 @@ def step2_noise(target, clean):
     result["signals"]["noise_prior_sigma"] = round(avg_sigma, 2)
     result["signals"]["sigma_per_channel"] = [round(s, 2) for s in sigma]
 
-    if avg_sigma < 1.9:   # calibrated: 83% recall, 7.3% FP
-        result["signals"]["gm_ratio_usable"] = True
-        return result
-
-    result["signals"]["gm_ratio_usable"] = False
+    # --- Always compute auxiliary signals (may trigger noise entry even when sigma low) ---
 
     # §B Step 1: Impulse (calibrated threshold: >2% extreme pixels)
     extreme_pct = ((np.abs(residual) > 3 * np.std(residual)).sum(axis=2) > 0).mean()
     result["signals"]["impulse_extreme_pct"] = round(extreme_pct * 100, 2)
 
-    # §B Step 2: Speckle (var/mean slope)
+    # §B Step 2/3: Speckle (vm_slope) + Poisson (var_slope)
+    # var_slope: slope of variance vs intensity (Poisson: var ∝ intensity)
+    # vm_slope: slope of variance/mean ratio vs intensity (Speckle: var/mean ∝ intensity)
     flat_mask = np.std(clean, axis=2) < 30
     if flat_mask.sum() > 100:
         flat_intensities = clean[flat_mask].mean(axis=1)
@@ -237,25 +235,116 @@ def step2_noise(target, clean):
             bin_vars = [flat_variances[bins==i].mean() for i in range(6) if (bins==i).sum()>5]
             bin_means = [flat_intensities[bins==i].mean() for i in range(6) if (bins==i).sum()>5]
             if len(bin_vars) >= 3:
-                coeffs = np.polyfit(bin_means, bin_vars, 1)
-                result["signals"]["speckle_vm_slope"] = round(coeffs[0], 5)
-                result["signals"]["poisson_var_slope"] = round(coeffs[0], 3)
+                # Poisson var_slope: variance vs intensity
+                var_coeffs = np.polyfit(bin_means, bin_vars, 1)
+                result["signals"]["poisson_var_slope"] = round(var_coeffs[0], 3)
+                # Speckle vm_slope: variance/mean ratio vs intensity
+                bin_vm_ratios = [v / max(m, 1) for v, m in zip(bin_vars, bin_means)]
+                vm_coeffs = np.polyfit(bin_means, bin_vm_ratios, 1)
+                result["signals"]["speckle_vm_slope"] = round(vm_coeffs[0], 6)
 
-    # §B Step 4: Spatial correlation
+    # §B Step 2.5: Poisson dark-vs-bright variance ratio (Poisson 独特签名)
+    # Poisson 加噪: Poisson(img*c)/c → 暗区方差≈0, 亮区方差=img/c
+    # 暗区 (intensity<50) vs 亮区 (intensity>180) 方差比:
+    #   Gaussian ~1.0-1.2, Poisson ~4-6, Speckle ~22-33
+    if residual.shape[0] > 4 and residual.shape[1] > 4:
+        gray_clean = clean.mean(axis=2)
+        flat_gray = np.std(clean, axis=2) < 15  # 灰色平坦区域
+        dark_mask = (gray_clean < 50) & flat_gray
+        bright_mask = (gray_clean > 180) & flat_gray
+        if dark_mask.sum() > 100 and bright_mask.sum() > 100:
+            dark_var = residual[dark_mask].var()
+            bright_var = residual[bright_mask].var()
+            db_ratio = bright_var / max(dark_var, 0.01)
+            result["signals"]["poisson_db_ratio"] = round(db_ratio, 2)
+
+    # §B Step 4: Spatial correlation (on HH wavelet subband → noise-dominated)
+    # Full-residual spatial_corr conflates blur (spatially correlated) with noise.
+    # HH subband contains finest details → isolates noise spatial structure.
     if residual.shape[0] > 4 and residual.shape[1] > 4:
         spatial_corrs = []
+        hh_spatial_corrs = []
         for c in range(3):
             ch_r = residual[:,:,c]
-            # Adjacent pixel correlation
+            # Full residual spatial correlation (legacy)
             c1 = np.corrcoef(ch_r[:-1,:].flatten(), ch_r[1:,:].flatten())[0,1]
             c2 = np.corrcoef(ch_r[:,:-1].flatten(), ch_r[:,1:].flatten())[0,1]
             spatial_corrs.extend([c1, c2])
+            # HH subband spatial correlation (noise-isolated)
+            _, _, _, HH = haar_dwt2_1d(ch_r)
+            if HH.shape[0] > 2 and HH.shape[1] > 2:
+                h1 = np.corrcoef(HH[:-1,:].flatten(), HH[1:,:].flatten())[0,1]
+                h2 = np.corrcoef(HH[:,:-1].flatten(), HH[:,1:].flatten())[0,1]
+                hh_spatial_corrs.extend([h1, h2])
         result["signals"]["spatial_corr"] = round(np.mean(spatial_corrs), 4)
+        result["signals"]["spatial_corr_hh"] = round(np.mean(hh_spatial_corrs), 4) if hh_spatial_corrs else 0
 
     # §B Step 5: RGB ratio (YCrCb vs RGB)
     rgb_stds = [residual[:,:,c].std() for c in range(3)]
     if min(rgb_stds) > 0:
         result["signals"]["rgb_ratio"] = round(max(rgb_stds) / min(rgb_stds), 2)
+
+    # --- Auto-detect same-image vs cross-image mode ---
+    # Same-image: clean is undegraded version of target → high correlation
+    # Cross-image: clean is a different image → low correlation, residual dominated by content
+    is_same_image = False
+    try:
+        # Coarse-scale correlation to reduce noise impact
+        from PIL.Image import Resampling
+        t_small = np.array(Image.fromarray(target.astype(np.uint8)).resize((64, 64), Resampling.LANCZOS))
+        c_small = np.array(Image.fromarray(clean.astype(np.uint8)).resize((64, 64), Resampling.LANCZOS))
+        corr = np.corrcoef(t_small.ravel(), c_small.ravel())[0, 1]
+        is_same_image = corr > 0.8  # Same image: corr > 0.85 even with strong degradation
+    except Exception:
+        pass  # Conservative: assume cross-image if detection fails
+
+    # --- Noise detection gate ---
+    # sigma < 1.9 AND no auxiliary signals → exit (low FP: 83% recall, 7.3% FP)
+    # Exception: spatial_corr/impulse can indicate noise even when wavelet sigma is low,
+    # but ONLY in same-image mode (cross-image residual dominated by content).
+    # Spatial correlation for noise typing:
+    # - Spatially_correlated noise: sc ~0.5-0.6 (pure), drops in composite but still >0.15
+    # - Blur also inflates sc (0.2-0.4) → false SC detections when blur+noise present
+    # - Sigma-dependent threshold: strong noise + high sc → likely blur+noise artifact
+    #   Weak noise + high sc → likely real SC noise
+    sc = result["signals"].get("spatial_corr", 0)
+    ep = result["signals"].get("impulse_extreme_pct", 0)
+    # Cross-image: residual dominated by content → spatial_corr unreliable
+    if is_same_image:
+        if avg_sigma > 15:      sc_threshold = 0.40  # Strong noise: blur+noise artifact risk
+        elif avg_sigma > 5:     sc_threshold = 0.25
+        else:                   sc_threshold = 0.15  # Low sigma: classic SC signature
+        ep_threshold = 2
+    else:
+        sc_threshold = 0.50
+        ep_threshold = 8
+    if avg_sigma < 1.9 and (sc < sc_threshold) and (ep < ep_threshold):
+        result["signals"]["gm_ratio_usable"] = True
+        result["signals"]["_same_image"] = is_same_image
+        return result
+
+    result["signals"]["gm_ratio_usable"] = avg_sigma < 1.9
+    result["signals"]["_same_image"] = is_same_image
+    # Low-sigma subjective detection (wavelet-blind noise types)
+    if avg_sigma <= 5:
+        _sc_t = 0.30 if is_same_image else 0.50
+        _ep_t = 5 if is_same_image else 15
+        if sc > _sc_t and is_same_image:
+            result["verdict"] = "SPATIALLY_CORRELATED"
+            result["confidence"] = "speculative"
+            result["subjective_guess"] = f"sigma={avg_sigma:.1f}≤5 but spatial_corr={sc:.4f}>{_sc_t} → spatially structured noise (wavelet-blind)"
+            result["estimated_severity"] = 3 if sc > 0.45 else (2 if sc > 0.3 else 1)
+            result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": False,
+                                     "can_fake_saturation": False, "can_fake_brightness": False}
+            return result
+        if ep > _ep_t:
+            result["verdict"] = "IMPULSE"
+            result["confidence"] = "speculative"
+            result["subjective_guess"] = f"sigma={avg_sigma:.1f}≤5 but extreme_pct={ep:.1f}%>{_ep_t}% → sparse impulse noise (wavelet-blind, mode={'same' if is_same_image else 'cross'})"
+            result["estimated_severity"] = 2 if ep > 10 else 1
+            result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": False,
+                                     "can_fake_saturation": False, "can_fake_brightness": False}
+            return result
 
     # Histogram-based noise classification (skew+kurtosis, 56-case validated)
     # gaussian_RGB=100%, impulse=72%, YCrCb=66% in pure+composite
@@ -277,8 +366,30 @@ def step2_noise(target, clean):
         result["signals"]["noise_hist_skew"] = round(float(avg_skew), 3)
         result["signals"]["noise_hist_kurt"] = round(float(avg_kurt), 2)
 
-        # Classify (56-case validated: gaussian_RGB 100%, impulse 72%, YCrCb 66%)
-        if result["signals"].get("rgb_ratio", 1) > 1.4:
+        # Classify: Tier 1 histogram (56-case validated) + Tier 1.5 db_ratio (物理信号优先)
+        # ⚠️ 复合退化中直方图(skew/kurt/rgb_ratio)可能被 blur/saturate/JPEG 扭曲。
+        # db_ratio (暗区vs亮区绝对方差比) 是直接物理测量, 复合退化中更可靠。
+        # db_ratio: Gaussian~1.1, Poisson~4-6, Speckle~22-33
+        subjective_reason = None
+        db = result["signals"].get("poisson_db_ratio", 0)
+        vs = result["signals"].get("poisson_var_slope", 0)
+        vm = result["signals"].get("speckle_vm_slope", 0)
+
+        # Tier 1.5: db_ratio 物理信号 (在直方图之前, 复合退化更鲁棒)
+        # ⚠️ 复合退化中 blur 会压低 Speckle 的 db_ratio (从 >15 到 2-10),
+        # 与 Poisson 的 db_ratio (4-6) 重叠。用 vm_slope 区分:
+        #   vm_slope > 0.001 → var/mean ∝ I (Speckle 乘性)
+        #   vm_slope ≈ 0 → var ∝ I (Poisson 加性, var/mean ≈ constant)
+        if db > 15 or (db > 2.0 and vm > 0.01):
+            result["verdict"] = "SPECKLE"
+            result["confidence"] = "high" if db > 15 else "medium"
+            subjective_reason = f"db_ratio={db:.1f}>15" if db > 15 else f"db_ratio={db:.1f} in [2,15] + vm_slope={vm:.4f}>0.01 → Speckle (乘性噪声, var/mean∝I)"
+        elif db > 2.0 and vs > 0.3:
+            # Poisson 物理签名: 暗区方差小、亮区方差大 (var∝I)
+            result["verdict"] = "POISSON"
+            result["confidence"] = "medium" if db > 3.5 else "speculative"
+            subjective_reason = f"db_ratio={db:.1f} in [2,15] + var_slope={vs:.2f}>0.3 → signal-dependent additive noise (Poisson-like, var∝I)"
+        elif result["signals"].get("rgb_ratio", 1) > 1.4:
             result["verdict"] = "GAUSSIAN_YCrCb"
             result["confidence"] = "high" if abs(avg_skew) < 0.3 else "medium"
         elif avg_kurt > 5 or extreme_pct > 5:
@@ -286,23 +397,66 @@ def step2_noise(target, clean):
             result["confidence"] = "high" if avg_kurt > 20 else "medium"
         elif avg_skew < -0.5:
             result["verdict"] = "SPECKLE"
-            result["confidence"] = "high" if result["signals"].get("speckle_vm_slope", 0) > 0.01 else "medium"
+            result["confidence"] = "high" if vm > 0.01 else "medium"
+        # --- Tier 2: subjective guesses (直方图歧义, 辅助信号) ---
+        elif vs > 0.5:
+            # Signal-dependent variance (var ∝ intensity) — Poisson or Speckle signature.
+            # Disambiguate via db_ratio (dark/bright absolute variance ratio) + vm_slope:
+            #   Gaussian: db_ratio ~1.1, cv_ratio ~6.5
+            #   Poisson:  db_ratio ~5,   cv_ratio ~2.8
+            #   Speckle:  db_ratio ~25,  cv_ratio ~1.3
+            vm = result["signals"].get("speckle_vm_slope", 0)
+            db = result["signals"].get("poisson_db_ratio", 0)
+            if db > 15:
+                result["verdict"] = "SPECKLE"
+                result["confidence"] = "medium" if vm > 0.001 else "low"
+                subjective_reason = f"db_ratio={db:.1f}>15 → multiplicative noise (Speckle-like, bright var >> dark var)"
+            elif db > 2.0:
+                result["verdict"] = "POISSON"
+                result["confidence"] = "medium" if db > 3.5 else "speculative"
+                subjective_reason = f"db_ratio={db:.1f} in [2,15] + var_slope={result['signals']['poisson_var_slope']:.2f}>0.5 → signal-dependent additive noise (Poisson-like, var∝I)"
+            elif vm > 0.001:
+                result["verdict"] = "SPECKLE"
+                result["confidence"] = "low"
+                subjective_reason = f"var_slope={result['signals']['poisson_var_slope']:.3f}>0.5 + vm_slope={vm:.5f}>0.001 → speckle (low-sev, histogram missed)"
+            else:
+                result["verdict"] = "POISSON"
+                result["confidence"] = "speculative"
+                subjective_reason = f"var_slope={result['signals']['poisson_var_slope']:.3f}>0.5 + vm_slope≈0 + db_ratio={db:.1f} → signal-dependent noise (Poisson-like). NOT histogram-verified."
+        elif sc > sc_threshold:
+            result["verdict"] = "SPATIALLY_CORRELATED"
+            result["confidence"] = "speculative"
+            subjective_reason = f"spatial_corr={sc:.4f}>{sc_threshold} (sigma={avg_sigma:.1f}) → spatially structured noise. NOT histogram-verified."
         elif abs(avg_skew) < 0.3 and avg_kurt < 3:
             result["verdict"] = "GAUSSIAN_RGB"
             result["confidence"] = "high"
-        elif result["signals"].get("spatial_corr", 0) > 0.15:
-            result["verdict"] = "SPATIALLY_CORRELATED"
-            result["confidence"] = "low"  # hard to distinguish from gaussian
         else:
             result["verdict"] = "GAUSSIAN_RGB"
             result["confidence"] = "low"
+        if subjective_reason:
+            result["subjective_guess"] = subjective_reason
 
-    # Severity estimation
-    sev_map = {2:1, 5:2, 10:3, 20:4, 35:5}
-    sev = 1
-    for threshold, s in sorted(sev_map.items()):
-        if avg_sigma > threshold: sev = s
-    result["estimated_severity"] = sev
+    # Severity estimation (type-specific maps calibrated on wavelet MAD sigma)
+    v = result["verdict"]
+    if v == "POISSON":
+        # Poisson wavelet sigma: sev1=8.9, sev3=12.4, sev5=19.3
+        sev_map = {5:1, 9:2, 11:3, 15:4, 17:5}
+    elif v == "SPATIALLY_CORRELATED":
+        # Spatially_correlated wavelet sigma: sev1=1.5, sev3=2.2, sev5=3.3
+        sev_map = {0:1, 1.8:2, 2.5:3, 3.0:4, 3.1:5}
+    elif v == "IMPULSE" and result.get("confidence") == "speculative":
+        # Low-sigma impulse (wavelet-blind): severity from extreme_pct
+        ep = result["signals"].get("impulse_extreme_pct", 0)
+        result["estimated_severity"] = 1 if ep < 5 else (2 if ep < 15 else (3 if ep < 30 else 4))
+        sev_map = None  # Already set
+    else:
+        # Gaussian-calibrated (works for GAUSSIAN_RGB, GAUSSIAN_YCrCb, SPECKLE, IMPULSE)
+        sev_map = {2:1, 5:2, 10:3, 20:4, 35:5}
+    if sev_map is not None:
+        sev = 1
+        for threshold, s in sorted(sev_map.items()):
+            if avg_sigma > threshold: sev = s
+        result["estimated_severity"] = sev
 
     # Speckle-specific severity signal
     if result["verdict"] == "SPECKLE":
@@ -404,10 +558,39 @@ def compute_radial_mtf(img):
         radial.append(fft[mask].mean())
     return np.array(radial)
 
+
+def compute_spectral_slope(img):
+    """Log-power vs log-frequency slope (mid-frequencies 10-100 px).
+    More negative = more blur. Noise adds flat offset → slope barely changes.
+    Pure: -1.1 (no blur) to -1.8 (sev5). Noise: -1.08 (sev5, no blur).
+    Blur+Noise sev5+sev5: -1.60 (blur dominates)."""
+    gray = img.mean(axis=2) if len(img.shape) == 3 else img
+    h, w = gray.shape
+    fft = np.abs(np.fft.fftshift(np.fft.fft2(gray - gray.mean())))
+    cy, cx = h // 2, w // 2
+    max_r = min(cy, cx) - 5
+    freqs, powers = [], []
+    for r in range(5, max_r, 3):
+        y, x = np.ogrid[-cy:h - cy, -cx:w - cx]
+        mask = (np.sqrt(x**2 + y**2) >= r) & (np.sqrt(x**2 + y**2) < r + 3)
+        if mask.sum() > 10:
+            freqs.append(r)
+            powers.append(fft[mask].mean())
+    freqs = np.array(freqs)
+    powers = np.array(powers)
+    mid = (freqs > 10) & (freqs < min(100, max_r - 10))
+    if mid.sum() < 5:
+        return 0.0
+    log_f = np.log(freqs[mid])
+    log_p = np.log(powers[mid] + 1)
+    slope, _ = np.polyfit(log_f, log_p, 1)
+    return float(slope)
+
 def step3_blur(target, clean, noise_info):
-    """Blur detection using gm_ratio + MTF signals."""
+    """Blur detection using gm_ratio + spectral_slope (noise-robust) + MTF signals."""
     result = {"verdict": "NO_BLUR", "confidence": "medium", "signals": {}}
     gm_ratio_usable = noise_info.get("signals", {}).get("gm_ratio_usable", True)
+    has_noise = noise_info.get("verdict", "NO_NOISE") != "NO_NOISE"
 
     target_gm = compute_gm_ratio(target)
     clean_gm = compute_gm_ratio(clean)
@@ -415,18 +598,35 @@ def step3_blur(target, clean, noise_info):
     result["signals"]["gm_ratio"] = round(gm_ratio, 4)
     result["signals"]["gm_ratio_usable"] = gm_ratio_usable
 
-    # Calibrated thresholds:
-    #   pure: gm_ratio < 0.62 (95% recall, 9.3% FP)
-    #   with noise: gm_ratio < 0.72 (noise increases gradient, signal shifts ~5%)
-    has_noise = noise_info.get("verdict", "NO_NOISE") != "NO_NOISE"
-    blur_threshold = 0.72 if has_noise else 0.62
+    # Spectral slope: noise-robust blur signal
+    # Blur steepens slope (more negative); noise barely affects it (±0.03)
+    target_slope = compute_spectral_slope(target)
+    clean_slope = compute_spectral_slope(clean)
+    slope_ratio = target_slope / min(clean_slope, -0.01)  # > 1 when target has steeper slope (more blurred)
+    result["signals"]["spectral_slope_target"] = round(target_slope, 4)
+    result["signals"]["spectral_slope_clean"] = round(clean_slope, 4)
+    result["signals"]["spectral_slope_ratio"] = round(slope_ratio, 4)
 
-    if gm_ratio > blur_threshold:
+    # gm_ratio threshold: pure=0.62, with noise=0.72
+    # BUT noise completely destroys gm_ratio (2.0+ even for sev=1 noise + sev=5 blur).
+    # When noise present, rely on spectral_slope instead.
+    blur_threshold = 0.72 if has_noise else 0.62
+    gm_detects_blur = gm_ratio < blur_threshold
+    # Spectral slope detects blur: slope_ratio > 1.15 (target significantly steeper than clean)
+    # Calibrated: pure blur sev≥2 → slope_ratio > 1.12; blur+noise sev≥2 → slope_ratio > 1.05
+    slope_detects_blur = slope_ratio > 1.08
+    # When noise present, trust spectral_slope over gm_ratio
+    blur_detected = slope_detects_blur if has_noise else gm_detects_blur
+
+    if not blur_detected:
         result["verdict"] = "BLUR_UNLIKELY"
-        result["confidence"] = "medium" if has_noise else "high"
-        result["should_still_test"] = True  # Agent should still PSNR-test blur candidates
-        result["note"] = f"gm_ratio={gm_ratio:.3f} > {blur_threshold}" + (" (noise present, signal may be masked)" if has_noise else "")
-        result["suggested_action"] = "Test 2-3 blur candidates via PSNR despite gm_ratio signal — noise/blur coupling can mask blur"
+        result["confidence"] = "low" if has_noise else "medium"
+        result["should_still_test"] = True
+        if has_noise:
+            result["note"] = f"gm_ratio={gm_ratio:.3f} (noise-destroyed), spectral_slope_ratio={slope_ratio:.3f} (threshold=1.08)"
+        else:
+            result["note"] = f"gm_ratio={gm_ratio:.3f} > {blur_threshold}"
+        result["suggested_action"] = "Test 2-3 blur candidates via PSNR — noise/blur coupling can mask blur in both gm and spectral signals"
         return result
 
     # Blur detected — use MTF for sub-type
@@ -517,17 +717,27 @@ def step3_blur(target, clean, noise_info):
         result["verdict"] = "GAUSSIAN_BLUR"
         result["confidence"] = "medium" if gm_ratio_usable else "low"
 
-    # Severity estimation from gm_ratio (only if usable)
+    # Severity estimation (prefer gm_ratio when usable, fall back to spectral slope)
     if gm_ratio_usable:
-        # gm_ratio → severity mapping (calibrated)
         if gm_ratio < 0.35: sev = 5
         elif gm_ratio < 0.50: sev = 4
         elif gm_ratio < 0.65: sev = 3
         elif gm_ratio < 0.78: sev = 2
         else: sev = 1
         result["estimated_severity"] = sev
+        result["signals"]["severity_source"] = "gm_ratio"
+    elif slope_ratio > 1.01:
+        # Spectral-slope-based severity (noise-robust, calibrated on blur+noise combos)
+        if slope_ratio > 1.50: sev = 5
+        elif slope_ratio > 1.30: sev = 4
+        elif slope_ratio > 1.18: sev = 3
+        elif slope_ratio > 1.08: sev = 2
+        else: sev = 1
+        result["estimated_severity"] = sev
+        result["signals"]["severity_source"] = "spectral_slope"
     else:
         result["estimated_severity"] = None
+        result["signals"]["severity_source"] = "none"
 
     return result
 
@@ -667,8 +877,15 @@ def run_full_analysis(target_path, clean_path):
         recommended_search.append("compression: none detected")
 
     if report["step2_noise"]["verdict"] != "NO_NOISE":
-        detections.append(f"noise: {report['step2_noise']['verdict']} (sev~{report['step2_noise']['estimated_severity']})")
-        recommended_search.append(f"noise candidates: {report['step2_noise']['verdict']}+related types")
+        noise_label = f"noise: {report['step2_noise']['verdict']} (sev~{report['step2_noise']['estimated_severity']})"
+        if report["step2_noise"].get("subjective_guess"):
+            noise_label += f" [subjective: {report['step2_noise']['subjective_guess'][:80]}...]"
+        detections.append(noise_label)
+        guess_types = ["POISSON", "SPATIALLY_CORRELATED"]
+        if report['step2_noise']['verdict'] in guess_types:
+            recommended_search.append(f"noise candidates: {report['step2_noise']['verdict']} (speculative) + GAUSSIAN_RGB, SPECKLE (verify via §B stats)")
+        else:
+            recommended_search.append(f"noise candidates: {report['step2_noise']['verdict']}+related types")
     else:
         recommended_search.append("noise: none detected")
 
@@ -726,6 +943,10 @@ def run_full_analysis(target_path, clean_path):
     if has_noise and s2["confidence"] in ["low", "medium"]:
         risks.append("NOISE_TYPE_UNCERTAIN")
         reflections.append("Re-run §B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)")
+    # Risk 3b: Speculative noise type (poisson/spatially_correlated) — needs extra verification
+    if has_noise and s2.get("confidence") == "speculative":
+        risks.append("NOISE_TYPE_SPECULATIVE")
+        reflections.append("Subjective noise guess based on auxiliary signals (var_slope/spatial_corr). Verify via §B stats + PSNR test against GAUSSIAN_RGB alternative.")
 
     # Risk 4: Global FP check — PSNR verification
     if s4["verdict"] != "NO_GLOBAL" and s4["confidence"] in ["low", "medium"]:
