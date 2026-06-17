@@ -245,100 +245,102 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
 
 ### 核心流程 (v10 — 噪声优先, 两条路径)
 
-⚠️ **强制执行顺序。整个流程三个阶段: 全局退化预检 → 噪声判断 → 分路径执行。**
+⚠️ **强制执行顺序。顺序检测 + 交叉验证消除假阳性（不做逆变换——退化不可逆）。**
 
-来源: 1140 cases大规模合成 + exp17/exp18 32组真实退化
+来源: 1140 cases大规模合成 + exp17/18/19/20/21 80+组真实退化 + exp21假阳性审计
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Phase 0: 全局退化预检 (先于噪声判断, 利用 clean 参照)         │
+│ Step 1: Compression 检测 (最高优先级 — 0%FP)                 │
+│                                                             │
+│   判据: unique_G < 200 → compression 存在 (对所有退化鲁棒)    │
+│   子类型: block_boundary > 1.1 → JPEG; ringing → JPEG2000   │
+│   Severity: BPP或unique_G下降比例查表                        │
+│                                                             │
+│   记录: compression=YES/NO, type, sev                       │
+│   传给后续: JPEG会使8×8块间均值离散 → global可能假阳性        │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 2: Noise 检测 (noise统计不受低频blur影响)                │
+│                                                             │
+│   noise_prior.py + §B 6步检查                               │
+│   判据: wavelet MAD σ > 2 → 有噪声                          │
+│   子类型: §B 6步 (impulse→speckle→poisson→spatial→YCrCb→   │
+│           gaussian)                                         │
+│   Severity: σ 值与校准表匹配                                 │
+│                                                             │
+│   记录: noise=YES/NO, type, σ, spatial_corr                 │
+│   传给后续: noise σ=32 会撑开percentile → contrast假阳性     │
+│            noise会增加Cr/Cb方差 → saturation假阳性           │
+│   ⚠️ 不做去噪! 只记录参数                                   │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 3: Blur 检测 (已知 noise/compression 状态)              │
+│                                                             │
+│   ⚠️ 有 noise? → gm_ratio 不可靠 (1%召回)                    │
+│     → 改用 MTF 频域信号:                                    │
+│        - lens:    MTF 局部极小值 (Bessel零点)               │
+│        - zoom:    gm_ratio(center)/gm_ratio(corner) > 1.3  │
+│        - glass:   MTF bin-to-bin 粗糙度                    │
+│        - motion:  angular_FFT anisotropy > 4.0 + dir>30%    │
+│        - gaussian: MTF 平滑单调衰减, 空间均匀               │
+│        - jitter:  gm_ratio > 0.85, 无motion各项异性         │
+│                                                             │
+│   ✅ 无 noise → gm_ratio 可用 (83%召回, 0%FP)                │
+│                                                             │
+│   记录: blur=YES/NO, 子类型, sev, 信号来源                   │
+│   传给后续: blur会平滑JPEG 8×8块 → global假阳性更难识别       │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 4: Global 退化检测 (已知所有结构性退化, 交叉验证假阳性)   │
 │                                                             │
 │   工具: global_degradation_analyzer.py                       │
-│   方法: histogram 匹配 + 逐通道均值 + YCrCb/HSV 色域分析    │
+│   方法: histogram + 逐通道均值 + YCrCb/HSV                   │
 │                                                             │
-│   检测精度 (exp18 验证, σ=10噪声下鲁棒):                     │
-│     ✅ brightness 检出 100%, 方向 100%, sev±1=95%, FP=0%    │
-│     ✅ contrast   检出  96%, 方向  96%, sev±1=76%, FP=0%    │
-│     ✅ saturation 检出  93%, 方向  90%, sev±1=74%, FP=0%    │
-│     ⚠️ gamma 仍困难 (非线性, 与brightness+contrast耦合)      │
+│   🔴 假阳性交叉验证 (exp21 审计, 40%FP 根因):                 │
 │                                                             │
-│   检测到全局退化:                                            │
-│     → 记录类型 + 方向 + 预估 severity                        │
-│     → 先做逆变换 normalize (消除全局退化)                    │
-│     → 再用 normalized 图像进入 Phase 1                       │
-│     → 最终管线前置全局退化步骤                               │
+│   □ brightness 检测到?                                      │
+│     → Step1有JPEG? 检查 8×8块间均值方差 vs 块内方差          │
+│       块间方差 >> 块内方差 → JPEG假阳性, 排除                │
+│       块间方差 ≈ 块内方差  → 真实brightness                  │
 │                                                             │
-│   未检测到: 直接进入 Phase 1                                 │
+│   □ contrast 检测到?                                        │
+│     → Step2有noise? 计算 clean+noise 的percentile spread    │
+│       spread_target ≈ spread_clean+noise → noise假阳性, 排除│
+│       spread_target ≉ spread_clean+noise → 真实contrast     │
+│                                                             │
+│   □ saturation 检测到?                                      │
+│     → Step2有noise? 检查 Cr/Cb std 增量是否 > noise σ 预期  │
+│       Cr_std(target)/Cr_std(clean) 对比 noise-only 参考      │
+│       差异 < noise引起的波动 → noise假阳性, 排除              │
+│                                                             │
+│   Severity: 无耦合污染时查表, 有耦合时减信度                  │
 └─────────────────────────────────────────────────────────────┘
+```
 
-┌─────────────────────────────────────────────────────────────┐
-│ Phase 1: 噪声判断 (全局退化消除后进行, 决定后续所有策略)      │
-│                                                             │
-│   residual = target - clean (同图模式)                       │
-│   噪声判别: SKILL.md §B 6步检查 + noise_prior.py (辅助)     │
-│                                                             │
-│   → 无 noise: 进入 路径 A (高置信)                           │
-│   → 有 noise: 进入 路径 B (低置信)                           │
-└─────────────────────────────────────────────────────────────┘
+### 执行规则
 
-═══════════════════════════════════════════════════════════════
-路径 A: 纯确定性退化 ⭐ 高置信 (PSNR 可用)
-═══════════════════════════════════════════════════════════════
+1. **Step 1-4 顺序执行**，不可跳步。每一步记录结果传给后续步骤。
+2. **不做逆变换**（退化不可逆）。只传递"已知信息"用于交叉验证。
+3. **每个函数类别测试 ≤5 个候选**，总量 ≤25 次 PSNR 验证。
+4. **Blur 子类型用信号决策，不枚举**。不确定时保留 2 个候选，让训练 PSNR 仲裁。
+5. **所有检测结果记录在 reflection.json**，含交叉验证的通过/排除理由。
 
-  注意: 全局退化已在 Phase 0 预检并 normalize, 此阶段只需验证 blur/compression。
+### 保存规则
 
-  信号可靠性 (大规模验证):
-    ✅ gm_ratio < 0.85     → blur 存在 (83%召回, 0%FP in pure)
-    ✅ unique_G < 200      → compression/quant 存在 (0%FP)
-    ✅ PSNR > 40dB         → 函数+严重度正确
-    ❌ blur 子类型无法区分 (gaussian/lens/zoom/glass 50%)
-    ❌ gm_ratio 在混合退化中仅 1% 召回 (已被 Phase 0 的 normalize 改善)
+```
+verdict:
+  - 单步退化 + 信号明确 + PSNR > 40dB → LIKELY
+  - 含噪声 → UNCERTAIN (随机seed, PSNR不可靠)
+  - 多步退化 → UNCERTAIN 或 POOR (退化耦合)
+  - 所有候选 PSNR < 30 → POOR
 
-  A1. 信号扫描 (禁止枚举!):
-      🔴 严禁暴力枚举所有函数×严重度! 必须基于信号定向测试!
-      gm_ratio < 0.85? → 定向测试 blur 类型 (gaussian/motion/lens, PSNR 验证)
-      unique_G < 200?  → 定向测试 compression (JPEG vs JPEG2000)
-      强制: 每个退化类别测试 ≤5 个候选, 总量 ≤20 次 PSNR 验证
-
-  A2. PSNR 验证:
-      apply → PSNR vs target
-      > 40dB → ✅ 正确
-      30-40dB → 调 severity
-      < 30dB → 换函数族
-      PSNR gap > 10dB between candidates → 胜者显著
-
-  A3. 保存:
-      verdict = LIKELY (PSNR >= 40 + gap >= 10) 或 GOOD
-      alternatives: PSNR >= 30 的不同函数族候选
-      所有候选 PSNR < 30 → POOR
-
-═══════════════════════════════════════════════════════════════
-路径 B: 含噪声退化 ⚠️ 低置信 (PSNR 对噪声无效)
-═══════════════════════════════════════════════════════════════
-
-  注意: 全局退化已在 Phase 0 预检并 normalize, 此阶段专注 noise + 确定性退化。
-
-  信号可靠性:
-    ✅ unique_G < 200       → 仍可靠 (0%FP)
-    ❌ gm_ratio             → 不可用 (噪声增加梯度, 召回1%)
-    ❌ overshoot_ratio      → 不可用 (FP=90%)
-    ❌ PSNR 对噪声部分      → 无效 (随机seed)
-
-  B1. 噪声识别 (用统计, 不用 PSNR):
-      §B 6步检查 (impulse→speckle→poisson→spatial→YCrCb→gaussian)
-      严重度: 残差 std 与校准阈值 closest match
-      辅助: noise_prior.py wavelet σ 估计 (仅 gaussian_RGB/YCrCb 区分可靠)
-
-  B2. 确定性部分识别 (剥离噪声后):
-      det_sim = apply(clean, 非noise退化)
-      残差 = target - det_sim → 统计验证噪声假设
-      PSNR(target, det_sim) → 验证确定性部分
-      ⚠️ 不要用 PSNR 选噪声! 不要用 gm_ratio!
-
-  B3. 保存:
-      verdict = UNCERTAIN (必须, 退化耦合无法可靠验证)
-      alternatives: 至少 3 个 PSNR >= 30 的确定性候选 + 不同噪声类型候选
-      所有候选 PSNR < 30 → POOR, 全部保留供训练验证
+alternatives: 跨函数族保留至少各1个候选 (blur/noise/compression/global)
+thinking_process.json: Step1-4每一步的检测结果 + 交叉验证记录
+```
 
 ═══════════════════════════════════════════════════════════════
 反思 (盲识别阶段迭代 + 训练后反思)
@@ -351,10 +353,11 @@ python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
   │
   │  每轮 = 调整退化组合 → apply → 验证 → 记录
   │
-  │  R1: 先重检 Phase 1 噪声判断
-  │      → 噪声判断可能错了? → 切换路径A/B重新假设
-  │      → 确定性部分: 测试 alternatives 中跨函数族候选
-  │      → 噪声部分: 仅用统计, 不用 PSNR
+  │  R1: 按 Step1→4 顺序重检
+  │      → Step1 unique_G 稳定 (0%FP) → compression 通常可靠
+  │      → Step2 noise 重检: §B 6步, 关注之前可能被JPEG/blur掩盖的噪声
+  │      → Step3 blur: 有新MTF信号? 之前误判子类型的可能?
+  │      → Step4 global: 已知Step1/2信息 → 交叉验证假阳性
   │
   │  R2: 根据 R1 结果进一步调整
   │      → R1 确定性子 PSNR 提升 > 2dB → 方向正确, 继续细化
