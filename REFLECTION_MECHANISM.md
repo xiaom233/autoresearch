@@ -81,17 +81,29 @@
 | **gaussian_RGB ↔ YCrCb** | 1-5 dB | 可测试，但非优先 |
 | **impulse → 任何其他 noise** | **21 dB** | 绝对不可互换。impulse 专家极度专一 |
 
-### JPEG 反思 100% 可靠
+### JPEG 反思 — PSNR 测试可靠 (63-case验证: 38% GT匹配)
 
-基于 7-case 受控实验：当怀疑缺失 compression 时，PSNR 测试 JPEG(1-5) 的成功率是 100%（3/3 找到正确答案，2/3 像素级完美匹配）。compression 是确定性退化，PSNR 验证完全可靠。
+当怀疑缺失 compression 时，PSNR 测试 JPEG(1-5)。compression 是确定性退化，PSNR 验证可靠。
+在 63 案例全量测试中，JPEG 方向找到 13 个 GT 匹配（38%），平均改善 +7.9dB。
+即使 R0 完全错误（0/2 匹配），JPEG 反思仍能找到 7 个 GT 匹配。
 
-### Blur 反思边际有效
+### Blur 反思 — PSNR 改善 ≠ GT 正确，需要多信号联合
 
-PSNR 测试不同 blur 子类型可以找到改善方向，但增益通常在 0.1-2.0 dB 范围。blur 子类型之间的 PSNR 差距 <3dB，不可靠地区分。
+63-case 测试：34 次 PSNR 改善，但仅 1 次匹配 GT（2%）。PSNR 更高的 blur 子类型 ≠ 正确的 blur 子类型。
 
-### Noise 反思不可用 PSNR
+**优化方向**：PSNR 单独不够，需要结合模型残差分析和 MTF 频域信号：
+1. **模型残差**：R0 specialist 对 clean 做推理 → 模型尝试"修复"不存在的 blur → residual 特征揭示模型在找什么类型的 blur
+2. **MTF 频域信号**：lens 有 Bessel 零点、zoom 有空间梯度、glass 有 MTF 粗糙度——这些信号不受 PSNR 影响
+3. **跨图迁移知识**：gaussian↔lens 模型迁移 gap 仅 1-4dB ——如果 R0 选了 gaussian，换成 lens 的风险很低
 
-所有 noise 类型的 PSNR 都受随机种子影响。不能用 PSNR 选择 noise 类型——必须使用 §B 统计检查。
+### Noise 反思 — PSNR 无效，但统计检查 + 模型残差有效
+
+63-case 测试：28 次 PSNR 改善，0 次 GT 匹配（0%）。PSNR 对 noise 类型选择完全无用。
+
+**优化方向**：
+1. **§B 6-step 统计检查**（已集成）：impulse%、vm_slope、spatial_corr、rgb_ratio——这些是 noise 类型识别的主要手段
+2. **模型残差的双向推理**：R0 模型对 clean 推理 → 如果模型在 clean 上"制造"了类似 target 的噪声模式 → R0 的 noise 预测可能是对的。如果 residual 是结构化的 → noise 类型错了
+3. **噪声 severity 查表**：sigma 值与 severity 有确定对应关系，不需要 PSNR 搜索
 
 ### 初次复原残差分析 — 最强反思信号
 
