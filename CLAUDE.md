@@ -305,49 +305,58 @@ else:
 
 #### 反思工作流
 
+**单步退化反思**（步数 < 2）:
 ```
-Step 1: 加载失败模型, 用 CLEAN 图像做推理
-        pred = model(clean)  # 模型尝试修复 clean 图像
-        → 记录: 模型对 clean 做了什么改动？
-        → 记录: residual = target - model_output_on_clean 的特征
-
-Step 2: 残差诊断 (每项发现必须记录在 reflection.json 中)
-        residual = target - model_output_on_clean
-        ├── 残差有结构 (8×8块, 边缘模式) → 确定性部分错误
-        │   记录: [residual_diagnosis] 检测到 8×8 块效应 → 假设漏检 compression_jpeg
-        │   验证: apply + PSNR 测试 compression_jpeg 候选
-        └── 残差仅随机分布 → 确定性部分正确, 噪声识别错
-            记录: [residual_diagnosis] residual 无结构 → 噪声类型可能错误
-            验证: noise_prior + SKILL.md §B 6步统计检查
-
-Step 3: 分层修正 (每项修正必须注明来源)
-        ├── 先检查 alternatives 是否为空:
-        │   → 为空 → 标记 BEYOND_CAPABILITY
-        │   → 有候选 → 优先测试不同函数族的候选
-        ├── 确定性修正:
-        │   来源: [alternatives] 或 [residual_diagnosis] 或 [PSNR_test]
-        │   验证: PSNR gap >= 10dB vs 当前
-        └── 噪声修正:
-            来源: [statistical_check] 或 [noise_prior]
-            绝对不用 PSNR 选噪声
-
-Step 4: 反思终止条件
-        ├── 修正无法在 alternatives/残差诊断中找到支撑 → BEYOND_CAPABILITY
-        ├── PSNR gap < 3dB AND 噪声统计全部不匹配 → BEYOND_CAPABILITY
-        ├── 连续 2 轮修正后无改善 → 终止
-        ├── 已测试 ≥ 20 个新候选且无显著改善 → 终止
-        └── 修正成功 → 重训练
-
-Step 5: 保存修正 (predicted_params_v2.json)
-        必须包含 correction_source 字段，注明每步修正的来源:
-        {
-          "pipeline": [...],
-          "correction_source": [
-            "residual_diagnosis: 8×8 block artifacts → compression_jpeg",
-            "statistical_check: extreme_pct=10.2% matches noise_impulse(4) calibration"
-          ]
-        }
+Step 1: 加载失败模型 → clean推理 → 残差诊断
+Step 2: 仅以下情况修正:
+        - 残差明确指向某类错误 (8×8→漏JPEG, 高频→noise类型错)
+        - alternatives 中有跨函数族候选
+Step 3: 测试 ≤5 个 alternatives swap, PSNR gap > 3dB → 替换
+Step 4: 全部无改善 → BEYOND_CAPABILITY, 结束
+最多 1 轮, 不发明新候选, 不反复迭代
 ```
+
+**双步退化反思**（步数 ≥ 2 — 训练驱动两阶段）:
+
+来源: exp21 — 残差诊断无法解耦双步错误, 需要先消除一个退化再检测另一个。
+
+```
+前提: R0 verdict = POOR/UNCERTAIN, R0 步数 ≥ 2
+
+Stage 1: 用最自信的那一步训练 specialist, 消除该退化
+  1a. 从 R0 管线中选择置信度最高的 1 步 (优先级: compression > global > blur > noise)
+      或从逐级剥离检测结果中选择信号最强的退化
+  1b. Train(model_A, 仅这一步退化, EPOCH=2)
+  1c. model_A(target) → pred_A  # specialist 修复了退化A
+  1d. residual_A = target - pred_A  # 消除退化A后的残差
+
+Stage 2: 在 residual_A 上重跑检测, 暴露第二步
+  2a. 将 pred_A 视为"部分修复的目标", run_full_analysis(pred_A, clean)
+      或直接在 residual_A 上分析:
+      - 8×8 块效应 → 漏了 compression_jpeg
+      - 高频随机 → 漏了 noise
+      - 边缘残留模糊 → blur 类型/severity 不对
+      - 全局色偏/亮度 → 漏了 global
+  2b. 选出候选 B → Train(model_AB, A+B, EPOCH=2)
+  2c. GT 重评估 → PSNR 对比 R0:
+      提升 > 2dB → 修正成功 ✅
+      提升 < 1dB → 换 B 的候选, 最多 3 次尝试
+      全部失败 → BEYOND_CAPABILITY
+
+Stage 3 (可选): 如果 B 也正确识别了, 可以反向修正 A
+  3a. 类似 Stage 2, 但用 model_AB 消除 B, 在 residual_B 上重检 A
+  3b. 如果 A 修正 → 最终管线 ← 交叉验证
+
+特殊情况: R0 只识别了 1 步 (漏检)
+  → 那 1 步就是 A, Stage 1 照常
+  → Stage 2 在 residual_A 上找缺失的 B
+```
+
+**关键约束**:
+- Stage 1 选择的 A 必须是逐级剥离或信号检测给出高置信度的退化
+- 如果 R0 所有步骤置信度都低 → 跳过本流程, BEYOND_CAPABILITY
+- 每阶段额外训练最多触发 2 次 (Stage 1 + Stage 2)
+- 总 PSNR 测试 ≤ 10 次/阶段
 
 #### 判据分离规则
 
