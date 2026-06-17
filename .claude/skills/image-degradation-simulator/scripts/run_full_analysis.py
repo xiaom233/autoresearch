@@ -278,6 +278,13 @@ def step2_noise(target, clean):
         if avg_sigma > threshold: sev = s
     result["estimated_severity"] = sev
 
+    # Speckle-specific severity signal
+    if result["verdict"] == "SPECKLE":
+        sp_sigma, sp_vm, sp_sev = compute_speckle_severity(clean, residual)
+        result["signals"]["speckle_sigma"] = sp_sigma
+        result["signals"]["speckle_vm_slope"] = sp_vm
+        result["signals"]["speckle_est_severity"] = sp_sev
+
     # For Step4 cross-validation
     result["_for_step4"] = {
         "sigma": round(avg_sigma, 2),
@@ -302,6 +309,60 @@ def compute_gm_ratio(img):
     gy_full = np.pad(gy, ((0,1),(0,0),(0,0)), mode='edge')
     gm = np.sqrt(gx_full**2 + gy_full**2).mean()
     return gm
+
+
+def compute_jitter_signal(target, clean):
+    """Jitter blur: shuffle_pixels swaps nearby pixels → high change% + low magnitude.
+    Returns (nonzero_pct, residual_std, jitter_score). jitter_score > 0.5 suggests jitter."""
+    diff = np.abs(target.astype(float) - clean.astype(float))
+    nonzero_pct = (diff.max(axis=2) > 5).mean()
+    residual_std = diff.std()
+    # Jitter: high change% (>50%) + low magnitude (std < 30) + not noise (noise has higher std)
+    jitter_score = nonzero_pct * (1.0 - min(residual_std / 60.0, 1.0))
+    return round(nonzero_pct, 4), round(residual_std, 1), round(jitter_score, 4)
+
+
+def compute_speckle_severity(clean, residual):
+    """Speckle severity: combined sigma + vm_slope signal.
+    Returns (sigma, vm_slope, estimated_severity)."""
+    sigma = residual.std()
+    flat_mask = np.std(clean, axis=2) < 20
+    vm_slope = 0.0
+    if flat_mask.sum() > 100:
+        intensities = clean[flat_mask].mean(axis=1)
+        variances = residual[flat_mask].var(axis=1)
+        bins = np.digitize(intensities, np.percentile(intensities, [25, 50, 75]))
+        bin_vars = [variances[bins == i].mean() for i in range(4) if (bins == i).sum() > 5]
+        bin_means = [intensities[bins == i].mean() for i in range(4) if (bins == i).sum() > 5]
+        if len(bin_means) >= 3:
+            coeffs = np.polyfit(bin_means, bin_vars, 1)
+            vm_slope = coeffs[0]
+    # Severity lookup: (sigma, vm_slope) → sev (calibrated on speckle sev 1-5)
+    sev = 1
+    if sigma > 50 and vm_slope > 10: sev = 4
+    elif sigma > 40 and vm_slope > 7: sev = 3
+    elif sigma > 25 and vm_slope > 3: sev = 2
+    elif sigma > 10 and vm_slope > 0.5: sev = 1
+    return round(sigma, 1), round(vm_slope, 4), sev
+
+
+def compute_extreme_spatial_clustering(target, clean):
+    """Distinguish oversharpen (clustered extremes near edges) vs impulse (random extremes).
+    Returns (extreme_pct, spatial_clustering). clustering > 0.4 → oversharpen, < 0.2 → impulse."""
+    residual = target.astype(float) - clean.astype(float)
+    extreme_mask = np.abs(residual).max(axis=2) > 50
+    extreme_pct = extreme_mask.mean()
+    if extreme_pct < 0.001:
+        return 0.0, 0.0
+    ext_map = extreme_mask.astype(float)
+    h, w = ext_map.shape
+    if h > 2 and w > 2:
+        right_corr = np.corrcoef(ext_map[:, :-1].flatten(), ext_map[:, 1:].flatten())[0, 1]
+        down_corr = np.corrcoef(ext_map[:-1, :].flatten(), ext_map[1:, :].flatten())[0, 1]
+        clustering = (right_corr + down_corr) / 2
+    else:
+        clustering = 0.0
+    return round(extreme_pct * 100, 2), round(float(clustering), 4)
 
 def compute_radial_mtf(img):
     """Radial MTF analysis."""
@@ -396,6 +457,19 @@ def step3_blur(target, clean, noise_info):
     else:
         anisotropy = 1.0
     result["signals"]["angular_anisotropy"] = round(anisotropy, 4)
+
+    # --- Oversharpen vs Impulse discrimination ---
+    # Only usable when no blur is detected (blur edge artifacts mimic oversharpen clustering)
+    extreme_pct, extreme_cluster = compute_extreme_spatial_clustering(target, clean)
+    result["signals"]["extreme_spatial_clustering"] = extreme_cluster
+    if not has_noise:
+        # Pure case: clustering > 0.4 → oversharpen, < 0.15 → impulse-like random
+        if extreme_cluster > 0.4:
+            result["signals"]["oversharpen_vs_impulse"] = "OVERSHARPEN_LIKELY"
+            result["oversharpen_hint"] = True
+        elif extreme_cluster < 0.15 and extreme_pct > 1.0:
+            result["signals"]["oversharpen_vs_impulse"] = "IMPULSE_LIKELY"
+            result["impulse_hint"] = True
 
     # --- Classification ---
     if anisotropy > 4.0:

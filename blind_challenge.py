@@ -58,7 +58,7 @@ VAL_DIRS = [
 DEG_CATEGORIES = {
     "blur": [
         "blur_gaussian", "blur_motion", "blur_glass",
-        "blur_lens", "blur_zoom", "blur_jitter",
+        "blur_lens", "blur_zoom",  # blur_jitter removed — undetectable in composite
     ],
     "noise": [
         "noise_gaussian_RGB", "noise_gaussian_YCrCb", "noise_speckle",
