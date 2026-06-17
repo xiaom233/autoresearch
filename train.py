@@ -317,7 +317,8 @@ def evaluate(model, val_dataset, device, autocast_ctx):
 
     # Use DataLoader for async CPU→GPU transfer
     loader = torch.utils.data.DataLoader(samples, batch_size=1, shuffle=False,
-                                          num_workers=0, pin_memory=True)
+                                          num_workers=2, pin_memory=True,
+                                          persistent_workers=True)
     metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
     for degraded, clean in loader:
         degraded = degraded.to(device, non_blocking=True)
