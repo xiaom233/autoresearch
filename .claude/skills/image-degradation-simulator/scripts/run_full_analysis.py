@@ -629,93 +629,56 @@ def step3_blur(target, clean, noise_info):
         result["suggested_action"] = "Test 2-3 blur candidates via PSNR — noise/blur coupling can mask blur in both gm and spectral signals"
         return result
 
-    # Blur detected — use MTF for sub-type
+    # Blur detected — simplified sub-type classification
+    # Only MOTION has a reliable distinguishing signal (anisotropy on residual FFT).
+    # Lens/Glass/Zoom/Gaussian MTF signals are content-dominated → unreliable.
+    # Gaussian ↔ Lens 几乎可互换 (REFLECTION_MECHANISM: 1-4dB gap), Agent 靠 PSNR 区分.
+
+    # Motion detection: anisotropy on residual FFT (not target — content-dominated)
+    residual = target.astype(float) - clean.astype(float)
+    residual_gray = residual.mean(axis=2)
+    h, w = residual_gray.shape
+    cy_r, cx_r = h//2, w//2
+    fft_res = np.abs(np.fft.fftshift(np.fft.fft2(residual_gray - residual_gray.mean())))
+    angles = np.linspace(0, np.pi, 36)
+    res_energy = []
+    for a in angles:
+        x, y = np.cos(a), np.sin(a)
+        vals = []
+        for rad in range(5, min(h, w)//4, 3):
+            px, py = int(cx_r + rad*x), int(cy_r + rad*y)
+            if 0 <= px < w and 0 <= py < h:
+                vals.append(fft_res[py, px])
+        res_energy.append(np.mean(vals) if vals else 0)
+    res_energy = np.array(res_energy)
+    res_anisotropy = res_energy.max() / res_energy.mean() if res_energy.mean() > 0 else 1.0
+    result["signals"]["residual_anisotropy"] = round(res_anisotropy, 4)
+
+    # Also compute legacy MTF signals as hints for the Agent (not for classification)
     target_mtf = compute_radial_mtf(target)
     clean_mtf = compute_radial_mtf(clean)
     kernel_mtf = target_mtf / (clean_mtf + 1e-6)
-
-    # --- Lens: MTF zeros (Bessel function) ---
-    mtf_smoothed = np.convolve(kernel_mtf, np.ones(5)/5, mode='same')
-    local_mins = []
-    for i in range(1, len(mtf_smoothed)-1):
-        if mtf_smoothed[i] < mtf_smoothed[i-1] and mtf_smoothed[i] < mtf_smoothed[i+1]:
-            if mtf_smoothed[i] < 0.7 * max(mtf_smoothed[i-1], mtf_smoothed[i+1]):
-                local_mins.append(i)
-    result["signals"]["mtf_local_minima"] = len(local_mins)
-    result["signals"]["mtf_has_zeros"] = len(local_mins) > 0
-
-    # --- Zoom: spatial variation ---
-    h, w = target.shape[:2]
-    cy, cx = h//2, w//2
-    center_crop = target[cy-cy//4:cy+cy//4, cx-cx//4:cx+cx//4]
-    corner_crops = [
-        target[:h//4, :w//4],
-        target[:h//4, -w//4:],
-        target[-h//4:, :w//4],
-        target[-h//4:, -w//4:]
-    ]
-    center_gm = compute_gm_ratio(center_crop)
-    corner_gm = np.mean([compute_gm_ratio(c) for c in corner_crops])
-    zoom_ratio = corner_gm / max(center_gm, 1e-6)
-    result["signals"]["zoom_center_corner_ratio"] = round(zoom_ratio, 4)
-
-    # --- Glass: MTF roughness ---
     mtf_diff = np.abs(np.diff(kernel_mtf))
-    mtf_roughness = mtf_diff.std() / (mtf_diff.mean() + 1e-6)
-    result["signals"]["mtf_roughness"] = round(mtf_roughness, 4)
+    result["signals"]["mtf_roughness"] = round(mtf_diff.std() / (mtf_diff.mean() + 1e-6), 4)
 
-    # --- Motion: angular FFT ---
-    fft_2d = np.abs(np.fft.fftshift(np.fft.fft2(target.mean(axis=2) - target.mean(axis=2).mean())))
-    angles = np.linspace(0, np.pi, 36)
-    angular_energy = []
-    for a in angles:
-        x = np.cos(a); y = np.sin(a)
-        r = np.arange(5, min(h,w)//4)
-        energy = 0
-        for rad in r[::5]:
-            px = int(cx + rad*x); py = int(cy + rad*y)
-            if 0 <= px < w and 0 <= py < h:
-                energy += fft_2d[py, px]
-        angular_energy.append(energy)
-    angular_energy = np.array(angular_energy)
-    if angular_energy.mean() > 0:
-        anisotropy = angular_energy.max() / angular_energy.mean()
-    else:
-        anisotropy = 1.0
-    result["signals"]["angular_anisotropy"] = round(anisotropy, 4)
-
-    # --- Oversharpen vs Impulse discrimination ---
-    # Only usable when no blur is detected (blur edge artifacts mimic oversharpen clustering)
-    extreme_pct, extreme_cluster = compute_extreme_spatial_clustering(target, clean)
-    result["signals"]["extreme_spatial_clustering"] = extreme_cluster
-    if not has_noise:
-        # Pure case: clustering > 0.4 → oversharpen, < 0.15 → impulse-like random
-        if extreme_cluster > 0.4:
-            result["signals"]["oversharpen_vs_impulse"] = "OVERSHARPEN_LIKELY"
-            result["oversharpen_hint"] = True
-        elif extreme_cluster < 0.15 and extreme_pct > 1.0:
-            result["signals"]["oversharpen_vs_impulse"] = "IMPULSE_LIKELY"
-            result["impulse_hint"] = True
-
-    # --- Classification ---
-    if anisotropy > 4.0:
+    # --- Simplified classification ---
+    # Motion: residual anisotropy > 1.60 (calibrated: 纯Motion 1.60-2.07, 噪Motion 1.49-1.79, 非Motion≤1.55噪)
+    # 18% 非Motion 纯 blur 也超 1.60 (Zoom/Glass 高 sev 时各向异性接近 Motion)
+    motion_threshold = 1.60 if not has_noise else 1.52
+    if res_anisotropy > motion_threshold:
         result["verdict"] = "MOTION_BLUR"
-        result["confidence"] = "high"
-    elif result["signals"]["mtf_has_zeros"]:
-        result["verdict"] = "LENS_BLUR"
-        result["confidence"] = "medium"
-    elif zoom_ratio > 1.3:
-        result["verdict"] = "ZOOM_BLUR"
-        result["confidence"] = "medium"
-    elif mtf_roughness > 0.5:
-        result["verdict"] = "GLASS_BLUR"
-        result["confidence"] = "low"
-    elif gm_ratio > 0.85:
-        result["verdict"] = "JITTER_BLUR"
-        result["confidence"] = "low"
+        result["confidence"] = "high" if res_anisotropy > 1.70 else "medium"
     else:
         result["verdict"] = "GAUSSIAN_BLUR"
-        result["confidence"] = "medium" if gm_ratio_usable else "low"
+        # Confidence depends on signal quality
+        if gm_ratio_usable and gm_ratio < 0.62:
+            result["confidence"] = "high"
+        elif not has_noise:
+            result["confidence"] = "medium"
+        else:
+            result["confidence"] = "low"
+        # Agent hint: MTF signals for manual interpretation
+        result["note"] = "Lens/Glass/Zoom not distinguishable by automated signals — Agent should PSNR-test if subtype matters"
 
     # Severity estimation (prefer gm_ratio when usable, fall back to spectral slope)
     if gm_ratio_usable:
