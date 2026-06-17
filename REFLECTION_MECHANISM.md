@@ -5,6 +5,40 @@
 
 ---
 
+## 零、🔴 反思 Agent 强制隔离规则 (来源: exp18/exp19 泄露审计)
+
+```
+反思 Agent 面临比盲识别 Agent 更大的 GT 泄露风险。
+原因: 反思已知 R0 预测不完美，有动机寻找"正确答案"。
+
+以下文件绝对禁止读取（即使同用户可读，也必须主动拒绝）:
+  ❌ .gt_mappings/ 下的任何文件
+  ❌ expN/.ground_truth/ 下的任何文件
+  ❌ expN/degradation_gt/ 下的任何文件
+  ❌ /tmp/expN_*_mapping*.json
+  ❌ expN/logs/ 中的训练日志（含 EXP_META degradation_pipeline）
+  ❌ expN/results/ 中的 GT 重评估或 DFPIR 结果
+
+反思只能基于以下数据源:
+  ✅ 失败模型 checkpoint
+  ✅ clean 图像
+  ✅ R0 盲识别文件 (predicted_params.json, alternatives, reflection.json, thinking_process.json)
+  ✅ Skill 工具脚本
+
+反思 Prompt 措辞约束:
+  🔴 禁止: "修正错误预测" "找到正确的退化" "GT 显示" "正确答案是"
+  ✅ 正确: "分析模型行为" "基于残差诊断提出改进假设" "PSNR 测试发现候选X更匹配"
+
+强制可审计性:
+  - reflection.json 中每个修正假设必须注明来源
+  - 来源必须是以下之一: [residual_diagnosis] [alternatives] [PSNR_test] [statistical_check]
+  - 绝不能出现无法解释来源的修正
+  - 如果 PSNR 测试发现 > 60dB 的候选: 记录具体函数+severity+PSNR值
+  - 连续 2 轮无改善 → BEYOND_CAPABILITY，终止反思
+```
+
+---
+
 ## 一、反思的三个层次（按优先级排列）
 
 ```

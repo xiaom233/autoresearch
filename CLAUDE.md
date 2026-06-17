@@ -12,7 +12,11 @@ This file provides guidance to Claude Code when working with this repository.
    - Phase 6 (DFPIR 对比): 重读 `CLAUDE.md` §DFPIR 基线评估 (仅在全部流程结束后)
    - GT 重评估: 重读 `CLAUDE.md` §GT 退化重评估
    - 反思: 重读 `REFLECTION_MECHANISM.md`
-1. **绝不接触 GT**：`.ground_truth/` 和 `degradation/` 全程不可读
+1. **绝不接触 GT**：以下路径全程不可读（来源：exp18/exp19 泄露审计）：
+   - `.ground_truth/` 和 `degradation_gt/` → 已移出 challenges/ 目录，chmod 700/600
+   - `/tmp/expN_p4_mapping.json` → 已迁移至 `.gt_mappings/`（chmod 700）
+   - Agent prompt 中必须明确列出所有禁止读取的路径
+   - `.ground_truth.json` 不再存放于 Agent 可访问的 challenges/ 目录中
 2. **VAL 锁定**：反思修正只改 PARAMS，VAL 永远指向 GT
 3. **同图盲识别**：挑战生成用 `--same-image`
 4. **不用 rebase**：只用 merge/push
@@ -227,6 +231,47 @@ else:
 **来源**: exp17 R2 — 反思平均 +1.06 dB, 但对噪声假设无效 (0009 -1.41, 0014 -2.31).
 核心发现: 确定性退化和噪声必须用不同判据, 且失败模型本身就是最好的诊断工具.
 
+**来源**: exp18/exp19 反思泄露 — 反思 Agent 直接读取 `/tmp/expN_p4_mapping.json` 获取 GT。反思必须有比盲识别更严格的约束。
+
+#### 🔴 反思 Agent 强制隔离规则 (来源: exp18/exp19 泄露审计)
+
+```
+反思 Agent 比盲识别 Agent 面临更大的泄露风险（已知 R0 不完美，有动机寻找 GT）。
+以下为反思 Agent 的额外强制约束：
+
+1. 禁止访问的文件（即使同用户可读，Agent 也必须主动拒绝）:
+   - .gt_mappings/ 目录下的任何文件
+   - expN/.ground_truth/ 目录下的任何文件
+   - expN/degradation_gt/ 目录下的任何文件
+   - /tmp/expN_*_mapping*.json
+   - expN/logs/ 中的训练日志（含 EXP_META，可能泄露训练退化信息）
+   - expN/results/ 中的 GT 重评估结果
+
+2. 反思只能基于以下数据源:
+   ✅ 失败模型 checkpoint (expN/experiments/...)
+   ✅ clean 图像 (expN/challenges/phase4/blind_XXXX/clean.png)
+   ✅ R0 盲识别结果 (predicted_params.json, alternatives, reflection.json, thinking_process.json)
+   ✅ Skill 工具脚本 (analyze_degradation.py, noise_prior.py, model_diagnosis.py, global_degradation_analyzer.py, apply_multi.py, compare_degradation.py)
+
+3. 反思 Prompt 约束:
+   🔴 不能说"修正错误预测" —— 暗示了已知 R0 是错误的
+   ✅ 应该说"分析模型行为，基于残差诊断提出改进假设"
+   🔴 不能说"找到正确的退化" —— 暗示了存在已知正确答案
+   ✅ 应该说"提出可能更匹配目标图像退化特征的候选管线"
+
+4. 强制可审计性 (reflection.json 必须包含):
+   - 每个修正假设的来源追踪：
+     "残差中检测到 8×8 块效应 → 假设漏检 compression_jpeg"
+     "noise_prior 小波 HH 子带 σ 估计与 noise_impulse 校准表匹配 → 假设噪声类型为 impulse"
+   - 绝不能出现无法解释来源的"完美匹配"修正
+   - 如果 PSNR 测试发现某个候选 PSNR > 60dB：必须记录测试的函数+severity+PSNR值
+
+5. 反思终止条件:
+   - 修正假设无法在 alternatives 或残差诊断中找到支撑 → 标记 BEYOND_CAPABILITY
+   - 连续 2 轮修正后 PSNR 无改善 → 终止
+   - 已经测试 ≥ 20 个新候选且无显著改善 → 终止（防止变相枚举）
+```
+
 #### 核心原则
 
 ```
@@ -263,38 +308,45 @@ else:
 ```
 Step 1: 加载失败模型, 用 CLEAN 图像做推理
         pred = model(clean)  # 模型尝试修复 clean 图像
-        → 如果模型把 clean 修坏了: 说明训练退化 ≠ 真实退化
-        → pred 上的残差分析: 哪些特征被模型改变了?
+        → 记录: 模型对 clean 做了什么改动？
+        → 记录: residual = target - model_output_on_clean 的特征
 
-Step 2: 残差诊断
+Step 2: 残差诊断 (每项发现必须记录在 reflection.json 中)
         residual = target - model_output_on_clean
         ├── 残差有结构 (8×8块, 边缘模式) → 确定性部分错误
-        │   └── 重新 PSNR 测试 blur/compression 类型 (不用 PSNR 选噪声!)
+        │   记录: [residual_diagnosis] 检测到 8×8 块效应 → 假设漏检 compression_jpeg
+        │   验证: apply + PSNR 测试 compression_jpeg 候选
         └── 残差仅随机分布 → 确定性部分正确, 噪声识别错
-            └── 用 SKILL.md §B 6步统计检查 (不用 PSNR!)
-                extreme% → impulse; var_slope → poisson/speckle
-                spatial_corr → correlated; rgb_ratio → YCrCb
+            记录: [residual_diagnosis] residual 无结构 → 噪声类型可能错误
+            验证: noise_prior + SKILL.md §B 6步统计检查
 
-Step 3: 分层修正
+Step 3: 分层修正 (每项修正必须注明来源)
         ├── 先检查 alternatives 是否为空:
-        │   → 为空 (所有候选 PSNR < 30) → 盲识别完全失败
-        │   → 检查 psnr_ranking (全量表) 中是否有不同函数族的候选
-        │   → 没有 → BEYOND_CAPABILITY, 放弃反思
+        │   → 为空 → 标记 BEYOND_CAPABILITY
+        │   → 有候选 → 优先测试不同函数族的候选
         ├── 确定性修正:
-        │   → 优先测试 alternatives 中不同函数族的候选
-        │   → PSNR gap >= 10dB vs 当前 → 换候选 ✅
-        │   → 典型的不可区分对: blur_gaussian↔lens (PSNR都>40)
-        └── 噪声修正: 仅用 statistical_checks
-            → 检查 alternatives 中是否有不同噪声类型的候选
-            → 绝对不用 PSNR 选噪声
+        │   来源: [alternatives] 或 [residual_diagnosis] 或 [PSNR_test]
+        │   验证: PSNR gap >= 10dB vs 当前
+        └── 噪声修正:
+            来源: [statistical_check] 或 [noise_prior]
+            绝对不用 PSNR 选噪声
 
 Step 4: 反思终止条件
-        ├── 确定性 PSNR gap < 3dB AND 噪声统计全部不匹配 → BEYOND_CAPABILITY
-        │   不浪费 GPU 做无谓反思
-        ├── 确定性修正成功 (PSNR提升 > 2dB) → 重训练
-        └── 噪声修正成功 (统计匹配改善) → 重训练
+        ├── 修正无法在 alternatives/残差诊断中找到支撑 → BEYOND_CAPABILITY
+        ├── PSNR gap < 3dB AND 噪声统计全部不匹配 → BEYOND_CAPABILITY
+        ├── 连续 2 轮修正后无改善 → 终止
+        ├── 已测试 ≥ 20 个新候选且无显著改善 → 终止
+        └── 修正成功 → 重训练
 
-Step 5: 重训练 → GT评估 → 仍失败 → 标记 BEYOND_CAPABILITY, 接受 R1 结果
+Step 5: 保存修正 (predicted_params_v2.json)
+        必须包含 correction_source 字段，注明每步修正的来源:
+        {
+          "pipeline": [...],
+          "correction_source": [
+            "residual_diagnosis: 8×8 block artifacts → compression_jpeg",
+            "statistical_check: extreme_pct=10.2% matches noise_impulse(4) calibration"
+          ]
+        }
 ```
 
 #### 判据分离规则
