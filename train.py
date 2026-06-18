@@ -302,8 +302,7 @@ def compute_ssim(pred, target):
 @torch.no_grad()
 def evaluate(model, val_dataset, device, autocast_ctx):
     """Compute PSNR/SSIM in RGB and Y over full validation set.
-    Preloads all images to memory, then uses DataLoader with batch_size=1
-    to overlap CPU→GPU transfer with GPU inference.
+    直接用 DataLoader 并行加载（跳过串行预加载，大幅加速大图验证）。
     """
     eval_model = getattr(model, '_orig_mod', model)  # uncompiled for variable-size eval
     eval_model.eval()
@@ -311,14 +310,10 @@ def evaluate(model, val_dataset, device, autocast_ctx):
     if n == 0:
         return {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
 
-    # Preload all degraded/clean pairs into CPU memory (avoids repeated PIL I/O)
-    print(f"  Preloading {n} validation images into memory...", flush=True)
-    samples = [val_dataset[i] for i in range(n)]
-
-    # Use DataLoader for async CPU→GPU transfer
-    loader = torch.utils.data.DataLoader(samples, batch_size=1, shuffle=False,
-                                          num_workers=2, pin_memory=True,
-                                          persistent_workers=True)
+    # 直接用 DataLoader 并行加载（num_workers=4 并行解码+退化，避免串行预加载瓶颈）
+    loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False,
+                                          num_workers=4, pin_memory=True,
+                                          persistent_workers=False)
     metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
     for degraded, clean in loader:
         degraded = degraded.to(device, non_blocking=True)
