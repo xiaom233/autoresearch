@@ -643,32 +643,37 @@ PSNR 对噪声函数天然偏低（随机种子不同导致像素无法匹配）
 | **Impulse** | 稀疏极端像素 (0 和 255) | 两端尖峰 | exact_0+255 像素比例 > 0.3% |
 | **Spatially Correlated** | 邻域像素残差相关 | 空间自相关高 | spatial_corr 0.15-0.5 |
 
-#### 判别流程 (v14 — 双 Tier: 直方图确定 + 辅助信号猜测)
+#### 判别流程 (v16 — 数学指纹分类)
 
-**Tier 1 直方图分类** (56-case validated: gaussian_RGB 100%, impulse 72%, YCrCb 66%):
+**分类顺序 (顺序至关重要)**:
 ```
-Step 1: 检查 YCrCb → rgb_ratio > 1.4 + skew≈0 → noise_gaussian_YCrCb
-Step 2: 检查 Impulse → avg_kurt > 5 OR extreme_pct > 5% → noise_impulse
-Step 3: 检查 Speckle → avg_skew < -0.5 + vm_slope > 0.001 → noise_speckle
-Step 4: 检查 Gaussian_RGB → |skew| < 0.3 + kurt < 3 → noise_gaussian_RGB (高置信)
-```
-
-**Tier 2 辅助信号猜测** (直方图歧义时 — 置信度 = speculative):
-```
-Step 5: 检查 Poisson → var_slope > 0.5 + vm_slope ≈ 0 (方差∝强度, 纯Poisson ≥1.8)
-         注意: Speckle 也有高 var_slope (≥2.9), 用 vm_slope 区分 (speckle vm_slope > 0.001)
-Step 6: 检查 Spatially_Correlated → spatial_corr > 阈值 (sigma自适应):
-         - sigma < 5:  sc > 0.30 (低噪声: 高 sc 更可靠)
-         - sigma 5-15: sc > 0.25
-         - sigma > 15: sc > 0.40 (强噪声+blur 可能抬高 sc, 提高阈值)
-         ⚠️ 跨图模式: sc 被内容差异污染 (平均 0.52), 阈值升至 0.50
-Step 7: 默认 → noise_gaussian_RGB (低置信)
+Step 1: 检查 Impulse → 残差 zero_ratio > 0.85 (稀疏性: 绝大多数像素未改变)
+Step 2: 检查 Spatially_Correlated → 相邻像素残差相关 > 0.50
+         - sc > 0.72: 高置信 (完全排除 blur/JPEG 假阳性)
+         - sc > 0.50 + sigma >= 1.4: 辅助判断 (噪声存在排除纯 blur)
+Step 3: 检查 YCrCb → RGB通道间残差互相关 > 0.12 (YCrCb→RGB线性组合)
+Step 4: 检查 Gaussian/Poisson/Speckle → 16px patch 亮度-方差关系:
+         - corr(mean, var) < 0.15 → Gaussian_RGB (方差不随亮度变化)
+         - corr(mean, var/scaled_var) < 0.3 → Poisson (var ∝ I, var/I constant)
+         - else → Speckle (var ∝ I²)
 ```
 
-**Tier 2 的限制**:
-- Poisson/spatially_correlated 标记为 confidence="speculative"
-- 在 `subjective_guess` 字段中记录触发信号
-- Agent 必须通过 §B 统计检查或 PSNR 对比验证猜测
+**校准结果** (3图×5sev×5seed):
+| 类型 | 合成精度 | 关键信号 |
+|------|:--:|------|
+| Impulse | 100% (9/9) | zero_ratio > 0.85 |
+| Spatially_Correlated | 100% (9/9) | sc > 0.50; 校准: 纯SC=0.53-0.64, SC+JPEG=0.57-0.67 |
+| YCrCb | 100% (9/9) | cross_ch_corr > 0.12; RGB独立<0.05 |
+| Gaussian_RGB | 100% (9/9) | ivc < 0.15 |
+| Poisson | 100% (9/9) | ivc >= 0.15 + ivc_scaled < 0.3 |
+| Speckle | 67% (6/9) | 低sev(1)方差-亮度关系弱 |
+
+**⚠️ 已知 FP 问题**:
+- JPEG+blur 组合在 same-image 残差中产生 sc=0.77-0.85 + sigma=3.3-3.7
+- 与 SC 噪声 (sc=0.53-0.64, sigma=1.5-3.3) 在统计上不可区分
+- block_boundary 在 blur 存在时失效 (JPEG5+blur5: bb从3.5降至1.0)
+- → 6/16 FP (exp25), 但 100% 召回保证不漏检
+- → Agent 通过 PSNR 测试区分 SC noise vs JPEG artifact
 
 #### 复合退化中的噪声识别
 
