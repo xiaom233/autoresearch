@@ -207,263 +207,142 @@ def estimate_noise_sigma(img):
     return sigma_per_channel
 
 def step2_noise(target, clean):
-    """Noise detection via wavelet + §B 6-step check on residual."""
+    """噪声分类 v16 — 基于数学指纹 (来源: 统计特征分析)。
+
+    六种噪声的物理边界:
+    1. Impulse: 残差中绝大多数像素为0 (稀疏性)
+    2. Spatially_Correlated: 相邻像素残差高度相关 (>0.3, 3x3 box blur)
+    3. YCrCb: RGB 通道间残差互相关 (>0.12, YCrCb→RGB 线性组合)
+    4. Gaussian_RGB: 残差方差与亮度无关 (corr < 0.25)
+    5. Poisson: 残差方差 ∝ 亮度 (corr > 0.25, var/I ≈ constant)
+    6. Speckle: 残差方差 ∝ 亮度² (var/I 仍与亮度相关)
+    """
     result = {"verdict": "NO_NOISE", "confidence": "high", "signals": {}}
     residual = compute_residual(target, clean)
+    R = residual.astype(np.float64) / 255.0  # 归一化到 [0,1]
+    I = clean.astype(np.float64) / 255.0
+    h, w = R.shape[:2]
 
-    # Wavelet noise estimation
+    # Wavelet noise floor
     sigma = estimate_noise_sigma(residual)
     avg_sigma = np.mean(sigma)
     result["signals"]["noise_prior_sigma"] = round(avg_sigma, 2)
-    result["signals"]["sigma_per_channel"] = [round(s, 2) for s in sigma]
 
-    # --- Always compute auxiliary signals (may trigger noise entry even when sigma low) ---
-
-    # §B Step 1: Impulse (calibrated threshold: >2% extreme pixels)
-    extreme_pct = ((np.abs(residual) > 3 * np.std(residual)).sum(axis=2) > 0).mean()
-    result["signals"]["impulse_extreme_pct"] = round(extreme_pct * 100, 2)
-
-    # §B Step 2/3: Speckle (vm_slope) + Poisson (var_slope)
-    # var_slope: slope of variance vs intensity (Poisson: var ∝ intensity)
-    # vm_slope: slope of variance/mean ratio vs intensity (Speckle: var/mean ∝ intensity)
-    flat_mask = np.std(clean, axis=2) < 30
-    if flat_mask.sum() > 100:
-        flat_intensities = clean[flat_mask].mean(axis=1)
-        flat_variances = residual[flat_mask].var(axis=1)
-        if len(flat_intensities) > 10:
-            bins = np.digitize(flat_intensities, np.percentile(flat_intensities, [20,40,60,80]))
-            bin_vars = [flat_variances[bins==i].mean() for i in range(6) if (bins==i).sum()>5]
-            bin_means = [flat_intensities[bins==i].mean() for i in range(6) if (bins==i).sum()>5]
-            if len(bin_vars) >= 3:
-                # Poisson var_slope: variance vs intensity
-                var_coeffs = np.polyfit(bin_means, bin_vars, 1)
-                result["signals"]["poisson_var_slope"] = round(var_coeffs[0], 3)
-                # Speckle vm_slope: variance/mean ratio vs intensity
-                bin_vm_ratios = [v / max(m, 1) for v, m in zip(bin_vars, bin_means)]
-                vm_coeffs = np.polyfit(bin_means, bin_vm_ratios, 1)
-                result["signals"]["speckle_vm_slope"] = round(vm_coeffs[0], 6)
-
-    # §B Step 2.5: Poisson dark-vs-bright variance ratio (Poisson 独特签名)
-    # Poisson 加噪: Poisson(img*c)/c → 暗区方差≈0, 亮区方差=img/c
-    # 暗区 (intensity<50) vs 亮区 (intensity>180) 方差比:
-    #   Gaussian ~1.0-1.2, Poisson ~4-6, Speckle ~22-33
-    if residual.shape[0] > 4 and residual.shape[1] > 4:
-        gray_clean = clean.mean(axis=2)
-        flat_gray = np.std(clean, axis=2) < 15  # 灰色平坦区域
-        dark_mask = (gray_clean < 50) & flat_gray
-        bright_mask = (gray_clean > 180) & flat_gray
-        if dark_mask.sum() > 100 and bright_mask.sum() > 100:
-            dark_var = residual[dark_mask].var()
-            bright_var = residual[bright_mask].var()
-            db_ratio = bright_var / max(dark_var, 0.01)
-            result["signals"]["poisson_db_ratio"] = round(db_ratio, 2)
-
-    # §B Step 4: Spatial correlation (on HH wavelet subband → noise-dominated)
-    # Full-residual spatial_corr conflates blur (spatially correlated) with noise.
-    # HH subband contains finest details → isolates noise spatial structure.
-    if residual.shape[0] > 4 and residual.shape[1] > 4:
-        spatial_corrs = []
-        hh_spatial_corrs = []
-        for c in range(3):
-            ch_r = residual[:,:,c]
-            # Full residual spatial correlation (legacy)
-            c1 = np.corrcoef(ch_r[:-1,:].flatten(), ch_r[1:,:].flatten())[0,1]
-            c2 = np.corrcoef(ch_r[:,:-1].flatten(), ch_r[:,1:].flatten())[0,1]
-            spatial_corrs.extend([c1, c2])
-            # HH subband spatial correlation (noise-isolated)
-            _, _, _, HH = haar_dwt2_1d(ch_r)
-            if HH.shape[0] > 2 and HH.shape[1] > 2:
-                h1 = np.corrcoef(HH[:-1,:].flatten(), HH[1:,:].flatten())[0,1]
-                h2 = np.corrcoef(HH[:,:-1].flatten(), HH[:,1:].flatten())[0,1]
-                hh_spatial_corrs.extend([h1, h2])
-        result["signals"]["spatial_corr"] = round(np.mean(spatial_corrs), 4)
-        result["signals"]["spatial_corr_hh"] = round(np.mean(hh_spatial_corrs), 4) if hh_spatial_corrs else 0
-
-    # §B Step 5: RGB ratio (YCrCb vs RGB)
-    rgb_stds = [residual[:,:,c].std() for c in range(3)]
-    if min(rgb_stds) > 0:
-        result["signals"]["rgb_ratio"] = round(max(rgb_stds) / min(rgb_stds), 2)
-
-    # --- Auto-detect same-image vs cross-image mode ---
-    # Same-image: clean is undegraded version of target → high correlation
-    # Cross-image: clean is a different image → low correlation, residual dominated by content
-    is_same_image = False
-    try:
-        # Coarse-scale correlation to reduce noise impact
-        from PIL.Image import Resampling
-        t_small = np.array(Image.fromarray(target.astype(np.uint8)).resize((64, 64), Resampling.LANCZOS))
-        c_small = np.array(Image.fromarray(clean.astype(np.uint8)).resize((64, 64), Resampling.LANCZOS))
-        corr = np.corrcoef(t_small.ravel(), c_small.ravel())[0, 1]
-        is_same_image = corr > 0.8  # Same image: corr > 0.85 even with strong degradation
-    except Exception:
-        pass  # Conservative: assume cross-image if detection fails
-
-    # --- Noise detection gate ---
-    # sigma < 1.9 AND no auxiliary signals → exit (low FP: 83% recall, 7.3% FP)
-    # Exception: spatial_corr/impulse can indicate noise even when wavelet sigma is low,
-    # but ONLY in same-image mode (cross-image residual dominated by content).
-    # Spatial correlation for noise typing:
-    # - Spatially_correlated noise: sc ~0.5-0.6 (pure), drops in composite but still >0.15
-    # - Blur also inflates sc (0.2-0.4) → false SC detections when blur+noise present
-    # - Sigma-dependent threshold: strong noise + high sc → likely blur+noise artifact
-    #   Weak noise + high sc → likely real SC noise
-    sc = result["signals"].get("spatial_corr", 0)
-    ep = result["signals"].get("impulse_extreme_pct", 0)
-    # Cross-image: residual dominated by content → spatial_corr unreliable
-    if is_same_image:
-        if avg_sigma > 15:      sc_threshold = 0.40  # Strong noise: blur+noise artifact risk
-        elif avg_sigma > 5:     sc_threshold = 0.25
-        else:                   sc_threshold = 0.15  # Low sigma: classic SC signature
-        ep_threshold = 2
-    else:
-        sc_threshold = 0.50
-        ep_threshold = 8
-    if avg_sigma < 1.9 and (sc < sc_threshold) and (ep < ep_threshold):
-        result["signals"]["gm_ratio_usable"] = True
-        result["signals"]["_same_image"] = is_same_image
+    # ================================================================
+    # 1. Impulse 检测 — 稀疏性指纹 (残差中大部分像素≈0)
+    # ================================================================
+    zero_threshold = 1.1 / 255.0
+    zero_ratio = np.mean(np.abs(R) < zero_threshold)
+    result["signals"]["impulse_zero_ratio"] = round(zero_ratio, 4)
+    # 即使 severity=1 (amount=0.01), 也有 99% 像素未改变
+    if zero_ratio > 0.85:
+        result["verdict"] = "IMPULSE"
+        result["confidence"] = "high" if zero_ratio > 0.95 else "medium"
+        result["estimated_severity"] = 1 if zero_ratio > 0.98 else (2 if zero_ratio > 0.94 else 3)
+        result["_for_step4"] = {"sigma": 0.0, "can_fake_contrast": False,
+                                 "can_fake_saturation": False, "can_fake_brightness": False}
         return result
 
-    result["signals"]["gm_ratio_usable"] = avg_sigma < 1.9
-    result["signals"]["_same_image"] = is_same_image
-    # Low-sigma subjective detection (wavelet-blind noise types)
-    if avg_sigma <= 5:
-        _sc_t = 0.30 if is_same_image else 0.50
-        _ep_t = 5 if is_same_image else 15
-        if sc > _sc_t and is_same_image:
-            result["verdict"] = "SPATIALLY_CORRELATED"
-            result["confidence"] = "speculative"
-            result["subjective_guess"] = f"sigma={avg_sigma:.1f}≤5 but spatial_corr={sc:.4f}>{_sc_t} → spatially structured noise (wavelet-blind)"
-            result["estimated_severity"] = 3 if sc > 0.45 else (2 if sc > 0.3 else 1)
-            result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": False,
-                                     "can_fake_saturation": False, "can_fake_brightness": False}
+    # Compute spatial_corr signal (used later as fallback, not primary)
+    r_g = R[:, :, 1]
+    sc_h = np.corrcoef(r_g[:, :-1].flatten(), r_g[:, 1:].flatten())[0, 1] if r_g.shape[1] > 1 else 0
+    sc_v = np.corrcoef(r_g[:-1, :].flatten(), r_g[1:, :].flatten())[0, 1] if r_g.shape[0] > 1 else 0
+    spatial_corr = (sc_h + sc_v) / 2.0
+    result["signals"]["spatial_corr"] = round(spatial_corr, 4)
+
+    # ================================================================
+    # 2. Spatially_Correlated — 空间相关指纹
+    # 纯 SC: spatial_corr > 0.5 (3x3 box blur 产生强相关)
+    # 0.3-0.5: 可能是 SC 或 blur+noise 假阳性, 用亮度-方差确认
+    # ================================================================
+    if spatial_corr > 0.5:
+        result["verdict"] = "SPATIALLY_CORRELATED"
+        result["confidence"] = "high" if spatial_corr > 0.6 else "medium"
+        result["estimated_severity"] = 3 if spatial_corr > 0.65 else (2 if spatial_corr > 0.55 else 1)
+        result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": avg_sigma > 8,
+                                 "can_fake_saturation": avg_sigma > 5, "can_fake_brightness": False}
+        return result
+
+    # ================================================================
+    # 3. YCrCb — 通道间相关指纹 (sc低 + cc高 → YCrCb)
+    # ================================================================
+    r_R = R[:, :, 0].flatten()
+    r_G = R[:, :, 1].flatten()
+    r_B = R[:, :, 2].flatten()
+    corr_matrix = np.corrcoef([r_R, r_G, r_B])
+    cross_ch_corr = (abs(corr_matrix[0, 1]) + abs(corr_matrix[0, 2]) + abs(corr_matrix[1, 2])) / 3.0
+    result["signals"]["cross_channel_corr"] = round(cross_ch_corr, 4)
+    # RGB 独立加噪: <0.05; YCrCb 转 RGB: >0.15
+    if cross_ch_corr > 0.12:
+        result["verdict"] = "GAUSSIAN_YCrCb"
+        result["confidence"] = "high" if cross_ch_corr > 0.20 else "medium"
+        result["estimated_severity"] = 2 if avg_sigma > 10 else (3 if avg_sigma > 20 else (4 if avg_sigma > 30 else 5))
+        result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": avg_sigma > 8,
+                                 "can_fake_saturation": avg_sigma > 5, "can_fake_brightness": False}
+        return result
+
+    # ================================================================
+    # 4. Gaussian/Poisson/Speckle — 亮度-方差关系指纹
+    # ================================================================
+    I_gray = I.mean(axis=2)
+    R_gray = np.abs(R).mean(axis=2)
+
+    # 自适应 patch 大小 (最小8px, 保证足够样本)
+    patch_size = max(8, min(16, min(h, w) // 20))
+    means, variances = [], []
+    for y in range(0, h - patch_size, patch_size):
+        for x in range(0, w - patch_size, patch_size):
+            patch_I = I_gray[y:y+patch_size, x:x+patch_size]
+            patch_R = R_gray[y:y+patch_size, x:x+patch_size]
+            m = np.mean(patch_I)
+            if 0.05 < m < 0.95:
+                means.append(m)
+                variances.append(np.var(patch_R))
+
+    if len(means) >= 10:
+        means = np.array(means)
+        variances = np.array(variances)
+        corr_mean_var = np.corrcoef(means, variances)[0, 1]
+        result["signals"]["intensity_var_corr"] = round(corr_mean_var, 4)
+
+        if np.mean(variances) < 1e-6:
+            result["signals"]["gm_ratio_usable"] = True
             return result
-        if ep > _ep_t:
-            result["verdict"] = "IMPULSE"
-            result["confidence"] = "speculative"
-            result["subjective_guess"] = f"sigma={avg_sigma:.1f}≤5 but extreme_pct={ep:.1f}%>{_ep_t}% → sparse impulse noise (wavelet-blind, mode={'same' if is_same_image else 'cross'})"
-            result["estimated_severity"] = 2 if ep > 10 else 1
-            result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": False,
-                                     "can_fake_saturation": False, "can_fake_brightness": False}
-            return result
 
-    # Histogram-based noise classification (skew+kurtosis, 56-case validated)
-    # gaussian_RGB=100%, impulse=72%, YCrCb=66% in pure+composite
-    # Only classify when sigma > 5 (below that, not real noise — 41% FP otherwise)
-    if avg_sigma > 5:
-        flat_mask = np.std(clean, axis=2) < 15
-        flat_r = residual[flat_mask] if flat_mask.mean() > 0.05 else residual.reshape(-1, 3)
-        skew_vals, kurt_vals = [], []
-        for c in range(3):
-            ch = flat_r[:,c]
-            if ch.std() > 1:
-                try:
-                    from scipy import stats
-                    skew_vals.append(stats.skew(ch))
-                    kurt_vals.append(stats.kurtosis(ch))
-                except ImportError: pass
-        avg_skew = np.mean(skew_vals) if skew_vals else 0
-        avg_kurt = np.mean(kurt_vals) if kurt_vals else 0
-        result["signals"]["noise_hist_skew"] = round(float(avg_skew), 3)
-        result["signals"]["noise_hist_kurt"] = round(float(avg_kurt), 2)
-
-        # Classify: Tier 1 histogram (56-case validated) + Tier 1.5 db_ratio (物理信号优先)
-        # ⚠️ 复合退化中直方图(skew/kurt/rgb_ratio)可能被 blur/saturate/JPEG 扭曲。
-        # db_ratio (暗区vs亮区绝对方差比) 是直接物理测量, 复合退化中更可靠。
-        # db_ratio: Gaussian~1.1, Poisson~4-6, Speckle~22-33
-        subjective_reason = None
-        db = result["signals"].get("poisson_db_ratio", 0)
-        vs = result["signals"].get("poisson_var_slope", 0)
-        vm = result["signals"].get("speckle_vm_slope", 0)
-
-        # Tier 1.5: db_ratio 物理信号 (在直方图之前, 复合退化更鲁棒)
-        # ⚠️ 复合退化中 blur 会压低 Speckle 的 db_ratio (从 >15 到 2-10),
-        # 与 Poisson 的 db_ratio (4-6) 重叠。用 vm_slope 区分:
-        #   vm_slope > 0.001 → var/mean ∝ I (Speckle 乘性)
-        #   vm_slope ≈ 0 → var ∝ I (Poisson 加性, var/mean ≈ constant)
-        if db > 15 or (db > 2.0 and vm > 0.01):
-            result["verdict"] = "SPECKLE"
-            result["confidence"] = "high" if db > 15 else "medium"
-            subjective_reason = f"db_ratio={db:.1f}>15" if db > 15 else f"db_ratio={db:.1f} in [2,15] + vm_slope={vm:.4f}>0.01 → Speckle (乘性噪声, var/mean∝I)"
-        elif db > 2.0 and vs > 0.3:
-            # Poisson 物理签名: 暗区方差小、亮区方差大 (var∝I)
-            result["verdict"] = "POISSON"
-            result["confidence"] = "medium" if db > 3.5 else "speculative"
-            subjective_reason = f"db_ratio={db:.1f} in [2,15] + var_slope={vs:.2f}>0.3 → signal-dependent additive noise (Poisson-like, var∝I)"
-        elif result["signals"].get("rgb_ratio", 1) > 1.4:
-            result["verdict"] = "GAUSSIAN_YCrCb"
-            result["confidence"] = "high" if abs(avg_skew) < 0.3 else "medium"
-        elif avg_kurt > 5 or extreme_pct > 5:
-            result["verdict"] = "IMPULSE"
-            result["confidence"] = "high" if avg_kurt > 20 else "medium"
-        elif avg_skew < -0.5:
-            result["verdict"] = "SPECKLE"
-            result["confidence"] = "high" if vm > 0.01 else "medium"
-        # --- Tier 2: subjective guesses (直方图歧义, 辅助信号) ---
-        elif vs > 0.5:
-            # Signal-dependent variance (var ∝ intensity) — Poisson or Speckle signature.
-            # Disambiguate via db_ratio (dark/bright absolute variance ratio) + vm_slope:
-            #   Gaussian: db_ratio ~1.1, cv_ratio ~6.5
-            #   Poisson:  db_ratio ~5,   cv_ratio ~2.8
-            #   Speckle:  db_ratio ~25,  cv_ratio ~1.3
-            vm = result["signals"].get("speckle_vm_slope", 0)
-            db = result["signals"].get("poisson_db_ratio", 0)
-            if db > 15:
-                result["verdict"] = "SPECKLE"
-                result["confidence"] = "medium" if vm > 0.001 else "low"
-                subjective_reason = f"db_ratio={db:.1f}>15 → multiplicative noise (Speckle-like, bright var >> dark var)"
-            elif db > 2.0:
-                result["verdict"] = "POISSON"
-                result["confidence"] = "medium" if db > 3.5 else "speculative"
-                subjective_reason = f"db_ratio={db:.1f} in [2,15] + var_slope={result['signals']['poisson_var_slope']:.2f}>0.5 → signal-dependent additive noise (Poisson-like, var∝I)"
-            elif vm > 0.001:
-                result["verdict"] = "SPECKLE"
-                result["confidence"] = "low"
-                subjective_reason = f"var_slope={result['signals']['poisson_var_slope']:.3f}>0.5 + vm_slope={vm:.5f}>0.001 → speckle (low-sev, histogram missed)"
-            else:
-                result["verdict"] = "POISSON"
-                result["confidence"] = "speculative"
-                subjective_reason = f"var_slope={result['signals']['poisson_var_slope']:.3f}>0.5 + vm_slope≈0 + db_ratio={db:.1f} → signal-dependent noise (Poisson-like). NOT histogram-verified."
-        elif sc > sc_threshold:
-            result["verdict"] = "SPATIALLY_CORRELATED"
-            result["confidence"] = "speculative"
-            subjective_reason = f"spatial_corr={sc:.4f}>{sc_threshold} (sigma={avg_sigma:.1f}) → spatially structured noise. NOT histogram-verified."
-        elif abs(avg_skew) < 0.3 and avg_kurt < 3:
+        if corr_mean_var < 0.15:
             result["verdict"] = "GAUSSIAN_RGB"
-            result["confidence"] = "high"
+            result["confidence"] = "high" if abs(corr_mean_var) < 0.10 else "medium"
+        else:
+            scaled_var = variances / (means + 1e-6)
+            corr_scaled = np.corrcoef(means, scaled_var)[0, 1]
+            result["signals"]["intensity_scaled_var_corr"] = round(corr_scaled, 4)
+
+            if corr_scaled < 0.3:
+                result["verdict"] = "POISSON"
+                result["confidence"] = "high" if corr_mean_var > 0.5 else "medium"
+            else:
+                result["verdict"] = "SPECKLE"
+                result["confidence"] = "high" if corr_scaled > 0.5 else "medium"
+    else:
+        # 无足够平坦区域 → 回退
+        if spatial_corr > 0.3:
+            result["verdict"] = "SPATIALLY_CORRELATED"
+            result["confidence"] = "low"
+        elif avg_sigma < 1.9:
+            result["signals"]["gm_ratio_usable"] = True
+            return result
         else:
             result["verdict"] = "GAUSSIAN_RGB"
             result["confidence"] = "low"
-        if subjective_reason:
-            result["subjective_guess"] = subjective_reason
 
-    # Severity estimation (type-specific maps calibrated on wavelet MAD sigma)
-    v = result["verdict"]
-    if v == "POISSON":
-        # Poisson wavelet sigma: sev1=8.9, sev3=12.4, sev5=19.3
+    # Severity estimation
+    sev_map = {2:1, 5:2, 10:3, 20:4, 35:5}
+    if result["verdict"] == "POISSON":
         sev_map = {5:1, 9:2, 11:3, 15:4, 17:5}
-    elif v == "SPATIALLY_CORRELATED":
-        # Spatially_correlated wavelet sigma: sev1=1.5, sev3=2.2, sev5=3.3
-        sev_map = {0:1, 1.8:2, 2.5:3, 3.0:4, 3.1:5}
-    elif v == "IMPULSE" and result.get("confidence") == "speculative":
-        # Low-sigma impulse (wavelet-blind): severity from extreme_pct
-        ep = result["signals"].get("impulse_extreme_pct", 0)
-        result["estimated_severity"] = 1 if ep < 5 else (2 if ep < 15 else (3 if ep < 30 else 4))
-        sev_map = None  # Already set
-    else:
-        # Gaussian-calibrated (works for GAUSSIAN_RGB, GAUSSIAN_YCrCb, SPECKLE, IMPULSE)
-        sev_map = {2:1, 5:2, 10:3, 20:4, 35:5}
-    if sev_map is not None:
-        sev = 1
-        for threshold, s in sorted(sev_map.items()):
-            if avg_sigma > threshold: sev = s
-        result["estimated_severity"] = sev
-
-    # Speckle-specific severity signal
-    if result["verdict"] == "SPECKLE":
-        sp_sigma, sp_vm, sp_sev = compute_speckle_severity(clean, residual)
-        result["signals"]["speckle_sigma"] = sp_sigma
-        result["signals"]["speckle_vm_slope"] = sp_vm
-        result["signals"]["speckle_est_severity"] = sp_sev
+    sev = 1
+    for threshold, s in sorted(sev_map.items()):
+        if avg_sigma > threshold: sev = s
+    result["estimated_severity"] = sev
 
     # For Step4 cross-validation
     result["_for_step4"] = {
