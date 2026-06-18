@@ -282,7 +282,9 @@ def main():
             all_metrics[gid] = (metrics, n)
 
         for p in processes:
-            p.join()
+            p.join(timeout=10)
+            if p.is_alive():
+                p.terminate()
 
     # Aggregate per dataset
     ds_metrics = defaultdict(lambda: {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0, "count": 0})
