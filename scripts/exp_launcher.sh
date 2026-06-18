@@ -109,7 +109,7 @@ for gpu in gpus:
             ckpt_dir = f"$EXP/experiments/{task_id}/checkpoints"
             logf = f"$EXP/logs/{task_id}.log"
             # 跳过已完成
-            f.write(f'if [ -f {ckpt_dir}/*.pt ] 2>/dev/null; then\n')
+            f.write(f'if ls {ckpt_dir}/*.pt >/dev/null 2>&1; then\n')
             f.write(f'  echo "[$(date +%H:%M)] GPU{gpu}: {task_id} SKIP (已有ckpt)"\n')
             f.write(f'else\n')
             f.write(f'  echo "[$(date +%H:%M)] GPU{gpu}: {task_id} START"\n')
