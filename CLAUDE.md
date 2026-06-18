@@ -6,12 +6,13 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## ⚠️ 关键规则
 
-0. **Phase 切换时重读文档**：每个 Phase 开始前，必须重新阅读对应的协议文档：
-   - Phase 4 (盲识别): 重读 `SKILL.md` + `CLAUDE.md` §子 Agent 盲识别协议
-   - Phase 5 (训练): 重读 `CLAUDE.md` §GPU 并行调度 + `finetune_strategy.md`
-   - Phase 6 (DFPIR 对比): 重读 `CLAUDE.md` §DFPIR 基线评估 (仅在全部流程结束后)
-   - GT 重评估: 重读 `CLAUDE.md` §GT 退化重评估
-   - 反思: 重读 `REFLECTION_MECHANISM.md`
+0. **Phase 切换时强制重读文档 🔴**：每个 Phase 开始前，必须重新阅读对应的协议文档。**禁止凭记忆操作**：
+   - Phase 4 (盲识别): `Read` SKILL.md + CLAUDE.md §子 Agent 盲识别协议
+   - Phase 5 (训练): `Read` CLAUDE.md §Phase 5 训练启动 + `Read` finetune_strategy.md
+   - Phase 6 (DFPIR 对比): `Read` CLAUDE.md §DFPIR 基线评估 (仅在全部流程结束后)
+   - GT 重评估: `Read` CLAUDE.md §GT 退化重评估
+   - 反思: `Read` REFLECTION_MECHANISM.md
+   - 违反后果: 架构遗漏(ColorPre/ColorMLP)、策略错误(Ft vs Direct)、FP问题未处理
 1. **绝不接触 GT**：以下路径全程不可读（来源：exp18/exp19 泄露审计）：
    - `.ground_truth/` 和 `degradation_gt/` → 已移出 challenges/ 目录，chmod 700/600
    - `/tmp/expN_p4_mapping.json` → 已迁移至 `.gt_mappings/`（chmod 700）
