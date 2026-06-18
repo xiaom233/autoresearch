@@ -250,12 +250,22 @@ def step2_noise(target, clean):
     spatial_corr = (sc_h + sc_v) / 2.0
     result["signals"]["spatial_corr"] = round(spatial_corr, 4)
 
+    # Quick JPEG detection: 8x8 block boundary → raises SC threshold (避免 JPEG→SC 假阳性)
+    has_jpeg = False
+    try:
+        gray_target = target.mean(axis=2)
+        bb = compute_block_boundary(target)
+        has_jpeg = bb > 1.1
+    except:
+        pass
+
     # ================================================================
     # 2. Spatially_Correlated — 空间相关指纹
     # 纯 SC: spatial_corr > 0.5 (3x3 box blur 产生强相关)
-    # 0.3-0.5: 可能是 SC 或 blur+noise 假阳性, 用亮度-方差确认
+    # JPEG 也会产生 spatial_corr (8x8 块) → 有 JPEG 时阈值提高到 0.65
     # ================================================================
-    if spatial_corr > 0.5:
+    sc_threshold = 0.65 if has_jpeg else 0.50
+    if spatial_corr > sc_threshold:
         result["verdict"] = "SPATIALLY_CORRELATED"
         result["confidence"] = "high" if spatial_corr > 0.6 else "medium"
         result["estimated_severity"] = 3 if spatial_corr > 0.65 else (2 if spatial_corr > 0.55 else 1)
