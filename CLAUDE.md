@@ -503,51 +503,51 @@ CUDA_VISIBLE_DEVICES=0 exp1 & CUDA_VISIBLE_DEVICES=0 exp2 &  # 并行! OOM!
 
 每个实验计划中，在 Phase 5 训练 + GT 重评估全部完成后，用 DFPIR (31M, CVPR'25) 做最终对比。
 
-#### ✅ 正确方法：8 GPU 串行模式（推荐）
+#### ✅ 推荐：串行多 GPU 模式（每个 task 用所有可用 GPU，逐个接力）
 
 ```bash
-# 1. 创建队列（每个退化用全部 8 GPU，串行执行）
-> dfpir_queue.txt
-for f in expN/degradation/*.json; do
-    name=$(basename $f .json)
-    [[ "$name" =~ _R[12]$|_fixed$|challenge_ids ]] && continue
-    echo "/home/zyli/anaconda3/envs/dfpir/bin/python \
-      resource/.../test_degradation.py --params $f --gpus 0,1,2,3,4,5,6,7 \
-      --output expN/results/dfpir_${name}.json \
-      > expN/logs/dfpir_${name}.log 2>&1|DFP_${name}" >> dfpir_queue.txt
-done
+# 生成串行队列脚本（每个 task 用 7 GPU 并行，GPU7 留给训练）
+.venv/bin/python3 << 'PYEOF'
+import os
+DFPIR_PY = "resource/.../test_degradation.py"
+DFPIR_PYTHON = "/home/zyli/anaconda3/envs/dfpir/bin/python"
+bids = sorted([...])  # 已完成训练的 challenge ID 列表
 
-# 2. 启动专用 runner（串行取任务，每个任务自动用 8 GPU）
-bash exp12/scripts/dfpir_runner.sh dfpir_queue.txt &
+with open("expN/scripts/dfpir_serial.sh", "w") as f:
+    f.write("#!/bin/bash\n")
+    for bid in bids:
+        params = f"expN/degradation_gt/{bid}_params.json"
+        output = f"expN/results/dfpir_{bid}.json"
+        logf = f"expN/logs/dfpir_{bid}.log"
+        cmd = f"{DFPIR_PYTHON} {DFPIR_PY} --params {params} --gpus 0,1,2,3,4,5,6 --output {output}"
+        f.write(f'echo "[$(date +%H:%M)] {bid} START"\n')
+        f.write(f'{cmd} > {logf} 2>&1\n')
+        f.write(f'echo "[$(date +%H:%M)] {bid} DONE"\n')
+os.chmod("expN/scripts/dfpir_serial.sh", 0o755)
+PYEOF
+
+# 启动
+bash expN/scripts/dfpir_serial.sh &
 ```
 
-**前提条件**：⚠️ **全部 8 GPU 必须完全空闲**。spawn 在有任何 CUDA 进程时死锁。
+**性能**：每退化 ~1 分钟（7 GPU 分担 737 张图），15 退化 ≈ 15 分钟。
 
-**性能**：每退化 ~4.2 分钟，56 退化 ≈ 4 小时。
+#### 训练和 DFPIR 并行
 
-#### ✅ 备选：单 GPU direct 模式（可与训练并行）
+GPU7 留给训练，GPU0-6 跑 DFPIR，互不干扰。
 
 ```bash
-# 队列中每个任务用单 GPU（--gpus 0 + CUDA_VISIBLE_DEVICES），每个任务前加 sleep 10 错峰
-echo "sleep 10 && CUDA_VISIBLE_DEVICES=GPU_ID ... --gpus 0 ..." >> dfpir_queue.txt
-# 启动 8 个 runner
-for gpu in 0..7; do bash exp10/scripts/gpu_runner.sh $gpu dfpir_queue.txt & done
+# 训练：GPU7 单独跑最后一个 task
+# DFPIR：GPU0-6 串行多 GPU 模式（--gpus 0,1,2,3,4,5,6）
 ```
 
 #### ❌ 错误方法
 
 | 错误 | 原因 |
 |------|------|
-| 8 GPU 模式 + GPU 被占用 | spawn 死锁，进程永久挂起 |
-| 8 GPU 模式 + `CUDA_VISIBLE_DEVICES` | spawn 需要看到全部 GPU |
-| 单 GPU 模式 + 无 `sleep` 错峰 | 8 进程同时预加载 → CPU 饱和 → GPU 饿死 |
-| `fork` 替代 `spawn` | CUDA 拒绝：`Cannot re-initialize CUDA in forked subprocess` |
-
-#### 优化记录
-
-- `test_degradation.py` worker：`ThreadPoolExecutor(2)` 多线程预加载 + DataLoader pin_memory
-- 单 GPU 模式（`n_gpus==1`）direct 调用 worker，不走 spawn
-- `train.py` evaluate() 同样加入预加载 + DataLoader
+| 8 GPU 模式 + GPU 被占用 | spawn 死锁 |
+| 每个 task 单独单 GPU 进程 | 每个进程重复加载全部 737 张图，I/O 冗余 |
+| 修改 test_degradation.py | 外部代码，改动难追踪 |
 
 **关键参数**：
 - Checkpoint: `resource/.../dfpir_blind/checkpoints/dfpir_blind_step301920.pt`
