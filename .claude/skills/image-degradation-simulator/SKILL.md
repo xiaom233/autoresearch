@@ -220,7 +220,7 @@ for cat, funcs in distortions_dict.items():
 | `saturate_weaken` | HSV, YCrCb |
 | `oversharpen` | oversharpen |
 | `pixelate` | pixelate |
-| `quantization` | otsu, median, hist |
+| `quantization` | median, hist（⚠️ otsu 已禁用 — 图像唯一值<8时崩溃, blind_challenge.py 已排除）|
 
 For the complete severity-to-actual-parameter mappings (e.g., severity 3 → sigma=0.15 for gaussian_RGB noise), read `references/severity_mappings.md`.
 
