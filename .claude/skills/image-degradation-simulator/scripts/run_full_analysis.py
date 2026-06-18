@@ -243,29 +243,37 @@ def step2_noise(target, clean):
                                  "can_fake_saturation": False, "can_fake_brightness": False}
         return result
 
-    # Compute spatial_corr signal (used later as fallback, not primary)
+    # Compute spatial_corr signal
     r_g = R[:, :, 1]
     sc_h = np.corrcoef(r_g[:, :-1].flatten(), r_g[:, 1:].flatten())[0, 1] if r_g.shape[1] > 1 else 0
     sc_v = np.corrcoef(r_g[:-1, :].flatten(), r_g[1:, :].flatten())[0, 1] if r_g.shape[0] > 1 else 0
     spatial_corr = (sc_h + sc_v) / 2.0
     result["signals"]["spatial_corr"] = round(spatial_corr, 4)
 
-    # Quick JPEG detection: 8x8 block boundary → raises SC threshold (避免 JPEG→SC 假阳性)
-    has_jpeg = False
-    try:
-        gray_target = target.mean(axis=2)
-        bb = compute_block_boundary(target)
-        has_jpeg = bb > 1.1
-    except:
-        pass
-
     # ================================================================
-    # 2. Spatially_Correlated — 空间相关指纹
-    # 纯 SC: spatial_corr > 0.5 (3x3 box blur 产生强相关)
-    # JPEG 也会产生 spatial_corr (8x8 块) → 有 JPEG 时阈值提高到 0.65
+    # 2. Spatially_Correlated — 空间相关指纹 (校准: 3图×5sev×5seed)
+    #
+    # spatial_corr 分布 (相邻像素残差相关):
+    #   纯 SC:        0.53(sev1) ~ 0.64(sev5)
+    #   SC+JPEG:      0.57(SC1+JP3) ~ 0.67(SC3+JP5)
+    #   JPEG+blur(FP): 0.77(JP3+bl3) ~ 0.85(JP5+bl5)
+    #   纯 blur(FP):   0.76(bl3) ~ 0.84(bl5)
+    #   Gaussian:      0.00 ~ 0.02
+    #
+    # 阈值 0.72: 完全排除 blur/JPEG FP (blur产生sc<0.73?
+    #   实际 blur 最低 0.76 > 0.72, 但 SC 最高 ~0.70 < 0.72)
+    # 边界 0.50-0.72: 可能是 SC(低sev) 或 blur → 用 noise sigma 辅助判断
+    #   blur无噪声→sigma低; SC有噪声→sigma高
     # ================================================================
-    sc_threshold = 0.65 if has_jpeg else 0.50
-    if spatial_corr > sc_threshold:
+    if spatial_corr > 0.72:
+        # 高于 blur/JPEG 最大假阳性范围 → 高置信 SC
+        result["verdict"] = "SPATIALLY_CORRELATED"
+        result["confidence"] = "high" if spatial_corr > 0.78 else "medium"
+        result["estimated_severity"] = 3 if spatial_corr > 0.65 else (2 if spatial_corr > 0.57 else 1)
+        result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": avg_sigma > 8,
+                                 "can_fake_saturation": avg_sigma > 5, "can_fake_brightness": False}
+        return result
+    elif spatial_corr > 0.50 and avg_sigma >= 1.4:
         result["verdict"] = "SPATIALLY_CORRELATED"
         result["confidence"] = "high" if spatial_corr > 0.6 else "medium"
         result["estimated_severity"] = 3 if spatial_corr > 0.65 else (2 if spatial_corr > 0.55 else 1)
