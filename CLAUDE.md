@@ -580,66 +580,105 @@ expN/
 
 根目录仅保留核心文件：`train.py`、`prepare.py`、`blind_challenge.py`、`evaluate_blind_challenge.py`、`setup_challenge.sh`。
 
-## GPU 并行调度
+## Phase 5 训练启动 ⚠️ 实操
 
-基于 Python 原子锁调度器，替代旧的 bash gpu_runner.sh（flock 竞态问题）。
+### 训练前必读
 
-### 核心工具
+启动 Phase 5 前必须：
+1. **重读 `finetune_strategy.md`** — 按退化类型选择策略和架构
+2. **确认 VAL 参数指向预测管线**（非 GT）— 防泄露
+3. **确认 EPOCH_BUDGET=2, LR=5e-4**
 
-| 工具 | 路径 | 用途 |
-|------|------|------|
-| GPU 调度器 | `scripts/gpu_scheduler.py` | 通用任务生成 + 多 GPU 并行执行 |
-| DFPIR 串行 | `expN/scripts/dfpir_serial.sh` | DFPIR 8 GPU 串行模式 |
+### 策略选择速查
 
-### 完整实验流程
+| 退化类型 | 策略 | 架构 | LR |
+|------|------|------|:--:|
+| contrast 型全局 | **Direct** | Swin | 5e-4 |
+| UNCERTAIN 盲识别 | Direct | **DualBranch** | 5e-4 |
+| LIKELY + 全局退化 | Ft (如有ckpt) | Swin+ColorPre | 5e-4 |
+| LIKELY + 局部退化 | Ft (如有ckpt) | Swin | 5e-4 |
+| motion blur sev≥5 | Direct/Ft | OCAB+ws16 | 5e-4 |
+
+**预训练 ckpt**：从历史实验复制 `M_blind` 的 `step15092.pt` → `resource/blind_pretrain/checkpoints/`。
+注意：ColorPre/DualBranch 等改架构的不能 Ft（ckpt 不兼容），必须 Direct。
+
+### 任务生成和启动
+
+gpu_scheduler.py 的 `os.fork()` 在部分环境下不稳定。**推荐直接生成 bash 脚本并行执行**：
 
 ```bash
-# === Phase 5: Specialist 训练 ===
+# 1. 用 Python 脚本生成 per-GPU 任务文件和 bash 启动脚本
+.venv/bin/python3 << 'PYEOF'
+import json, os
 
-# 1. 生成任务文件 (自动跳过已完成, 导出 params)
-.venv/bin/python3 scripts/gpu_scheduler.py gen \
-  --exp exp18 \
-  --task-file exp18/scripts/phase5_tasks.jsonl \
-  --ckpt-prefix exp18/experiments/exp18_v2 \
-  --epoch-budget 2
-  # 可选: --extra-env "AR_ATTENTION_TYPE=ocab AR_WINDOW_SIZE=16 AR_USE_COLOR_PRE=1"
+LOAD_CKPT = "resource/blind_pretrain/checkpoints/blind_pretrain_step15092.pt"
+LR = "0.0005"
 
-# 2. 启动 8 GPU worker 并行执行
-.venv/bin/python3 scripts/gpu_scheduler.py run \
-  --task-file exp18/scripts/phase5_tasks.jsonl \
-  --gpus 0,1,2,3,4,5,6,7
+# 按 finetune_strategy.md 分配每个挑战的策略和架构
+# 示例配置（需根据实际 verdict 调整）
+configs = {
+    "blind_0001": "AR_USE_DUAL_BRANCH=1",           # UNCERTAIN → DualBranch
+    "blind_0005": f"AR_LOAD_CKPT={LOAD_CKPT}",      # LIKELY 局部 → Ft
+    "blind_0008": "",                                 # contrast → Swin Direct
+    "blind_0009": "AR_USE_COLOR_PRE=1",              # 全局 LIKELY → ColorPre
+}
 
-# 3. 查看状态
-.venv/bin/python3 scripts/gpu_scheduler.py status \
-  --task-file exp18/scripts/phase5_tasks.jsonl
+tasks = []
+for i in range(1, 17):
+    bid = f"blind_{i:04d}"
+    extra = configs.get(bid, "")
+    params = f"expN/degradation/{bid}_params.json"     # 预测管线 params
+    ckpt = f"expN/experiments/expN_v1_{bid}"
+    log = f"expN/logs/expN_v1_{bid}.log"
+    env = f"AR_PARAMS_PATH={params} AR_VAL_PARAMS_PATH={params} AR_EPOCH_BUDGET=2 AR_CKPT_PREFIX={ckpt} AR_LEARNING_RATE={LR}"
+    if extra: env += f" {extra}"
+    cmd = f"CUDA_VISIBLE_DEVICES=GPU_ID {env} .venv/bin/python3 train.py > {log} 2>&1"
+    tasks.append({"id": bid, "cmd": cmd})
 
-# 4. 停止 (软停: 完成当前任务后停)
-touch /tmp/stop_exp18 && .venv/bin/python3 scripts/gpu_scheduler.py run \
-  --task-file exp18/scripts/phase5_tasks.jsonl --stop-file /tmp/stop_exp18
+# 分配任务到 GPU（每个 GPU 2 个任务，顺序执行）
+gpu_queues = {i: [] for i in range(8)}
+for i, t in enumerate(tasks):
+    gpu_queues[i % 8].append((t['id'], t['cmd'].replace('GPU_ID', str(i % 8))))
 
-# 5. 紧急停止
-pkill -f "gpu_scheduler.py"
+# 生成 per-GPU bash 脚本
+for gpu in range(8):
+    with open(f'expN/scripts/gpu{gpu}_run.sh', 'w') as f:
+        f.write("#!/bin/bash\n")
+        for task_id, cmd in gpu_queues[gpu]:
+            ckpt_dir = f"expN/experiments/expN_v1_{task_id}/checkpoints"
+            # 删除旧 LR=1e-3 的 ckpt
+            f.write(f'if grep -sq \'"lr": 0.001\' expN/logs/expN_v1_{task_id}.log 2>/dev/null; then rm -rf {ckpt_dir}; fi\n')
+            # 跳过已完成的
+            f.write(f'if [ ! -f {ckpt_dir}/*.pt ] 2>/dev/null; then\n')
+            f.write(f'  echo "[$(date +%H:%M)] GPU{gpu}: {task_id} START"\n')
+            f.write(f'  {cmd}\n')
+            f.write(f'  echo "[$(date +%H:%M)] GPU{gpu}: {task_id} DONE"\n')
+            f.write(f'else\n')
+            f.write(f'  echo "[$(date +%H:%M)] GPU{gpu}: {task_id} SKIP"\n')
+            f.write(f'fi\n')
+    os.chmod(f'expN/scripts/gpu{gpu}_run.sh', 0o755)
+
+# 2. 并行启动所有 GPU
+import subprocess
+for gpu in range(8):
+    subprocess.Popen(["bash", f"expN/scripts/gpu{gpu}_run.sh"],
+                     stdout=open(f"expN/logs/gpu{gpu}_runner.log", "w"),
+                     stderr=subprocess.STDOUT)
+PYEOF
+
+# 3. 监控进度
+watch -n 30 'nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader'
 ```
 
-### 通用任务格式 (JSON Lines)
+### 训练故障排查
 
-每行一个任务, 支持任意命令:
-```jsonl
-{"id": "blind_0001", "cmd": "CUDA_VISIBLE_DEVICES=GPU_ID AR_... .venv/bin/python3 train.py > log 2>&1", "status": "pending", "claimed_by": null}
-```
-
-`GPU_ID` 占位符由 scheduler 自动替换为实际 GPU 编号。
-
-### 关键设计
-
-| 特性 | 实现 |
-|------|------|
-| **原子取任务** | `O_CREAT|O_EXCL` 创建 .claim 锁文件, 无竞态 |
-| **GPU 绑定** | `GPU_ID` 占位符自动替换 |
-| **断点续跑** | `gen` 命令检查 checkpoint + val_psnr_db, 自动跳过 |
-| **幂等** | 同一队列多次运行不重复执行已完成任务 |
-| **状态追踪** | pending → claimed → running → done/failed |
-| **通用性** | 支持任意命令, 不限于 train.py |
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| OOM | DualBranch+大图 | 减少 BATCH_SIZE 或换 Swin |
+| ColorPre+Ft 崩溃 | ckpt 缺少 color_pre 层 | 必须用 Direct |
+| 重复进程 | 旧 bash 脚本未杀 | `pkill -f train.py` 后重启 |
+| LR=1e-3 | 默认值未覆盖 | 确认 `AR_LEARNING_RATE=0.0005` |
+| gpu_scheduler "no pending" | `.claim.*` 锁文件残留 | `rm -f expN/scripts/phase5_tasks.jsonl.claim.*` |
 
 ⚠️ **auto_pipeline 限制**: `auto_pipeline.py` 只能处理 Phase 3 (params 导出)、Phase 5 (训练)、DFPIR 评估。**绝对禁止** auto_pipeline 做 Phase 4 盲识别——必须由 Agent 通过 Skill 执行。
 （来源: exp17 — 脚本生成的盲识别 75% 函数错误，全部 CI=0/10，0 reflection 文件）
