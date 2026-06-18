@@ -661,24 +661,25 @@ def step3_blur(target, clean, noise_info):
     mtf_diff = np.abs(np.diff(kernel_mtf))
     result["signals"]["mtf_roughness"] = round(mtf_diff.std() / (mtf_diff.mean() + 1e-6), 4)
 
-    # --- Simplified classification ---
-    # Motion: residual anisotropy > 1.60 (calibrated: 纯Motion 1.60-2.07, 噪Motion 1.49-1.79, 非Motion≤1.55噪)
-    # 18% 非Motion 纯 blur 也超 1.60 (Zoom/Glass 高 sev 时各向异性接近 Motion)
-    motion_threshold = 1.60 if not has_noise else 1.52
-    if res_anisotropy > motion_threshold:
-        result["verdict"] = "MOTION_BLUR"
-        result["confidence"] = "high" if res_anisotropy > 1.70 else "medium"
+    # --- Simplified classification (v15: Glass 分数唯一可用附加信号) ---
+    # Motion: 残差各向异性受图像内容主导(FP>80%) → 不可自动区分, Agent PSNR 测试
+    # Lens/Gaussian: 数学上不可区分 (disk vs gaussian 核差异被图像内容淹没)
+    # Glass: glass_score > 0.25 (Laplacian/gradient 比, pixel shuffle 高频残留)
+    #   Gaussian(2-4): 0.04-0.13, Lens(2-4): 0.08-0.20, Glass(2-4): 0.19-0.41
+    gray_target = target.mean(axis=2)
+    lap = np.abs(np.diff(gray_target, 2, axis=0)[:, :-2]) + np.abs(np.diff(gray_target, 2, axis=1)[:-2, :])
+    grad = np.abs(np.diff(gray_target, axis=0)[:, :-1]) + np.abs(np.diff(gray_target, axis=1)[:-1, :])
+    glass_score = lap.var() / (grad.var() + 0.01)
+    result["signals"]["glass_score"] = round(glass_score, 4)
+
+    if glass_score > 0.25:
+        result["verdict"] = "GLASS_BLUR"
+        result["confidence"] = "medium" if glass_score > 0.35 else "low"
+        result["note"] = f"glass_score={glass_score:.3f}>0.25 (pixel shuffle高频残留). Motion/Lens/Gaussian需Agent PSNR区分."
     else:
         result["verdict"] = "GAUSSIAN_BLUR"
-        # Confidence depends on signal quality
-        if gm_ratio_usable and gm_ratio < 0.62:
-            result["confidence"] = "high"
-        elif not has_noise:
-            result["confidence"] = "medium"
-        else:
-            result["confidence"] = "low"
-        # Agent hint: MTF signals for manual interpretation
-        result["note"] = "Lens/Glass/Zoom not distinguishable by automated signals — Agent should PSNR-test if subtype matters"
+        result["confidence"] = "medium" if gm_ratio_usable else "low"
+        result["note"] = "Glass/Lens/Motion/Zoom不可靠区分 — Agent应PSNR测试替代子类型"
 
     # Severity estimation (prefer gm_ratio when usable, fall back to spectral slope)
     if gm_ratio_usable:
@@ -928,6 +929,21 @@ def run_full_analysis(target_path, clean_path):
 
     report["failure_risks"] = risks
     report["recommended_reflection"] = reflections
+
+    # --- 🔴 交叉验证: JPEG 块结构 → spatial_corr 假阳性 (exp25 根因) ---
+    # JPEG 8x8 块边界产生 0.5+ 的空间相关性, 与 SC 噪声不可区分。
+    # 当 JPEG 被检测到且噪声被判为 SPATIALLY_CORRELATED 时, 大概率是 JPEG 假阳性。
+    if (s1["verdict"] != "NO_COMPRESSION" and "MILD" not in s1.get("verdict", "") and
+        s2["verdict"] == "SPATIALLY_CORRELATED" and s2.get("confidence") in ["speculative", "low"]):
+        report["cross_validation"] = {
+            "trigger": "JPEG + SPATIALLY_CORRELATED",
+            "action": "spatial_corr 信号可能来自 JPEG 8x8 块结构而非真实 SC 噪声",
+            "recommendation": "Agent 应优先测试 GAUSSIAN_RGB/IMPULSE/SPECKLE 替代 SC",
+            "affected_signal": "spatial_corr",
+            "confidence": "high"
+        }
+        risks.append("JPEG_SC_FALSE_POSITIVE")
+        reflections.append("JPEG detected + SC noise (speculative) → high probability JPEG block artifact. Test GAUSSIAN_RGB/IMPULSE/SPECKLE as replacements.")
 
     # --- Architecture recommendation (来源: finetune_strategy.md exp9/10/12) ---
     has_contrast = any('contrast' in s.lower() for s in detections)
