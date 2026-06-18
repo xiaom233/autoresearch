@@ -867,7 +867,7 @@ def main():
             "loss_fn": LOSS_FN, "grad_clip": GRAD_CLIP,
             "learning_rate": LEARNING_RATE, "weight_decay": WEIGHT_DECAY,
         },
-        "per_dataset": {name: per_set[name] for name in [v[0] for v in val_full_sets]},
+        "per_dataset": {name: per_set.get(name, {}) for name in [v[0] for v in val_full_sets]},
         "overall": final_metrics,
         "summary": {
             "best_step": best_checkpoint["step"],
