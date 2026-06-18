@@ -166,6 +166,7 @@ LOG_INTERVAL = 25            # steps between PSNR logging
 CKPT_PREFIX = "ckpt"         # 多实验并行时 checkpoint 文件名前缀
 QUIET_PIPELINE = 0            # 1=抑制 prepare.py 打印退化管线（防盲识别泄露）
 LOAD_CKPT = None              # 盲预训练 checkpoint 路径（用于 Ft 微调）
+SKIP_FINAL_VAL = 0            # 1=跳过训练结束后的全量验证（验证的是预测退化非GT，意义不大）
 
 # Environment variable overrides for parallel experiments
 for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNING_RATE",
@@ -178,7 +179,7 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
            "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX",
            "WINDOW_SHIFT_RATIO", "HEAD_DIM", "NORM_TYPE", "SKIP_RSTB",
            "CONV_KERNEL", "CHANNEL_MIX", "STAGE_CONFIG", "NUM_STAGES", "QUIET_PIPELINE",
-           "LOAD_CKPT",
+           "LOAD_CKPT", "SKIP_FINAL_VAL",
            "CURRICULUM_CONFIG", "REPLAY_RATIO", "FREEZE_STAGES", "PHASE2_LR_MULT",
            "ADAPTIVE_SWITCH", "ADAPTIVE_THRESHOLD",
            "USE_GCM", "USE_CSN", "USE_COLOR_PRE", "USE_COLOR_MLP",
@@ -811,18 +812,24 @@ def main():
             print(f"\nLoaded best checkpoint: step {best_checkpoint['step']} "
                   f"(Set14 PSNR_RGB={best_checkpoint['metrics']['psnr_rgb']:.2f})", flush=True)
 
-    print(f"Running full validation on {total_val} images across {len(val_full_sets)} sets...", flush=True)
-    per_set, final_metrics = evaluate_all(model, val_full_sets, device, autocast_ctx)
+    if SKIP_FINAL_VAL:
+        print(f"Skipping final validation (SKIP_FINAL_VAL=1). GT reeval should be done separately.", flush=True)
+        per_set = {}
+        final_metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0, "psnr_rgb_avg": 0.0}
+    else:
+        print(f"Running full validation on {total_val} images across {len(val_full_sets)} sets...", flush=True)
+        per_set, final_metrics = evaluate_all(model, val_full_sets, device, autocast_ctx)
     total_imgs = step * BATCH_SIZE
 
-    # Print per-dataset table
-    print(f"\n{'Dataset':<14} {'PSNR_RGB':>10} {'PSNR_Y':>10} {'SSIM_RGB':>10} {'SSIM_Y':>10}")
-    print("-" * 58)
-    for name in [v[0] for v in val_full_sets]:
-        m = per_set[name]
-        print(f"{name:<14} {m['psnr_rgb']:>10.2f} {m['psnr_y']:>10.2f} {m['ssim_rgb']:>10.4f} {m['ssim_y']:>10.4f}")
-    print("-" * 58)
-    print(f"{'Overall':<14} {final_metrics['psnr_rgb']:>10.2f} {final_metrics['psnr_y']:>10.2f} {final_metrics['ssim_rgb']:>10.4f} {final_metrics['ssim_y']:>10.4f}")
+    # Print per-dataset table (skip if SKIP_FINAL_VAL)
+    if not SKIP_FINAL_VAL:
+        print(f"\n{'Dataset':<14} {'PSNR_RGB':>10} {'PSNR_Y':>10} {'SSIM_RGB':>10} {'SSIM_Y':>10}")
+        print("-" * 58)
+        for name in [v[0] for v in val_full_sets]:
+            m = per_set[name]
+            print(f"{name:<14} {m['psnr_rgb']:>10.2f} {m['psnr_y']:>10.2f} {m['ssim_rgb']:>10.4f} {m['ssim_y']:>10.4f}")
+        print("-" * 58)
+        print(f"{'Overall':<14} {final_metrics['psnr_rgb']:>10.2f} {final_metrics['psnr_y']:>10.2f} {final_metrics['ssim_rgb']:>10.4f} {final_metrics['ssim_y']:>10.4f}")
 
     # ---------------------------------------------------------------------------
     # Summary
