@@ -129,9 +129,9 @@ def step1_compression(target, clean):
     result["signals"]["dct_zero_ratio"] = round(dct_zeros, 4)
 
     # Multi-signal voting (calibrated from 290 synthetic tests)
-    bb_detected = block_boundary > 1.05   # 1.5% deviation threshold (no natural image triggers)
-    dct_detected = dct_zeros > 0.77       # 87% recall, 12.8% FP
-    dct_degraded = dct_zeros > 0.15       # DCT fails in composite (4.3σ degradation)
+    bb_detected = block_boundary > 1.05   # 14400-case校准: 0% FP, 99.5% R1, 100% R2+
+    dct_detected = dct_zeros > 0.50       # 14400-case校准: 0% FP, R1=84%, R2+=90%+
+    dct_degraded = dct_zeros > 0.20       # DCT fails in composite
     ug_detected = ug_ratio < 0.3 and ug_target < 50  # Only severe quantization
 
     # Voting: require 2/3 signals for HIGH confidence
@@ -251,35 +251,17 @@ def step2_noise(target, clean):
     result["signals"]["spatial_corr"] = round(spatial_corr, 4)
 
     # ================================================================
-    # 2. Spatially_Correlated — 空间相关指纹 (校准: 3图×5sev×5seed)
-    #
-    # spatial_corr 分布 (相邻像素残差相关):
-    #   纯 SC:        0.53(sev1) ~ 0.64(sev5)
-    #   SC+JPEG:      0.57(SC1+JP3) ~ 0.67(SC3+JP5)
-    #   JPEG+blur(FP): 0.77(JP3+bl3) ~ 0.85(JP5+bl5)
-    #   纯 blur(FP):   0.76(bl3) ~ 0.84(bl5)
-    #   Gaussian:      0.00 ~ 0.02
-    #
-    # 阈值 0.72: 完全排除 blur/JPEG FP (blur产生sc<0.73?
-    #   实际 blur 最低 0.76 > 0.72, 但 SC 最高 ~0.70 < 0.72)
-    # 边界 0.50-0.72: 可能是 SC(低sev) 或 blur → 用 noise sigma 辅助判断
-    #   blur无噪声→sigma低; SC有噪声→sigma高
+    # 2. Spatially_Correlated — 暂时关闭
+    #    原因: JPEG 8×8 块 + blur 产生 spatial_corr 0.68-0.85，
+    #          与真 SC 噪声 (0.53-0.70) 不可区分 (同图模式)
+    #    exp27 证明: 3/16 的 SC 检测来自 JPEG+blur FP
     # ================================================================
-    if spatial_corr > 0.72:
-        # 高于 blur/JPEG 最大假阳性范围 → 高置信 SC
-        result["verdict"] = "SPATIALLY_CORRELATED"
-        result["confidence"] = "high" if spatial_corr > 0.78 else "medium"
-        result["estimated_severity"] = 3 if spatial_corr > 0.65 else (2 if spatial_corr > 0.57 else 1)
-        result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": avg_sigma > 8,
-                                 "can_fake_saturation": avg_sigma > 5, "can_fake_brightness": False}
-        return result
-    elif spatial_corr > 0.50 and avg_sigma >= 1.4:
-        result["verdict"] = "SPATIALLY_CORRELATED"
-        result["confidence"] = "high" if spatial_corr > 0.6 else "medium"
-        result["estimated_severity"] = 3 if spatial_corr > 0.65 else (2 if spatial_corr > 0.55 else 1)
-        result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": avg_sigma > 8,
-                                 "can_fake_saturation": avg_sigma > 5, "can_fake_brightness": False}
-        return result
+    # if spatial_corr > 0.72:
+    #     result["verdict"] = "SPATIALLY_CORRELATED"
+    #     ...
+    # elif spatial_corr > 0.50 and avg_sigma >= 1.4:
+    #     result["verdict"] = "SPATIALLY_CORRELATED"
+    #     ...
 
     # ================================================================
     # 3. YCrCb — 通道间相关指纹 (sc低 + cc高 → YCrCb)
@@ -291,13 +273,42 @@ def step2_noise(target, clean):
     cross_ch_corr = (abs(corr_matrix[0, 1]) + abs(corr_matrix[0, 2]) + abs(corr_matrix[1, 2])) / 3.0
     result["signals"]["cross_channel_corr"] = round(cross_ch_corr, 4)
     # RGB 独立加噪: <0.05; YCrCb 转 RGB: >0.15
+    # ⚠️ 同图模式 FP 风险: blur/JPEG 也产生跨通道相关 (exp28: 3例FP)
+    #   blur: RGB通道同步平滑 → cc升高
+    #   JPEG: YCrCb色彩空间操作 → cc升高
+    #   前置条件: 如果 blur 或 JPEG 被检测到, YCrCb 置信度必须降级
     if cross_ch_corr > 0.12:
-        result["verdict"] = "GAUSSIAN_YCrCb"
-        result["confidence"] = "high" if cross_ch_corr > 0.20 else "medium"
-        result["estimated_severity"] = 2 if avg_sigma > 10 else (3 if avg_sigma > 20 else (4 if avg_sigma > 30 else 5))
-        result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": avg_sigma > 8,
-                                 "can_fake_saturation": avg_sigma > 5, "can_fake_brightness": False}
-        return result
+        # 二次判定: 残差是否随像素强度变化? (gamma=确定性函数 YCrCb=随机噪声)
+        # exp28校准: ric阈值从0.25降至0.15 (0009 ric=0.09未触发, 0010 ric=0.21未触发)
+        R_mag = np.abs(R).mean(axis=2).flatten()
+        I_flat = I.mean(axis=2).flatten()
+        # 降采样加速 (大图上采样)
+        if len(I_flat) > 50000:
+            idx = np.random.choice(len(I_flat), 50000, replace=False)
+            R_mag_sample = R_mag[idx]
+            I_sample = I_flat[idx]
+        else:
+            R_mag_sample, I_sample = R_mag, I_flat
+        residual_intensity_corr = np.corrcoef(I_sample, R_mag_sample)[0, 1]
+        result["signals"]["residual_intensity_corr"] = round(residual_intensity_corr, 4)
+
+        if abs(residual_intensity_corr) > 0.15:
+            # 残差与强度相关 → 确定性变换 (gamma/contrast), 非随机噪声
+            # exp28: 阈值从0.25降至0.15 (0009 ric=0.09未触发, 0010 ric=0.21→0.21>0.15触发)
+            result["signals"]["gamma_suspect_from_noise"] = True
+            result["verdict"] = "GAUSSIAN_YCrCb"
+            result["confidence"] = "low"  # 降级 — 可能是 gamma FP
+            result["estimated_severity"] = 2 if avg_sigma > 10 else 3
+            result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": avg_sigma > 8,
+                                     "can_fake_saturation": avg_sigma > 5, "can_fake_brightness": False}
+            return result
+        else:
+            result["verdict"] = "GAUSSIAN_YCrCb"
+            result["confidence"] = "high" if cross_ch_corr > 0.20 else "medium"
+            result["estimated_severity"] = 2 if avg_sigma > 10 else (3 if avg_sigma > 20 else (4 if avg_sigma > 30 else 5))
+            result["_for_step4"] = {"sigma": round(avg_sigma, 2), "can_fake_contrast": avg_sigma > 8,
+                                     "can_fake_saturation": avg_sigma > 5, "can_fake_brightness": False}
+            return result
 
     # ================================================================
     # 4. Gaussian/Poisson/Speckle — 亮度-方差关系指纹
@@ -342,11 +353,8 @@ def step2_noise(target, clean):
                 result["verdict"] = "SPECKLE"
                 result["confidence"] = "high" if corr_scaled > 0.5 else "medium"
     else:
-        # 无足够平坦区域 → 回退
-        if spatial_corr > 0.3:
-            result["verdict"] = "SPATIALLY_CORRELATED"
-            result["confidence"] = "low"
-        elif avg_sigma < 1.9:
+        # 无足够平坦区域 → 回退 (SC 已关闭)
+        if avg_sigma < 1.9:
             result["signals"]["gm_ratio_usable"] = True
             return result
         else:
@@ -569,14 +577,65 @@ def step3_blur(target, clean, noise_info):
     glass_score = lap.var() / (grad.var() + 0.01)
     result["signals"]["glass_score"] = round(glass_score, 4)
 
-    if glass_score > 0.25:
+    # 两阶段模糊分类: 梯度域联合核提取 → PCA 统计特征决策树
+    # exp28 验证: lens 4/4, zoom 4/4, motion≥3 3/3, gaussian 4/4
+    blur_subtype = "blur_gaussian"
+    subtype_confidence = "low"
+    try:
+        from blur_kernel_recovery import identify_blur_type
+        # Save temp files for identify_blur_type (it reads from disk)
+        import tempfile, os as _os
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tf, \
+             tempfile.NamedTemporaryFile(suffix='.png', delete=False) as cf:
+            Image.fromarray(target.clip(0,255).astype(np.uint8)).save(tf.name)
+            clean_img = clean if len(clean.shape) == 2 else clean.mean(axis=2)
+            Image.fromarray(clean_img.clip(0,255).astype(np.uint8)).save(cf.name)
+            tf.close(); cf.close()
+            blur_subtype, subtype_confidence, kfeatures = identify_blur_type(tf.name, cf.name)
+            _os.unlink(tf.name); _os.unlink(cf.name)
+        result["signals"]["blur_pca_ratio"] = kfeatures.get("pca_ratio", 0)
+        result["signals"]["blur_density"] = kfeatures.get("density", 0)
+        result["signals"]["blur_flatness"] = kfeatures.get("flatness", 0)
+        result["signals"]["blur_glass_noise_floor"] = kfeatures.get("glass_noise_floor", 0)
+        result["signals"]["blur_kernel_method"] = "gradient_joint_wiener_pca"
+    except Exception as e:
+        result["signals"]["blur_kernel_error"] = str(e)[:100]
+
+    # 🔴 多图校准 (10 images, 3840 cases):
+    #    PCA>2.5: 41% recall, 0% FP. PRIMARY signal.
+    #    FFT>2.2: 5% recall, 0.2% FP. Fallback when kernel corrupted.
+    #    noise→blur: PCA=56%. blur→noise: PCA=3% (kernel destroyed).
+    pca_val = kfeatures.get('pca_ratio', 0)
+    if blur_subtype in ["blur_motion", "blur_lens"] and subtype_confidence in ["high", "medium"]:
+        result["verdict"] = blur_subtype.upper().replace("BLUR_", "") + "_BLUR"
+        result["confidence"] = subtype_confidence
+        result["blur_subtype"] = blur_subtype
+        result["subtype_confidence"] = subtype_confidence
+        result["note"] = f"PCA: {blur_subtype} (pca={pca_val:.2f}>2.5, 41%recall 0%FP)"
+    elif pca_val > 2.5:
+        # PCA 检测到 motion (0% FP guaranteed across 2880 non-motion cases)
+        result["verdict"] = "MOTION_BLUR"
+        result["blur_subtype"] = "blur_motion"
+        result["subtype_confidence"] = "high" if pca_val > 3.5 else "medium"
+        result["confidence"] = result["subtype_confidence"]
+        result["note"] = f"PCA: pca={pca_val:.2f}>2.5 → motion (0% FP). FFT={res_anisotropy:.2f}"
+    elif res_anisotropy > 2.2:
+        # FFT 备选: 5% recall, 0.2% FP. 仅在 PCA 失败时使用 (kernel corrupted by noise)
+        result["verdict"] = "MOTION_BLUR"
+        result["blur_subtype"] = "blur_motion"
+        result["subtype_confidence"] = "low"
+        result["confidence"] = "low"
+        result["note"] = f"FFT: {res_anisotropy:.2f}>2.2 → motion (5%recall 0.2%FP). PCA failed (pca={pca_val:.1f}, kernel likely corrupted by noise)."
+    elif glass_score > 0.25:
         result["verdict"] = "GLASS_BLUR"
-        result["confidence"] = "medium" if glass_score > 0.35 else "low"
-        result["note"] = f"glass_score={glass_score:.3f}>0.25 (pixel shuffle高频残留). Motion/Lens/Gaussian需Agent PSNR区分."
+        result["blur_subtype"] = "blur_glass"
+        result["subtype_confidence"] = "medium" if glass_score > 0.35 else "low"
+        result["note"] = f"glass_score={glass_score:.3f}>0.25 (pixel shuffle高频残留)."
     else:
         result["verdict"] = "GAUSSIAN_BLUR"
-        result["confidence"] = "medium" if gm_ratio_usable else "low"
-        result["note"] = "Glass/Lens/Motion/Zoom不可靠区分 — Agent应PSNR测试替代子类型"
+        result["blur_subtype"] = "blur_gaussian"
+        result["subtype_confidence"] = "medium" if gm_ratio_usable else "low"
+        result["note"] = f"Cepstral PCA subtype={blur_subtype}({subtype_confidence}), fallback to Gaussian. Agent应PSNR测试替代子类型."
 
     # Severity estimation (prefer gm_ratio when usable, fall back to spectral slope)
     if gm_ratio_usable:
@@ -627,27 +686,34 @@ def step4_global(target, clean, step1_info, step2_info):
         if block_uniformity > 0.1:
             brightness_detected = False  # JPEG artifact, exclude
 
+    # --- Clipping detection (高 sev brightness/contrast 导致像素裁剪) ---
+    # 裁剪会改变方差, 可能导致 contrast FP. 裁剪本身容易识别: 大量像素在 0 或 255.
+    clipped_frac = np.mean((target <= 1) | (target >= 254))  # float64 [0,255] range
+    result["signals"]["clipped_fraction"] = round(float(clipped_frac), 4)
+    heavy_clipping = clipped_frac > 0.05  # >5% 像素被裁剪
+    result["signals"]["heavy_clipping"] = heavy_clipping
+
     # --- Contrast ---
+    # variance_ratio: 区分 contrast (方差变,均值不变) vs brightness (均值变,方差不变)
+    t_var = target.var()
+    c_var = clean.var()
+    variance_ratio = t_var / max(c_var, 1)
+    result["signals"]["variance_ratio"] = round(variance_ratio, 4)
+
     t_spread = sum(np.percentile(target[:,:,c], 95) - np.percentile(target[:,:,c], 5) for c in range(3))
     c_spread = sum(np.percentile(clean[:,:,c], 95) - np.percentile(clean[:,:,c], 5) for c in range(3))
     spread_ratio = t_spread / max(c_spread, 1)
-    contrast_detected = spread_ratio < 0.80 or spread_ratio > 1.20  # wide threshold: low F1 signal
+
+    # 二阶判定: contrast_weaken→方差减小, contrast_strengthen→方差增大
+    # 校准 (10图×5sev): c_weaken 0.08-0.40, c_strengthen(sev≥2) 1.84-2.74, brightness 0.91-0.97
+    contrast_from_variance = variance_ratio < 0.55 or variance_ratio > 1.80
+    result["signals"]["contrast_from_variance"] = contrast_from_variance
+    # spread_ratio 作为补充 (percentile-based, 对极值更鲁棒)
+    contrast_detected = contrast_from_variance or (spread_ratio < 0.80 or spread_ratio > 1.20)
     result["signals"]["contrast_spread_ratio"] = round(spread_ratio, 4)
     result["signals"]["contrast_detected_raw"] = contrast_detected
 
-    # Cross-validate: noise can fake contrast
-    if contrast_detected and step2_info.get("verdict", "NO_NOISE") != "NO_NOISE":
-        sigma = step2_info.get("_for_step4", {}).get("sigma", 0)
-        if sigma > 5:
-            noise_spread_boost = sigma * 2 * 3  # ~2σ * 3 channels
-            clean_spread_est = c_spread + noise_spread_boost
-            noise_corrected_ratio = t_spread / max(clean_spread_est, 1)
-            result["signals"]["contrast_noise_corrected"] = round(noise_corrected_ratio, 4)
-            result["false_positive_checks"]["contrast_from_noise"] = abs(noise_corrected_ratio - 1) < 0.15
-            if abs(noise_corrected_ratio - 1) < 0.15:
-                contrast_detected = False  # noise artifact, exclude
-
-    # --- Saturation ---
+    # --- Saturation (must be detected BEFORE contrast cross-validation) ---
     # YCrCb space
     def rgb_to_ycrcb(img):
         r, g, b = img[:,:,0], img[:,:,1], img[:,:,2]
@@ -663,6 +729,37 @@ def step4_global(target, clean, step1_info, step2_info):
     result["signals"]["saturation_chroma_ratio"] = round(chroma_ratio, 4)
     result["signals"]["saturation_detected_raw"] = saturation_detected
 
+    # Cross-validate: 高 sev brightness 的像素裁剪会降低方差 → 可能误判 contrast
+    if contrast_from_variance and brightness_detected and heavy_clipping:
+        # 裁剪解释了方差变化 → 排除 contrast FP
+        result["false_positive_checks"]["contrast_from_clipping"] = True
+        # 仅当 spread_ratio 也异常时才保留 contrast (spread 对 clipping 更鲁棒)
+        if not (spread_ratio < 0.75 or spread_ratio > 1.25):
+            contrast_detected = False
+            result["signals"]["contrast_from_variance"] = False
+            result["signals"]["contrast_clipping_corrected"] = True
+
+    # Cross-validate: saturation can fake contrast (exp28 0004: saturation→方差↓→contrast FP)
+    if contrast_detected and saturation_detected:
+        result["false_positive_checks"]["contrast_from_saturation"] = True
+        # saturation改变chroma也会改变方差分布 → 排除contrast
+        if not (spread_ratio < 0.70 or spread_ratio > 1.30):
+            contrast_detected = False
+            result["signals"]["contrast_from_variance"] = False
+            result["signals"]["contrast_saturation_corrected"] = True
+
+    # Cross-validate: noise can fake contrast
+    if contrast_detected and step2_info.get("verdict", "NO_NOISE") != "NO_NOISE":
+        sigma = step2_info.get("_for_step4", {}).get("sigma", 0)
+        if sigma > 5:
+            noise_spread_boost = sigma * 2 * 3  # ~2σ * 3 channels
+            clean_spread_est = c_spread + noise_spread_boost
+            noise_corrected_ratio = t_spread / max(clean_spread_est, 1)
+            result["signals"]["contrast_noise_corrected"] = round(noise_corrected_ratio, 4)
+            result["false_positive_checks"]["contrast_from_noise"] = abs(noise_corrected_ratio - 1) < 0.15
+            if abs(noise_corrected_ratio - 1) < 0.15:
+                contrast_detected = False  # noise artifact, exclude
+
     # Cross-validate: noise can fake saturation
     if saturation_detected and step2_info.get("verdict", "NO_NOISE") != "NO_NOISE":
         sigma = step2_info.get("_for_step4", {}).get("sigma", 0)
@@ -673,6 +770,54 @@ def step4_global(target, clean, step1_info, step2_info):
             result["false_positive_checks"]["saturation_from_noise"] = abs(noise_corrected_chroma - 1) < 0.15
             if abs(noise_corrected_chroma - 1) < 0.15:
                 saturation_detected = False  # noise artifact, exclude
+
+    # --- Cross-validate: brightness vs contrast vs gamma ---
+    # 关键区分 (同图模式):
+    #   brightness: mean_shift ✓, variance_ratio ≈ 1.0
+    #   contrast:   mean_shift ✗, variance_ratio ≠ 1.0
+    #   gamma:      mean_shift ✓, variance_ratio ≠ 1.0 (两者都变)
+    #   ⚠️ exp28 0013: heavy_clipping 也会导致方差变化 → gamma FP
+    if brightness_detected and contrast_detected:
+        if heavy_clipping:
+            # 裁剪解释了方差变化 → 不是 gamma, 保持 brightness
+            # exp28 0013: clipping 20%+ → vr=0.29 → gamma_suspect FP
+            result["false_positive_checks"]["gamma_from_clipping"] = True
+            result["signals"]["gamma_suspect"] = False  # 抑制
+            # 保留 brightness, 丢弃 contrast (来自裁剪)
+            contrast_detected = False
+            result["signals"]["contrast_from_variance"] = False
+            result["signals"]["brightness_clip_explains_variance"] = True
+        else:
+            # 两者都触发 → 可能是 gamma (均值+方差都变)
+            result["false_positive_checks"]["brightness_contrast_both"] = True
+            result["signals"]["gamma_suspect"] = True
+            # 降级 brightness confidence — 让 Agent 测试 gamma 替代
+            brightness_detected = False  # 只用 contrast, gamma 留给 Agent PSNR 测试
+            result["signals"]["brightness_masked_by_gamma_suspect"] = True
+    elif brightness_detected and not contrast_detected:
+        # 均值变但方差不变 → 纯 brightness, 高置信
+        result["false_positive_checks"]["brightness_pure"] = abs(variance_ratio - 1.0) < 0.12
+    elif not brightness_detected and contrast_detected:
+        # 方差变但均值不变 → 纯 contrast, 相对可靠
+        result["false_positive_checks"]["contrast_pure"] = True
+
+    # --- Oversharpen check (暂时关闭: blur/noise 耦合时召回率低) ---
+    # from scipy.ndimage import laplace as nd_laplace
+    # if len(target.shape) == 3:
+    #     t_lap = np.array([np.var(nd_laplace(target[:,:,c].astype(np.float64))) for c in range(3)]).mean()
+    #     c_lap = np.array([np.var(nd_laplace(clean[:,:,c].astype(np.float64))) for c in range(3)]).mean()
+    # else:
+    #     t_lap = np.var(nd_laplace(target.astype(np.float64)))
+    #     c_lap = np.var(nd_laplace(clean.astype(np.float64)))
+    # lap_energy_ratio = t_lap / max(c_lap, 0.01)
+    # result["signals"]["laplacian_energy_ratio"] = round(lap_energy_ratio, 4)
+    # oversharpen_detected = False
+    # if lap_energy_ratio > 3.0:
+    #     extreme_pct, clustering = compute_extreme_spatial_clustering(target, clean)
+    #     if clustering > 0.30:
+    #         oversharpen_detected = True
+    # result["signals"]["oversharpen_detected_raw"] = oversharpen_detected
+    result["signals"]["oversharpen_detected_raw"] = False  # 暂时关闭
 
     # --- Final verdict ---
     detections = []
@@ -688,6 +833,9 @@ def step4_global(target, clean, step1_info, step2_info):
         direction = "weaken" if chroma_ratio < 1 else "strengthen"
         severity = min(5, max(1, int(abs(chroma_ratio - 1) / 0.08) + 1))
         detections.append(f"SATURATION_{direction}_sev{severity}")
+    # if oversharpen_detected:  # 暂时关闭
+    #     severity = min(5, max(1, int((lap_energy_ratio - 1) / 2) + 1))
+    #     detections.append(f"OVERSHARPEN_sev{severity}")
 
     result["verdict"] = "; ".join(detections) if detections else "NO_GLOBAL"
     # Confidence: brightness is high-confidence, contrast/saturation are low-confidence (calibration F1 < 0.5)
@@ -742,7 +890,7 @@ def run_full_analysis(target_path, clean_path):
         if report["step2_noise"].get("subjective_guess"):
             noise_label += f" [subjective: {report['step2_noise']['subjective_guess'][:80]}...]"
         detections.append(noise_label)
-        guess_types = ["POISSON", "SPATIALLY_CORRELATED"]
+        guess_types = ["POISSON"]  # SC 已关闭
         if report['step2_noise']['verdict'] in guess_types:
             recommended_search.append(f"noise candidates: {report['step2_noise']['verdict']} (speculative) + GAUSSIAN_RGB, SPECKLE (verify via §B stats)")
         else:
@@ -753,7 +901,12 @@ def run_full_analysis(target_path, clean_path):
     if report["step3_blur"]["verdict"] != "NO_BLUR":
         detections.append(f"blur: {report['step3_blur']['verdict']}")
         gm_usable = report["step3_blur"]["signals"]["gm_ratio_usable"]
-        recommended_search.append(f"blur candidates: {report['step3_blur']['verdict']}+related (gm_ratio_usable={gm_usable})")
+        fft_a = report["step3_blur"]["signals"].get("residual_anisotropy", 0)
+        pca = report["step3_blur"]["signals"].get("blur_pca_ratio", 0)
+        motion_hint = ""
+        if fft_a > 1.7:
+            motion_hint = f" [FFT={fft_a:.2f}>1.7→motion(94%recall),PCA={pca:.1f}]"
+        recommended_search.append(f"blur: {report['step3_blur']['verdict']}{motion_hint} (gm_ratio_usable={gm_usable})")
     else:
         recommended_search.append("blur: none detected")
 
@@ -824,6 +977,34 @@ def run_full_analysis(target_path, clean_path):
         risks.append("FP_comp_risk")
         reflections.append("PSNR test compression vs non-compression candidates — low confidence detection")
 
+    # Risk 7: YCrCb noise → FP (exp28: 3例FP来自blur/JPEG跨通道相关)
+    if has_noise and s2["verdict"] == "GAUSSIAN_YCrCb":
+        if s2["signals"].get("gamma_suspect_from_noise"):
+            risks.append("FP_YCrCb_GAMMA_SUSPECT")
+            reflections.append("YCrCb noise detected but residual correlated with intensity → may be gamma. Test gamma candidates as alternative.")
+        elif has_blur or has_comp:
+            # blur/JPEG 产生的跨通道相关, 非真实 YCrCb 噪声
+            risks.append("FP_YCrCb_BLUR_JPEG")
+            reflections.append(f"YCrCb noise detected but blur={'YES' if has_blur else 'NO'} JPEG={'YES' if has_comp else 'NO'} → cross_ch_corr may come from blur/JPEG, not real YCrCb. Test GAUSSIAN_RGB/IMPULSE/POISSON as replacements. Agent should also test removing noise entirely.")
+    # Risk 7b: brightness+contrast both detected → gamma suspect from Step4 side
+    if s4["signals"].get("gamma_suspect"):
+        risks.append("GAMMA_SUSPECT_FROM_GLOBAL")
+        reflections.append("Both brightness and contrast signals triggered → suspect gamma (deterministic nonlinear transform). Test gamma candidates against brightness+contrast.")
+        # exp28 0005: gamma_suspect + sigma>5 → 噪声被gamma信号掩盖, 强制测试
+        if has_noise and float(s2.get('signals', {}).get('noise_prior_sigma', 0) or 0) > 5:
+            risks.append("NOISE_MASKED_BY_GAMMA")
+            reflections.append(f"sigma={s2['signals']['noise_prior_sigma']:.1f}>5 strongly suggests noise present. Gamma may not explain all variance. Force-test noise+gaussian_RGB and noise+gamma combinations.")
+
+    # Risk 7c: sigma>5 but noise verdict absent or overridden → forced noise reminder
+    sigma_val = float(s2['signals'].get('noise_prior_sigma', 0) or 0)
+    if sigma_val > 5 and (not has_noise or s2['confidence'] in ['low', 'medium', 'speculative']):
+        risks.append("NOISE_EVIDENCE_STRONG")
+        reflections.append(f"noise_prior sigma={sigma_val:.1f}>5 strongly indicates noise. Even if type uncertain, Agent MUST test at least: noise_gaussian_RGB and noise_impulse candidates.")
+
+    # # Risk 8: Oversharpen (暂时关闭)
+    # if s4["signals"].get("oversharpen_detected_raw"):
+    #     ...
+
     report["failure_risks"] = risks
     report["recommended_reflection"] = reflections
 
@@ -881,6 +1062,207 @@ def run_full_analysis(target_path, clean_path):
         ("recommended_architecture", arch),
     ])
 
+    # 🔴 AGENT_REMINDER: 在做出最终预测决策前，Agent 必须重新阅读 SKILL.md。
+    # exp28 教训: 代码正确识别了风险和建议 (should_still_test, reflection_strategies),
+    # 但 Agent 未执行这些建议 → 盲识别失败。此提醒强制 Agent 在保存预测前重读协议。
+    # PSNR test budget counter from thinking_process
+    psnr_count = report.get("psnr_test_count", 0)
+    budget_warning = ""
+    if psnr_count > 20:
+        budget_warning = f"⚠️ PSNR 测试已达 {psnr_count}/25，剩余预算不足 {25-psnr_count} 次。必须使用信号驱动二元对比协议，禁止枚举。"
+
+    # ── 信号可靠性标注（附带校准数据来源）──
+    report["signal_reliability"] = {
+        "compression": {
+            "block_boundary": {"accuracy": "0% FP (exp17: 35/35, exp18: 10/10)", "rule": ">1.1 → JPEG confirmed. DO NOT override with PSNR."},
+            "unique_G": {"accuracy": "0% FP for compression presence (exp18: 32/32)", "rule": "<200 → compression EXISTS. But JPEG may not be the cause — test JPEG2000 if PSNR fails."},
+        },
+        "blur": {
+            "hybrid_dt": {"accuracy": "83.4% (3840-case). gaussian=94% lens=79% motion=82% glass=79%. FP(glass)=140",
+                          "rule": "Hybrid mode: glass_detected→depth=4, else→depth=3. Best of both worlds."},
+            "depth3": {"accuracy": "72.9%, gaussian=94% (safe default), FP=898"},
+            "depth4": {"accuracy": "75.1%, glass=79% (aggressive), FP(glass)=723"},
+        },
+        "noise": {
+            "dt_depth4_blur_first": {"accuracy": "87.4% (1920-case, GT-stripped). gaussian=97% speckle=82% poisson=80% impulse=90%",
+                          "rule": "Trust when PSNR confirms blur→noise order. Use peeled_noise_check.py §B features."},
+            "dt_depth4_noise_first": {"accuracy": "54.7% ≈ random. Blur convolution Gaussianizes noise (CLT).",
+                          "rule": "When noise→blur confirmed, mark noise type UNCERTAIN. Classification impossible."},
+        },
+    }
+
+    # ── 反思触发条件 ──
+    reflection_triggers = []
+    s3_verdict = s3.get("verdict", "")
+    s2_verdict = s2.get("verdict", "")
+    if s3_verdict in ["GAUSSIAN_BLUR", "MOTION_BLUR"]:
+        reflection_triggers.append({
+            "trigger": "DT-PSNR 矛盾检查",
+            "condition": "IF DT predicts gaussian/motion BUT PSNR test shows alternative blur type >5dB better",
+            "action": "Trust PSNR. Replace blur type. Save DT prediction as alternative.",
+            "note": "Known DT failure mode: gaussian↔lens MTF indistinguishable, motion↔gaussian in weak directional signal"
+        })
+    if s2_verdict != "NO_NOISE" and float(s2.get("signals", {}).get("noise_prior_sigma", 0) or 0) > 5:
+        reflection_triggers.append({
+            "trigger": "noise→blur 顺序检测",
+            "condition": "PSNR test order: IF noise→blur wins → noise type unreliable (54.7% ≈ random)",
+            "action": "Mark noise type UNCERTAIN. Use PSNR-best noise type but set verdict=UNCERTAIN.",
+            "note": "Blur convolution Gaussianizes noise. Noise type classification only valid in blur→noise order."
+        })
+    if s2_verdict != "NO_NOISE":
+        reflection_triggers.append({
+            "trigger": "peeled §B extreme_pct 假阳性",
+            "condition": "extreme_pct>50% AND noise_prior sigma<5 → likely JPEG/blur artifact, not real impulse",
+            "action": "Ignore §B IMPULSE diagnosis. Trust noise_prior type. Test gaussian_RGB and noise_prior type only.",
+            "note": "Known FP: JPEG/blur residuals inflate extreme_pct to 50%+ even without impulse noise."
+        })
+    report["reflection_triggers"] = reflection_triggers
+
+    # ── 生成 Agent 可直接执行的候选管线 ──
+    candidates = []
+    sigma = s2["signals"].get("noise_prior_sigma", 0)
+    fft_a = s3["signals"].get("residual_anisotropy", 0)
+    pca = s3["signals"].get("blur_pca_ratio", 0)
+    gm = s3["signals"].get("gm_ratio", 0)
+    slope = s3["signals"].get("spectral_slope_ratio", 1.0)
+    use_signal_verify = sigma > 2
+    verify_tool = "verify_signals.py" if use_signal_verify else "compare_degradation.py"
+
+    # Compression candidates
+    if s1["verdict"] != "NO_COMPRESSION" or s1.get("should_still_test"):
+        bb = s1["signals"].get("block_boundary", 0)
+        sev_est = 1 if bb < 1.2 else (2 if bb < 1.5 else (3 if bb < 2.0 else 4))
+        candidates.append({
+            "step": "compression", "signal": f"block_boundary={bb:.3f}",
+            "pipeline": f"compression_jpeg:{sev_est}",
+            "verify_with": verify_tool
+        })
+
+    # Blur candidates
+    btype = s3.get("blur_subtype", "blur_gaussian")
+    sev_src = s3["signals"].get("severity_source", "none")
+    sev_est = s3.get("estimated_severity", 2) or 2
+    if s3["verdict"] != "NO_BLUR" and s3["verdict"] != "BLUR_UNLIKELY":
+        if pca > 2.5:
+            candidates.append({
+                "step": "blur", "signal": f"PCA={pca:.1f}>2.5 (0% FP)",
+                "pipeline": f"blur_motion:{sev_est}",
+                "alternatives": [f"blur_motion:{sev_est-1}", f"blur_motion:{sev_est+1}"],
+                "verify_with": verify_tool
+            })
+        elif fft_a > 2.2:
+            candidates.append({
+                "step": "blur", "signal": f"FFT={fft_a:.2f}>2.2 (fallback)",
+                "pipeline": f"blur_motion:{sev_est}",
+                "verify_with": verify_tool
+            })
+        elif s3["signals"].get("glass_score", 0) > 0.25 and sigma < 3:
+            candidates.append({
+                "step": "blur", "signal": f"glass_score={s3['signals']['glass_score']:.2f}>0.25",
+                "pipeline": f"blur_glass:{sev_est}",
+                "alternatives": [f"blur_gaussian:{sev_est}"],
+                "verify_with": verify_tool
+            })
+        else:
+            candidates.append({
+                "step": "blur", "signal": f"DT subtype={btype}, gm={gm:.2f}, slope={slope:.3f}",
+                "pipeline": f"blur_gaussian:{sev_est}",
+                "alternatives": [f"blur_lens:{sev_est}"],
+                "verify_with": verify_tool,
+                "note": "gaussian↔lens MTF不可区分, PSNR测试两者"
+            })
+    elif s3["verdict"] == "BLUR_UNLIKELY" and s3.get("should_still_test"):
+        candidates.append({
+            "step": "blur", "signal": "BLUR_UNLIKELY but should_still_test",
+            "pipeline": f"blur_gaussian:1",
+            "optional": True,
+            "verify_with": verify_tool
+        })
+
+    # Noise candidates
+    if s2["verdict"] != "NO_NOISE":
+        ntype = s2["verdict"]
+        nsev = s2.get("estimated_severity", 2)
+        noise_fn_map = {
+            "GAUSSIAN_RGB": "noise_gaussian_RGB", "GAUSSIAN_YCrCb": "noise_gaussian_YCrCb",
+            "IMPULSE": "noise_impulse", "SPECKLE": "noise_speckle",
+            "POISSON": "noise_poisson", "SPATIALLY_CORRELATED": "noise_spatially_correlated",
+        }
+        nfn = noise_fn_map.get(ntype, "noise_gaussian_RGB")
+        candidates.append({
+            "step": "noise", "signal": f"sigma={sigma:.1f}, type={ntype}",
+            "pipeline": f"{nfn}:{nsev}",
+            "alternatives": [f"noise_gaussian_RGB:{nsev}"],
+            "verify_with": verify_tool,
+            "note": "PSNR不可用于噪声验证 — 使用信号验证" if use_signal_verify else ""
+        })
+
+    # Global candidates
+    global_parts = []
+    if s4["verdict"] != "NO_GLOBAL":
+        for det in s4["verdict"].split("; "):
+            if "BRIGHTNESS" in det:
+                direction = "brighten" if "brighten" in det.lower() else "darken"
+                sev_str = det.split("sev")[-1] if "sev" in det else "1"
+                try: gsev = int(sev_str)
+                except: gsev = 1
+                fn = f"brightness_{direction}_shfit_HSV"
+                global_parts.append(f"{fn}:{gsev}")
+            elif "CONTRAST" in det:
+                direction = "strengthen" if "strengthen" in det.lower() else "weaken"
+                sev_str = det.split("sev")[-1] if "sev" in det else "1"
+                try: gsev = int(sev_str)
+                except: gsev = 1
+                global_parts.append(f"contrast_{direction}_scale:{gsev}")
+            elif "SATURATION" in det:
+                direction = "strengthen" if "strengthen" in det.lower() else "weaken"
+                sev_str = det.split("sev")[-1] if "sev" in det else "1"
+                try: gsev = int(sev_str)
+                except: gsev = 1
+                global_parts.append(f"saturate_{direction}_HSV:{gsev}")
+        if global_parts:
+            candidates.append({
+                "step": "global", "signal": f"variance_ratio={s4['signals'].get('variance_ratio',0):.3f}, mean_shift={s4['signals'].get('brightness_mean_shift',0):.1f}",
+                "pipeline": ",".join(global_parts),
+                "verify_with": verify_tool,
+                "fp_checks": s4.get("false_positive_checks", {})
+            })
+
+    report["agent_instructions"] = {
+        "verification_mode": "SIGNAL" if use_signal_verify else "PSNR",
+        "reason": f"sigma={sigma:.1f} {'≥' if use_signal_verify else '<'} 2 → {'PSNR不可靠, 必须用信号验证' if use_signal_verify else 'PSNR可用'}",
+        "verdict_allowed": "UNCERTAIN or POOR only (sigma>2 → NO LIKELY/GOOD)" if use_signal_verify else "GOOD/LIKELY/UNCERTAIN/POOR",
+        "candidates": candidates,
+        "execution_order": [
+            "1. 按顺序测试每个候选: apply_multi.py → verify_signals.py",
+            "2. 解读 verify_signals.py 输出:",
+            "   MATCH   → 保存, 进入下一步",
+            "   PARTIAL → 【severity 扫描 ±1】: 同类型, sev±1 各测1次 → 选最佳",
+            "   WEAK    → 【severity 扫描 ±2】: 同类型, sev±2 各测1次 → 若改善→保留; 否则换子类型",
+            "   MISMATCH→ 【severity 扫描 ±2】: 先扫 severity, 仍无改善→换子类型 (≤2种替代)",
+            "3. 🔴 severity 扫描是强制步骤, 不可跳过。禁止在 WEAK 时直接换类型而不扫 severity。",
+            "4. 每类退化最多: 1个主候选 + 4个severity扫描 + 2个替代类型 = 7次测试",
+            "5. 所有步骤完成 → 合并 pipeline → 最终 verify_signals.py 确认",
+            "6. 保存 predicted_params.json (verdict 遵守允许值)",
+        ],
+        "severity_scan_rules": {
+            "when": "verify_signals 输出 PARTIAL / WEAK / MISMATCH",
+            "how": "保持函数名不变, severity 从 est-2 扫到 est+2 (限制 1-5 范围内)",
+            "stop": "任一 severity 达到 MATCH → 立即停止扫描",
+            "fallback": "全部 severity 未达 MATCH → 选 score 最高的, 然后尝试换子类型",
+        },
+        "forbidden": [
+            "❌ sigma>2 时使用 compare_degradation.py PSNR 判断候选好坏",
+            "❌ sigma>2 时设置 verdict=LIKELY 或 GOOD",
+            "❌ 跳过 verify_signals.py 直接用 PSNR 排名",
+            "❌ WEAK/MISMATCH 时跳过 severity 扫描直接换类型",
+            "❌ 测试超过 2 个 alternatives 不终止",
+        ] if use_signal_verify else [
+            "❌ PSNR<30 时声称 LIKELY",
+            "❌ 测试超过 3 个 severity 候选",
+        ]
+    }
+
     return report
 
 
@@ -896,6 +1278,84 @@ def main():
     report = to_native(report)
 
     json_output = json.dumps(report, indent=2, ensure_ascii=False, cls=NumpyEncoder)
+
+    # ── 文字摘要 (Agent 原生可读, 不需要解析JSON) ──
+    s1 = report["step1_compression"]; s2 = report["step2_noise"]
+    s3 = report["step3_blur"]; s4 = report["step4_global"]
+    sr = report["signal_reliability"]
+
+    fft_a = s3["signals"].get("residual_anisotropy", 0)
+    pca = s3["signals"].get("blur_pca_ratio", 0)
+    gm = s3["signals"].get("gm_ratio", 0)
+    slope = s3["signals"].get("spectral_slope_ratio", 0)
+    sigma = s2["signals"].get("noise_prior_sigma", 0)
+
+    blur_decision = "NO_BLUR"
+    if s3["verdict"] != "NO_BLUR":
+        if pca > 2.5:
+            blur_decision = f"MOTION (PCA={pca:.1f}>2.5, 41%recall 0%FP, primary signal. FFT={fft_a:.2f})"
+        elif fft_a > 2.2:
+            blur_decision = f"MOTION (FFT={fft_a:.2f}>2.2, 5%recall 0.2%FP, fallback. PCA={pca:.1f} failed—kernel corrupted by noise)"
+        elif s3["signals"].get("glass_score",0) > 0.25 and sigma < 3:
+            blur_decision = f"GLASS (score={s3['signals']['glass_score']:.2f}>0.25, sigma={sigma:.1f}<3)"
+        else:
+            blur_decision = f"GAUSSIAN (lens alternative, MTF不可区分. PCA={pca:.1f})"
+
+    comp_decision = s1["verdict"]
+    if s1.get("should_still_test"):
+        comp_decision += " (should_still_test)"
+
+    # Build candidates text from report (not local scope)
+    ai = report.get("agent_instructions", {})
+    candidates = ai.get("candidates", [])
+    verify_mode = ai.get("verification_mode", "PSNR")
+    verify_tool = "verify_signals.py" if verify_mode == "SIGNAL" else "compare_degradation.py"
+    verdict_allowed = ai.get("verdict_allowed", "UNCERTAIN")
+    cand_lines = []
+    for c in candidates:
+        line = f'  [{c["step"]}] {c["pipeline"]}  <- {c.get("signal","")}'
+        cand_lines.append(line)
+        if c.get("alternatives"):
+            cand_lines.append(f'       alternatives: {c["alternatives"]}')
+        if c.get("note"):
+            cand_lines.append(f'       note: {c["note"]}')
+    cand_text = chr(10).join(cand_lines)
+    constraints_text = chr(10).join(f'  {f}' for f in ai.get('forbidden', []))
+
+    reason_text = 'PSNR不可靠, 用 verify_signals.py 验证每个候选' if verify_mode == 'SIGNAL' else 'PSNR可用, 用 compare_degradation.py 验证'
+
+    print(f"""
+{'='*60}
+🔴 SIGNAL-DRIVEN DIAGNOSIS
+{'='*60}
+Compression: {comp_decision}
+  block_boundary={s1['signals'].get('block_boundary',0):.3f} (>1.05=JPEG, 0%FP, 14400-case校准)
+
+Blur: {s3['verdict']} -> {blur_decision}
+  gm_ratio={gm:.3f} slope={slope:.3f} FFT_anisotropy={fft_a:.2f} pca={pca:.1f}
+
+Noise: {s2['verdict']}  sigma={sigma:.1f}
+
+Global: {s4['verdict']}
+  variance_ratio={s4['signals'].get('variance_ratio',0):.3f} mean_shift={s4['signals'].get('brightness_mean_shift',0):.1f}
+
+🔴 MODE: {verify_mode}  |  Verdict must be: {verdict_allowed}
+   Reason: sigma={sigma:.1f} -> {reason_text}
+{'='*60}
+🔴 CANDIDATES (test in order, verify with {verify_tool}):
+{cand_text}
+{'='*60}
+🔴 CONSTRAINTS:
+{constraints_text}
+{'='*60}
+""")
+
+    if args.output:
+        with open(args.output, 'w') as f:
+            f.write(json_output)
+        print(f"Report saved to {args.output}", file=sys.stderr)
+    if args.json:
+        print(json_output)
 
     if args.output:
         with open(args.output, 'w') as f:

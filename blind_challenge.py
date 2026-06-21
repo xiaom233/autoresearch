@@ -44,13 +44,8 @@ CLEAN_NAME = "clean.png"
 GROUND_TRUTH_NAME = ".ground_truth.json"      # hidden — agent must NOT read
 PREDICTED_NAME = "predicted_params.json"       # agent writes this
 
-# Clean image sources — pick randomly from validation sets
+# Clean image sources — pick randomly from DIV2K validation set only
 VAL_DIRS = [
-    "datasets/Set5/GTmod4",
-    "datasets/Set14/GTmod4",
-    "datasets/B100/GTmod4",
-    "datasets/Urban100/GTmod4",
-    "datasets/Manga109/GTmod4",
     "datasets/DIV2K/DIV2K_valid_HR",
 ]
 
@@ -58,11 +53,12 @@ VAL_DIRS = [
 DEG_CATEGORIES = {
     "blur": [
         "blur_gaussian", "blur_motion", "blur_glass",
-        "blur_lens", "blur_zoom",  # blur_jitter removed — undetectable in composite
+        "blur_lens",  # "blur_zoom",  # 暂时关闭: Wiener核/cepstrum无法可靠区分(42%)
     ],
     "noise": [
         "noise_gaussian_RGB", "noise_gaussian_YCrCb", "noise_speckle",
-        "noise_spatially_correlated", "noise_poisson", "noise_impulse",
+        # "noise_spatially_correlated",  # 暂时关闭: JPEG 8×8 块产生不可区分的 spatial_corr FP
+        "noise_poisson", "noise_impulse",
     ],
     "compression": [
         "compression_jpeg",
@@ -77,7 +73,7 @@ DEG_CATEGORIES = {
         "contrast_weaken_scale", "contrast_weaken_stretch",
         "saturate_strengthen_HSV", "saturate_strengthen_YCrCb",
         "saturate_weaken_HSV", "saturate_weaken_YCrCb",
-        "oversharpen",
+        # "oversharpen",  # 暂时关闭: laplacian_energy_ratio 在 blur/noise 耦合时召回率低
         # "pixelate",  # FIXME: temporarily disabled - detection logic broken
         # "quantization_otsu",  # FIXME: temporarily disabled - crashes skimage threshold_multiotsu with <8 unique values (exp18: 0006/0015)
         "quantization_median", "quantization_hist",
@@ -115,8 +111,35 @@ def pick_random_image(val_dirs):
     return random.choice(all_paths)
 
 
+# 物理顺序约束 (数值越小越靠前):
+#   priority 0: noise(传感器噪声) + brightness(环境光,可模拟传感器前的照明条件)
+#   priority 1: blur(光学模糊, 在传感器之后)
+#   priority 2: global_other(contrast/saturation, ISP后期) + compression(JPEG存储)
+# brightness 和 noise 同优先级 → 随机化相对顺序
+# contrast/saturation 和 JPEG 同优先级 → 随机化相对顺序
+PHYSICAL_ORDER_CATEGORY = {"noise": 0, "blur": 1, "global": 2, "compression": 2}
+
+
+def _get_physical_order(step):
+    """Return physical order for a pipeline step.
+
+    brightness 随机分配 priority 0 (环境光, 传感器前) 或 priority 2 (ISP亮度调整, blur后).
+    Other global functions (contrast/saturation/quantization) are ISP-stage → priority 2.
+    """
+    cat = step["category"]
+    if cat == "global" and step["function"].startswith("brightness"):
+        return 0 if random.random() < 0.5 else 2
+    return PHYSICAL_ORDER_CATEGORY[cat]
+
+
 def generate_random_pipeline(num_degs=None):
     """Generate a random degradation pipeline (blur/noise/compression/global categories).
+
+    Enforces physical ordering constraints:
+      - noise and brightness: priority 0 (sensor noise + ambient light)
+      - blur: priority 1 (optical, must be after sensor)
+      - contrast/saturation/quantization/JPEG: priority 2 (ISP + storage)
+      - Items within same priority are randomly shuffled
 
     Args:
         num_degs: if None, randomly choose 1/2/3/4 with equal probability.
@@ -135,7 +158,7 @@ def generate_random_pipeline(num_degs=None):
     pipeline = []
     used_cats = set()    # 禁止同一类别出现两次
     used_funcs = set()   # 禁止同一函数出现两次
-    for step_idx in range(n):
+    for _ in range(n):
         available = [c for c in cats if c not in used_cats]
         if not available:
             break  # 没有未使用的类别了
@@ -144,13 +167,32 @@ def generate_random_pipeline(num_degs=None):
         func = random.choice(funcs)
         sev = random.randint(1, 5)
         pipeline.append({
-            "step": step_idx + 1,
             "category": cat,
             "function": func,
             "severity": sev,
         })
         used_cats.add(cat)
         used_funcs.add(func)
+
+    # 按物理顺序分三组: priority 0 (noise/brightness) → 1 (blur) → 2 (contrast/saturation/JPEG)
+    # 同优先级内随机 shuffle
+    # 注意: _get_physical_order 对 brightness 随机分配 priority, 必须预先计算后缓存
+    for s in pipeline:
+        s["_phys_order"] = _get_physical_order(s)
+    p0 = [s for s in pipeline if s["_phys_order"] == 0]
+    p1 = [s for s in pipeline if s["_phys_order"] == 1]
+    p2 = [s for s in pipeline if s["_phys_order"] == 2]
+    random.shuffle(p0)
+    random.shuffle(p2)
+    pipeline = p0 + p1 + p2
+    # 清理临时字段
+    for s in pipeline:
+        del s["_phys_order"]
+
+    # 重新编号 step
+    for i, step in enumerate(pipeline):
+        step["step"] = i + 1
+
     return pipeline
 
 

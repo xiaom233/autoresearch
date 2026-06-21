@@ -5,21 +5,438 @@ description: Use this skill whenever the user needs to analyze degraded images, 
 
 # Image Degradation Simulator
 
-Analyze degraded images, identify present distortion types and their severity, then reproduce the degradation on clean images through iterative hypothesis, simulation, visual comparison, and refinement.
+Analyze degraded images, identify present distortion types and their severity.
 
-**同图模式优先**：实验生成挑战时使用 `--same-image` 标志（`blind_challenge.py`），clean 和 degraded 来自同一原图。这使得像素级校准成为可能，盲识别准确率远高于跨图模式。
+**同图模式优先**：实验生成挑战时使用 `--same-image` 标志。
+
+## 🔴 盲识别标准工具集（仅 4 个脚本）
+
+Agent 只使用以下 4 个脚本，禁止使用其他分析脚本：
+
+| # | 脚本 | 用途 | 频率 |
+|---|------|------|:--:|
+| 1 | `run_full_analysis.py --target X --clean C --output O` | 信号报告（整合 noise_prior + blur_kernel + global + compression） | 1次/挑战 |
+| 2 | `apply_multi.py --input C --distortions "fn:sev,..." --output O` | 施加退化管线 | 每个候选 |
+| 3 | `compare_degradation.py --target X --simulated S` | PSNR/CI 对比（**仅 σ<2 时使用**） | 每个候选 |
+| 4 | `peeled_noise_check.py --target X --clean C --pipeline "fn:sev,..."` | 剥离确定性退化后的 §B 自动诊断 | 1次/挑战 |
+| **5** | **`verify_signals.py --target X --simulated S --clean C --pipeline "..."`** | **信号级验证（σ>2 时替代 PSNR）** | **每个候选** |
+
+**禁止使用**: noise_prior.py (被 run_full_analysis 内部调用), analyze_degradation.py (旧版), global_degradation_analyzer.py (旧版), model_diagnosis.py (反思用), save_results.py (手动保存JSON即可)
+
+### 标准工作流（4 步，~10 PSNR）
+
+```
+Step 0: run_full_analysis.py → full_analysis.json
+        → step1: block_boundary, unique_G (compression 0%FP)
+        → step3: blur_subtype, residual_anisotropy (FFT), pca_ratio, glass_score
+        → step2: noise_prior_sigma
+        → step4: variance_ratio, mean_shift (global)
+
+Step 1: Compression (IF block_boundary>1.1)
+        apply_multi.py JPEG 1-5 → PSNR 选最优 → pipeline_comp
+
+Step 2: Blur — 🔴 决策树, 不盲目 PSNR
+        IF residual_anisotropy > 1.7 → motion (94% recall, 0% FP, 384-case校准)
+           → PSNR 调 severity (1-2次)
+        ELIF glass_score > 0.25 + sigma < 3 → glass
+           → PSNR 调 severity (1-2次)
+        ELSE → gaussian (lens 为 alternative, MTF已知不可区分)
+           → PSNR 调 severity (1-2次)
+
+Step 3: peeled_noise_check.py --pipeline "jpeg:X,blur:Y"
+        → 🏆 自动噪声诊断
+        → PSNR 验证 (1次)
+        → IF sigma < 2 → NO_NOISE
+
+Step 4: 保存 predicted_params.json + reflection.json + thinking_process.json
+```
+
+**预算: 5(JPEG) + 2(blur) + 1(noise) + 2(顺序) = ≤10 PSNR测试 (σ<2 时)**
+
+### 🔴 验证模式自动切换
+
+```
+run_full_analysis.py → noise_prior_sigma
+  ├─ σ < 2 (无噪声): PSNR 可用
+  │    compare_degradation.py → PSNR > 40dB → 确认
+  │
+  └─ σ ≥ 2 (有噪声): PSNR 不可靠 → 切换到信号验证
+       verify_signals.py --target X --simulated S --clean C --pipeline "..."
+       → MATCH:    全部信号匹配 → 退化正确, severity 正确
+       → PARTIAL:  多数信号匹配 → 类型正确, 🔴 severity 扫 ±1
+       → WEAK:     少数匹配 → 🔴 severity 扫 ±2, 无改善再换类型
+       → MISMATCH: 无匹配 → 🔴 先扫 severity ±2, 仍不行换子类型
+```
+
+### 🔴 Severity 扫描（强制，不可跳过）
+
+**当 verify_signals 返回 PARTIAL/WEAK/MISMATCH 时，必须先扫 severity，再换类型：**
+
+```
+for sev in [est-2, est-1, est+1, est+2]:  # 限制 1-5
+    same_function, different_severity → verify_signals
+    if MATCH → 立即停止, 保存
+    if 改善(score↑) → 更新 best
+
+全部 sev 未达 MATCH → 取 best score 的 severity → 然后才换子类型
+```
+
+**原因**: exp34 审计发现 — 多数 rejection 是 severity 不对（如 sev=1 预测给实际 sev=4 的退化），不是类型不对。
+
+### 🔴 噪声耦合时切换信号验证（禁止 PSNR）
+
+**当 noise 存在时（sigma > 2），PSNR 对所有退化都不可靠**，因为 noise seed 失配会导致像素级对比失真。必须切换到噪声鲁棒的信号验证：
+
+| 退化 | 噪声下 PSNR | 替代验证信号 | 阈值 |
+|------|:--:|------|:--:|
+| blur | ❌ | Wiener 核自洽: `corr(h_target, h_simulated) > 0.9` | 相关系数 |
+| | | `spectral_slope` 差值: `|slope(target) - slope(simulated)| < 0.08` | 噪声仅偏移 ±0.03 |
+| JPEG | ❌ | `block_boundary` 差值: `|bb(target) - bb(simulated)| / bb(target) < 5%` | 噪声同向衰减 8×8 块 |
+| | | DCT zero_ratio 差值: `|zr(target) - zr(simulated)| < 0.05` | — |
+| contrast | ❌ | noise-corrected `variance_ratio`: `|var(target)-var(sim)| / var(target) < 5%` | 前提: sigma 已知 |
+| | | `histogram_shape` 相关系数 > 0.95 | 噪声平滑直方图不改变结构 |
+| brightness | ✓ (σ<10) | `mean_shift` 差值: `|ms(target)-ms(sim)| < 0.5/255` | 噪声均值为零 |
+| noise | — | §B 6步逐一对比 + `sigma` 误差 < 15% | 剥离确定性后重检 |
+| | | 剥离后残差结构检测: `autocorr_FWHM < 3px` + FFT 无低频突起 | 残差应无结构 |
+
+**验证链（有噪声时强制执行）**：
+```
+1. 验证确定性部分 (blur/JPEG/contrast): 全部用信号验证，不用 PSNR
+2. 确认剥离干净: autocorr_FWHM < 3px + block_boundary < 1.02
+3. §B on peeled residual → noise 类型+severity
+4. 仅当所有信号验证通过 → 保存
+   任一不通过 → 修正确定性参数 → 重剥离 → 重回 Step 1（最多 2 轮）
+```
+
+**PSNR 仍有价值的场景（噪声不存在时）**：
+- σ < 2: PSNR > 40dB → 确定性退化高置信度确认
+- σ < 2: PSNR 30-40dB → severity 可能在 ±1 范围内
+- σ ≥ 2: 放弃 PSNR，全部走信号验证
+
+### 🔴 管线顺序物理约束
+
+**物理事实**:
+
+```
+传感器噪声 → 光学模糊 → ISP(对比度/饱和度/量化) → JPEG 存储
+                ↑
+           brightness 可在此前 (环境光, 模拟传感器前照明条件)
+```
+
+- `noise < blur`: 传感器噪声先于光学模糊（不可违反）
+- `noise+blur < JPEG`: 存储是最后一步（不可违反）
+- `brightness ↔ noise`: brightness **随机** priority=0 (环境光, blur前) 或 priority=2 (ISP亮度, blur后)
+- `contrast/saturation/quantization ↔ JPEG`: ISP 后期，顺序取决于是否二次编辑
+
+**PSNR 测试顺序（按概率从高到低）**：
+
+```
+含 brightness (环境光):
+  1. brightness→noise→blur→global→JPEG   (自然光→传感器→光学→ISP→存储)
+  2. noise→brightness→blur→global→JPEG   (传感器→环境光→光学→ISP→存储)
+
+不含 brightness (标准相机管线):
+  3. blur→noise→global→JPEG   (相机直出, >80% 场景)
+  4. noise→blur→global→JPEG   (相机直出, 噪声先于光学模糊)
+  5. blur→noise→JPEG→global   (后期编辑)
+  6. noise→blur→JPEG→global   (后期编辑 + 噪声优先)
+```
+
+前两种覆盖含 brightness 的场景，前四种覆盖绝大多数。
+
+**blind_challenge.py 已强制**：`noise/brightness(priority=0) → blur(priority=1) → contrast/saturation/quantization/JPEG(priority=2)`，同优先级随机 shuffle。
+
+### 🔴 信号信任规则（禁止 PSNR 覆盖）
+
+| 信号 | 可靠性 | 来源 | 规则 |
+|------|:--:|------|------|
+| block_boundary > 1.1 | **0% FP** | exp17/18 | → JPEG 确认 |
+| blur Hybrid DT (depth=3+4) | **83.4%** | 3840-case, 10图 | → 默认 depth=3, glass_detected→depth=4 |
+| noise §B DT (depth=4, blur→noise) | **87.4%** | 3840-case, GT剥离 | → 信任 noise 类型（仅在 blur→noise 顺序） |
+| noise §B (noise→blur) | 54.7% ≈ 随机 | 同上 | → **不可用**，标记 UNCERTAIN |
+| Wiener 核自洽 (噪声下) | **>90%** | 3840-case, blur 正确性验证 | → 噪声耦合时替代 PSNR 验证 blur |
+| spectral_slope 差值 (噪声下) | **±0.03** | 噪声偏移远小于 blur 变化 | → 噪声耦合时替代 PSNR 验证 blur severity |
+| block_boundary 差值 (噪声下) | **<5%** | 噪声同向衰减 | → 噪声耦合时替代 PSNR 验证 JPEG |
+
+**PSNR 仅用于: 无噪声时(σ<2)的 severity 确认。有噪声时全部验证走信号模式（见上方噪声耦合信号验证表）。**
+
+### 🔴 Verdict 强制规则（来源: exp34 审计）
+
+**当 noise 存在时 (sigma > 2)，禁止 GOOD/LIKELY verdict。**
+
+```
+sigma < 2 (无噪声):  GOOD / LIKELY / UNCERTAIN / POOR  均可
+sigma > 2 (有噪声):  仅 UNCERTAIN / POOR
+```
+
+exp34 教训: 5 个 LIKELY 挑战平均 GT PSNR=21.81dB，3 个 UNCERTAIN 挑战平均=18.08dB。LIKELY 没有比 UNCERTAIN 更正确——噪声耦合时 PSNR 是随机数，Agent 的高置信度是虚假的。
+
+### 🔴 verify_signals.py 用法
+
+```bash
+.venv/bin/python3 .claude/skills/image-degradation-simulator/scripts/verify_signals.py \
+  --target <degraded.png> --simulated <candidate.png> --clean <clean.png> \
+  --pipeline "blur_gaussian:3,noise_gaussian_RGB:2"
+```
+
+**输出解读**（Agent 直接读取文字摘要）：
+
+| Verdict | 含义 | 动作 |
+|------|------|------|
+| MATCH | 所有信号匹配 | → 退化参数正确，保存 |
+| PARTIAL | 多数信号匹配 | → 类型正确，severity 微调 |
+| WEAK | 少数信号匹配 | → 类型可能错误，换假设或降低置信度 |
+| MISMATCH | 无信号匹配 | → 退化错误，重做假设 |
+
+**核心对比信号**（阈值来自 3840-case 校准）：
+- blur: `spectral_slope` 差值 < 0.08, Wiener 核相关 > 0.85
+- noise: `sigma` 误差 < 20%, 残差 autocorr FWHM < 4px
+- compression: `block_boundary` 差值 < 8%
+- global: `mean_shift` 差值 < 0.005, `variance_ratio` 差值 < 8%
+
+### 🔴 已知失败模式与反思策略
+
+### 🔴 失败模式与自动反思机制
+
+#### 盲识别阶段反思（保存 predicted_params 前触发）
+
+| 触发条件 | 失败模式 | 发生率 | 反思动作 |
+|------|------|:--:|------|
+| blur DT 预测 gaussian + PSNR lens 高 ≥5dB | lens 被误判为 gaussian | ~15% | 替换为 lens，保存 alternative |
+| blur DT 预测 motion + PSNR gaussian 高 ≥5dB | gaussian 被误判为 motion (DT FP) | ~18% | PSNR 胜出，替换为 gaussian |
+| noise→blur 顺序 PSNR 胜出 | 噪声类型不可诊断 | 54.7% | 标记 UNCERTAIN，noise 类型不做判断 |
+| peeled §B extreme_pct>50% + noise_prior sigma<5 | extreme_pct 假阳性 (JPEG/blur 伪影) | ~30% | 忽略 §B IMPULSE，信任 noise_prior 类型 |
+| unique_G<200 + block_boundary<1.1 + JPEG 不改善 PSNR | compression 假阳性 (noise/quantization 导致) | ~20% | 检查 noise/量化是否独立导致 unique_G 减少 |
+| DT-PSNR 矛盾 unresolved | 超出 x_distortion 能力或 OOD 退化 | ~5% | POOR，留空 alternatives，等训练 PSNR 仲裁 |
+
+#### 训练后反思（Phase 5 完成后，GT 重评估触发）
+
+| 触发条件 | 可疑根因 | 反思动作 |
+|------|------|------|
+| GT PSNR < 20 + R0 PSNR > 25 (gap > 5dB) | Blind ID 严重有误 | 🔴 重做盲识别：重跑 run_full_analysis，信号重释 |
+| GT PSNR < 30 + verdict=POOR/UNCERTAIN | 盲识别部分错误 | Skill 子 Agent 反思：剥离已知退化→重检 §B/MTF |
+| GT PSNR > 35 + verdict=LIKELY | 盲识别大概率正确 | 跳过反思，直接收录 |
+| R0 < DFPIR (Specialist 弱于大模型) | 训练策略或架构问题 | 检查 finetune_strategy.md，考虑架构升级 |
+| 训练崩溃 (NaN/PSNR<<10) | Ft 在全局退化上崩溃 | 切换 Direct，检查 contrast→Swin 规则 |
+
+#### 反思执行协议
+
+```
+1. 盲识别阶段反思:
+   - Agent 在保存预测前自动检查上述触发条件
+   - 触发时 → 执行对应反思动作 → 更新 predicted_params
+   - 仍无法解决 → 标记 UNCERTAIN/POOR，等训练后仲裁
+
+2. 训练后反思:
+   - GT 重评估后自动触发
+   - 🔴 必须通过 Skill 子 Agent 执行（禁止主 Agent 手动修改 params）
+   - 子 Agent: Read SKILL.md → 重跑 run_full_analysis → 信号重释 → ≤5修正假设 → PSNR验证
+   - 改善 >2dB → 保存 R1 params → 重新训练
+   - 无改善 → BEYOND_CAPABILITY → 更新 reflection.json
+```
 
 ## 🚫 绝对禁止（违反立即停止）
 
 以下任何一条都会导致 CPU 100% 持续数小时、结果质量差、实验作废：
 
-1. **不允许写任何 Python 脚本文件**：只使用已有的 Skill 脚本（global_degradation_analyzer.py、analyze_degradation.py、noise_prior.py、apply_multi.py、compare_degradation.py、save_prediction.py、model_diagnosis.py）。
-2. **禁止 PSNR 枚举搜索**：PSNR 仅用于最终验证（正确管线 > 40dB）。所有函数和 severity 决策必须通过校准阈值，不通过 PSNR 排名。
-3. **禁止跨类别盲目组合**：不要遍历所有组合。
+1. **不允许写任何 Python 脚本文件**：只使用已有的 Skill 脚本。
+2. **禁止 PSNR 枚举搜索** 🔴 exp31 审计: 4/8 Agent 超标, 最高 ~80 次。使用信号驱动二元对比协议（见下方），≤25 PSNR 测试/挑战，3 轮硬终止。
+3. **禁止跨类别盲目组合**：每轮只测 ≤ 2 个候选，信号→决策映射表直接给候选，不遍历。
 4. **禁止 `run_in_background: true` 启动多个并行搜索**。
 5. **禁止编写子进程调用脚本**。
+6. **禁止凭记忆做噪声/模糊类型判定** 🔴：噪声判定前必须 `Read SKILL.md offset=42 limit=25`；模糊判定前必须 `Read SKILL.md offset=67 limit=20`。
 
-**正确做法**：Phase 0 全局退化预检(histogram+色域) → normalize → Phase 1 噪声判断 → analyze检测 → 校准阈值决策函数类型+severity → apply+compare → PSNR最终验证(>40dB=正确) → 残差分析噪声 → 保存。
+**正确做法**：run_full_analysis.py 获取信号 → 🔴 逐层剥离 → 信号驱动探索协议 → PSNR 最终验证 → 保存。
+
+---
+
+## 🔴🔴 逐层剥离（v12 — 解决双退化信号污染）
+
+> 来源: exp31 v1/v2/v3 — 三版协议 noise 识别率始终 46%，根因: §B 6步在混合残差上不可靠。
+> 核心改变: 确定性退化必须先识别并剥离，然后在剥离后的残差上做 §B 检查。
+
+### 为什么必须剥离
+
+```
+❌ 错误: residual = target - clean  (包含 blur + noise 混合)
+   → §B 6步在混合残差上: spatial_corr 被 blur 抬高, var_slope 被 compression 扭曲
+   → noise_prior wavelet 被 blur 衰减 (sigma 低估 50%+)
+   
+✅ 正确: 
+   Step A: 先识别确定性退化 (compression/blur)
+   Step B: simulate(clean, deterministic_pipeline) → simulated
+   Step C: peeled_residual = target - simulated
+   Step D: 在 peeled_residual 上做 §B 6步 + noise_prior
+```
+
+### 强制执行规则
+
+```
+1. 如果 run_full_analysis 检测到 compression (unique_G<200 或 block_boundary>1.1):
+   → 先确定 compression 参数 → 剥离 → 再做 noise/blur 判断
+
+2. 如果 run_full_analysis 检测到 blur (gm_ratio<0.85 且无强噪声, 或 spectral_slope_ratio>1.08):
+   → 先确定 blur 参数 → 剥离 → 再做 noise 判断
+   
+3. 优先级: compression > blur > noise
+   compression 的 block_boundary 是 0% FP 最强信号 → 优先剥离
+   blur 的 spectral_slope 在 noise 存在时仍可用 → 次优先
+   noise 的 §B 信号最容易被污染 → 最后判断
+```
+
+### 剥离后的噪声判断（§B 重跑）🔴 使用 peeled_noise_check.py
+
+剥离确定性退化后，**必须运行 peeled_noise_check.py** 获取 §B 6步数值：
+```bash
+.venv/bin/python3 .claude/skills/image-degradation-simulator/scripts/peeled_noise_check.py \
+  --target <degraded.png> --clean <clean.png> \
+  --pipeline "compression_jpeg:3,blur_gaussian:2"
+```
+输出：
+- §B 6步完整数值表（extreme_pct, vm_slope, var_slope, spatial_corr, rgb_ratio, cross_ch_corr）
+- noise_prior wavelet sigma 估计
+- 🏆 自动噪声类型推断 + severity 建议
+
+**Agent 只需读取输出，不需自己计算。** 根据推断结果选择噪声候选。
+⚠️ extreme_pct 会被 JPEG 残留放大 → 结合 noise_prior sigma 判断真实噪声强度。
+
+---
+
+## 🔴 信号驱动探索协议（v12 — 逐层剥离 + 全覆盖）
+
+### 协议总览
+
+```
+run_full_analysis.py
+       ↓
+信号报告 (signals + failure_risks + reflection_strategies)
+       ↓
+┌──────────────────────────────────────────────────────────┐
+│ Round 1: 信号驱动全覆盖 (关键!)                            │
+│   每个退化类别基于信号选出 3-4 个 plausible 候选             │
+│   ⚠️ 不是 2 选 1 — 必须覆盖主要混淆对                       │
+│   噪声: gaussian_RGB + YCrCb + speckle + poisson 至少3种   │
+│   模糊: gaussian + lens + motion 至少3种                   │
+│   用 PSNR/统计匹配排序，取 top-2 进入 R2                    │
+│   预算: ≤12 次 (3-4候选/类别 × 2-3类别)                     │
+├──────────────────────────────────────────────────────────┤
+│ Round 2: 胜者 vs 跨族替代                                  │
+│   R1 top-1 vs R1 top-2 (同类别替代)                        │
+│   R1 top-1 vs best cross-family candidate                 │
+│   预算: ≤8 次 (4对 × 2)                                     │
+├──────────────────────────────────────────────────────────┤
+│ Round 3: Severity 微调 + 掩盖推理                           │
+│   对 R2 胜者微调 severity ±1 (≤2次)                        │
+│   若 PSNR<30 且不含 compression → 掩盖推理测 JPEG 1-5      │
+│   预算: ≤5 次                                               │
+└──────────────────────────────────────────────────────────┘
+总预算: ≤25 次 (12+8+5)。🔴 超限 → 立即终止，标记 UNCERTAIN。
+```
+
+### 🔴 决策点强制重读
+
+**在做以下决策前，必须先 Read SKILL.md 对应章节（禁止凭记忆）：**
+
+| 决策点 | 重读内容 | 时机 |
+|------|------|------|
+| noise 类型判定 | `Read SKILL.md offset=42 limit=25` (§B 6步检查) | Step 2 开始前 |
+| blur 类型判定 | `Read SKILL.md offset=67 limit=20` (§C Blur判定) | Step 3 开始前 |
+| quantization 判定 | `Read SKILL.md offset=30 limit=15` (§A 残差先行) | 看到 unique_G<200 时 |
+| 保存预测前 | `Read SKILL.md offset=24 limit=8` (强制检查清单) | 保存 predicted_params 前 |
+
+**成本**: 每次 Read ~200 tokens，单挑战最多 4 次重读 ≈ 800 tokens。对比当前平均 35 次 PSNR 测试（每次 apply+compare ≈ 5000 tokens compute），开销 < 2%。
+
+### 信号→候选映射表
+
+**run_full_analysis.py 输出 → Agent 决策（直接映射，不枚举）：**
+
+| run_full_analysis 信号 | 决策 | 候选 1 | 候选 2 |
+|------|------|------|------|
+| `noise_prior sigma > 5` | 噪声存在 | 从 noise_prior 类型推断 | 从 §B 6步统计推断 |
+| `rgb_ratio > 1.4 + ric < 0.15` | YCrCb 噪声 | noise_gaussian_YCrCb | noise_gaussian_RGB (对照) |
+| `var_slope > 1.0 + vm_slope≈0` | Poisson 噪声 | noise_poisson | noise_gaussian_RGB (对照) |
+| `vm_slope > 0.01` (>0.005 for sev≤3) | Speckle 噪声 | noise_speckle | noise_gaussian_RGB (对照) |
+| `extreme_pct > 0.3%` | Impulse 噪声 | noise_impulse | noise_gaussian_RGB (对照) |
+| `spatial_corr > 0.15 + 无JPEG` | SC 噪声 | noise_spatially_correlated | noise_gaussian_RGB (对照) |
+| 以上全不满足 | Gaussian_RGB | noise_gaussian_RGB | — |
+| `gm_ratio < 0.85` (无 noise) or `spectral_slope_ratio > 1.08` | Blur 存在 | 从 MTF 信号推断子类型 | blur_gaussian (默认对照) |
+| `anisotropy_ratio > 4.0 + h_v_ratio≠1.0` | Motion blur | blur_motion | blur_gaussian (对照) |
+| `radial_ratio > 2.0` | Lens blur | blur_lens | blur_gaussian (对照) |
+| `glass_score > 0.25` | Glass blur | blur_glass | blur_gaussian (对照) |
+| 以上不满足 + blur 存在 | Gaussian blur | blur_gaussian | — |
+| `block_boundary > 1.1` | JPEG | compression_jpeg | — |
+| `unique_G < 200 + var_slope<1.0` | Compression/Quant | compression_jpeg | quantization |
+| `variance_ratio ≠ 1.0` | Contrast/Gamma | contrast_weaken/strengthen | gamma |
+| `mean_shift > 0.08 + variance_ratio≈1.0` | Brightness | brightness_shift | — |
+
+### Round 1 信号驱动全覆盖规则 🔴 核心
+
+**这不是 2 选 1。这是信号驱动的全混淆覆盖。**
+
+```
+噪声类别 (基于 noise_prior + §B 6步):
+  必测: noise_gaussian_RGB (对照基线)
+  信号触发候选:
+    rgb_ratio > 1.4 + ric < 0.15 → + noise_gaussian_YCrCb
+    vm_slope > 0.005 → + noise_speckle  
+    var_slope > 1.0 + vm_slope≈0 (在残差上!) → + noise_poisson
+    extreme_pct > 0.3% → + noise_impulse
+    spatial_corr > 0.15 + 无JPEG → + noise_spatially_correlated
+  → 至少测试 3-4 种噪声类型 (覆盖主要混淆对: speckle/gaussian, poisson/gaussian)
+  
+模糊类别 (基于 gm_ratio / spectral_slope_ratio / MTF):
+  必测: blur_gaussian (对照基线)
+  信号触发候选:
+    anisotropy > 4.0 + h_v_ratio 偏30% → + blur_motion
+    radial_ratio > 2.0 → + blur_lens  
+    glass_score > 0.25 → + blur_glass
+  → 至少测试 3 种模糊类型 (gaussian+lens+motion, 文档已知MTF无法区分)
+  
+压缩类别:
+  必测: compression_jpeg (唯一确定性选项)
+  替代: compression_jpeg_2000 (仅在 unique_G 模式不同于JPEG时测)
+```
+
+### Round 2 二元对比规则
+
+**对 R1 top-2 进行二元对比。**
+
+1. **同族对比**: R1 top-1 vs R1 top-2（确认该类别最佳子类型）
+2. **跨族对比**: R1 top-1 vs best cross-family candidate（排除跨族混淆）
+3. **Control test**: 最佳候选 vs baseline（去除该步），确认该步贡献
+4. 最多 8 次 (4对 × 2候选)
+
+### Round 3 Severity 微调
+
+1. R2 胜者 ±1 severity (≤4次)
+2. 若 PSNR<30 且不含 compression → 掩盖推理: 测试 compression_jpeg 1-5
+3. 总 ≤5 次
+
+### 终止条件（满足任一即停止，禁止继续搜索）
+
+| 条件 | 行动 |
+|------|------|
+| 确定性部分 PSNR > 40dB + 噪声统计匹配 | → LIKELY，保存 |
+| 已完成 3 轮探索 | → 标记 UNCERTAIN，保存当前最佳 |
+| PSNR 测试 ≥ 25 次 | 🔴 **硬终止**，保存当前最佳，标记 UNCERTAIN |
+| 连续 2 轮无改善 (>2dB) | → BEYOND_CAPABILITY，保存 R0 |
+| 所有 candidate PSNR < 20dB | → POOR，保存全部候选 |
+
+### PSNR 测试预算
+
+```
+总预算: ≤ 25 次/挑战
+
+分配:
+  Round 1 (信号→候选):   ≤ 8 次 (≤ 2候选/类别 × 4类别)
+  Round 2 (二元对比):     ≤ 8 次 (≤ 4 对比 × 2 候选)
+  Round 3 (severity微调): ≤ 4 次 (≤ 2 退化 × ±1 severity)
+  掩盖推理补充:           ≤ 5 次 (compression_jpeg 1-5)
+  
+  🔴 超预算 → 立即终止，标记 UNCERTAIN，在 thinking_process.json 中记录原因
+```
+
+---
 
 ## 🔴 强制检查清单（保存预测前必须逐项确认，不可跳过）
 
@@ -146,978 +563,24 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 - 三退化: 7 Agent × 3 组 (最后1个2组)
 - 总计: **12 Agent 并行**，预计同时完成
 
-## Core principles
 
-### PSNR-based identification (v4)
+## 附录: x_distortion 退化库
 
-**核心原理**: 校准阈值直接从指标推断函数类型和 severity。PSNR 仅用于最终验证（正确管线 > 40dB）。
+| 类别 | 函数 |
+|------|------|
+| blur | gaussian, motion, glass, lens |
+| noise | gaussian_RGB, gaussian_YCrCb, speckle, spatially_correlated, poisson, impulse |
+| compression | jpeg, jpeg_2000 |
+| global | brightness(8), contrast(4), saturation(4), oversharpen, pixelate, quantization(2) |
 
-**当前工作流**:
-1. `analyze_degradation.py` 检测类别 + 计算所有指标
-2. 校准阈值速查表直接决策函数类型和 severity（不枚举!）
-3. apply + compare 验证
-4. PSNR > 40dB → 确定性部分正确
-5. 噪声从残差分布识别
+用法: `add_distortion(img, severity, distortion_name)`，返回 uint8 RGB。
 
-**与旧版的关键区别**: v1-v3 试图用 CI 和决策树区分相似函数，失败了 (JPEG vs JPEG2000, blur子类型混淆)。v4 用 PSNR 像素级匹配——正确函数 PSNR 45 dB vs 错误函数 21 dB，差异 24 dB，不存在混淆。
-
-### Handling out-of-domain parameters
-
-The x_distortion severity scale (1–5) covers a specific range for each distortion. Real-world images may have degradations that fall outside these ranges. When this happens:
-
-**Degradation stronger than severity 5:** Apply the same distortion twice with severity values that sum to the needed level. For example, if the target noise appears to have sigma ≈ 0.35 but `noise_gaussian_RGB` maxes out at sigma=0.25 (severity 5), try `noise_gaussian_RGB:5` followed by `noise_gaussian_RGB:2` (sigma accumulates: 0.25 + 0.10 ≈ 0.35). Document this in params.json with `"out_of_domain": true` and explain the rationale.
-
-**Degradation between two severity levels:** Pick the closer severity. If the target looks halfway between severity 2 and 3, try severity 3 first (slightly over is easier to detect and correct than slightly under). Document the mismatch in reflection.json: `"match_note": "Target noise is between severity 2 and 3. Severity 3 selected as closest available match."`
-
-**Degradation type not in x_distortion:** If the target shows artifacts that don't match any available distortion (e.g., lens distortion, chromatic aberration, HDR artifacts), identify the closest available approximation and clearly document in reflection.json what couldn't be reproduced and why. This is valuable research data — knowing the library's limitations is as important as knowing its capabilities.
-
-**When the pipeline parameters are genuinely ambiguous:** Add a `match_quality` field to the params.json entry:
-```json
-{
-  "function": "noise_gaussian_RGB",
-  "severity": 5,
-  "actual_params": {"sigma": 0.25},
-  "out_of_domain": true,
-  "match_quality": "undershoot",
-  "match_note": "Target noise sigma estimated at ~0.35, but max severity 5 only reaches 0.25. Applied double Gaussian noise (sev 5 + sev 2) to approximate."
-}
-```
-
-## The x_distortion library
-
-Located at `x_distortion/` in the project root. Core usage:
-
-```python
-from x_distortion import add_distortion, distortions_dict
-degraded = add_distortion(img, severity=severity, distortion_name=dist_name)
-```
-
-- `img`: np.ndarray, uint8, H x W x 3, RGB, [0, 255]
-- `severity`: integer 1–5
-- `distortion_name`: specific function identifier string
-- Returns degraded image as np.ndarray, uint8
-
-List available distortions by category:
-
-```python
-from x_distortion import distortions_dict
-for cat, funcs in distortions_dict.items():
-    print(f"{cat}: {funcs}")
-```
-
-### Distortion categories
-
-| Category | Functions |
-|----------|-----------|
-| `blur` | gaussian, motion, glass, lens, zoom, jitter |
-| `noise` | gaussian_RGB, gaussian_YCrCb, speckle, spatially_correlated, poisson, impulse |
-| `compression` | jpeg, jpeg_2000 |
-| `brighten` | shift_HSV, shift_RGB, gamma_HSV, gamma_RGB |
-| `darken` | shift_HSV, shift_RGB, gamma_HSV, gamma_RGB |
-| `contrast_strengthen` | scale, stretch |
-| `contrast_weaken` | scale, stretch |
-| `saturate_strengthen` | HSV, YCrCb |
-| `saturate_weaken` | HSV, YCrCb |
-| `oversharpen` | oversharpen |
-| `pixelate` | pixelate |
-| `quantization` | median, hist（⚠️ otsu 已禁用 — 图像唯一值<8时崩溃, blind_challenge.py 已排除）|
-
-For the complete severity-to-actual-parameter mappings (e.g., severity 3 → sigma=0.15 for gaussian_RGB noise), read `references/severity_mappings.md`.
-
-### Multi-distortion
-
-`add_distortion` applies one distortion at a time. To apply a sequence of distortions, use the bundled script:
-
-```bash
-python ${CLAUDE_SKILL_DIR}/scripts/apply_multi.py \
-  --input <clean_image_path> \
-  --distortions "blur_gaussian:3,noise_gaussian_RGB:2,compression_jpeg:4" \
-  --output <output_path>
-```
-
-## 批量盲识别工作流程 (v7 — detect + 残差验证 + 三级反思)
-
-> v6: detect_degradation.py 自动决策 + decision_flow 披露。v7: 强化 Round A/C 残差验证，三级反思机制。
-> v8: exp17 盲化评估（35 单退化）→ 强制检查清单 + 噪声残差先行 + 阈值修正 + 失败案例。
-> v9: exp17 双退化评估（20 双退化）→ 掩盖推理 + compression 定向补充验证。
-> 校准阈值来自 100 张 DIV2K 图像的系统校准 (exp15/scripts/calibrate_thresholds.py)。
-> exp17 盲化基准：单退化 88.6%（31/35），双退化 30%（6/20），掩盖推理预期双退化提升至 ~70%。
-
-### 核心流程 (v10 — 噪声优先, 两条路径)
-
-⚠️ **强制执行顺序。顺序检测 + 交叉验证消除假阳性（不做逆变换——退化不可逆）。**
-
-来源: 1140 cases大规模合成 + exp17/18/19/20/21 80+组真实退化 + exp21假阳性审计
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Step 1: Compression 检测 (最高优先级 — 0%FP)                 │
-│                                                             │
-│   判据: unique_G < 200 → compression 存在 (对所有退化鲁棒)    │
-│   子类型: block_boundary > 1.1 → JPEG; ringing → JPEG2000   │
-│   Severity: BPP或unique_G下降比例查表                        │
-│                                                             │
-│   记录: compression=YES/NO, type, sev                       │
-│   传给后续: JPEG会使8×8块间均值离散 → global可能假阳性        │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Step 2: Noise 检测 (noise统计不受低频blur影响)                │
-│                                                             │
-│   判据: wavelet MAD σ > 1.9 → 有噪声 (83%召回, 7.3%FP)      │
-│   例外: σ 低但 spatial_corr > 0.15 或 extreme_pct > 2 也进入  │
-│                                                             │
-│   子类型 — Tier 1 直方图 (56-case验证, 置信度高):             │
-│     YCrCb:   rgb_ratio > 1.4 + skew≈0                       │
-│     Impulse: avg_kurt > 5 OR extreme_pct > 5%               │
-│     Speckle: avg_skew < -0.5 + vm_slope > 0.001             │
-│     Gaussian_RGB: |skew|<0.3 + kurt<3                       │
-│                                                             │
-│   子类型 — Tier 2 辅助信号猜测 (直方图歧义, confidence=       │
-│     speculative, Agent 必须用 §B 统计检查验证):              │
-│     Poisson:  var_slope > 0.5 + vm_slope≈0 (方差∝强度)       │
-│              ⚠️ Speckle 也有高 var_slope, 用 vm_slope 区分    │
-│     Spatially_Correlated: spatial_corr > 自适应阈值           │
-│              σ<5→sc>0.30, σ5-15→sc>0.25, σ>15→sc>0.40       │
-│              ⚠️ blur 也会抬高 sc, σ 自适应阈值部分缓解         │
-│                                                             │
-│   Severity: 按类型分别映射 σ→sev (Poisson/SC 用专属映射表)     │
-│                                                             │
-│   记录: noise=YES/NO, type, confidence, σ, subjective_guess  │
-│   传给后续: noise σ 会撑开 percentile → contrast假阳性        │
-│            noise 会增加 Cr/Cb 方差 → saturation假阳性         │
-│   ⚠️ 不做去噪! 只记录参数                                   │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Step 3: Blur 检测 (已知 noise/compression 状态)              │
-│                                                             │
-│   ⚠️ 有 noise? → gm_ratio 完全失效 (noise sev=1 就能让       │
-│     blur sev=5 的 gm_ratio 从 0.20 跳到 2.06, 不可恢复)       │
-│     → 改用 spectral_slope (对数功率谱斜率):                   │
-│        原理: noise 均匀增加所有频率能量 → 斜率几乎不变 (±0.03) │
-│              blur 衰减高频 → 斜率变陡 (sev5: -1.1→-1.8)       │
-│        判据: slope_ratio > 1.08 (目标比clean陡峭→有blur)      │
-│        severity: slope_ratio 1.08/1.18/1.30/1.50 → sev 2-5   │
-│                                                             │
-│   子类型 (MTF 频域信号, 噪声也会降低精度但仍有区分度):         │
-│        - lens:    MTF 局部极小值 (Bessel零点)               │
-│        - zoom:    gm_ratio(center)/gm_ratio(corner) > 1.3  │
-│        - glass:   MTF bin-to-bin 粗糙度                    │
-│        - motion:  angular_FFT anisotropy > 4.0              │
-│        - gaussian: MTF 平滑单调衰减, 默认                   │
-│                                                             │
-│   ✅ 无 noise → gm_ratio 可用 (83%召回, 0%FP)                │
-│     阈值: 纯 blur < 0.62; 有 noise 时 gm 不用, 改用 slope    │
-│                                                             │
-│   记录: blur=YES/NO, 子类型, sev, 信号来源(gm/slope)         │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Step 4: Global 退化检测 (已知所有结构性退化, 交叉验证假阳性)   │
-│                                                             │
-│   工具: global_degradation_analyzer.py                       │
-│   方法: histogram + 逐通道均值 + YCrCb/HSV                   │
-│                                                             │
-│   🔴 假阳性交叉验证 (exp21 审计, 40%FP 根因):                 │
-│                                                             │
-│   □ brightness 检测到?                                      │
-│     → Step1有JPEG? 检查 8×8块间均值方差 vs 块内方差          │
-│       块间方差 >> 块内方差 → JPEG假阳性, 排除                │
-│       块间方差 ≈ 块内方差  → 真实brightness                  │
-│                                                             │
-│   □ contrast 检测到?                                        │
-│     → Step2有noise? 计算 clean+noise 的percentile spread    │
-│       spread_target ≈ spread_clean+noise → noise假阳性, 排除│
-│       spread_target ≉ spread_clean+noise → 真实contrast     │
-│                                                             │
-│   □ saturation 检测到?                                      │
-│     → Step2有noise? 检查 Cr/Cb std 增量是否 > noise σ 预期  │
-│       Cr_std(target)/Cr_std(clean) 对比 noise-only 参考      │
-│       差异 < noise引起的波动 → noise假阳性, 排除              │
-│                                                             │
-│   Severity: 无耦合污染时查表, 有耦合时减信度                  │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 执行规则
-
-1. **Step 1-4 顺序执行**，不可跳步。每一步记录结果传给后续步骤。
-2. **不做逆变换**（退化不可逆）。只传递"已知信息"用于交叉验证。
-3. **每个函数类别测试 ≤5 个候选**，总量 ≤25 次 PSNR 验证。
-4. **Blur 子类型用信号决策，不枚举**。不确定时保留 2 个候选，让训练 PSNR 仲裁。
-5. **所有检测结果记录在 reflection.json**，含交叉验证的通过/排除理由。
-
-### 保存规则
-
-```
-verdict:
-  - 单步退化 + 信号明确 + PSNR > 40dB → LIKELY
-  - 含噪声 → UNCERTAIN (随机seed, PSNR不可靠)
-  - 多步退化 → UNCERTAIN 或 POOR (退化耦合)
-  - 所有候选 PSNR < 30 → POOR
-
-alternatives: 跨函数族保留至少各1个候选 (blur/noise/compression/global)
-thinking_process.json: Step1-4每一步的检测结果 + 交叉验证记录
-```
-
-═══════════════════════════════════════════════════════════════
-反思 (盲识别阶段迭代 + 训练后反思)
-═══════════════════════════════════════════════════════════════
-
-  反思不是"判断对错"然后放弃, 而是迭代探索退化空间。
-  盲识别阶段无法验证的部分, 训练后 PSNR 做最终仲裁。
-
-  ┌─ 盲识别阶段反思 (R1, R2, ..., 每轮调整假设并验证)
-  │
-  │  每轮 = 调整退化组合 → apply → 验证 → 记录
-  │
-  │  R1: 按 Step1→4 顺序重检
-  │      → Step1 unique_G 稳定 (0%FP) → compression 通常可靠
-  │      → Step2 noise 重检: §B 6步, 关注之前可能被JPEG/blur掩盖的噪声
-  │      → Step3 blur: 有新MTF信号? 之前误判子类型的可能?
-  │      → Step4 global: 已知Step1/2信息 → 交叉验证假阳性
-  │
-  │  R2: 根据 R1 结果进一步调整
-  │      → R1 确定性子 PSNR 提升 > 2dB → 方向正确, 继续细化
-  │      → R1 无改善 → 换不同策略 (加/减退化步数, 换函数族)
-  │      → 启发式猜想: 残差中有什么被掩盖的模式?
-  │
-  │  RN: 持续迭代, 直到满足终止条件
-  │
-  │  终止条件 (满足任一即停止, 保存当前最佳):
-  │    ✅ 确定性部分 PSNR > 40dB AND 噪声统计匹配 → 识别成功
-  │    ✅ 已尝试 ≥5 轮, 当前最佳 PSNR 已连续 2 轮无改善
-  │    ⚠️ 不要因为"PSNR < 20"就放弃 — 含噪声退化 PSNR 本就低
-  │       此时看的是 PSNR 的相对改善, 不是绝对值
-  │
-  │  保存: 当前最佳假设 + 所有 alternatives + 每轮反思记录
-  │
-  └─ 训练后反思 (Phase 5完成, GT评估后)
-
-      触发 (自参照，不依赖外部模型):
-        - verdict = POOR/UNCERTAIN → 反思
-        - GT重评估 PSNR < 35 → 反思
-        - GT重评估 PSNR >= 35 + verdict = GOOD/LIKELY → 跳过
-
-      此时有训练 PSNR 这个最强的信号:
-        → 加载失败模型, 诊断残差 (model_diagnosis.py)
-        → 残差有 JPEG 块 → 漏了 compression
-        → 残差有高频噪声 → 噪声类型/严重度错了
-        → 用诊断结果修正假设, 重新训练
-
-      训练后反思仍然是迭代的:
-        修正 → 重训练 → GT评估 → 仍差? → 再修正 → ...
-        最多 3 轮训练后反思 (GPU 昂贵)
-        3 轮仍差 → 标记 NEEDS_WORK, 保留结果供后续分析
-
-═══════════════════════════════════════════════════════════════
-保存
-═══════════════════════════════════════════════════════════════
-
-  predicted_params.json: pipeline + alternatives + analysis
-  reflection.json: Phase 1噪声判断 + 路径选择 + psnr_ranking + 反思记录
-  🔴 thinking_process.json (强制): 简要思考流程, 必须保存!
-    用于验证盲识别过程是否合规 (非枚举、非脚本)
-    格式: {"path": "A|B", "signals_found": [...], "hypotheses_tested": [...],
-           "total_psnr_tests": N, "enumeration_used": false}
-    ⚠️ total_psnr_tests > 20 且路径A → 疑似枚举, 守门检查不通过!
-```
-
-### 残差诊断速查表
-
-| residual_A 模式 | 诊断 | 修正 |
-|------|------|------|
-| 8×8 块状结构 | JPEG 漏检 (块边界在残差中可见) | 添加 compression_jpeg |
-| 随机均匀分布 + res_std > 8 | noise 漏检 | 添加 noise, 从残差分布判断类型 |
-| 边缘区域强信号 | blur severity 有误 | 调整 blur severity ±1 |
-| 整体亮度/色彩偏移 | global (brightness/contrast/saturation) 有误 | 检查 decision_flow 中 global 决策 |
-| 均匀无结构 + res_std < 5 | ✅ 确定性部分正确, 残差仅为 noise | 进入 Round B |
-
-### 反思三级示例
-
-```
-案例: GT=[jpeg:3, noise_gauss:2, blur:4], Pred=[blur:4]
-
-Round A: det_sim = blur:4 → PSNR=22dB ❌
-残差诊断: residual_A 显示 8×8 块状 + 均匀噪声
-→ 残差模式提示: JPEG + noise 漏检
-
-第 1 级反思 (移除 FP): blur 是唯一检测, 高置信 → 不移除
-第 2 级反思 (添加漏检):
-  尝试 guess_a=compression_jpeg sev 2-4
-  → full_sim = blur:4 + jpeg:3 → PSNR=32dB ↑10dB ✅
-  尝试 guess_b=noise_gaussian_RGB sev 1-2
-  → full_sim = blur:4 + jpeg:3 + noise:2 → PSNR=42dB ↑10dB ✅
-→ 管线修正成功, 保存 GOOD
-```
-
-### 校准阈值速查表 (100 DIV2K 校准 + exp17 盲化评估修正, exp15+17)
-
-| 检测项 | 指标 | 阈值 | 来源 |
-|--------|------|------|------|
-| blur 存在 | gm_ratio | < 0.85 (mild zone 0.75-0.85 标记为"可能 blur") | exp17 修正 |
-| blur 确认 | gm_ratio + lap_ratio | < 0.75 OR lap_ratio < 0.55 | calibration |
-| blur severity | gm_ratio | [0.60, 0.40, 0.32, 0.27] → sev 1-5 | calibration |
-| blur_motion | dir_change + patch_ratio_std | > 20% + std > 0.38 | calibration |
-| blur_lens | gradient_radial_ratio | > 2.0 → 强制 lens（不要归因于内容!）; > 1.3 → 候选 | exp17 修正 |
-| blur_zoom | gradient_radial_ratio | < 0.9 | calibration |
-| blur_jitter | gm_ratio + lap_ratio | gm > 1.0 AND lap < 0.7 | source code |
-| JPEG | block_norm + specificity | > 1.10 + > 1.2 | calibration |
-| JPEG2000 | uG_ratio + zc_ratio | < 0.85 + > 1.3 (medium conf) | calibration |
-| quantization | uG | < 25 **AND** 残差 var_slope < 1.0（必须排除 Poisson!）| exp17 修正 |
-| oversharpen | gm_ratio + lap_edge_ratio | > 1.4 + > 2.5 | calibration |
-| contrast | std_ratio + proportional check | < 0.70 (weaken) / > 1.3 (strengthen) | source code |
-| brightness | mean_shift_pct | abs > 0.08 | source code |
-| saturation | sat_ratio | < 0.65 (weaken) / > 1.6 (strengthen) | source code |
-| noise_impulse | exact_0+255 pixel fraction | > 0.3% | calibration |
-| noise_speckle | vm_slope on residual | > 0.01 (sev≥2); sev=1 时 > 0.005 或 speckle_contrast > 0.005 | exp17 修正 |
-| noise_poisson | var_slope on **residual** | > 1.0 + vm_slope≈0（⚠️ 必须在残差上测!）| exp17 修正 |
-| noise_spatially_correlated | spatial_corr on residual | 0.15-0.5（⚠️ 必须检查，不可跳过!）| exp17 修正 |
-| noise_YCrCb | rgb_std_ratio | > 1.4 | calibration |
-
-### 逐层剥离示例
-
-```
-GT: blur_gaussian:3 → noise_poisson:2 → compression_jpeg:2
-
-错误做法 (v4.1):
-  在target上直接看 noise 指标
-  → flat_variance 被 blur:3 抹平 → "无 noise" ❌
-  → 预测: blur_gaussian:3 + compression_jpeg:2 (漏检noise!)
-
-正确做法 (v5):
-  Round A: gm_r=0.32→blur:3, block_boundary>1.1→JPEG:2
-           deterministic_sim = apply(clean, blur:3 + JPEG:2)
-           PSNR=35dB → 确定性部分正确 ✅
-  
-  Round B: residual = target - deterministic_sim
-           在 residual 上:
-           - flat_variance(residual) = 850 (显著, 不是0!)
-           - var vs intensity: 正相关 → Poisson! ✅
-           → noise_poisson:2
-  
-  Round C: apply(clean, blur:3 + poisson:2 + JPEG:2) → full_sim
-           compare(full_sim, target) → CI子指标全部通过
-           PSNR=42dB → 确认 ✅
-  
-  最终: blur_gaussian:3 + noise_poisson:2 + compression_jpeg:2 ✅
-```
-
-### 为什么 Step 2 不含 noise？
-
-noise 指标在 target 上被 blur/compression 严重污染：
-- blur 降低 flat_variance → noise 看起来比实际弱
-- compression 产生 impulse 样式的极端像素 → 假阳性
-- blur+noise 耦合 → overshoot 信号来自 noise 还是 blur？
-
-**只有剥离确定性退化后，residual 中的 noise 信号才是真实的。**
-
-### exp17 盲化评估 — 失败案例与预防 (v8 新增)
-
-exp17 对 35 个单退化进行盲化评估（目录名盲 ID，Agent 完全不知退化类型）。3 个失败案例的教训：
-
-**案例 1: Poisson:4 → 误判为 quantization_otsu:1** 🔴 最严重
-```
-Agent 看到: unique_G 减少 + extreme% 升高 → "是 quantization!"
-实际情况: 噪声将像素推至极端值, unique_G 被动减少。
-          残差上 var_slope=1.72 >> 1.0 → 明确的 Poisson 信号!
-根因: Agent 在 target 上直接用 unique_G 判断, 没有先算残差。
-预防: 强制规则 → 判定 quantization 前必须确认残差 var_slope < 1.0。
-```
-
-**案例 2: spatially_correlated:4 → 误判为 gaussian_RGB:2**
-```
-Agent 看到: 残差分布对称 + 通道 std 相似 → "gaussian!"
-实际情况: spatial_corr=0.233 明确在 0.15-0.5 范围内。
-根因: Agent 跳过了 spatial_corr 检查步骤, 凭"直觉"判为 gaussian。
-预防: 噪声 6 项检查必须逐项执行并记录数值, 不可跳步。
-```
-
-**案例 3: speckle:1 → 误判为 gaussian_RGB:1**
-```
-Agent 看到: vm_slope < 0.01 → "不是 speckle"
-实际情况: sev=1 的 speckle_contrast=0.14, vm_slope 信号被内容淹没。
-根因: vm_slope 阈值 0.01 对 sev=1 过高。
-预防: sev=1 时降低阈值到 0.005, 或检查 speckle_contrast > 0.005。
-```
-
-**案例 4: lens:4 → 误判为 gaussian:3** (blur 子类型)
-```
-Agent 看到: radial_ratio=3.17 → "应该是中心构图导致的, 不是 lens blur"
-实际情况: radial_ratio=3.17 就是 lens blur!
-根因: Agent 用"直觉"否定了指标。radial_ratio > 2.0 不可能是纯内容造成的。
-预防: 强制规则 → radial_ratio > 2.0 必须优先判定 lens。
-```
-
-**案例 5: zoom:1 → 误判为 noise** (blur 漏检)
-```
-Agent 看到: gm_ratio=0.85 > 0.75 → "不是 blur"
-实际情况: sev=1 的 zoom blur 很 mild, gm_ratio 刚好高于阈值。
-根因: blur 阈值 0.75 对 mild blur 不够敏感。
-预防: gm_ratio 0.75-0.85 标记为 mild blur 可能, 检查 lap_ratio 辅助确认。
-```
-
-### exp17 双退化评估 — 掩盖推理 (v9 新增)
-
-exp17 对 20 个随机双退化进行盲化评估。结果：两函数全对 30%，但 **Agent 方向 100% 正确**（至少猜对一个类别）。核心发现：
-
-**compression 是"最容易被掩盖的退化"** — 14 个失败中 11 个是 compression 漏检。
-
-掩盖机制（强退化 → 破坏弱退化特征）：
-
-| 主导退化 | 掩盖 compression 的机制 |
-|----------|----------------------|
-| global (brightness/contrast/saturation) | 像素值重映射 → 8×8 块边界消失；clipping → DCT 模式不可见 |
-| noise (impulse/poisson/YCrCb) | 随机像素破坏 8×8 规律性；ringing 被噪声淹没 |
-| blur (gaussian:5) | 平滑抹掉 block_boundary；ringing 被模糊消除 |
-
-**启发式规则（掩盖推理）⚠️ 触发条件：PSNR < 35dB 且已识别退化数不足且不含 compression**：
-
-掩盖推理不替代常规反思（换 severity/换子类型/调顺序）。常规反思优先执行，
-仅在常规修正无法将 PSNR 提升到 35dB 以上时，才启动掩盖推理。
-
-```
-触发条件（3 条全部满足才执行）:
-  1. 当前管线 PSNR < 35dB（确实有问题，不是 fine-tune 范围）
-  2. 已识别退化数 < 预期退化数（如双退化只找到 1 个，单退化全对则跳过）
-  3. 已识别的退化中不含 compression（compression 已被找到则跳过）
-
-满足条件 → 掩盖检查:
-  □ 剥离已知退化 → 残差上测试 compression_jpeg + compression_jpeg_2000
-    （先测 sev=1，低严重度最容易被掩盖）
-    验证: PSNR > 50dB 才追加（compression 是确定性的）
-    追加后 PSNR 提升 > 5dB → "掩盖确认"
-
-不满足条件 → 跳过掩盖检查:
-  - 单退化 PSNR > 40dB → 已做对，不需要
-  - 已找到所有退化 → 不需要
-  - 已有 compression → 不需要
-```
-
-**为什么不是枚举**：只在已识别出至少一个退化后，对"最容易被掩盖的类别 (compression)"做定向补充测试。最多增加 10 次 PSNR 验证（2 函数 × 5 严重度），不是遍历组合。
-
-**预期效果**：修复 11/14 的 compression 漏检，双退化准确率从 30% → ~70%。
-
-**剩余不可修复**：含 noise 且 noise 子类型错误的 3 个案例（speckle↔gaussian↔impulse 混淆）。噪声子类型只能靠 Phase 5 训练 + Phase 6 反思。
-
-### 关键改进 (vs v4.1 + calib v2)
-
-| 问题 | v4.1 | calib v2 | v5 |
-|------|------|---------|-----|
-| noise漏检(20例) | CI诊断但模糊 | 阈值不清 | **先剥离blur→残差分析noise** |
-| Poisson误判(5例) | 无检测 | 阈值不准 | **残差强度-方差相关** |
-| oversharpen误入 | 2次 | 1次 | gm_r>2+osr>50+nvs三重确认 |
-| global漏检(7例) | 无 | 部分 | **剥离局部后再检查ratios** |
-
-        unique_G↑+block↓ → JPEG→JPEG2000（压缩类型耦合）
-        gradient↑+laplacian↑ → 缺少blur（噪声被误判为主导）
-        flat_variance↓+Cr/Cb↓ → blur在noise之后（噪声被模糊抹平）
-        
-  方法: apply完整管线 → compare → 分析每个子指标偏差方向
-        → 根据耦合诊断表推断哪个退化有误
-        → 定向修正（只改被诊断的部分）
-
-Round 4 — PSNR最终验证
-  目标: 确定性部分像素级确认
-  方法: 只对确定性退化部分计算PSNR（排除noise）
-        → PSNR > 40 dB → 确定性部分正确
-        → PSNR < 30 dB → 确定性部分有误，回到Round 2
-        → 噪声类型从残差统计特征确认
-```
-
-### 噪声单退化识别 ⚠️ PSNR 无效，用残差+分布
-
-PSNR 对噪声函数天然偏低（随机种子不同导致像素无法匹配）。**噪声类型识别必须用残差和分布特征。**
-
-同图模式下，残差 = target - clean 直接暴露噪声模式：
-
-#### 六种噪声的残差/分布判别
-
-| 噪声类型 | 残差特征 | 分布特征 | 关键验证 |
-|---------|---------|---------|---------|
-| **Gaussian RGB** | 方差为常数，与像素强度无关 | 正态分布，对称 | 分 10 个强度 bin → 每 bin 方差接近 |
-| **Gaussian YCrCb** | **RGB 通道噪声不均** (B > G > R) | Cr/Cb 正态分布 | rgb_std_ratio > 1.4 OR Cr/Y_std > 1.3 |
-| **Poisson** | **方差 ∝ 强度**（暗区噪声小，亮区大） | 低强度偏斜，高强度近正态 | var_slope > 1.0 + vm_slope≈0 |
-| **Speckle** | **方差 ∝ 强度²**（乘性，vm_slope > 0） | Gamma 分布 | vm_slope > 0.01 |
-| **Impulse** | 稀疏极端像素 (0 和 255) | 两端尖峰 | exact_0+255 像素比例 > 0.3% |
-| **Spatially Correlated** | 邻域像素残差相关 | 空间自相关高 | spatial_corr 0.15-0.5 |
-
-#### 判别流程 (v16 — 数学指纹分类)
-
-**分类顺序 (顺序至关重要)**:
-```
-Step 1: 检查 Impulse → 残差 zero_ratio > 0.85 (稀疏性: 绝大多数像素未改变)
-Step 2: 检查 Spatially_Correlated → 相邻像素残差相关 > 0.50
-         - sc > 0.72: 高置信 (完全排除 blur/JPEG 假阳性)
-         - sc > 0.50 + sigma >= 1.4: 辅助判断 (噪声存在排除纯 blur)
-Step 3: 检查 YCrCb → RGB通道间残差互相关 > 0.12 (YCrCb→RGB线性组合)
-Step 4: 检查 Gaussian/Poisson/Speckle → 16px patch 亮度-方差关系:
-         - corr(mean, var) < 0.15 → Gaussian_RGB (方差不随亮度变化)
-         - corr(mean, var/scaled_var) < 0.3 → Poisson (var ∝ I, var/I constant)
-         - else → Speckle (var ∝ I²)
-```
-
-**校准结果** (3图×5sev×5seed):
-| 类型 | 合成精度 | 关键信号 |
-|------|:--:|------|
-| Impulse | 100% (9/9) | zero_ratio > 0.85 |
-| Spatially_Correlated | 100% (9/9) | sc > 0.50; 校准: 纯SC=0.53-0.64, SC+JPEG=0.57-0.67 |
-| YCrCb | 100% (9/9) | cross_ch_corr > 0.12; RGB独立<0.05 |
-| Gaussian_RGB | 100% (9/9) | ivc < 0.15 |
-| Poisson | 100% (9/9) | ivc >= 0.15 + ivc_scaled < 0.3 |
-| Speckle | 67% (6/9) | 低sev(1)方差-亮度关系弱 |
-
-**⚠️ 已知 FP 问题**:
-- JPEG+blur 组合在 same-image 残差中产生 sc=0.77-0.85 + sigma=3.3-3.7
-- 与 SC 噪声 (sc=0.53-0.64, sigma=1.5-3.3) 在统计上不可区分
-- block_boundary 在 blur 存在时失效 (JPEG5+blur5: bb从3.5降至1.0)
-- → 6/16 FP (exp25), 但 100% 召回保证不漏检
-- → Agent 通过 PSNR 测试区分 SC noise vs JPEG artifact
-
-#### 复合退化中的噪声识别
-
-复合退化 (blur+noise) 残差被 blur 污染:
-- blur 会抬高 spatial_corr → 可能误判为 spatially_correlated
-- sigma 自适应阈值部分缓解, 但不能完全消除
-- Agent: 如果 blur 被检测到, 对 SC 猜测保持怀疑, 优先 Trust 直方图分类
-
-### 关键原则
-
-### ⚠️ 挑战函数范围（4类别 35 函数）
-
-`blind_challenge.py` 从 4 类别生成退化管线（每类最多1个函数，最多4步）：
-
-| 类别 | 函数数 | 确定性? |
-|------|:--:|:--:|
-| blur | 6 | ✅ 全部确定性 |
-| noise | 6 | ❌ 全部随机 |
-| compression | 2 | ✅ 全部确定性 |
-| global | 21 | ✅ 全部确定性（除 pixelate 和 quantization 外） |
-
-global 包含: brightness(8), contrast(4), saturation(4), oversharpen, pixelate, quantization(3)
-
-### 关键原则 (v7)
-
-1. **detect 自动决策 + Agent 审查** — detect_degradation.py 给出 pipeline + decision_flow，Agent 审查 evidence 后确认或调整
-2. **残差验证是核心** — Round A 的 residual_A 模式直接诊断漏检/FP: 8×8块→JPEG漏检, 随机→noise漏检, 边缘结构→blur有误
-3. **PSNR 只验证确定性退化** — 不用于噪声搜索。阈值: >40dB 完美, 35-40dB 类别正确, 25-35dB 有FP/漏检, <25dB 严重错误
-4. **噪声从残差识别** — PSNR 对噪声无效，残差+分布才是正确方法。判别顺序: impulse → speckle → Poisson → spatial → YCrCb → gaussian
-5. **decision_flow 向 Agent 披露** — 每个决策的证据链完整透明，Agent 可据此独立判断
-6. **反思 = 综合审视 + 多步修正** — 每轮可同时 移除FP + 添加漏检 + 调整severity + 调整顺序 + 替换误诊。改完后一次 PSNR 验证。最多 3 轮
-7. **训练后反思最可靠** — L1+L2 失败 → NEEDS_WORK → Phase 5 训练 → Phase 6 Spec vs M_blind PSNR 差触发深度反思
-8. **blur 子类型简化** — 仅区分 motion / jitter / gaussian
-9. **顺序从数据推断** — 默认: compression → quantization → global → blur → noise
-
-### 与旧版对比
-
-| 问题 | v4.1 | v5 | v6 (当前) |
-|------|------|-----|------|
-| 单退化确定函数 | PSNR验证(75%) | 校准阈值 | **detect自动决策(84%单退化)** |
-| 单退化噪声 | 残差+分布 | 残差+分布 | **残差+校准阈值+RGB ratio** |
-| JPEG vs JPEG2000 | CI盲区 | PSNR可区分 | **block_norm+特异性+zc_ringing** |
-| 全局退化识别 | 无 | PSNR验证 | **色彩空间映射+校准阈值** |
-| blur子类型 | 决策树(radial) | 决策树(radial) | **简化: motion/jitter/gaussian** |
-| 多退化耦合 | CI诊断 | 逐层剥离 | **逐层剥离+耦合修正+guesses** |
-| Agent可见性 | 原始指标 | 原始指标 | **decision_flow完整证据链** |
-| 多退化耦合 | CI子指标 | 失败(万能填充) | CI耦合诊断+逐层剥离 |
-| JPEG vs JPEG2000 | CI盲区 | PSNR可区分 | PSNR验证 |
-| noise子类型(多退化) | 决策树 | 失败 | 待后续实验 |
-| 全局退化识别 | 无 | 无 | **新增 (Round0+PSNR)** |
-
-## Mode Selection: Same-image vs Cross-image
-
-Before starting, check whether the clean source image is the **same image** as the target (just undegraded) or a **different image**.
-
-### How to determine
-
-Run this quick check before starting analysis:
-
-```python
-from PIL import Image
-import numpy as np
-target = np.array(Image.open('<target>').resize((64,64)).convert('L'), dtype=np.float32)
-clean  = np.array(Image.open('<clean>').resize((64,64)).convert('L'), dtype=np.float32)
-corr = np.corrcoef(target.flat, clean.flat)[0,1]
-print(f"Image correlation: {corr:.3f}")
-# corr > 0.95 → same image (different resolution OK after resize)
-# corr < 0.95 → different images → cross-image mode
-```
-
-Decision rules:
-- `corr > 0.95` → **same-image mode** (same scene, just degraded)
-- `corr < 0.95` → **cross-image mode** (different scenes)
-- User explicitly says "this is the original" → **same-image mode** regardless
-- No clean source provided → **target-only mode** (same flow as cross-image Phase 1)
-
-### Same-image mode (preferred, recommended)
-
-**生成挑战**：使用 `blind_challenge.py --same-image`，clean 即为 degraded 的原图（未退化版本）。
-
-When the target and clean source are the same image, you have a massive advantage: **every metric can be calibrated**. Compute target/clean ratios for all 14 analysis modules. Content-dependent metrics become reliable:
-
-```bash
-uv run python .claude/skills/image-degradation-simulator/scripts/analyze_degradation.py --target <target> --clean <clean>
-```
-
-The `ratios_vs_clean` section tells you exactly what changed: gradient_magnitude_ratio=0.21 means 79% sharpness loss → severe blur. laplacian_variance_ratio=0.03 means 97% detail loss → confirms heavy blur. saturation_mean shift of +50 means deliberate saturation boost.
-
-In same-image mode, you can also use MSE/PSNR during iterations as a convergence signal — pixel-perfect match IS possible if your pipeline is exactly right.
-
-验证同图：correlation > 0.95（`blind_challenge.py --same-image` 自动满足）
-
-### Cross-image mode (fallback)
-
-When the target and clean source are different images, follow the target-only Phase 1 below. **Never use clean source statistics as a baseline** — content differences will mislead you into false degradation detections.
-
----
-
-## The iterative analysis loop (cross-image)
-
-The core workflow has two phases:
-
-**Phase 1: Target-only analysis** — Identify degradation TYPES from the target image alone using content-independent metrics and visual inspection.
-
-**Phase 2: Degradation simulation** — Apply the identified pipeline to the clean image (the "output canvas"). Compare degradation TEXTURE (not pixel values) between target and simulated results. Iterate on severity only.
-
-### Step 1: VISUAL INSPECTION FIRST — read the target image
-
-**Before running any script, read the target image with your eyes.** You are a vision model — use that capability. Look at the image and describe what you actually SEE:
-
-- **Blur**: Is the image soft overall? Can you see directional smear? Are edges smoothly faded or do they have halos?
-- **Noise**: Is there visible grain? Is it uniform across the image? Are there bright/dark speckles? Look at flat regions (sky, walls) — are they smooth or textured?
-- **Compression**: Are there block-shaped artifacts (8×8 squares)? Is color bleeding at edges? 
-- **Quantization**: Are there visible color bands in gradients (sky, shadows)?
-- **Oversharpen**: Are there bright/dark halos along edges? Does the image look artificially crisp?
-- **Pixelate**: Is there an obvious blocky, low-resolution appearance?
-
-Write down your visual observations in reflection.json. This is your primary evidence. Do not skip this step — the numbers exist to support or challenge your visual findings, not replace them.
-
-### Step 2: Quantitative confirmation — run analysis script
-
-Now run the analysis script to get numbers that support or challenge what you saw:
-
-```bash
-python ${CLAUDE_SKILL_DIR}/scripts/analyze_degradation.py --target <target_path>
-```
-
-The `degradation_summary` section provides content-independent findings. **Treat these as hypotheses to verify, not as ground truth.** 
-
-Each metric has known failure modes — use your visual inspection to resolve them:
-
-| Metric | What it flags | Known false positive | How to resolve visually |
-|--------|--------------|---------------------|------------------------|
-| `overshoot_ratio > 0.5` | Oversharpen | **Noise also elevates it** | Check `noise_vs_sharpen.verdict`: noise/oversharpen/uncertain. Also visually: halos at edges vs uniform grain everywhere |
-| `impulse_total_pct > 0.5%` | Impulse noise | **Oversharpen clipping** at 0/255 | Look at spatial distribution: random dots = noise, edge-correlated = oversharpen |
-| `block_boundary_ratio > 1.1` | JPEG blocks | Blur can mask blocks | Look for 8×8 grid patterns |
-| `unique_G < 256` | JPEG/quantization | Blur can reduce unique colors | Check if reduction is G-only (JPEG) or all-channel (blur/quantization) |
-| `gradient ↓` + `hf_lf ↓` | Blur | Image can be naturally soft | Is the softness uniform across the image? Natural softness varies by region. |
-
-**When numbers and visual inspection disagree, your eyes are the final authority.**
-
-### Step 3: Form initial hypothesis
-
-Based on your analysis, propose a degradation pipeline. Write it down explicitly in reflection.json:
-
-```
-Hypothesis 1:
-  1. blur_gaussian, severity=3
-  2. noise_gaussian_RGB, severity=2
-  3. compression_jpeg, severity=3
-```
-
-Start simple — try to capture the most visually dominant degradation first before adding subtle ones. A single well-chosen distortion with the right severity often gets surprisingly close.
-
-**You must NOT enumerate all options.** Do not generate a grid of severity × type combinations. Do not test things you have no visual evidence for. Each simulation you run should test a specific hypothesis you can justify. If you haven't written down WHY you're testing a particular distortion before running it, you're brute-forcing.
-
-### Step 4: Simulate
-
-Apply your hypothesized pipeline to the clean image using `scripts/apply_multi.py`. Save the result to the workspace.
-
-### Step 5: Compare — visual inspection first, then numbers
-
-**First, look at the simulated image and the target side-by-side.** You are comparing degradation TEXTURE, not image content:
-
-- "The blur level looks similar — edges are equally soft"
-- "The noise grain in the simulated image is finer than the target"
-- "The simulated image has clean flat regions, but the target has visible grain everywhere"
-- "The target has blocky JPEG artifacts that our simulation is missing"
-
-Trust what you see. The visual comparison is the primary judgment.
-
-**Then run the comparison script** for quantitative support:
-
-```bash
-python ${CLAUDE_SKILL_DIR}/scripts/compare_degradation.py \
-  --target <target_path> --simulated <iter_path>
-```
-
-The `content_independent_metrics` section shows which degradation fingerprints match quantitatively. Use it to catch subtle mismatches your eyes might miss. But remember: **when numbers and visual inspection disagree, your eyes win.**
-
-**For each iteration, do a three-way comparison:**
-
-```
-         Target (degraded)          Clean Source              Simulated (current iter)
-         ─────────────              ────────────              ───────────────────────
-         "What degradations         "What does this           "Did applying my
-          do I see?"                 image look like           hypothesis move the
-                                     without any               clean source toward
-                                     degradation?"             the target?"
-```
-
-Ask yourself three questions:
-1. **Direction check**: Did this adjustment move the simulation closer to the target or further away? Compare the current iteration against the PREVIOUS iteration, not just the target.
-2. **Over-correction check**: Did I overshoot? If iteration N was too strong and iteration N+1 is too weak, the answer is between them.
-3. **Side-effect check**: Did adding/removing a degradation introduce new artifacts that the target doesn't have? (e.g., adding noise destroyed cross-channel correlation that the target preserves)
-
-Write each comparison into reflection.json with specific observations. Include the iteration images for later review.
-
-**Detect out-of-domain situations early.** If severity 5 still undershoots the target, or severity 1 still overshoots, you're out of the library's range. Don't keep trying severity adjustments — recognize the limit and apply the out-of-domain strategies (double-application, closest-match documentation) described in Core Principles.
-
-If the simulation is already very close, you can stop. Otherwise, update your hypothesis with specific adjustments — each change should address a specific observed discrepancy, not be a random probe.
-
-### Step 6: Iterate
-
-Repeat steps 4–6. Save each iteration's output so the researcher can trace the evolution. Usually 3–5 iterations are sufficient. Stop when:
-
-- The simulated image is visually very close to the target
-- Further adjustments produce only imperceptible changes
-- You've tried reasonable variants and the remaining differences are likely due to factors outside the x_distortion scope (e.g., content changes, geometric transforms)
-
-### Step 7: Save final results
-
-Once satisfied, organize everything into the output directory using the bundled save script:
-
-```bash
-python ${CLAUDE_SKILL_DIR}/scripts/save_results.py \
-  --output-dir degradation_results/<name> \
-  --target <target_degraded_image> \
-  --clean <clean_source_image> \
-  --simulated <final_simulated_image> \
-  --params <params.json> \
-  --reflection <reflection.json> \
-  --iterations-dir <workspace/iterations>
-```
-
-If you prefer manual organization, the output directory structure should be:
-
-```
-degradation_results/<descriptive_name>/
-├── target.png              # Copy of the target degraded image
-├── clean_source.png        # Copy of the clean source image
-├── simulated.png           # Final simulated result
-├── params.json             # Distortion pipeline parameters
-├── reflection.json         # Full search-and-reflect process log
-├── analysis.md             # Brief report of findings
-└── iterations/             # Intermediate simulation results
-    ├── iter_01.png
-    ├── iter_02.png
-    └── ...
-```
-
-### params.json format
-
-For each distortion in the pipeline, record both the abstract severity (1–5) and the actual physical parameters. Read `references/severity_mappings.md` to look up the actual parameters for each distortion at each severity level.
+## 附录: reflection.json 格式
 
 ```json
 {
-  "target_image": "target.png",
-  "clean_image": "clean_source.png",
-  "pipeline": [
-    {
-      "step": 1,
-      "category": "blur",
-      "function": "blur_gaussian",
-      "severity": 3,
-      "actual_params": {
-        "sigma": 3
-      }
-    },
-    {
-      "step": 2,
-      "category": "noise",
-      "function": "noise_gaussian_RGB",
-      "severity": 2,
-      "actual_params": {
-        "sigma": 0.1
-      }
-    }
-  ],
-  "notes": "Gaussian blur at severity 3 was the dominant degradation. After blur, mild Gaussian RGB noise was needed to match the fine grain in the target."
+  "initial_analysis": {"suspected_degradations": [...], "ruled_out": [...], "uncertainties": [...]},
+  "iterations": [{"round": N, "hypothesis": {"pipeline": [...]}, "comparison": {...}, "adjustment": "..."}],
+  "final_decision": {"pipeline": [...], "verdict": "LIKELY|UNCERTAIN|POOR", "rationale": "..."}
 }
 ```
-
-### reflection.json format
-
-This is the most important artifact — it captures the entire search-and-reflect process, making the reasoning traceable and the skill improvable. Write this file incrementally as you work through each iteration. Do not wait until the end to fill it in — the intermediate thinking is as valuable as the final answer.
-
-```json
-{
-  "initial_analysis": {
-    "suspected_degradations": [
-      {"category": "blur", "confidence": "high", "evidence": "overall softness, no sharp edges, fine details lost"},
-      {"category": "noise", "confidence": "medium", "evidence": "visible grain in shadow regions, possibly Gaussian"}
-    ],
-    "ruled_out": [
-      {"category": "compression", "reason": "no blocking artifacts or ringing visible"},
-      {"category": "pixelate", "reason": "no blocky low-resolution appearance"}
-    ],
-    "uncertainties": [
-      "Cannot determine if blur is Gaussian or Lens type from initial inspection",
-      "Noise might be spatially correlated rather than independent Gaussian"
-    ]
-  },
-  "iterations": [
-    {
-      "round": 1,
-      "hypothesis": {
-        "pipeline": [
-          {"function": "blur_gaussian", "severity": 3}
-        ],
-        "reasoning": "The dominant artifact is overall softness consistent with moderate Gaussian blur. Starting simple to establish the baseline before adding secondary degradations."
-      },
-      "comparison": {
-        "observations": [
-          "Blur profile matches well in the center of the image",
-          "Simulated image lacks the fine noise grain visible in the target's dark areas",
-          "Blur strength is slightly too aggressive — target retains more edge definition"
-        ],
-        "discrepancies": [
-          "Missing noise component",
-          "Blur severity overestimated by ~1 level"
-        ],
-        "similarity_rating": "moderate"
-      },
-      "adjustment": "Reduce blur to severity 2, add Gaussian RGB noise starting at severity 1"
-    },
-    {
-      "round": 2,
-      "hypothesis": {
-        "pipeline": [
-          {"function": "blur_gaussian", "severity": 2},
-          {"function": "noise_gaussian_RGB", "severity": 1}
-        ],
-        "reasoning": "Round 1 showed blur was too strong and noise was missing. Reducing blur and adding mild Gaussian noise."
-      },
-      "comparison": {
-        "observations": [
-          "Blur level now closely matches the target",
-          "Noise grain is present but finer than the target — need higher severity",
-          "Noise pattern looks correct (uniform, no spatial correlation)"
-        ],
-        "discrepancies": [
-          "Noise severity too low"
-        ],
-        "similarity_rating": "good"
-      },
-      "adjustment": "Keep blur at severity 2, increase noise to severity 2"
-    }
-  ],
-  "final_assessment": {
-    "pipeline": [
-      {"function": "blur_gaussian", "severity": 2, "actual_params": {"sigma": 2}},
-      {"function": "noise_gaussian_RGB", "severity": 2, "actual_params": {"sigma": 0.1}}
-    ],
-    "confidence_per_degradation": [
-      {"function": "blur_gaussian", "confidence": "high", "rationale": "Blur profile matches across all regions"},
-      {"function": "noise_gaussian_RGB", "confidence": "medium", "rationale": "Noise type seems right but spatial correlation pattern subtly different"}
-    ],
-    "remaining_discrepancies": [
-      "Slight color cast in target not reproduced — may be from a brightness or saturation shift not yet identified"
-    ],
-    "alternatives_considered": [
-      "blur_lens was considered but ruled out — target blur is uniform across the frame, not radial"
-    ]
-  }
-}
-```
-
-The key fields to populate carefully:
-- **initial_analysis.suspected_degradations**: List every degradation you suspect, with visual evidence. Be specific about what you see.
-- **initial_analysis.ruled_out**: Equally important — what did you look for but not find? This shows thoroughness.
-- **iterations[].comparison.observations**: Be concrete and visual. "Missing noise" is better than "looks different." Include spatial context (shadows, edges, flat regions).
-- **iterations[].adjustment**: Explain WHY you're changing specific parameters, not just what you're changing.
-- **final_assessment.confidence_per_degradation**: Honest self-assessment. Low confidence on a degradation is valuable information for future research.
-
-### analysis.md
-
-Write a brief report covering:
-1. What degradations were found and their likely physical causes
-2. The iteration history — what changed between each attempt and why
-3. Remaining discrepancies, if any, and hypotheses for what might explain them
-4. Confidence assessment for each identified distortion
-
-## Important considerations
-
-### Order sensitivity
-
-The order of degradations in the pipeline changes the result. For example:
-- `blur → noise` produces clean noise grain on a soft image
-- `noise → blur` smears the noise grain, producing a different look
-- `noise → compression` loses fine noise to DCT blocking
-- `compression → noise` adds noise on top of blocking artifacts
-
-When the target shows both blur and noise, try both orders and compare. The one that looks more natural is usually correct — real camera pipelines tend to add noise before any blur (denoising) step, while display/reproduction pipelines may blur before adding noise.
-
-### Severity beyond the 1–5 range
-
-The x_distortion library only supports severity 1–5. If the target appears to have a degradation stronger than severity 5, you can apply the same distortion twice (e.g., `blur_gaussian:5, blur_gaussian:3` for an effective sigma beyond 5). Note this in params.json.
-
-### Images that combine content differences with degradation
-
-When the target degraded image and the clean source image have **different content** (different scenes, resolutions, or crops), you cannot use pixel-level comparison. This is the hardest case and requires strict discipline about which analysis metrics to trust.
-
-#### Content-independent metrics: Trust these for degradation TYPE
-
-These metrics detect structural anomalies that no natural image exhibits, regardless of content. Use them to **identify which degradations are present**:
-
-| Metric | Detects | Trust Reason |
-|--------|---------|--------------|
-| `noise.impulse_total_pct` > 0.5% | Impulse noise | Natural images don't have clusters of 0/255 pixels |
-| `compression.block_boundary_ratio` > 1.1 | JPEG compression | Natural images don't have 8×8 DCT block boundaries |
-| `compression.unique_G` selectively < 256 (R/B full) | JPEG chroma subsampling | G-only reduction = YCrCb JPEG signature |
-| `file_info.bytes_per_pixel` < 1.0 | Heavy compression | Uncompressed images always > 1.0 BPP |
-| `sharpening.overshoot_ratio` > 0.5 | Oversharpen | Natural edges don't have Laplacian overshoot |
-| `multiscale` abrupt spike (>5x jump) | Pixelate | Natural images have smooth multi-scale variance roll-off |
-| `frequency` 8-pixel FFT peaks | JPEG compression | DCT quantization creates periodic frequency peaks |
-
-**Note: `h_v_ratio` is NOT in this list.** Natural images have h_v_ratios from 0.5 to 1.5 due to scene content (horizons, buildings). Motion blur detection in cross-image scenarios requires visual inspection of directional smear, not metric thresholds.
-
-#### Content-dependent metrics: DO NOT trust for degradation TYPE
-
-These metrics measure absolute values that vary naturally with image content. **Never conclude a degradation is present based solely on these metrics.** Use them only for severity calibration when the degradation type is already confirmed by content-independent metrics.
-
-| Metric | Why Unreliable |
-|--------|---------------|
-| `gradient.gradient_magnitude_mean` | Sharp landscape >> soft portrait, regardless of blur |
-| `gradient.laplacian_variance` | Textured image >> smooth image, regardless of blur |
-| `basic_stats.mean` (per channel) | Scene lighting varies naturally |
-| `basic_stats.std` (per channel) | High-contrast scene >> low-contrast scene |
-| `noise.flat_region_variance` | **The most dangerous metric.** Textured images have high "flat region" variance without any noise. Never use this alone to claim Gaussian noise. |
-| `ycrcb.Y_local_std_median` | Same as above — natural texture ≠ noise |
-| `saturation.saturation_mean` | Colorful photo >> grayscale document |
-| `radial.gradient_radial_ratio` | Center-composed image >> edge-composed image |
-| `gradient.directional_h_v_ratio` | Natural images range 0.5–1.5. Only useful for same-image target vs clean comparison |
-| `cross_channel` absolute values | Depends on scene color palette |
-| `frequency.hf_lf_ratio` absolute value | Different images have different frequency distributions |
-
-#### The cross-image decision rule
-
-```
-For each suspected degradation:
-  1. Check content-INDEPENDENT metrics → determine TYPE
-  2. If no content-independent metric supports it → RULE IT OUT
-  3. Only after type is confirmed → use content-dependent metrics for SEVERITY calibration
-  4. Still uncertain? → Simulate and visually compare degradation TEXTURE (not image content)
-```
-
-**Example of correct reasoning:**
-- "h_v_ratio=0.45 → motion blur confirmed (content-independent). Gradient magnitude is 15.5 — can't determine severity from this alone (content-dependent). Let me try severity 2 and visually compare the blur texture."
-- "flat_region_variance=2700 → could be noise OR natural texture. impulse_pct=0.1% → no impulse. block_boundary_ratio=0.64 → no JPEG. Without a content-independent noise metric, I cannot confirm Gaussian noise from numbers alone. Let me visually inspect for grain."
-
-**Example of wrong reasoning (the most common failure):**
-- "flat_region_variance is elevated → Gaussian noise present." ← WRONG. The variance comes from image texture, not degradation.
-
-### Handling uncertainty
-
-Some degradations are inherently ambiguous. High-severity JPEG compression can look similar to quantization. Heavy Gaussian blur can mask other degradations. When uncertain between competing hypotheses, try both and let the visual comparison decide. Document the alternatives you considered in params.json notes.
