@@ -229,12 +229,63 @@ else:
 
 **来源**: exp17 教训 — 16 Agent 平均 CI=8.2/10, 函数正确率 6%. CI 衡量视觉相似性, 不衡量函数正确性.
 
-### 🔴 训练后反思协议：用失败模型诊断盲识别错误
+### 🔴 训练后反思协议：Skill 子 Agent 强制执行 🔴
 
 **来源**: exp17 R2 — 反思平均 +1.06 dB, 但对噪声假设无效 (0009 -1.41, 0014 -2.31).
-核心发现: 确定性退化和噪声必须用不同判据, 且失败模型本身就是最好的诊断工具.
+**来源**: exp27 R1 — 3/7 反思有害 (-1.02, -3.51, -6.96 dB). 根因: 过度依赖 R0 模型残差，而非回归 SKILL.md 信号.
+**来源**: exp28 R1 — 反思未通过 Skill 子 Agent 执行，手动调整参数，违反了隔离和可审计性原则.
 
-**来源**: exp18/exp19 反思泄露 — 反思 Agent 直接读取 `/tmp/expN_p4_mapping.json` 获取 GT。反思必须有比盲识别更严格的约束。
+#### 🔴 反思必须通过 Skill 子 Agent 执行（来源: exp28 审计）
+
+```
+❌ 禁止: 主 Agent 手动修改 predicted_params.json 后直接训练
+❌ 禁止: 主 Agent 批量脚本处理多个挑战的反思
+❌ 禁止: 跳过 PSNR 预验证直接生成 R1 训练管线
+
+✅ 正确: 对每个需反思的挑战，Skill(skill="image-degradation-simulator", args="反思 blind_XXXX...")
+         → Skill 加载 → 子 Agent 执行反思工作流:
+         1. Read SKILL.md 确认当前协议
+         2. 重新运行 run_full_analysis.py 获取完整信号报告
+         3. 信号重释: 找被忽略/误判/边界的信号
+         4. 生成修正假设 (注明信号来源)
+         5. apply_multi.py 模拟 + PSNR 验证 (≤5 候选)
+         6. 保存 R1 predicted_params.json + reflection.json (更新)
+         7. 仅在 PSNR 验证通过后 → 保存 R1 训练 params
+```
+
+**为什么必须用 Skill 子 Agent**:
+1. 反思面临比盲识别更大的 GT 泄露风险（已知 R0 不完美）
+2. 子 Agent 强制遵守隔离规则（禁止读取 GT 文件）
+3. 子 Agent 强制可审计性（每个修正必须注明信号来源）
+4. 主 Agent 手动操作会跳过 PSNR 预验证 → 直接训练 → 浪费 GPU
+5. exp28 教训: 主 Agent 手动反思未做 PSNR 测试, 修正方向未经验证
+
+**反思并发**: 与盲识别相同, 按挑战数分组并行子 Agent
+| 挑战数 | Agent 数 | 说明 |
+|------|:--:|------|
+| 1-4 | 1 | 少量挑战, 1 Agent 顺序处理 |
+| 5-8 | 4 | 中等数量, 4 Agent 各处理 2 个 |
+| 9-16 | 8 | 大量挑战, 8 Agent 各处理 1-2 个 |
+
+#### 🔴 核心原则修正 (exp27 教训)
+
+```
+❌ 旧原则: "失败模型是诊断工具" — 它学会了修什么, 就说明训练管线里有什么是对的
+   → exp27 证明: R0 模型训练于错误退化 → residual = target - pred 被模型错误污染
+   → 从被污染的 residual 诊断 → 修正方向随机 → 3/7 有害
+
+✅ 新原则: R0 模型 = 验证器, 不是诊断器
+   1. R0 GT PSNR < 阈值 → 确认盲识别有误 → 触发 SKILL.md 信号复检
+   2. 修正方向来自原始信号 (Step 1→4), 不是模型 residual
+   3. 信号复检重点:
+      a. 被忽略的信号 (存在但未纳入决策, 如 block_boundary 已检出但被覆盖)
+      b. 被错误归因的信号 (如 mean_shift 归因于 brightness 而非 contrast, 
+         盲点: variance_ratio 未检查)
+      c. 阈值边界的信号 (略低于阈值的也应考虑)
+      d. 遗漏的二阶/高阶统计量 (方差比、偏度、残差-强度相关性)
+   4. R0 模型 residual 仅作为辅助 (如: residual 中明显 8×8 块 → 提醒检查 compression)
+   5. 严禁从 R0 模型 residual 反推"缺少哪种退化" — 解耦不可靠
+```
 
 #### 🔴 反思 Agent 强制隔离规则 (来源: exp18/exp19 泄露审计)
 
@@ -251,36 +302,34 @@ else:
    - expN/results/ 中的 GT 重评估结果
 
 2. 反思只能基于以下数据源:
-   ✅ 失败模型 checkpoint (expN/experiments/...)
+   ✅ 原始目标图像 (expN/challenges/phase4/blind_XXXX/degraded.png)
    ✅ clean 图像 (expN/challenges/phase4/blind_XXXX/clean.png)
    ✅ R0 盲识别结果 (predicted_params.json, alternatives, reflection.json, thinking_process.json)
-   ✅ Skill 工具脚本 (analyze_degradation.py, noise_prior.py, model_diagnosis.py, global_degradation_analyzer.py, apply_multi.py, compare_degradation.py)
+   ✅ Skill 工具脚本 — 主要用于重新运行信号分析:
+      - run_full_analysis.py (重新跑 Step 1→4, 获取完整信号报告)
+      - analyze_degradation.py (单独分析特定退化信号)
+      - noise_prior.py (噪声 σ 估计)
+      - apply_multi.py, compare_degradation.py (PSNR 测试候选)
+   ⚠️ R0 模型 checkpoint — 仅用于 GT PSNR 评估 (判断 R0 是否有误)
+   ❌ 禁止: model_diagnosis.py 对 R0 模型 residual 做退化类型诊断
 
 3. 反思 Prompt 约束:
    🔴 不能说"修正错误预测" —— 暗示了已知 R0 是错误的
-   ✅ 应该说"分析模型行为，基于残差诊断提出改进假设"
+   ✅ 应该说"重新审视信号分析，探索被忽略或误判的信号"
    🔴 不能说"找到正确的退化" —— 暗示了存在已知正确答案
    ✅ 应该说"提出可能更匹配目标图像退化特征的候选管线"
 
 4. 强制可审计性 (reflection.json 必须包含):
-   - 每个修正假设的来源追踪：
-     "残差中检测到 8×8 块效应 → 假设漏检 compression_jpeg"
-     "noise_prior 小波 HH 子带 σ 估计与 noise_impulse 校准表匹配 → 假设噪声类型为 impulse"
-   - 绝不能出现无法解释来源的"完美匹配"修正
+   - 每个修正假设的 SIGNAL 来源追踪 (不是 residual 来源):
+     "variance_ratio=0.72 → 方差显著降低但 mean_shift 微弱 → 假设 contrast_weaken 替代 brightness"
+     "residual_intensity_corr=0.35 → 残差与强度相关 → 假设 gamma 替代 YCrCb noise"
+   - 绝不能出现无法解释信号来源的修正
    - 如果 PSNR 测试发现某个候选 PSNR > 60dB：必须记录测试的函数+severity+PSNR值
 
 5. 反思终止条件:
-   - 修正假设无法在 alternatives 或残差诊断中找到支撑 → 标记 BEYOND_CAPABILITY
-   - 连续 2 轮修正后 PSNR 无改善 → 终止
-   - 已经测试 ≥ 20 个新候选且无显著改善 → 终止（防止变相枚举）
-```
-
-#### 核心原则
-
-```
-1. PSNR 对确定性退化可靠, 对噪声完全不可靠
-2. 失败模型是诊断工具: 它学会了修什么, 就说明训练管线里有什么是对的
-3. 残差分析区分"确定性部分错" vs "噪声部分错"
+   - 所有信号都已重新审视且无新发现 → 标记 BEYOND_CAPABILITY
+   - 连续 2 轮信号重释后 PSNR 无改善 → 终止
+   - 已经测试 ≥ 15 个新候选且无显著改善 → 终止（防止变相枚举）
 ```
 
 #### 触发条件
@@ -302,64 +351,54 @@ else:
   不启动反思:
     - 盲识别 verdict=GOOD/LIKELY + GT PSNR >= 35 (高置信 + 高PSNR, 大概率正确)
     - 所有候选 PSNR < 20 (噪声主导, 无可靠信号)
-    - 已修正 ≥ 3 轮且提升 < 1dB (收益递减)
-    - 退化超出小模型容量 (即使正确识别也难以恢复)
+    - 已修正 ≥ 2 轮且提升 < 1dB (收益递减)
 ```
 
-#### 反思工作流
-
-**单步退化反思**（步数 < 2）:
-```
-Step 1: 加载失败模型 → clean推理 → 残差诊断
-Step 2: 仅以下情况修正:
-        - 残差明确指向某类错误 (8×8→漏JPEG, 高频→noise类型错)
-        - alternatives 中有跨函数族候选
-Step 3: 测试 ≤5 个 alternatives swap, PSNR gap > 3dB → 替换
-Step 4: 全部无改善 → BEYOND_CAPABILITY, 结束
-最多 1 轮, 不发明新候选, 不反复迭代
-```
-
-**双步退化反思**（步数 ≥ 2 — 训练驱动两阶段）:
-
-来源: exp21 — 残差诊断无法解耦双步错误, 需要先消除一个退化再检测另一个。
+#### 反思工作流 (修正版)
 
 ```
-前提: R0 verdict = POOR/UNCERTAIN, R0 步数 ≥ 2
+主 Agent 职责 (仅触发 + 汇总, 不做具体反思):
+  Step 0: GT PSNR 评估 R0 模型 → PSNR < 30? → 触发反思
+  Step 1: 对每个需反思的挑战, 启动 Skill 子 Agent:
+          Skill(skill="image-degradation-simulator", args="反思 exp28...blind_XXXX...")
+  Step 2: 等待所有子 Agent 完成
+  Step 3: 汇总反思结果, 更新 FINAL_REPORT.md
 
-Stage 1: 用最自信的那一步训练 specialist, 消除该退化
-  1a. 从 R0 管线中选择置信度最高的 1 步 (优先级: compression > global > blur > noise)
-      或从逐级剥离检测结果中选择信号最强的退化
-  1b. Train(model_A, 仅这一步退化, EPOCH=2)
-  1c. model_A(target) → pred_A  # specialist 修复了退化A
-  1d. residual_A = target - pred_A  # 消除退化A后的残差
-
-Stage 2: 在 residual_A 上重跑检测, 暴露第二步
-  2a. 将 pred_A 视为"部分修复的目标", run_full_analysis(pred_A, clean)
-      或直接在 residual_A 上分析:
-      - 8×8 块效应 → 漏了 compression_jpeg
-      - 高频随机 → 漏了 noise
-      - 边缘残留模糊 → blur 类型/severity 不对
-      - 全局色偏/亮度 → 漏了 global
-  2b. 选出候选 B → Train(model_AB, A+B, EPOCH=2)
-  2c. GT 重评估 → PSNR 对比 R0:
-      提升 > 2dB → 修正成功 ✅
-      提升 < 1dB → 换 B 的候选, 最多 3 次尝试
-      全部失败 → BEYOND_CAPABILITY
-
-Stage 3 (可选): 如果 B 也正确识别了, 可以反向修正 A
-  3a. 类似 Stage 2, 但用 model_AB 消除 B, 在 residual_B 上重检 A
-  3b. 如果 A 修正 → 最终管线 ← 交叉验证
-
-特殊情况: R0 只识别了 1 步 (漏检)
-  → 那 1 步就是 A, Stage 1 照常
-  → Stage 2 在 residual_A 上找缺失的 B
+子 Agent 职责 (由 Skill 加载, 执行完整反思工作流):
+  Step A: Read SKILL.md 确认当前协议
+  Step B: 重新运行 run_full_analysis.py → 获取完整信号报告
+          ⚠️ 重点关注: variance_ratio, residual_intensity_corr, clipped_fraction
+  Step C: 信号重释 — 找出所有被忽略/误判/边界的信号
+     a. 检查每个 Step 的 verdict vs signals: 信号指向 A 但 verdict 选了 B?
+        典型: block_boundary>1.0 但 verdict=NO_COMPRESSION
+        典型: variance_ratio≠1.0 但 verdict=BRIGHTNESS
+        典型: gamma_suspect=True 但 verdict=YCrCb
+     b. 检查阈值边界: 信号接近但未达阈值 → 降低阈值重检
+     c. 检查遗漏统计量: 只用了一阶? 漏了方差/偏度/残差-强度相关?
+  Step D: 形成新假设 (基于信号, 非 residual)
+     每个假设必须注明信号来源:
+     ✅ "variance_ratio=0.72 + mean_shift 微弱 → contrast_weaken, 不是 brightness"
+     ❌ "R0 模型 residual 显示高频噪声 → 换 noise type" (不可审计)
+  Step E: 🔴 PSNR 预验证 (强制, 不可跳过)
+     apply_multi.py 模拟每个候选 → PSNR vs target
+     仅当 PSNR 提升 > 2dB 或 PSNR > 35dB → 进入 Step F
+     全部无改善 → BEYOND_CAPABILITY, 不生成 R1 训练 params
+  Step F: 保存 R1 预测 + 训练 params
+     - exp28/challenges/phase4/blind_XXXX/predicted_params_R1.json
+     - exp28/degradation/blind_XXXX_params_R1.json
+     - 更新 exp28/challenges/phase4/blind_XXXX/reflection.json (追加 R1 记录)
+  Step G (可选): 如果信号指向漏检了一步退化
+     用已识别的高置信步骤训练 specialist → 消除 → residual 重检
+     ⚠️ 仅当已识别步骤信号置信度高; deterministic > random
 ```
 
 **关键约束**:
-- Stage 1 选择的 A 必须是逐级剥离或信号检测给出高置信度的退化
-- 如果 R0 所有步骤置信度都低 → 跳过本流程, BEYOND_CAPABILITY
-- 每阶段额外训练最多触发 2 次 (Stage 1 + Stage 2)
-- 总 PSNR 测试 ≤ 10 次/阶段
+- 🔴 反思必须由 Skill 子 Agent 执行, 禁止主 Agent 直接修改预测
+- 🔴 每个修正假设必须通过 PSNR 预验证才能进入训练
+- 反思主路径 = 信号重释, 不做模型 residual 诊断
+- 如果所有信号已穷尽且 PSNR 无改善 → BEYOND_CAPABILITY
+- 最多 2 轮信号重释
+- 总 PSNR 测试 ≤ 15 次/轮
 
 #### 判据分离规则
 
@@ -368,16 +407,8 @@ Stage 3 (可选): 如果 B 也正确识别了, 可以反向修正 A
 | blur/compression/contrast | PSNR (>40dB=正确) | — | 确定性, PSNR可靠 |
 | noise 类型 | 统计匹配 (6步检查) | PSNR | 随机seed, PSNR无意义 |
 | noise 严重度 | 残差 std 校准表 | PSNR | 同上 |
-
-#### 不启动反思的情况
-
-- 所有候选 PSNR < 20dB (噪声主导, 无可靠信号)
-- PSNR gap < 3dB 且无统计差异 (参数简并, 无法区分)
-- 退化超出小模型容量 (即使正确识别也难以恢复)
-- verdict=GOOD/LIKELY + GT重评估 PSNR >= 35 (高置信 + 高PSNR)
-
-**来源**: exp17 R2 — 0001(确定性修正 +0.56), 0016(去噪修正 +7.41) 成功;
-0009/0014(噪声假设用PSNR调整) 退步 -1.41/-2.31.
+| **gamma vs YCrCb** | **残差-强度相关性** (同图模式) | cross_ch_corr alone | gamma 确定性变换, 残差随强度变化 |
+| **contrast vs brightness** | **variance_ratio + mean_shift** (两者都查) | mean_shift alone | contrast 变方差不变均值 |
 
 ## 环境安装
 
@@ -581,6 +612,65 @@ expN/
 
 根目录仅保留核心文件：`train.py`、`prepare.py`、`blind_challenge.py`、`evaluate_blind_challenge.py`、`setup_challenge.sh`。
 
+### 🔴 实验总结报告规范 (summarize/)
+
+每个实验完成后，`expN/summarize/` 下必须包含以下内容，缺一不可：
+
+#### 1. R0 盲识别报告 (`blindID_R0.md`)
+
+```markdown
+- 盲识别方式: Agent 分配 (多少个 Agent, 各处理几个挑战)
+- 工作流: 4 步标准流程 (run_full_analysis -> compression -> blur -> peeled_noise_check -> 保存)
+- 验证模式: sigma<2 PSNR / sigma>2 信号验证
+- 逐挑战 R0 预测 vs GT 对比表 (函数+严重度+顺序)
+- 准确度统计: 完全匹配率, 类别匹配率, 单/双退化分别统计
+- 主要失败模式分类 (漏检/过预测/子类型混淆/假阳性)
+- 每个 Agent 的思考过程摘要 (来自 thinking_process.json)
+```
+
+#### 2. R1 反思报告 (`reflection_R1.md`)
+
+```markdown
+- 反思触发条件: 哪些挑战触发, 哪些跳过, 原因
+- 反思方式: Skill 子 Agent 分配, 信号重释工作流
+- 逐挑战 R0->R1 修正对比:
+  - R0 预测 vs R1 修正
+  - 修正的信号来源 (variance_ratio, block_boundary, gamma_suspect 等)
+  - 仿真 PSNR 变化 (PSNR 预验证结果)
+- 反思效果统计: 有效/有害数量, 平均 Delta PSNR
+- 成功案例分析 (信号重释如何找到被忽略/误判的信号)
+- 失败案例分析 (为什么修正方向错误)
+```
+
+#### 3. 训练策略与资源报告 (`training_config.md`)
+
+```markdown
+- 逐挑战训练配置表:
+  | Challenge | 策略 (Direct/Ft) | 架构 (Swin/DualBranch/ColorPre) | 参数量 | 训练退化 | EPOCH | GPU时间 |
+- 模型参数统计: Swin base 0.455M, +DualBranch 0.458M, +ColorPre 0.455M
+- GPU 资源: 总 GPU 数, 每 GPU 任务分配, 墙钟时间
+- 训练超参: LR, batch_size, loss_fn, amp_dtype
+- 对比基线: M_blind (0.455M pretrained), DFPIR zero-shot (31.1M), DFPIR-ft (31.1M, 1.5 GPU-h)
+```
+
+#### 4. 最终性能对比报告 (`final_performance.md`)
+
+```markdown
+- 逐挑战四组对比表:
+  | Challenge | M_blind | R0_Spec | R1_Spec | DFPIR zero-shot | DFPIR-ft | Best | Delta vs DFPIR | 胜者 |
+- 按退化类型分层: 局部退化 vs 全局退化 vs 混合退化
+- Specialist vs DFPIR 胜率统计
+- 训练效率对比: GPU-h per dB (相同预算下谁更高效)
+- 关键结论: 盲识别质量 vs 模型规模 vs 训练预算的权衡
+```
+
+#### 注意事项
+
+- 所有 summarize 文件在写入后立即 chmod 600 (含 GT 对比数据)
+- thinking_process.md 从 reflection.json 的 iterations 和 thinking_process.json 提取
+- 性能对比必须包含 Delta vs DFPIR 列 (Specialist - DFPIR, 正值=Specialist 更优)
+- 架构选择理由需追溯到 finetune_strategy.md 的决策规则
+
 ## Phase 5 训练启动 ⚠️ 实操
 
 ### 训练前必读
@@ -688,35 +778,131 @@ watch -n 30 'nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=c
 
 ⚠️ **Phase 5 Specialist 训练的 VAL_PARAMS 使用盲识别预测（不泄露 GT），但评估对比时必须以 GT 退化为准。**
 
+🔴 **必须 8 卡并行**：16 个挑战评估不能单卡串行（~30 分钟），必须按排队机制分配到 8 张 GPU，每卡 2 个挑战并行评估（~5 分钟）。
+
+#### 1. 生成 per-GPU 并行评估脚本
+
 ```bash
-# === 重评估所有 specialist checkpoint（用 GT 退化） ===
+# 生成 8 GPU 并行评估脚本（每 GPU 处理 total/8 个挑战）
+cat > expN/scripts/reeval_parallel.sh << 'SCRIPT'
+#!/bin/bash
+EXP="expN"
+cd /data/zyli/projects/autoresearch
+GPU=$1
 
-# 1. 创建 GT 退化 params（从 mapping 文件提取，仅用于 VAL）
-python3 -c "
-import json, os
-m = json.load(open('/tmp/expN_p4_mapping.json'))
-os.makedirs('expN/degradation_gt', exist_ok=True)
-for bid, info in m.items():
-    json.dump({'pipeline': info['pipeline']}, open(f'expN/degradation_gt/{bid}_params.json', 'w'))
-"
+export CUDA_VISIBLE_DEVICES=$GPU
 
-# 2. 评估脚本: expN/scripts/reeval_with_gt.py
-#   - 遍历所有 checkpoint（含 _v2 等变体）
-#   - 从 EXP_META 日志提取模型架构（attention_type, use_color_pre 等）
-#   - 用 GT params 构建 ValDataset，调用 evaluate_all()
-#   - 输出: expN/results/reeval_gt.json（每个 checkpoint 的 PSNR_RGB/Y + SSIM）
-#   - 验证集: Set5, Set14, B100, Urban100, Manga109, DIV2K_valid_HR
+.venv/bin/python3 << PYEOF
+import json, os, sys, glob, torch
+sys.path.insert(0, '.')
+from train import evaluate_all, ValDataset, RestoreNet
 
-# 3. 训练完成后立即执行 GT 重评估 (不等待 DFPIR)
-echo "CUDA_VISIBLE_DEVICES=0 .venv/bin/python3 expN/scripts/reeval_with_gt.py > expN/logs/reeval_gt.log 2>&1|REEVAL_GT" >> expN/scripts/reeval_tasks.txt
-# GT 重评估独立运行，不依赖 DFPIR 完成。DFPIR 在所有流程结束后单独执行。
+EXP = 'expN'
+MAPPING = f'.gt_mappings/{EXP}_mapping.json'
+gt_map = json.load(open(MAPPING))
+device = torch.device('cuda:0')
+amp = torch.amp.autocast('cuda', dtype=torch.bfloat16)
+
+D = ['datasets/Set5/GTmod4','datasets/Set14/GTmod4','datasets/B100/GTmod4',
+     'datasets/Urban100/GTmod4','datasets/Manga109/GTmod4','datasets/DIV2K/DIV2K_valid_HR']
+
+all_bids = sorted(gt_map.keys())
+gpu_id = $GPU
+my_bids = [all_bids[i] for i in range(len(all_bids)) if i % 8 == gpu_id]
+
+results = {}
+for bid in my_bids:
+    # Find checkpoint (supports _v2, _R1 suffixes)
+    ckpt_dir = f'{EXP}/experiments/{EXP}_v1_{bid}/checkpoints'
+    if not os.path.isdir(ckpt_dir):
+        # Try R1 or other variants
+        for suffix in ['_R1', '_v2', '_v3', '']:
+            alt = f'{EXP}/experiments/{EXP}{suffix}_{bid}/checkpoints'
+            if os.path.isdir(alt): ckpt_dir = alt; break
+    pts = sorted(glob.glob(f'{ckpt_dir}/*.pt'))
+    if not pts:
+        print(f'{bid}: NO CHECKPOINT')
+        continue
+    
+    # Extract architecture from EXP_META in training log
+    logf = f'{EXP}/logs/{EXP}_v1_{bid}.log'
+    arch = {'attention_type': 'swin', 'window_size': 8, 'dual_branch': 0, 'color_pre': 0}
+    if os.path.exists(logf):
+        with open(logf, errors='ignore') as f:
+            for line in f:
+                if 'EXP_META:' in line:
+                    try:
+                        mo = json.loads(line.split('EXP_META: ')[1].split(' ===')[0])['model']
+                        arch = {'attention_type': mo.get('attention_type','swin'),
+                                'window_size': mo.get('window_size',8),
+                                'dual_branch': int(bool(mo.get('dual_branch',0))),
+                                'color_pre': int(bool(mo.get('color_pre',0)))}
+                    except: pass
+                    break
+    
+    model = RestoreNet(in_ch=3, embed_dim=64,
+                       attention_type=arch['attention_type'],
+                       window_size=arch['window_size'],
+                       use_dual_branch=arch['dual_branch'],
+                       use_color_pre=arch['color_pre']).to(device)
+    ck = torch.load(pts[-1], map_location=device, weights_only=True)
+    model.load_state_dict(ck['model'])
+    model.eval()
+    
+    tmp_path = f'/tmp/{EXP}_gt_{bid}_gpu{gpu_id}.json'
+    json.dump({'pipeline': gt_map[bid]['pipeline']}, open(tmp_path, 'w'))
+    vs = [(ds.split('/')[-2], ValDataset([ds], count=0, params_path=tmp_path))
+          for ds in D if os.path.isdir(ds)]
+    _, ov = evaluate_all(model, vs, device, amp)
+    os.remove(tmp_path)
+    
+    results[bid] = {'psnr_rgb': round(ov['psnr_rgb'],2), 'psnr_y': round(ov.get('psnr_y',0),2)}
+    print(f'[{gpu_id}] {bid}: GT PSNR={ov["psnr_rgb"]:.2f} dB')
+
+json.dump(results, open(f'{EXP}/results/gt_reeval_gpu{gpu_id}.json', 'w'), indent=2)
+PYEOF
+SCRIPT
+chmod +x expN/scripts/reeval_parallel.sh
 ```
 
-**评估脚本关键参数**：
-- 模型架构：从训练日志 `EXP_META` 提取 `model.attention_type`, `model.color_pre`, `model.pcp` 等
-- Checkpoint：取 `experiments/expN_{bid}{suffix}/checkpoints/` 下 step 最大的 .pt 文件
-- 评估退化：`/tmp/expN_p4_mapping.json` 中的 GT pipeline（仅用于 VAL，不用于训练）
-- 验证集：与 train.py 一致的 6 个标准 benchmark
+#### 2. 并行启动
+
+```bash
+# 8 GPU 并行评估
+for gpu in 0 1 2 3 4 5 6 7; do
+  nohup bash expN/scripts/reeval_parallel.sh $gpu > expN/logs/reeval_gpu${gpu}.log 2>&1 &
+done
+```
+
+#### 3. 合并结果 + 对比分析
+
+```bash
+# 全部 GPU 完成后合并
+.venv/bin/python3 << 'PYEOF'
+import json, glob
+EXP = 'expN'
+merged = {}
+for f in sorted(glob.glob(f'{EXP}/results/gt_reeval_gpu*.json')):
+    merged.update(json.load(open(f)))
+
+json.dump(merged, open(f'{EXP}/results/gt_reeval.json', 'w'), indent=2)
+
+# 对比 M_blind 基线
+m_blind = json.load(open(f'{EXP}/results/m_blind_baseline.json'))
+print(f"{'Challenge':<14} {'M_blind':>8} {'Specialist':>10} {'Delta':>8}")
+for bid in sorted(merged.keys()):
+    mb = m_blind[bid]['psnr_rgb']
+    ms = merged[bid]['psnr_rgb']
+    print(f'{bid:<14} {mb:>8.2f} {ms:>10.2f} {ms-mb:>+8.2f}')
+PYEOF
+```
+
+**关键参数**：
+- 验证集：Set5, Set14, B100, Urban100, Manga109, DIV2K_valid_HR（6 个标准 benchmark）
+- 模型架构：从训练日志 `EXP_META` 提取（`model.attention_type`, `model.color_pre`, `model.dual_branch`）
+- Checkpoint：取每个实验目录下 step 最大的 .pt 文件
+- 评估退化：`.gt_mappings/expN_mapping.json` 中的 GT pipeline（仅用于 VAL，不用于训练）
+- **并行策略**：8 GPU 各评估 total/8 个挑战，每 GPU ~5 分钟（vs 单卡 ~30 分钟）
 
 ## The experiment loop
 

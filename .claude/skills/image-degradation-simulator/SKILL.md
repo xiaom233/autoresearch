@@ -9,21 +9,19 @@ Analyze degraded images, identify present distortion types and their severity.
 
 **同图模式优先**：实验生成挑战时使用 `--same-image` 标志。
 
-## 🔴 盲识别标准工具集（仅 4 个脚本）
+## 🔴 盲识别标准工具集（仅 3 个脚本）
 
-Agent 只使用以下 4 个脚本，禁止使用其他分析脚本：
+Agent 只使用以下 3 个脚本，禁止使用其他分析脚本：
 
 | # | 脚本 | 用途 | 频率 |
 |---|------|------|:--:|
 | 1 | `run_full_analysis.py --target X --clean C --output O` | 信号报告（整合 noise_prior + blur_kernel + global + compression） | 1次/挑战 |
-| 2 | `apply_multi.py --input C --distortions "fn:sev,..." --output O` | 施加退化管线 | 每个候选 |
-| 3 | `compare_degradation.py --target X --simulated S` | PSNR/CI 对比（**仅 σ<2 时使用**） | 每个候选 |
-| 4 | `peeled_noise_check.py --target X --clean C --pipeline "fn:sev,..."` | 剥离确定性退化后的 §B 自动诊断 | 1次/挑战 |
-| **5** | **`verify_signals.py --target X --simulated S --clean C --pipeline "..."`** | **信号级验证（σ>2 时替代 PSNR）** | **每个候选** |
+| 2 | `peeled_noise_check.py --target X --clean C --pipeline "fn:sev,..."` | 剥离确定性退化后的 §B 自动诊断 | 1次/挑战 |
+| **3** | **`test_candidate.py --target X --clean C --pipeline "..." --thinking "..." --reflection R`** | **施加退化 + PSNR/信号验证 + 自动更新 reflection.json** | **每个候选** |
 
-**禁止使用**: noise_prior.py (被 run_full_analysis 内部调用), analyze_degradation.py (旧版), global_degradation_analyzer.py (旧版), model_diagnosis.py (反思用), save_results.py (手动保存JSON即可)
+**禁止使用**: noise_prior.py (被 run_full_analysis 内部调用), analyze_degradation.py (旧版), global_degradation_analyzer.py (旧版), model_diagnosis.py (反思用), apply_multi.py + compare_degradation.py (已被 test_candidate.py 替代)
 
-### 标准工作流（4 步，~10 PSNR）
+### 标准工作流（3 步，~10 次 test_candidate.py）
 
 ```
 Step 0: run_full_analysis.py → full_analysis.json
@@ -31,27 +29,31 @@ Step 0: run_full_analysis.py → full_analysis.json
         → step3: blur_subtype, residual_anisotropy (FFT), pca_ratio, glass_score
         → step2: noise_prior_sigma
         → step4: variance_ratio, mean_shift (global)
+        → 手动写入 reflection.json: initial_analysis (mode, sigma, suspected/ruled_out)
 
 Step 1: Compression (IF block_boundary>1.1)
-        apply_multi.py JPEG 1-5 → PSNR 选最优 → pipeline_comp
+        test_candidate.py JPEG 1-5 → PSNR 选最优 → pipeline_comp
 
 Step 2: Blur — 🔴 决策树, 不盲目 PSNR
         IF residual_anisotropy > 1.7 → motion (94% recall, 0% FP, 384-case校准)
-           → PSNR 调 severity (1-2次)
+           → test_candidate.py 调 severity (1-2次)
         ELIF glass_score > 0.25 + sigma < 3 → glass
-           → PSNR 调 severity (1-2次)
+           → test_candidate.py 调 severity (1-2次)
         ELSE → gaussian (lens 为 alternative, MTF已知不可区分)
-           → PSNR 调 severity (1-2次)
+           → test_candidate.py 调 severity (1-2次)
 
 Step 3: peeled_noise_check.py --pipeline "jpeg:X,blur:Y"
         → 🏆 自动噪声诊断
-        → PSNR 验证 (1次)
+        → test_candidate.py 验证 (1次)
         → IF sigma < 2 → NO_NOISE
 
-Step 4: 保存 predicted_params.json + reflection.json + thinking_process.json
+Step 4: 手动写入 final_decision → 保存 predicted_params.json
 ```
 
-**预算: 5(JPEG) + 2(blur) + 1(noise) + 2(顺序) = ≤10 PSNR测试 (σ<2 时)**
+test_candidate.py 自动写入: iterations, psnr_ranking, decision
+Agent 手动写入: initial_analysis, noise_6step_check, final_decision
+
+**预算: 5(JPEG) + 2(blur) + 1(noise) + 2(顺序) = ≤10 次 test_candidate.py (σ<2 时)**
 
 ### 🔴 验证模式自动切换
 
@@ -577,10 +579,41 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 
 ## 附录: reflection.json 格式
 
+Agent 只需手动写入 3 个字段，其余由 `test_candidate.py` 自动维护。
+
+### Agent 手动写入
+
 ```json
 {
-  "initial_analysis": {"suspected_degradations": [...], "ruled_out": [...], "uncertainties": [...]},
-  "iterations": [{"round": N, "hypothesis": {"pipeline": [...]}, "comparison": {...}, "adjustment": "..."}],
+  "initial_analysis": {
+    "run_full_analysis_summary": {"compression": "...", "blur": "...", "noise": "...", "global": "..."},
+    "mode": "PSNR|SIGNAL (sigma=X.X)"
+  },
+  "noise_6step_check": {"extreme_pct": 0.12, "vm_slope": 0.003, "var_slope": 0.85,
+    "spatial_corr": 0.08, "rgb_ratio": 1.05, "cross_ch_corr": 0.12, "diagnosis": "..."},
   "final_decision": {"pipeline": [...], "verdict": "LIKELY|UNCERTAIN|POOR", "rationale": "..."}
 }
 ```
+
+### test_candidate.py 自动维护
+
+```
+iterations[]: {hypothesis(pipeline + thinking), test_result(PSNR/CI或MATCH/PARTIAL等), decision}
+psnr_ranking[]: 按 PSNR 降序排列
+```
+
+**强制**: noise_6step_check 必须含 6 项数值，不能只写结论。initial_analysis.mode 必须注明 sigma 值。
+
+### 强制字段规则
+
+| 字段 | 何时必须 | 内容要求 |
+|------|------|------|
+| `psnr_ranking` | 所有挑战 | **全量排名**，含 PSNR<30 的也要记录（test_candidate.py 自动维护） |
+| `noise_6step_check` | 含 noise 的挑战 | **6 项数值完整记录**，不能只写结论 |
+| `iterations[].hypothesis.thinking` | 所有 | 每个假设必须注明信号来源和推理过程 |
+| `iterations[].test_result.psnr_rgb` | PSNR 模式 | 每次测试的精确 PSNR 值（test_candidate.py 自动计算） |
+| `iterations[].test_result.matched_signals` | SIGNAL 模式 | 列出匹配/不匹配的具体信号名 |
+| `final_decision.alternatives` | PSNR>=30 且 gap<10dB | 跨族备份候选 |
+| `reflection_R1` | R1 反思触发时 | 信号重释过程 + 修正来源追踪 |
+
+**🔴 exp35 审计教训**: reflection.json 不完整导致无法追溯盲识别决策。多个挑战 PSNR 缺失、6步检查数值缺失、假设缺乏信号来源。test_candidate.py + 强制字段规则确保后续实验可完整追溯每个决策链：**信号 → 假设 → PSNR → 判决**。

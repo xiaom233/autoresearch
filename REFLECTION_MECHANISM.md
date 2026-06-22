@@ -1,11 +1,13 @@
 # Reflection Mechanism — 训练策略反思修正
 
-> 来源: exp11 (~1174组 误识别分析) + exp12 (56退化 多轮修正) + exp13 (24退化 盲识别全流程)
+> 来源: exp11 (~1174组 误识别分析) + exp12 (56退化 多轮修正) + exp13 (24退化 盲识别全流程) + exp27 (16双退化 R1) + exp28 (R1 审计)
 > 核心洞察: 盲识别质量 > 训练策略调整 > LR 微调
+> **exp27 修正**: R0 模型 = 验证器, 不是诊断器。反思主路径 = SKILL.md 信号重释。
+> **exp28 修正**: 🔴 反思必须通过 Skill 子 Agent 执行。禁止主 Agent 手动修改预测或批量脚本处理。
 
 ---
 
-## 零、🔴 反思 Agent 强制隔离规则 (来源: exp18/exp19 泄露审计)
+## 零、🔴 反思 Agent 强制隔离规则 (来源: exp18/exp19 泄露审计, exp27 修正)
 
 ```
 反思 Agent 面临比盲识别 Agent 更大的 GT 泄露风险。
@@ -20,21 +22,56 @@
   ❌ expN/results/ 中的 GT 重评估或 DFPIR 结果
 
 反思只能基于以下数据源:
-  ✅ 失败模型 checkpoint
+  ✅ 原始 target 图像 (degraded.png)
   ✅ clean 图像
   ✅ R0 盲识别文件 (predicted_params.json, alternatives, reflection.json, thinking_process.json)
-  ✅ Skill 工具脚本
+  ✅ Skill 工具脚本 — 重点是重新运行 run_full_analysis.py 获取完整信号报告
+  ⚠️ R0 模型 checkpoint — 仅用于 GT PSNR 评估 (判断 R0 是否有误)
+  ❌ 禁止: model_diagnosis.py 对 R0 模型 residual 做退化类型诊断
+
+🔴 反思执行方式 (exp28 审计):
+  反思必须通过 Skill image-degradation-simulator 启动子 Agent 执行。
+  禁止主 Agent 直接修改 predicted_params.json 或批量脚本处理多个挑战。
+  每个需反思的挑战单独启动一个子 Agent:
+    Skill(skill="image-degradation-simulator", args="反思 blind_XXXX...")
+  子 Agent 必须:
+    1. 重新运行 run_full_analysis.py
+    2. 信号重释 → 生成修正假设 → apply_multi.py PSNR 预验证
+    3. 仅 PSNR 验证通过的候选 → 保存 R1 params 供训练
+  原因: 
+    - 隔离 GT (子 Agent 无法访问 GT 文件)
+    - 强制可审计性 (每个修正注明信号来源)
+    - PSNR 预验证 (避免无效训练浪费 GPU, exp28 教训)
 
 反思 Prompt 措辞约束:
   🔴 禁止: "修正错误预测" "找到正确的退化" "GT 显示" "正确答案是"
-  ✅ 正确: "分析模型行为" "基于残差诊断提出改进假设" "PSNR 测试发现候选X更匹配"
+  ✅ 正确: "重新审视信号分析" "基于信号重释提出改进假设" "PSNR 测试发现候选X更匹配"
+
+🔴 核心原则修正 (exp27 教训):
+  ❌ 旧: "失败模型是诊断工具" — 从 R0 模型 residual 推断缺失退化
+     → exp27: 3/7 R1 有害 (-1.02, -3.51, -6.96 dB)
+     → 原因: R0 模型训练于错误退化 → residual 被污染 → 修正方向随机
+  
+  ✅ 新: "R0 模型 = 验证器, 不是诊断器"
+     1. R0 GT PSNR < 阈值 → 确认盲识别有误 → 触发信号重释
+     2. 修正方向来自 SKILL.md 原始信号 (Step 1→4), 不是模型 residual
+     3. 信号重释重点:
+        a. 被忽略的信号 (存在但未纳入决策)
+        b. 被错误归因的信号 (signal→function 映射错误)
+        c. 遗漏的二阶/高阶统计量 (variance_ratio, residual_intensity_corr)
+     4. R0 模型 residual 仅作辅助参考 (如: residual 有 8×8 块 → 提醒检查 compression)
+     5. 严禁从 R0 residual 反推"缺少哪种退化" — 耦合不可解耦
 
 强制可审计性:
-  - reflection.json 中每个修正假设必须注明来源
-  - 来源必须是以下之一: [residual_diagnosis] [alternatives] [PSNR_test] [statistical_check]
-  - 绝不能出现无法解释来源的修正
-  - 如果 PSNR 测试发现 > 60dB 的候选: 记录具体函数+severity+PSNR值
-  - 连续 2 轮无改善 → BEYOND_CAPABILITY，终止反思
+  - reflection.json 中每个修正假设必须注明 SIGNAL 来源 (不是 residual 来源)
+  - 来源必须是以下之一: [signal_reanalysis] [alternatives] [PSNR_test] [statistical_check]
+  - 示例:
+    ✅ "variance_ratio=0.72 → 方差显著降低但 mean_shift 微弱 → 假设 contrast_weaken"
+    ✅ "residual_intensity_corr=0.35 → 残差与强度相关 → 假设 gamma 替代 YCrCb noise"
+    ❌ "R0 模型 residual 显示高频噪声" (不可审计, 无法追溯信号来源)
+  - 绝不能出现无法解释信号来源的修正
+  - PSNR 测试发现 > 60dB 的候选: 记录具体函数+severity+PSNR值
+  - 连续 2 轮信号重释无改善 → BEYOND_CAPABILITY, 终止反思
 ```
 
 ---
@@ -75,7 +112,7 @@
 |------|:--:|------|
 | **gaussian ↔ lens** (sev≥3) | 1-4 dB | 几乎可互换。lens 模型在 gaussian 目标上有时甚至更好 |
 | **gaussian/lens → glass** | 2-7 dB | 场景依赖。sev=3 时较接近，sev=1 时差距大 |
-| **gaussian/lens → zoom** | 1-5 dB | zoom 专家反而表现更差！其他 blur 模型在 zoom 上更好 |
+| **gaussian/lens → zoom** | — | zoom 暂时关闭 (Wiener核42%无法可靠区分) |
 | **glass → gaussian/lens** (sev=1) | 5-8 dB | 低严重度时不可互换 |
 | **poisson ↔ speckle** | 1-3 dB | 相对安全 |
 | **gaussian_RGB ↔ YCrCb** | 1-5 dB | 可测试，但非优先 |
@@ -93,7 +130,7 @@
 
 **优化方向**：PSNR 单独不够，需要结合模型残差分析和 MTF 频域信号：
 1. **模型残差**：R0 specialist 对 clean 做推理 → 模型尝试"修复"不存在的 blur → residual 特征揭示模型在找什么类型的 blur
-2. **MTF 频域信号**：lens 有 Bessel 零点、zoom 有空间梯度、glass 有 MTF 粗糙度——这些信号不受 PSNR 影响
+2. **MTF 频域信号**：lens 有 Bessel 零点、glass 有 MTF 粗糙度——这些信号不受 PSNR 影响 (zoom 暂时关闭)
 3. **跨图迁移知识**：gaussian↔lens 模型迁移 gap 仅 1-4dB ——如果 R0 选了 gaussian，换成 lens 的风险很低
 
 ### Noise 反思 — PSNR 无效，但统计检查 + 模型残差有效
@@ -105,76 +142,98 @@
 2. **模型残差的双向推理**：R0 模型对 clean 推理 → 如果模型在 clean 上"制造"了类似 target 的噪声模式 → R0 的 noise 预测可能是对的。如果 residual 是结构化的 → noise 类型错了
 3. **噪声 severity 查表**：sigma 值与 severity 有确定对应关系，不需要 PSNR 搜索
 
-### 初次复原残差分析 — 最强反思信号
+### 🔴 反思主路径: 信号重释 (exp27 修正)
 
-R0 训练完成后，模型在预测退化上训练了 2 epoch。用这个模型对 target 做推理：
+**不应从 R0 模型 residual 反推缺失退化。应从原始 SKILL.md 信号中找被忽略/误判的信号。**
+
+```
+Step 1: 重新运行 run_full_analysis.py → 获取完整信号报告
+        ⚠️ 关注 NEW 信号: variance_ratio, laplacian_energy_ratio, residual_intensity_corr
+
+Step 2: 信号重释 — 找出所有被忽略/误判/边界的信号
+   a. 检查每个 Step 的 verdict vs signals: 信号指向 A 但 verdict 选了 B?
+      例: block_boundary>1.0 但 verdict=NO_COMPRESSION (被其他信号覆盖)
+      例: variance_ratio≠1.0 但 verdict=BRIGHTNESS (未区分 contrast)
+      例: gamma_suspect=True 但 verdict=YCrCb (gamma FP 未处理)
+   b. 检查阈值边界: 信号接近但未达阈值 → 降低阈值重检
+   c. 检查遗漏统计量: 只看了均值? 方差、偏度、残差-强度相关性?
+
+Step 3: 形成新假设 (基于信号, 非 residual)
+   每个假设必须注明信号来源
+
+Step 4: PSNR 测试 ≤ 5 个新候选
+
+Step 5 (可选): 如果信号指向漏检了一步退化
+   用修复较好的一步训练 specialist → 消除该退化 → 重跑 run_full_analysis
+   ⚠️ 仅当已识别步骤置信度高时使用; deterministic > random
+```
+
+### 模型残差 — 辅助参考 (降级, 不可做主路径)
+
+⚠️ R0 模型训练于错误退化 → residual = target - pred 被模型错误污染。
+仅作辅助提醒 (如 residual 中明显 8×8 → 提醒检查 compression)，不做退化类型诊断。
 
 ```
 model(target) → pred  # 模型尝试修复 target
-residual = target - pred  # 模型没能修复的部分
+residual = target - pred  # 仅作辅助, 不可做主诊断依据
 
-residual 特征 → 漏检/误判信号:
-  - 8×8 block boundary > 1.2    → 漏了 compression_jpeg
-  - DCT zero_ratio > 0.6        → 漏了 compression
-  - sigma > 5 + spatial_corr低  → 漏了 noise 或 noise 类型/severity 错
-  - spatial_corr > 0.3 + gm低   → 漏了 blur 或 blur 子类型错
-  - mean_shift > 5              → 漏了 brightness
-  - percentile spread异常       → 漏了 contrast
-  - 高频 ringing               → 可能误判了 oversharpen
+residual 的有限用途 (exp27 修正):
+  - 8×8 block boundary 明显 → 提醒: Step1 信号是否被忽略了?
+  - 高频噪声明显 → 提醒: Step2 noise_prior sigma 被低估了吗?
+  - 全局色偏明显 → 提醒: Step4 mean_shift 信号是否正确归因?
+  
+  ❌ 禁止: "residual 有 spatial_corr → 漏了 SC 噪声" (SC 已关闭)
+  ❌ 禁止: "residual 有特定模式 → 缺少 X 类型退化" (耦合不可解耦)
 ```
 
-**为什么比 raw residual 更好**：raw 残差 = target - clean，包含所有退化。模型复原残差 = target - model(target)，只包含**模型没修掉的部分**。模型修掉的 = 预测正确的部分。模型没修的 = 漏检/误判的部分。
+### 反思 Agent 使用指南 (修正版)
 
-**使用方式**：反思 Agent 加载 R0 checkpoint → 对 target 推理 → 分析 residual → 把 residual 特征和 transfer knowledge 结合判断。
+综合以下信息做决策，按优先级排列：
 
-### 反思 Agent 使用指南
+1. **SKILL.md 信号重释**（最优先）→ 被忽略/误判/边界的信号？
+2. **退化迁移知识**（severity/子类型代价表）→ 如果错了代价多大？
+3. **PSNR 定向测试**（验证假设）→ JPEG 测试可靠, blur 边际, noise 不可用
+4. **模型残差辅助**（最低优先级）→ 仅用作提醒, 不做诊断
 
-当分析 R0 预测时，综合以下三类信息做决策：
+优先级排序 (修正):
 
-1. **初次复原残差**（最优先）→ 模型没修掉什么？
-2. **退化迁移知识**（本节的 severity/子类型代价表）→ 如果错了代价多大？
-3. **PSNR 定向测试**（验证假设）→ JPEG 测试 100% 可靠，blur 边际，noise 不可用
-
-优先级排序：
-
-1. 如果 R0 含 **brightness_gamma** → 优先检查 severity 是否精确（±1 代价 17dB）
-2. 如果 R0 含 **noise_impulse** → 绝不替换为其他 noise 类型（代价 21dB）
-3. 如果 R0 预测 **blur_gaussian** 且 alternatives 含 **blur_lens** → 安全 swap，直接换（代价 <4dB）
-4. 如果怀疑缺失 **compression_jpeg** → 100% 值得 PSNR 测试
-5. 如果 R0 含 **blur_zoom** → 考虑换成 gaussian/lens——其他模型在 zoom 上可能更好
+1. 回到 SKILL.md Step 1→4 → 重新审视所有原始信号
+2. 如果 R0 含 **brightness_gamma** → 优先检查 variance_ratio（gamma 改变方差, 纯 brightness 不变）
+3. 如果 R0 含 **noise_impulse** → 绝不替换为其他 noise 类型（代价 21dB）
+4. 如果 signal 显示 gamma_suspect (brightness+contrast 同时触发) → 优先测试 gamma
+5. oversharpen: 暂时关闭 (blur/noise 耦合召回低)
+6. 如果怀疑缺失 **compression_jpeg** → 100% 值得 PSNR 测试
 
 ---
 
-## 三、训练驱动两阶段反思 (来源: exp21 双步反思失效审计)
+## 三、训练驱动两阶段反思 (仅作最后手段)
+
+> ⚠️ exp27 降级: 此方法依赖模型 residual, 仅在信号重释已穷尽且 R0 有至少 1 步高置信度时使用。
+> 优先使用主路径 (信号重释 + PSNR 测试)。
 
 ### 问题
 
-exp21 证明: 双步退化中 raw 残差无法解耦两个错误的信号。8/8 R1 修正全部不匹配 GT，平均退步 -1.31 dB。
+exp21 证明: 双步退化中 raw 残差无法解耦两个错误的信号。8/8 R1 修正全部不匹配 GT, 平均退步 -1.31 dB。
 
-### 方案: 先训练消除一个退化，再检测第二个
+### 方案 (谨慎使用): 先训练消除一个退化，再检测第二个
 
 ```
-Stage 1: Train(model_A, R0 最自信的 1 步)
+前提: 信号重释已穷尽, 且 R0 中有 ≥1 步高置信度 (signal confidence high)
+
+Stage 1: Train(model_A, R0 最自信的 1 步, EPOCH=2)
          model_A(target) → 消除退化A
-         residual_A = target - model_A 的输出
-        
-Stage 2: 在 residual_A 上重跑检测
-         → 第二步的信号现在被显式暴露
-         → 选出候选 B → Train(model_AB, A+B)
+         在 model_A(target) 上重跑 run_full_analysis → 获取信号
+         
+Stage 2: 基于新信号选出候选 B → Train(model_AB, A+B, EPOCH=2)
          → PSNR 显著提升 → 修正成功
 ```
 
-### 适用条件
+### 适用条件 (收紧)
 
-- R0 步数 ≥ 2（或 R0 只检测到 1 步但实际有 2 步）
-- R0 中有至少 1 步是高置信度（逐级剥离信号强）
-- 额外成本: 1 次训练（约 1.5h），仅在双步案例触发
-
-### 失败保护
-
-- 最多 2 次额外训练（Stage 1 + Stage 2）
-- 每阶段候选测试 ≤ 5 次
-- 3 次尝试无改善 → BEYOND_CAPABILITY
+- 信号重释已穷尽 (所有 Step 1→4 信号都已检查)
+- R0 中有至少 1 步是信号层面高置信度 (not just verdict confidence)
+- ⚠️ 优先选择 deterministic 步骤 (JPEG/blur/global > noise)
+- 额外成本: 1 次训练 (~5 min EPOCH=2), 仅在信号穷尽后触发
 
 ---
 
