@@ -95,7 +95,19 @@ LR/loss 微调 → 影响最小                    (< 0.3 dB, loss 函数之间�
 
 ---
 
-## 五、架构-退化耦合表 (来源: exp10)
+## 五、架构-退化耦合表 (来源: exp10, 130+组验证)
+
+### 🔴 核心原则 0：退化难度决定组件价值，而非退化类型
+
+不是"退化类型 X → 组件 Y"，而是"当修正复杂度超出网络隐式容量时，显式组件才有价值"。
+
+| 退化难度 | 示例 | 网络能隐式学到? | 显式组件价值 | 推荐 |
+|:--:|------|:--:|:--:|------|
+| 低 | gamma, brightness_shift_RGB | ✅ | ~0 dB | 纯 Swin，不加组件 |
+| 中 | stretch, contrast_scale, contrast+噪声 | ❌ 部分 | +0.4~+1 dB | ColorPre/CSN (+0.8~1K) |
+| 高 | contrast + 结构化局部 (motion/jpeg) | ❌ | **+2.4~+3.5 dB** | FiLM-GCM (+26K) |
+
+**exp35 验证**: blind_0002 (JPEG sev=1) 纯 Swin 即可 PSNR=28.8，加组件无益。blind_0010 (blur+contrast) PSNR=18.0，属于高难度，FiLM-GCM 可能有 +2-3 dB 额外收益（未验证）。
 
 ### 注意力类型选择
 
@@ -107,18 +119,20 @@ LR/loss 微调 → 影响最小                    (< 0.3 dB, loss 函数之间�
 | saturate 全局 | Swin | 基线 | 无明显胜者 |
 | brightness+blur | Swin | 基线 | MDTA/OCAB 无优势 |
 
-### 附加组件推荐
+### 附加组件推荐 (排名来自 exp10 60+组)
 
-| 场景 | 推荐组件 | 参数 | 效果 | 风险 |
-|------|------|:--:|:--:|------|
-| contrast+结构化局部 | **FiLM-GCM** | +26K | L5 +3.52 | L1 后期发散但 best ckpt 可用 (-0.09~-0.30) |
-| contrast+噪声 | **ColorPre** | +0.8K | L2 +0.81, L5 +2.56 | 跨退化泛化差 (见鲁棒性) |
-| contrast+噪声 (轻量) | **CSN** | +1K | L5 +1.39 | 最轻量，最稳定 |
-| 通用鲁棒 | **DualBranch** | +3K | L5 +3.27, L2 +0.78 | 鲁棒性排序第一 |
-| 强空间结构 (L6/SF8) | **PCP shared** | +3K | L6 +4.21, SF8 +9.00 | 部分退化不如 Swin (SF9 -1.26) |
-| brightness_HSV | ColorMLP | +0.1K | L1 +0.28 (修复 NaN) | L6 -0.52 |
-| stretch | ChannelCurve | +0.1K | stretch +0.38 | gamma 无效 |
-| 默认安全首选 | ColorPre | +0.8K | 全稳定 | 推荐首选 |
+| 排名 | 场景 | 推荐组件 | 参数 | 最大收益 | 风险 | 推荐 |
+|:--:|------|------|:--:|:--:|------|:--:|
+| 1 | contrast+结构化局部 | **FiLM-GCM** | +26K | L5 **+3.52** | L1 NaN (HSV+brightness), 需 lr=5e-4 | 有条件 |
+| 2 | contrast+噪声/全局 | **ColorPre** | +0.8K | L2 +0.81, SF1 +18.91 | 跨退化泛化差 (盲识别错误时退化严重) | ✅ 推荐 |
+| 3 | 轻量通用 | **CSN** | +1K | L5 +1.39 | **L6 -4.60 (纯全局退化灾难)** | 有条件 |
+| 4 | 鲁棒泛化 | **DualBranch** | +3K | L5 +2.60, L2 +0.78 | 无 NaN，最稳定 | 备选(盲识别不确定时) |
+| 5 | brightness_HSV | ColorMLP | +0.1K | L1 +0.28 (修复NaN) | L6 -0.52 | 特定场景 |
+| 6 | stretch | ChannelCurve | +0.1K | stretch +0.38 | gamma 无效 | 有限 |
+| — | PCP (per-block +91K) | — | +91K | — | 参数不公平 (20%) | ❌ 废弃 |
+| — | FreqMod | — | +276K | — | SF8 -9.67, 6/7退化≤基线 | ❌ 废弃 |
+
+**⚠️ CSN 警告**: 在纯全局退化（SF9 saturate_pure）上 -11.73 dB，在 L6 (saturate+impulse+lens) 上 -4.60 dB。仅在退化包含噪声或模糊等空间结构时安全。
 
 ### 各退化类型最佳方案 (来源: exp10 Phase 1-4)
 
@@ -189,68 +203,92 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 | FreqMod (+276K) | SF8 -9.67；参数膨胀 61%；bfloat16 不兼容 |
 | PCP per-block (+91K) | 参数不公平 (+20%，超出 ≤1.05× 限制)，PCP shared 已替代 |
 
-### 架构鲁棒性排序 (盲识别可能出错时，越低越好)
+### 架构鲁棒性排序 (跨退化泛化能力)
 
-DualBranch (10.1 dB gap) > CSN (11.7) > Swin (13.2) > FiLM (13.6) > FreqMod (15.2) > ColorPre (16.0)
+盲识别可能出错时，组件在错误退化上的 PSNR 下降幅度（越低越好）：
 
-**关键警告**：ColorPre 在自身退化上最强 (+0.81~+18.91 dB)，但跨退化泛化最差——盲识别错误时退化可能完全失效。仅在盲识别置信度极高时使用。盲识别不确定时优先 **DualBranch** 或 **CSN**。
+| 组件 | PSNR gap | 解释 |
+|------|:--:|------|
+| DualBranch | 10.1 dB | 最鲁棒（双重分支提供退化无关通路） |
+| CSN | 11.7 | 轻量泛化好，但纯全局退化上灾难 |
+| Swin | 13.2 | 无额外组件的基线鲁棒性 |
+| FiLM-GCM | 13.6 | 强但泛化一般 |
+| ColorPre | 16.0 | 自身退化最强，跨退化最差 |
+
+**关键警告**：
+- **ColorPre**: 在自身退化上最强 (+0.81~+18.91 dB)，但跨退化泛化最差。仅在盲识别置信度极高时使用。
+- **CSN**: 泛化好但纯全局退化上有灾难性失败（L6 -4.60, SF9 -11.73）。确保退化包含空间结构。
+- **盲识别不确定时优先 DualBranch**（兼顾鲁棒性和稳定性）。
 
 ---
 
-## 六、策略选择框架
+## 六、策略选择框架 🔴 exp10修正
 
 ```
 输入退化管线 →
 
-Step 1: 判断退化类型
+Step 0: 判断退化难度（决定是否需要额外架构组件）
+  管线难度评估:
+    低难度: gamma, brightness_shift_RGB, JPEG sev≤2 (MLP能隐式学到)
+      → 纯 Swin，不加任何组件（组件收益 ≈ 0 dB）
+    中难度: stretch, contrast+噪声, saturation+噪声
+      → ColorPre (+0.8K) 或 CSN (+1K)，轻量稳定
+    高难度: contrast+结构化局部(motion/jpeg), 多退化耦合
+      → FiLM-GCM (+26K), 需 lr=5e-4 防 NaN
+      → 注意: FiLM在brightness_HSV上有NaN风险
+
+Step 1: 判断训练策略 (Direct vs Ft)
   管线含 contrast_weaken/strengthen (仿射型全局)?
-    → 是: 优先 Direct (不用 Ft, L2 上 Ft 崩溃 -4.51 dB)
+    → 是: 必须 Direct (不用 Ft, L2 上 Ft 崩溃 -4.51 dB)
   管线含 brightness/saturation 全局?
     → Ft 可能安全 (L1 上 Ft +0.41)，但仍推荐 Direct 保守
-    → 架构: Swin (不用 MDTA/OCAB)
+  纯局部退化 (blur/noise/compression)?
+    → Ft 安全且通常优于 Direct (+0.3~+5 dB)
+  含全局退化 + 局部退化?
+    → Direct (保守), 含 contrast 时绝对不用 Ft
 
-Step 2: 处理局部退化
+Step 2: 选择附加组件（基于难度，非类型）
+  高难度 + contrast + 结构化 → FiLM-GCM (lr=5e-4)
+  中难度 + 全局退化 → ColorPre (最稳, 首选)
+  盲识别不确定 (UNCERTAIN) → DualBranch (鲁棒性最好)
+  brightness_HSV 有 NaN 风险 → +ColorMLP (+0.1K)
+  纯局部退化 → 不需要额外组件
+
+Step 3: 组件稳定性检查 🔴 必查
+  FiLM-GCM + brightness_HSV? → NaN风险, 降lr=5e-4或换ColorPre
+  CSN + 纯全局退化(saturate/gamma)? → 灾难性失败, 换ColorPre或Swin
+  ColorPre + 盲识别不确定? → 跨退化泛化差, 换DualBranch
+
+Step 4: 处理局部退化的训练顺序
   管线含 compression + blur?
     → 梯度干扰存在但 Ft 可处理 (Ft > Curric, +0.6 dB)
-    → 推荐 Ft，Curric 为备选
   管线含 motion + 其他?
     → motion P1 + sev ≥ 3: Curric(Fwd) 可能 > Ft (4/4 案例)
-    → 否则 Ft 即可
 
-Step 3: 选择 Ft 还是从零训练
-  局部退化 sev ≤ 3: Ft (优势 +0.3 ~ +5 dB)
-  局部退化 sev ≥ 4: Ft ≈ Direct (选简单的，Ft 即可)
-  全局退化: Direct (保守)，含 brightness 时可试 Ft
-
-Step 4: 如果用 Curric，Phase1 选哪个退化
+Step 5: 如果用 Curric，Phase1 选哪个退化
   motion blur → Fwd (已验证)
   lens blur → Rev (已验证)
-  两者都不在 → Fwd/Rev 均可 (差异 < 0.7 dB, ⚠️ 未验证)
-
-Step 5: 步数分配
-  默认 Fixed 5000/5000/5094
-  动态 split (MD/TA) 在特定退化有效 (T2 +2.91, N12 +3.97) 但非普适
 ```
 
 ---
 
-## 七、实操速查表
+## 七、实操速查表 🔴 exp10修正
 
-| 场景 | 策略 | LR | 原因 |
-|------|------|:--:|------|
-| 不确定 | Ft | 5e-4 | 局部退化下已验证安全 |
-| contrast 型全局退化 | **Direct** | 5e-4 | L2 上 Ft 崩溃 -4.51 |
-| brightness 型全局退化 | Direct (保守) 或 Ft | 5e-4 | L1 上 Ft 安全 +0.41 |
-| compression+blur | Ft | 5e-4 | Ft > Curric, 梯度干扰存在但 Ft 可处理 |
-| motion+任意 (sev≥3) | Curric(Fwd) | 5e-4 | 唯一 Curric>Ft 的可靠场景 (4/4) |
-| lens+任意 | Curric(Rev) 或 Ft | 5e-4 | lens 迁移价值低, Ft 也安全 |
-| 严重度 ≥ 4 (局部) | Ft | 5e-4 | 预训练优势缩小但仍安全 |
-| 严重度 ≤ 3 (局部) | Ft | 5e-4 | Ft 优势 +0.3~+5 dB |
-| noise_impulse | 任意 | 5e-4 | 极易修，策略不重要 |
-| 架构: 严重motion(sev≥5) | OCAB (+1.19) 或 OCAB+ws16 (+1.72) | — | SwiGLU 独立 +1.47, 无三合一组合实验 |
-| 架构: contrast | Swin | — | 不用 MDTA/OCAB |
-| 架构: contrast+结构化 | FiLM-GCM (lr=5e-4) | — | +3.52, L1 无收益但无 NaN |
-| 架构: 盲识别不确定 | DualBranch 或 CSN | — | 鲁棒性最好，跨退化泛化强 |
-| 架构: 默认安全首选 | ColorPre (+0.8K) | — | 全稳定，但跨退化泛化差 |
-| 架构: 含 gamma/stretch | ChannelCurve or PCP | — | gamma 不需要额外组件，stretch +0.38 |
-| 架构: brightness_HSV | ColorMLP (+0.1K) | — | 防 NaN，其他场景不用 |
+| 场景 | 策略 | LR | 架构 | 说明 |
+|------|------|:--:|------|------|
+| 低难度 (gamma/shift/JPEG sev≤2) | Direct/Ft | 5e-4 | **纯Swin** | 组件收益≈0, 不要加 |
+| 中难度 (stretch, contrast+噪声) | Direct | 5e-4 | **Swin+ColorPre** | +0.8K, 最稳定首选 |
+| 高难度 (contrast+结构化) | Direct | 5e-4 | **Swin+FiLM-GCM** | +3.52 dB, 需lr=5e-4防NaN |
+| 盲识别 UNCERTAIN | Direct | 5e-4 | **Swin+DualBranch** | 鲁棒性最好, 10.1dB gap |
+| contrast 全局 (无结构化) | Direct | 5e-4 | Swin+ColorPre/纯Swin | Ft 崩溃 -4.51, 绝对不用Ft |
+| brightness_HSV + blur | Direct | 5e-4 | Swin+ColorMLP | +0.28, 防NaN |
+| motion blur sev≥5 | Direct/Ft | 5e-4 | Swin+OCAB+ws16 | +1.72 dB |
+| 纯局部 (blur/noise/comp) | Ft | 5e-4 | 纯 Swin | Ft 安全, ckpt 兼容 |
+| gamma/stretch 纯 | Direct | 5e-4 | **纯Swin** | MLP已能处理, 加组件无效 |
+| saturation + 复杂空间 | Direct | 5e-4 | 纯 Swin | 所有额外组件都有害(≤0.22dB) |
+
+**⚠️ 组件风险速查**:
+- FiLM-GCM: brightness_HSV 上 NaN → lr=5e-4 修复
+- CSN: 纯全局退化上灾难 (-4.60~-11.73 dB) → 确保退化含空间结构
+- ColorPre: 跨退化泛化差 → 仅盲识别高置信时使用
+- DualBranch: 速度 -3%, 但无其他风险 → 不确定性场景首选
