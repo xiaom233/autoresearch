@@ -589,6 +589,34 @@ GPU7 留给训练，GPU0-6 跑 DFPIR，互不干扰。
 
 **对比格式**：实验报告中必须包含 DFPIR PSNR 作为参考上界。
 
+#### DFPIR-ft：同 GPU 预算 fine-tune 对比 🔴 用预测退化训练
+
+与 RestoreNet Specialist 在完全相同条件下对比：**同预测退化训练，同 1.5 GPU-h 预算，GT 仅用于最终评估**。
+
+```bash
+# 1. 训练 (8 GPU 并行, 每 GPU 2 任务串行, ~3h 墙钟)
+# 脚本: exp35/scripts/train_dfpir_ft.py
+# 关键参数: --params (预测退化) --time-budget 5400 --batch-size 4
+# 环境: /home/zyli/anaconda3/envs/dfpir/bin/python
+
+# 2. GT 重评估 (用 test_degradation.py --checkpoint 加载 fine-tune 权重)
+for bid in blind_*; do
+  /home/zyli/anaconda3/envs/dfpir/bin/python resource/.../test_degradation.py \
+    --params expN/degradation_gt/${bid}_params.json \
+    --checkpoint expN/experiments/dfpir_ft_${bid}/dfpir_ft_step*.pt \
+    --gpus 0,1,2,3,4,5,6,7 --output expN/results/dfpir_ft_${bid}.json
+done
+```
+
+**exp35 结论**: 1.5 GPU-h fine-tune 对 31M DFPIR 几乎无效（≈ zero-shot）。同预算下 0.46M RestoreNet 从头训练效率是 DFPIR 的 68 倍。这不是 DFPIR 能力问题——如果给足够的 fine-tune 预算（如 10 GPU-h），DFPIR 应能大幅超越小模型。
+
+**对比矩阵**:
+| 模型 | 训练退化 | GPU 预算 | GT 用于 |
+|------|------|:--:|------|
+| RestoreNet R0/R1/v2/Ft | 预测 | 1.5h | 最终评估 |
+| DFPIR-ft | 预测 | 1.5h | 最终评估 |
+| DFPIR zero-shot | N/A | 0 | 最终评估 |
+
 ```
 | 退化 | Direct | Ft | Curric | DFPIR(31M) |
 |------|--------|----|--------|------------|
@@ -774,84 +802,135 @@ watch -n 30 'nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=c
 ⚠️ **auto_pipeline 限制**: `auto_pipeline.py` 只能处理 Phase 3 (params 导出)、Phase 5 (训练)、DFPIR 评估。**绝对禁止** auto_pipeline 做 Phase 4 盲识别——必须由 Agent 通过 Skill 执行。
 （来源: exp17 — 脚本生成的盲识别 75% 函数错误，全部 CI=0/10，0 reflection 文件）
 
-### 🔴 挑战生成变更（Phase 2）
-
-每个挑战现在生成 **5 对** (degraded_i, clean_i) 图像，来自 5 张不同 DIV2K 验证图，施加**同一退化管线**。首个 pair 也保存为 degraded.png/clean.png 向后兼容。
-
-```bash
-bash setup_challenge.sh --exp expN --seed 42 --same-image
-# 输出: expN/challenges/phase4/blind_XXXX/
-#   degraded_0.png..4, clean_0.png..4 (5对)
-#   degraded.png, clean.png (第一对, 向后兼容)
-```
-
-### 🔴 训练时 validation 使用挑战图
-
-训练时 VAL_DIRS 已注释，仅用 `AR_CHALLENGE_DIR` 指定的挑战 clean 图作为验证集。标准 benchmark 仅用于最终 GT 重评估。
-
-```bash
-AR_CHALLENGE_DIR=expN/challenges/phase4/blind_XXXX \
-  AR_PARAMS_PATH=... .venv/bin/python3 train.py
-```
-
-### GT 退化重评估（Phase 5 后）🔴 按数据集分别报告
+### GT 退化重评估（Phase 5 后）
 
 ⚠️ **Phase 5 Specialist 训练的 VAL_PARAMS 使用盲识别预测（不泄露 GT），但评估对比时必须以 GT 退化为准。**
 
-🔴 **必须 8 卡并行**，且 **DIV2K 和 LSDIR 分别报告 PSNR**（不可混在一起平均）。
+🔴 **必须 8 卡并行**：16 个挑战评估不能单卡串行（~30 分钟），必须按排队机制分配到 8 张 GPU，每卡 2 个挑战并行评估（~5 分钟）。
 
-#### 1. 按数据集分别评估
+#### 1. 生成 per-GPU 并行评估脚本
 
 ```bash
-# 使用 reeval_per_dataset.py, 每个模型报告 7 个数据集的独立 PSNR
-for gpu in 0..7; do
-  .venv/bin/python3 expN/scripts/reeval_per_dataset.py expN v2 $gpu &
-done
-# 输出: {bid: {DIV2K: {psnr_rgb}, LSDIR: {psnr_rgb}, Set5: {...}, ...}}
-# 合并后报告: DIV2K PSNR / LSDIR PSNR 分开列
+# 生成 8 GPU 并行评估脚本（每 GPU 处理 total/8 个挑战）
+cat > expN/scripts/reeval_parallel.sh << 'SCRIPT'
+#!/bin/bash
+EXP="expN"
+cd /data/zyli/projects/autoresearch
+GPU=$1
+
+export CUDA_VISIBLE_DEVICES=$GPU
+
+.venv/bin/python3 << PYEOF
+import json, os, sys, glob, torch
+sys.path.insert(0, '.')
+from train import evaluate_all, ValDataset, RestoreNet
+
+EXP = 'expN'
+MAPPING = f'.gt_mappings/{EXP}_mapping.json'
+gt_map = json.load(open(MAPPING))
+device = torch.device('cuda:0')
+amp = torch.amp.autocast('cuda', dtype=torch.bfloat16)
+
+D = ['datasets/Set5/GTmod4','datasets/Set14/GTmod4','datasets/B100/GTmod4',
+     'datasets/Urban100/GTmod4','datasets/Manga109/GTmod4','datasets/DIV2K/DIV2K_valid_HR']
+
+all_bids = sorted(gt_map.keys())
+gpu_id = $GPU
+my_bids = [all_bids[i] for i in range(len(all_bids)) if i % 8 == gpu_id]
+
+results = {}
+for bid in my_bids:
+    # Find checkpoint (supports _v2, _R1 suffixes)
+    ckpt_dir = f'{EXP}/experiments/{EXP}_v1_{bid}/checkpoints'
+    if not os.path.isdir(ckpt_dir):
+        # Try R1 or other variants
+        for suffix in ['_R1', '_v2', '_v3', '']:
+            alt = f'{EXP}/experiments/{EXP}{suffix}_{bid}/checkpoints'
+            if os.path.isdir(alt): ckpt_dir = alt; break
+    pts = sorted(glob.glob(f'{ckpt_dir}/*.pt'))
+    if not pts:
+        print(f'{bid}: NO CHECKPOINT')
+        continue
+    
+    # Extract architecture from EXP_META in training log
+    logf = f'{EXP}/logs/{EXP}_v1_{bid}.log'
+    arch = {'attention_type': 'swin', 'window_size': 8, 'dual_branch': 0, 'color_pre': 0}
+    if os.path.exists(logf):
+        with open(logf, errors='ignore') as f:
+            for line in f:
+                if 'EXP_META:' in line:
+                    try:
+                        mo = json.loads(line.split('EXP_META: ')[1].split(' ===')[0])['model']
+                        arch = {'attention_type': mo.get('attention_type','swin'),
+                                'window_size': mo.get('window_size',8),
+                                'dual_branch': int(bool(mo.get('dual_branch',0))),
+                                'color_pre': int(bool(mo.get('color_pre',0)))}
+                    except: pass
+                    break
+    
+    model = RestoreNet(in_ch=3, embed_dim=64,
+                       attention_type=arch['attention_type'],
+                       window_size=arch['window_size'],
+                       use_dual_branch=arch['dual_branch'],
+                       use_color_pre=arch['color_pre']).to(device)
+    ck = torch.load(pts[-1], map_location=device, weights_only=True)
+    model.load_state_dict(ck['model'])
+    model.eval()
+    
+    tmp_path = f'/tmp/{EXP}_gt_{bid}_gpu{gpu_id}.json'
+    json.dump({'pipeline': gt_map[bid]['pipeline']}, open(tmp_path, 'w'))
+    vs = [(ds.split('/')[-2], ValDataset([ds], count=0, params_path=tmp_path))
+          for ds in D if os.path.isdir(ds)]
+    _, ov = evaluate_all(model, vs, device, amp)
+    os.remove(tmp_path)
+    
+    results[bid] = {'psnr_rgb': round(ov['psnr_rgb'],2), 'psnr_y': round(ov.get('psnr_y',0),2)}
+    print(f'[{gpu_id}] {bid}: GT PSNR={ov["psnr_rgb"]:.2f} dB')
+
+json.dump(results, open(f'{EXP}/results/gt_reeval_gpu{gpu_id}.json', 'w'), indent=2)
+PYEOF
+SCRIPT
+chmod +x expN/scripts/reeval_parallel.sh
 ```
 
-**验证集清单**:
-| 数据集 | 图片数 | 用途 |
-|------|:--:|------|
-| DIV2K_valid_HR | 100 | 训练同源验证 |
-| LSDIR val1 | 250 | 大尺度泛化验证 |
-| Set5/Set14/B100/Urban100/Manga109 | 5+14+200+200+218 | 经典 benchmark |
-
-#### 2. 8 GPU 并行评估 + 按数据集报告
+#### 2. 并行启动
 
 ```bash
-# 使用 reeval_per_dataset.py, 每个模型报告 7 个数据集的独立 PSNR
-# 复制 exp35/scripts/reeval_per_dataset.py 到 expN/scripts/
+# 8 GPU 并行评估
 for gpu in 0 1 2 3 4 5 6 7; do
-  nohup .venv/bin/python3 expN/scripts/reeval_per_dataset.py expN MODEL_TYPE $gpu \
-    > expN/logs/reeval_pds_gpu${gpu}.log 2>&1 &
+  nohup bash expN/scripts/reeval_parallel.sh $gpu > expN/logs/reeval_gpu${gpu}.log 2>&1 &
 done
+```
 
-# 合并
+#### 3. 合并结果 + 对比分析
+
+```bash
+# 全部 GPU 完成后合并
 .venv/bin/python3 << 'PYEOF'
 import json, glob
 EXP = 'expN'
 merged = {}
-for f in sorted(glob.glob(f'{EXP}/results/gt_reeval_pds_*.json')):
+for f in sorted(glob.glob(f'{EXP}/results/gt_reeval_gpu*.json')):
     merged.update(json.load(open(f)))
-json.dump(merged, open(f'{EXP}/results/gt_reeval_pds.json', 'w'), indent=2)
 
-# 报告 DIV2K 和 LSDIR 分别统计
+json.dump(merged, open(f'{EXP}/results/gt_reeval.json', 'w'), indent=2)
+
+# 对比 M_blind 基线
+m_blind = json.load(open(f'{EXP}/results/m_blind_baseline.json'))
+print(f"{'Challenge':<14} {'M_blind':>8} {'Specialist':>10} {'Delta':>8}")
 for bid in sorted(merged.keys()):
-    d = merged[bid]
-    print(f'{bid}: DIV2K={d["DIV2K"]["psnr_rgb"]:.2f} LSDIR={d["LSDIR"]["psnr_rgb"]:.2f}')
+    mb = m_blind[bid]['psnr_rgb']
+    ms = merged[bid]['psnr_rgb']
+    print(f'{bid:<14} {mb:>8.2f} {ms:>10.2f} {ms-mb:>+8.2f}')
 PYEOF
 ```
 
-#### 3. DFPIR-ft-GT 对比（同 GPU 预算）
-
-```bash
-# 用 GT 退化训练 DFPIR（上界对比），相同 1.5h GPU 预算
-# 脚本: exp35/scripts/train_dfpir_ft.py (修改 --params 指向 degradation_gt)
-# 8 GPU 并行, 2 任务/GPU 串行, ~3h 墙钟时间
-# 完成后用 test_degradation.py 8 GPU 做 GT 重评估
-```
+**关键参数**：
+- 验证集：Set5, Set14, B100, Urban100, Manga109, DIV2K_valid_HR（6 个标准 benchmark）
+- 模型架构：从训练日志 `EXP_META` 提取（`model.attention_type`, `model.color_pre`, `model.dual_branch`）
+- Checkpoint：取每个实验目录下 step 最大的 .pt 文件
+- 评估退化：`.gt_mappings/expN_mapping.json` 中的 GT pipeline（仅用于 VAL，不用于训练）
+- **并行策略**：8 GPU 各评估 total/8 个挑战，每 GPU ~5 分钟（vs 单卡 ~30 分钟）
 
 ## The experiment loop
 
