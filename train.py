@@ -2,6 +2,7 @@
 Autoresearch image restoration training script. Single-GPU, single-file.
 Usage: uv run train.py
 
+import shutil
 Reads clean images via WebDataset, applies a degradation pipeline on-the-fly
 (from params.json), and trains a restoration model to recover clean images.
 """
@@ -67,15 +68,18 @@ TRAIN_SHARDS = "datasets/DIV2K/DIV2K_train_HR_wds/train-*.tar"
 
 # Validation: standard SR benchmarks + DIV2K valid. Uses HR/original clean images
 # degraded with VAL_PARAMS_PATH (ground-truth degradation, NOT skill prediction).
-VAL_DIRS = [
-    "datasets/Set5/GTmod4",
-    "datasets/Set14/GTmod4",
-    "datasets/B100/GTmod4",
-    "datasets/Urban100/GTmod4",
-    "datasets/Manga109/GTmod4",
-    "datasets/DIV2K/DIV2K_valid_HR",
-]
+# 标准验证集（仅用于最终 GT 重评估，训练时不使用）
+# VAL_DIRS = [
+#     "datasets/Set5/GTmod4",
+#     "datasets/Set14/GTmod4",
+#     "datasets/B100/GTmod4",
+#     "datasets/Urban100/GTmod4",
+#     "datasets/Manga109/GTmod4",
+#     "datasets/DIV2K/DIV2K_valid_HR",
+# ]
+VAL_DIRS = []  # 训练时验证仅用 AR_CHALLENGE_DIR 指定的挑战图
 VAL_COUNT = 0                # max images per val set (0 = use all)
+CHALLENGE_DIR = os.environ.get("AR_CHALLENGE_DIR", "")  # 盲识别挑战 clean 图目录
 
 # Validation degradation: specific degradation to test against.
 # For blind restoration baseline (PARAMS_PATH=None), this tests a specific target.
@@ -401,6 +405,19 @@ def main():
         val_quick = ValDataset(VAL_QUICK_DIRS, count=0, params_path=VAL_PARAMS_PATH)
         val_full_sets = [(d.split("/")[-2], ValDataset([d], count=VAL_COUNT, params_path=VAL_PARAMS_PATH))
                           for d in VAL_DIRS]
+        # Add challenge images as validation set (if AR_CHALLENGE_DIR is set)
+        if CHALLENGE_DIR:
+            import glob as _glob
+            challenge_tmp = f"/tmp/{os.path.basename(CHALLENGE_DIR)}_val"
+            os.makedirs(challenge_tmp, exist_ok=True)
+            for src in sorted(_glob.glob(f"{CHALLENGE_DIR}/clean_*.png")):
+                dst = os.path.join(challenge_tmp, os.path.basename(src))
+                if not os.path.exists(dst):
+                    shutil.copy2(src, dst)
+            challenge_clean = [f for f in _glob.glob(f"{CHALLENGE_DIR}/clean_*.png")
+                              if not f.endswith("clean.png")]  # skip backward-compat copy
+            if challenge_clean:
+                val_full_sets.append(("Challenge", ValDataset([challenge_tmp], count=0, params_path=VAL_PARAMS_PATH)))
     total_val = sum(len(v[1]) for v in val_full_sets)
     print(f"Val quick: {len(val_quick)} images  |  Val full: {total_val} images across {len(val_full_sets)} sets")
 
