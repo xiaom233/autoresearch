@@ -3,10 +3,10 @@
 Generate a blind degradation identification challenge.
 
 This script runs as a SUBPROCESS — the main agent must NOT see its internal
-state. It picks a random clean image, applies a random degradation pipeline,
-and saves:
-  - blind_challenge/degraded.png      ← public (agent analyzes this)
-  - blind_challenge/clean.png         ← public (reference for the skill)
+state. It picks 5 random clean images, applies the SAME random degradation pipeline
+to each, and saves 5 (degraded, clean) pairs:
+  - blind_challenge/degraded_0.png..4  ← public (agent analyzes these)
+  - blind_challenge/clean_0.png..4     ← public (reference for the skill)
   - blind_challenge/.ground_truth.json ← HIDDEN (agent must NOT read this)
 
 The agent then uses image-degradation-simulator skill to identify the
@@ -16,7 +16,7 @@ degradation blindly, saving the prediction as:
 Finally, evaluate_blind_challenge.py compares prediction vs ground truth.
 
 Usage:
-    uv run blind_challenge.py                  # random image, random degradation
+    uv run blind_challenge.py                  # 5 random images, same random degradation
     uv run blind_challenge.py --seed 42        # reproducible challenge
     uv run blind_challenge.py --num-degs 2     # force exactly 2 degradations
 """
@@ -26,6 +26,7 @@ import json
 import os
 import random
 import sys
+import shutil
 import numpy as np
 from PIL import Image
 
@@ -43,6 +44,7 @@ DEGRADED_NAME = "degraded.png"
 CLEAN_NAME = "clean.png"
 GROUND_TRUTH_NAME = ".ground_truth.json"      # hidden — agent must NOT read
 PREDICTED_NAME = "predicted_params.json"       # agent writes this
+NUM_PAIRS = 5  # number of (degraded, clean) image pairs per challenge
 
 # Clean image sources — pick randomly from DIV2K validation set only
 VAL_DIRS = [
@@ -198,7 +200,7 @@ def generate_random_pipeline(num_degs=None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate a blind degradation identification challenge")
+        description="Generate a blind degradation identification challenge (5 image pairs)")
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducibility")
     parser.add_argument("--num-degs", type=int, default=None,
@@ -208,9 +210,9 @@ def main():
     parser.add_argument("--ref-image", type=str, default=None,
                         help="Clean REFERENCE image for skill (MUST be different from --clean-image)")
     parser.add_argument("--same-image", action="store_true",
-                        help="Same-image mode: clean reference = original undegraded image (enables pixel-level calibration)")
+                        help="Same-image mode: clean reference = original undegraded image for each pair")
     parser.add_argument("--target-only", action="store_true",
-                        help="Target-only mode: NO clean reference provided (hardest test)")
+                        help="Target-only mode: NO clean reference provided")
     parser.add_argument("--output-dir", type=str, default=OUTPUT_DIR,
                         help=f"Output directory (default: {OUTPUT_DIR})")
     parser.add_argument("--export-to", type=str, default=None,
@@ -226,65 +228,84 @@ def main():
     random.seed(seed)
     np.random.seed(seed)
 
-    # Pick target image (to be degraded)
-    if args.clean_image:
-        target_path = args.clean_image
-    else:
-        target_path = pick_random_image(VAL_DIRS)
-
-    # Pick reference image (for skill's simulation — must be DIFFERENT)
-    if args.same_image:
-        ref_path = target_path  # same source, undegraded
-    elif args.target_only:
-        ref_path = None
-    elif args.ref_image:
-        ref_path = args.ref_image
-        # Same-image mode: using the same source as reference is valid.
-        # This enables pixel-level calibration of content-dependent metrics.
-    else:
-        # Pick a DIFFERENT random image from a DIFFERENT dataset
-        ref_path = pick_random_image(VAL_DIRS)
-        attempts = 0
-        while ref_path == target_path and attempts < 20:
-            ref_path = pick_random_image(VAL_DIRS)
-            attempts += 1
-        if ref_path == target_path:
-            print("ERROR: Could not find a different reference image.")
-            sys.exit(1)
-
-    # Generate degradation pipeline
+    # Generate degradation pipeline ONCE for all pairs
     pipeline = generate_random_pipeline(args.num_degs)
-
-    # Load and degrade target image
-    target_img = np.array(Image.open(target_path).convert("RGB"), dtype=np.uint8)
-    degraded = target_img.copy()
-    for step in pipeline:
-        degraded = add_distortion(degraded, severity=step["severity"],
-                                  distortion_name=step["function"])
 
     # Setup output directory
     out_dir = args.output_dir
     os.makedirs(out_dir, exist_ok=True)
 
-    # Save degraded image (public)
-    degraded_path = os.path.join(out_dir, DEGRADED_NAME)
-    Image.fromarray(degraded).save(degraded_path)
+    # Generate NUM_PAIRS (degraded, clean) pairs
+    target_sources = []
+    reference_sources = []
+    used_images = set()
 
-    # Save clean reference (public — DIFFERENT image from target, for skill simulation)
-    if ref_path:
-        ref_img = np.array(Image.open(ref_path).convert("RGB"), dtype=np.uint8)
-        clean_out_path = os.path.join(out_dir, CLEAN_NAME)
-        Image.fromarray(ref_img).save(clean_out_path)
-    else:
-        clean_out_path = "(target-only mode — no reference provided)"
+    for i in range(NUM_PAIRS):
+        # Pick target image (unique across pairs)
+        if args.clean_image and i == 0:
+            target_path = args.clean_image
+        else:
+            target_path = pick_random_image(VAL_DIRS)
+            attempts = 0
+            while target_path in used_images and attempts < 50:
+                target_path = pick_random_image(VAL_DIRS)
+                attempts += 1
+        used_images.add(target_path)
+
+        # Pick reference image
+        if args.same_image:
+            ref_path = target_path
+        elif args.target_only:
+            ref_path = None
+        elif args.ref_image and i == 0:
+            ref_path = args.ref_image
+        else:
+            ref_path = pick_random_image(VAL_DIRS)
+            attempts = 0
+            while ref_path == target_path and attempts < 20:
+                ref_path = pick_random_image(VAL_DIRS)
+                attempts += 1
+
+        # Apply degradation pipeline
+        target_img = np.array(Image.open(target_path).convert("RGB"), dtype=np.uint8)
+        degraded = target_img.copy()
+        for step in pipeline:
+            degraded = add_distortion(degraded, severity=step["severity"],
+                                      distortion_name=step["function"])
+
+        # Save degraded image
+        deg_name = f"degraded_{i}.png"
+        degraded_path = os.path.join(out_dir, deg_name)
+        Image.fromarray(degraded).save(degraded_path)
+
+        # Save clean reference
+        if ref_path:
+            ref_img = np.array(Image.open(ref_path).convert("RGB"), dtype=np.uint8)
+            clean_name = f"clean_{i}.png"
+            clean_path = os.path.join(out_dir, clean_name)
+            Image.fromarray(ref_img).save(clean_path)
+        else:
+            clean_path = "(target-only mode — no reference provided)"
+
+        target_sources.append(os.path.basename(target_path))
+        reference_sources.append(os.path.basename(ref_path) if ref_path else "none")
+
+    # Backward-compat: also save first pair with original names
+    first_deg = os.path.join(out_dir, f"degraded_0.png")
+    first_clean = os.path.join(out_dir, f"clean_0.png")
+    if os.path.exists(first_deg):
+        shutil.copy(first_deg, os.path.join(out_dir, DEGRADED_NAME))
+    if os.path.exists(first_clean):
+        shutil.copy(first_clean, os.path.join(out_dir, CLEAN_NAME))
 
     # Save ground truth (HIDDEN — agent must NOT read this file)
     ground_truth = {
         "challenge_id": f"blind_{seed:08d}",
-        "target_source": os.path.basename(target_path),
-        "reference_source": os.path.basename(ref_path) if ref_path else "none (target-only)",
+        "target_sources": target_sources,
+        "reference_sources": reference_sources,
         "pipeline": pipeline,
-        "mode": "target-only" if args.target_only else "cross-image",
+        "num_pairs": NUM_PAIRS,
+        "mode": "target-only" if args.target_only else ("same-image" if args.same_image else "cross-image"),
     }
     truth_path = os.path.join(out_dir, GROUND_TRUTH_NAME)
     with open(truth_path, 'w') as f:
@@ -292,15 +313,18 @@ def main():
 
     # Export to target directory if requested
     if args.export_to:
-        import shutil
-        # Skip if export-to is the same as output-dir (already saved above)
         if os.path.abspath(args.export_to) != os.path.abspath(out_dir):
             os.makedirs(args.export_to, exist_ok=True)
-            for fname in [DEGRADED_NAME, CLEAN_NAME, GROUND_TRUTH_NAME]:
-                src = os.path.join(out_dir, fname)
-                if os.path.exists(src):
-                    shutil.copy(src, os.path.join(args.export_to, fname))
-        # Also copy to blind_challenge/ for skill access (only if different dir)
+            for i in range(NUM_PAIRS):
+                for src_name in [f"degraded_{i}.png", f"clean_{i}.png"]:
+                    src = os.path.join(out_dir, src_name)
+                    if os.path.exists(src):
+                        shutil.copy(src, os.path.join(args.export_to, src_name))
+            # Also copy ground truth
+            gt_src = os.path.join(out_dir, GROUND_TRUTH_NAME)
+            if os.path.exists(gt_src):
+                shutil.copy(gt_src, os.path.join(args.export_to, GROUND_TRUTH_NAME))
+        # Also copy first pair to blind_challenge/ for skill access
         skill_dir = "blind_challenge"
         if os.path.abspath(out_dir) != os.path.abspath(skill_dir):
             os.makedirs(skill_dir, exist_ok=True)
@@ -324,14 +348,16 @@ def main():
         }
         with open(args.params_output, 'w') as f:
             json.dump(training_params, f)
-        # NEVER print pipeline contents — this path is recorded in public info below
 
-    # Print public info ONLY — NEVER print degradation details, num_degs, or pipeline info
+    # Print public info ONLY — NEVER print degradation details or pipeline info
     if not args.quiet:
         print(f"seed:           {seed}")
     print(f"challenge_id: {ground_truth['challenge_id']}")
-    print(f"target: {os.path.abspath(degraded_path)}")
-    print(f"ref:    {os.path.abspath(clean_out_path) if ref_path else 'none (target-only)'}")
+    for i in range(NUM_PAIRS):
+        deg_path = os.path.join(out_dir, f"degraded_{i}.png")
+        clean_path = os.path.join(out_dir, f"clean_{i}.png") if reference_sources[i] != "none" else "none (target-only)"
+        print(f"pair_{i}: target={os.path.abspath(deg_path)}")
+        print(f"pair_{i}: ref={os.path.abspath(clean_path) if clean_path != 'none (target-only)' else clean_path}")
     print(f"export: {os.path.abspath(args.export_to) if args.export_to else 'none'}")
     if args.params_output:
         print(f"params: {os.path.abspath(args.params_output)}")
