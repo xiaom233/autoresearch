@@ -315,9 +315,9 @@ def evaluate(model, val_dataset, device, autocast_ctx):
     if n == 0:
         return {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
 
-    # 直接用 DataLoader 并行加载（num_workers=4 并行解码+退化，避免串行预加载瓶颈）
+    # 直接用 DataLoader 并行加载（num_workers=2 并行解码+退化）
     loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False,
-                                          num_workers=4, pin_memory=True,
+                                          num_workers=2, pin_memory=True,
                                           persistent_workers=False)
     metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
     for degraded, clean in loader:
