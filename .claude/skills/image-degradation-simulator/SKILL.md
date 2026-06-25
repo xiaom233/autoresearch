@@ -232,8 +232,12 @@ exp34 教训: 5 个 LIKELY 挑战平均 GT PSNR=21.81dB，3 个 UNCERTAIN 挑战
 2. 训练后反思:
    - GT 重评估后自动触发
    - 🔴 必须通过 Skill 子 Agent 执行（禁止主 Agent 手动修改 params）
-   - 子 Agent: Read SKILL.md → 重跑 run_full_analysis → 信号重释 → ≤5修正假设 → PSNR验证
-   - 改善 >2dB → 保存 R1 params → 重新训练
+   - 子 Agent: Read SKILL.md → 重跑 run_full_analysis → 信号重释 → ≤5修正假设 → PSNR/信号验证
+   - 🔴 判定条件 (区分噪声/确定性):
+     预测管线不含 noise → 仿真 PSNR 改善 > 2dB 或 > 35dB → 保存 R1 params
+     预测管线含 noise → verify_signals 改善 (WEAK→PARTIAL→MATCH) 或 §B 统计改善 → 保存 R1
+     注: 噪声 seed 失配导致 PSNR 不可信, σ估计在blur/JPEG存在时可能不准确,
+         直接用预测管线是否含 noise_* 函数判断, 比 σ 更可靠
    - 无改善 → BEYOND_CAPABILITY → 更新 reflection.json
 ```
 
@@ -421,7 +425,7 @@ run_full_analysis.py
 | 确定性部分 PSNR > 40dB + 噪声统计匹配 | → LIKELY，保存 |
 | 已完成 3 轮探索 | → 标记 UNCERTAIN，保存当前最佳 |
 | PSNR 测试 ≥ 25 次 | 🔴 **硬终止**，保存当前最佳，标记 UNCERTAIN |
-| 连续 2 轮无改善 (>2dB) | → BEYOND_CAPABILITY，保存 R0 |
+| 连续 2 轮无改善 (无噪声: PSNR<2dB; 含噪声: 信号级无改善) | → BEYOND_CAPABILITY，保存 R0 |
 | 所有 candidate PSNR < 20dB | → POOR，保存全部候选 |
 
 ### PSNR 测试预算
@@ -565,13 +569,13 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 | 类别 | 函数 |
 |------|------|
 | blur | gaussian, motion, glass, lens |
-| noise | gaussian_RGB, gaussian_YCrCb, speckle, spatially_correlated, poisson, impulse |
-| compression | jpeg, jpeg_2000 |
+| noise | gaussian_RGB, gaussian_YCrCb, speckle, poisson, impulse |
+| compression | jpeg |
 | global | brightness(8), contrast(4), saturation(4), quantization_median, quantization_hist |
 
 用法: `add_distortion(img, severity, distortion_name)`，返回 uint8 RGB。
 
-**注意**: 仅上表列出的函数可用。`quantization_otsu`, `blur_zoom`, `noise_spatially_correlated`, `compression_jpeg_2000`, `oversharpen`, `pixelate` 已禁用。
+**🔴 仅上表列出的函数可用。** 以下已禁用且不可预测: `quantization_otsu`, `blur_zoom`, `noise_spatially_correlated`, `compression_jpeg_2000`, `oversharpen`, `pixelate`。
 
 ## 附录: reflection.json 格式
 
