@@ -38,6 +38,13 @@ This file provides guidance to Claude Code when working with this repository.
 
 **盲识别必须通过 Skill `image-degradation-simulator` 启动子 Agent 执行。禁止用脚本或 auto_pipeline 直接生成预测。**
 
+**🔴 Agent 命名和 prompt 禁止泄露退化信息（来源：exp36 审计）**：
+- Agent 名称必须中性（如 "Blind ID batch A"），**禁止**包含 "single-deg"、"double-deg"、"triple-deg" 等退化步数提示
+- Agent prompt **禁止**提及退化步数（"单退化"、"双退化"、"三退化"）
+- Agent prompt **禁止**提及退化类型、严重度、或任何从 GT 推导的信息
+- Agent 对退化完全一无所知——步数、类型、严重度均需从信号分析中自行判断
+- blind_challenge.py 的 stdout 输出已确保不泄露 pipeline 信息（仅打印 challenge_id + 文件路径）
+
 **🔴 子 Agent 每完成一个退化的识别后，必须重新读取 SKILL.md（来源：exp22 v12 Agent 未严格遵循 Step 1→4 顺序，退化到旧习惯）。每次开始分析新的 challenge 前，先 `Read` SKILL.md 确认当前协议，防止长时间运行后遗忘流程。**
 
 #### 核心定位
@@ -613,7 +620,7 @@ done
 **对比矩阵**:
 | 模型 | 训练退化 | GPU 预算 | GT 用于 |
 |------|------|:--:|------|
-| RestoreNet R0/R1/v2/Ft | 预测 | 1.5h | 最终评估 |
+| RestoreNet R0/R1/Ft | 预测 | 1.5h | 最终评估 |
 | DFPIR-ft | 预测 | 1.5h | 最终评估 |
 | DFPIR zero-shot | N/A | 0 | 最终评估 |
 
@@ -840,11 +847,11 @@ my_bids = [all_bids[i] for i in range(len(all_bids)) if i % 8 == gpu_id]
 
 results = {}
 for bid in my_bids:
-    # Find checkpoint (supports _v2, _R1 suffixes)
+    # Find checkpoint (supports _R1, _v1 suffixes)
     ckpt_dir = f'{EXP}/experiments/{EXP}_v1_{bid}/checkpoints'
     if not os.path.isdir(ckpt_dir):
         # Try R1 or other variants
-        for suffix in ['_R1', '_v2', '_v3', '']:
+        for suffix in ['_R1', '']:
             alt = f'{EXP}/experiments/{EXP}{suffix}_{bid}/checkpoints'
             if os.path.isdir(alt): ckpt_dir = alt; break
     pts = sorted(glob.glob(f'{ckpt_dir}/*.pt'))
@@ -926,7 +933,7 @@ PYEOF
 ```
 
 **关键参数**：
-- 验证集：Set5, Set14, B100, Urban100, Manga109, DIV2K_valid_HR（6 个标准 benchmark）
+- 验证集：DIV2K_valid_HR (100张) + LSDIR val1 (250张)，分别报告
 - 模型架构：从训练日志 `EXP_META` 提取（`model.attention_type`, `model.color_pre`, `model.dual_branch`）
 - Checkpoint：取每个实验目录下 step 最大的 .pt 文件
 - 评估退化：`.gt_mappings/expN_mapping.json` 中的 GT pipeline（仅用于 VAL，不用于训练）

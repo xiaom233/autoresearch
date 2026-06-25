@@ -32,13 +32,12 @@ my_bids = [all_bids[i] for i in range(len(all_bids)) if i % 8 == GPU]
 
 # Checkpoint search: scan all prefixes, prefer exact match with MODEL_TYPE
 # MODEL_TYPE is v2/Ft/R1/v1 — determines priority order
-MODEL_TYPE = sys.argv[2] if len(sys.argv) > 2 else 'v2'
+MODEL_TYPE = sys.argv[2] if len(sys.argv) > 2 else 'R0'
 PREFIX_PRIORITY = {
-    'R1': ['exp36_R1', 'exp36_v2', 'exp36_Ft', 'exp36_v1'],
-    'v2': ['exp36_v2', 'exp36_R1', 'exp36_Ft', 'exp36_v1'],
-    'Ft': ['exp36_Ft', 'exp36_v2', 'exp36_R1', 'exp36_v1'],
-    'v1': ['exp36_v1', 'exp36_v2', 'exp36_R1', 'exp36_Ft'],
-}.get(MODEL_TYPE, [f'{EXP}_v2', f'{EXP}_R1', f'{EXP}_Ft', f'{EXP}_v1'])
+    'R1': [f'{EXP}_R1', f'{EXP}_v1', f'{EXP}_Ft'],
+    'R0': [f'{EXP}_v1', f'{EXP}_R1', f'{EXP}_Ft'],
+    'Ft': [f'{EXP}_Ft', f'{EXP}_v1', f'{EXP}_R1'],
+}.get(MODEL_TYPE, [f'{EXP}_v1', f'{EXP}_R1', f'{EXP}_Ft'])
 
 results = {}
 for bid in my_bids:
