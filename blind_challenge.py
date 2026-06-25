@@ -46,6 +46,16 @@ GROUND_TRUTH_NAME = ".ground_truth.json"      # hidden — agent must NOT read
 PREDICTED_NAME = "predicted_params.json"       # agent writes this
 NUM_PAIRS = 5  # number of (degraded, clean) image pairs per challenge
 
+# 🔴 黑名单：这些函数已知有缺陷，绝不可用于生成挑战或盲识别预测
+BLACKLIST = {
+    "quantization_otsu",         # skimage崩溃: <8唯一值时threshold_multiotsu失败
+    "blur_zoom",                 # Wiener核/cepstrum无法可靠区分(42%)
+    "noise_spatially_correlated", # JPEG 8×8块产生不可区分的spatial_corr FP
+    "compression_jpeg_2000",     # 无检测特征
+    "oversharpen",               # laplacian_energy_ratio在blur/noise耦合时召回率低
+    "pixelate",                  # 检测逻辑损坏
+}
+
 # Clean image sources — pick randomly from DIV2K validation set only
 VAL_DIRS = [
     "datasets/DIV2K/DIV2K_valid_HR",
@@ -165,7 +175,9 @@ def generate_random_pipeline(num_degs=None):
         if not available:
             break  # 没有未使用的类别了
         cat = random.choice(available)
-        funcs = [f for f in DEG_CATEGORIES[cat] if f not in used_funcs]
+        funcs = [f for f in DEG_CATEGORIES[cat] if f not in used_funcs and f not in BLACKLIST]
+        if not funcs:
+            break  # 该类别无可用函数
         func = random.choice(funcs)
         sev = random.randint(1, 5)
         pipeline.append({

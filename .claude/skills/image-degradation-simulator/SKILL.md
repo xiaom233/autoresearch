@@ -549,21 +549,15 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 
 以上规则针对**单个退化**的搜索。多个独立的退化可以并行处理，按退化复杂度分配：
 
-### Agent 任务分配策略
+### Agent 任务分配策略 (仅主 Agent/orchestrator 参考，子 Agent 不可见)
 
-| 退化类型 | 每组退化数 | Agent 数 | 原因 |
+🔴 **Agent 命名和 prompt 严格中性**：不包含退化步数信息。子 Agent 不知道自己的挑战是几步退化。
+
+| 退化步数 | Agent 数 | 每 Agent 处理 | 原因 |
 |------|:--:|:--:|------|
-| 单退化 | 6-8 | 1 | 最简单，处理快 |
-| 双退化 | 4-5 | 4-5 | 中等复杂度 |
-| 三退化 | 2-3 | 6-8 | 最复杂，需2倍时间 |
-
-**总 Agent 数 > 8 是合理的**——三退化需要更多 Agent 来平衡负载。
-
-**48 退化示例分配** (8单+20双+20三):
-- 单退化: 1 Agent × 8 组
-- 双退化: 4 Agent × 5 组
-- 三退化: 7 Agent × 3 组 (最后1个2组)
-- 总计: **12 Agent 并行**，预计同时完成
+| 1 步 | 1/6-8挑战 | 6-8个 | 最简单，处理快 |
+| 2 步 | 1/2-3挑战 | 4-5个 | 中等复杂度 |
+| 3 步 | 1/1-2挑战 | 6-8个 | 最复杂，需2倍时间 |
 
 
 ## 附录: x_distortion 退化库
@@ -573,9 +567,11 @@ exp17 盲化评估（35 单退化）发现：50% 的失败案例不是阈值/指
 | blur | gaussian, motion, glass, lens |
 | noise | gaussian_RGB, gaussian_YCrCb, speckle, spatially_correlated, poisson, impulse |
 | compression | jpeg, jpeg_2000 |
-| global | brightness(8), contrast(4), saturation(4), oversharpen, pixelate, quantization(2) |
+| global | brightness(8), contrast(4), saturation(4), quantization_median, quantization_hist |
 
 用法: `add_distortion(img, severity, distortion_name)`，返回 uint8 RGB。
+
+**注意**: 仅上表列出的函数可用。`quantization_otsu`, `blur_zoom`, `noise_spatially_correlated`, `compression_jpeg_2000`, `oversharpen`, `pixelate` 已禁用。
 
 ## 附录: reflection.json 格式
 
