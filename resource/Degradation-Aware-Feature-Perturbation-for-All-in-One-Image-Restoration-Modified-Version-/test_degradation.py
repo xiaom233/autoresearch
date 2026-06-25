@@ -32,9 +32,8 @@ from x_distortion import add_distortion
 CKPT_PATH = os.path.join(THIS_DIR, "dfpir_blind/checkpoints/dfpir_blind_step301920.pt")
 
 VAL_DIRS = [
-    "datasets/Set5/GTmod4", "datasets/Set14/GTmod4",
-    "datasets/B100/GTmod4", "datasets/Urban100/GTmod4",
-    "datasets/Manga109/GTmod4", "datasets/DIV2K/DIV2K_valid_HR",
+    "datasets/DIV2K/DIV2K_valid_HR",
+    "datasets/LSDIR/val1/HR/val",
 ]
 
 TILE_SIZE = 512       # tile size for large-image inference
