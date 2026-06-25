@@ -231,20 +231,39 @@ def main():
                         help="复制挑战文件到指定目录（如 exp3/blind_challenge/）")
     parser.add_argument("--params-output", type=str, default=None,
                         help="静默导出训练兼容的 params.json（仅 function+severity，不含 step/category）")
+    parser.add_argument("--num-challenges", type=int, default=1,
+                        help="生成 N 个挑战（默认 1），每个挑战使用随机 seed 和独立退化管线")
     parser.add_argument("--quiet", action="store_true",
                         help="静默模式：仅输出 challenge_id 和路径，不打印 seed")
     args = parser.parse_args()
 
-    # Seed everything
-    seed = args.seed if args.seed is not None else random.randint(0, 2**31 - 1)
+    # Generate multiple challenges
+    all_challenges = []
+    for challenge_idx in range(args.num_challenges):
+        challenge_seed = args.seed + challenge_idx if args.seed is not None else random.randint(0, 2**31 - 1)
+        random.seed(challenge_seed)
+        np.random.seed(challenge_seed)
+
+        # Generate degradation pipeline ONCE for all pairs
+        pipeline = generate_random_pipeline(args.num_degs)
+        all_challenges.append((challenge_seed, pipeline))
+
+    # Process all challenges
+    for challenge_idx, (seed, pipeline) in enumerate(all_challenges):
+        challenge_id = f"blind_{challenge_idx+1:04d}"
+        _generate_one_challenge(args, challenge_id, seed, pipeline, challenge_idx)
+
+    print(f"total_challenges: {len(all_challenges)}")
+    print("ALL_READY")
+
+
+def _generate_one_challenge(args, challenge_id, seed, pipeline, challenge_idx):
+    """Generate a single challenge with given pipeline and seed."""
     random.seed(seed)
     np.random.seed(seed)
 
-    # Generate degradation pipeline ONCE for all pairs
-    pipeline = generate_random_pipeline(args.num_degs)
-
-    # Setup output directory
-    out_dir = args.output_dir
+    # Setup per-challenge output directory
+    out_dir = os.path.join(args.output_dir, challenge_id)
     os.makedirs(out_dir, exist_ok=True)
 
     # Generate NUM_PAIRS (degraded, clean) pairs
@@ -312,7 +331,8 @@ def main():
 
     # Save ground truth (HIDDEN — agent must NOT read this file)
     ground_truth = {
-        "challenge_id": f"blind_{seed:08d}",
+        "challenge_id": challenge_id,
+        "seed": seed,
         "target_sources": target_sources,
         "reference_sources": reference_sources,
         "pipeline": pipeline,
@@ -323,56 +343,50 @@ def main():
     with open(truth_path, 'w') as f:
         json.dump(ground_truth, f, indent=2)
 
-    # Export to target directory if requested
+    # Export to target directory if requested (per-challenge subdir)
     if args.export_to:
-        if os.path.abspath(args.export_to) != os.path.abspath(out_dir):
-            os.makedirs(args.export_to, exist_ok=True)
+        export_challenge_dir = os.path.join(args.export_to, challenge_id)
+        if os.path.abspath(export_challenge_dir) != os.path.abspath(out_dir):
+            os.makedirs(export_challenge_dir, exist_ok=True)
             for i in range(NUM_PAIRS):
                 for src_name in [f"degraded_{i}.png", f"clean_{i}.png"]:
                     src = os.path.join(out_dir, src_name)
                     if os.path.exists(src):
-                        shutil.copy(src, os.path.join(args.export_to, src_name))
+                        shutil.copy(src, os.path.join(export_challenge_dir, src_name))
             # Also copy ground truth
             gt_src = os.path.join(out_dir, GROUND_TRUTH_NAME)
             if os.path.exists(gt_src):
-                shutil.copy(gt_src, os.path.join(args.export_to, GROUND_TRUTH_NAME))
-        # Also copy first pair to blind_challenge/ for skill access
-        skill_dir = "blind_challenge"
-        if os.path.abspath(out_dir) != os.path.abspath(skill_dir):
-            os.makedirs(skill_dir, exist_ok=True)
-            for fname in [DEGRADED_NAME, CLEAN_NAME, GROUND_TRUTH_NAME]:
-                src = os.path.join(out_dir, fname)
-                if os.path.exists(src):
-                    dst = os.path.join(skill_dir, fname)
-                    if os.path.abspath(src) != os.path.abspath(dst):
-                        shutil.copy(src, dst)
+                shutil.copy(gt_src, os.path.join(export_challenge_dir, GROUND_TRUTH_NAME))
 
     # Export training-compatible params.json (silently, without step/category)
+    params_file = None
     if args.params_output:
-        params_out_dir = os.path.dirname(args.params_output)
-        if params_out_dir:
-            os.makedirs(params_out_dir, exist_ok=True)
+        # If params_output is an existing directory or ends with /, treat as directory
+        if os.path.isdir(args.params_output) or args.params_output.endswith('/'):
+            params_out_dir = args.params_output.rstrip('/')
+        else:
+            params_out_dir = os.path.dirname(args.params_output) or '.'
+        os.makedirs(params_out_dir, exist_ok=True)
+        params_file = os.path.join(params_out_dir, f"{challenge_id}_params.json")
         training_params = {
             "pipeline": [
                 {"function": step["function"], "severity": step["severity"]}
                 for step in pipeline
             ]
         }
-        with open(args.params_output, 'w') as f:
+        with open(params_file, 'w') as f:
             json.dump(training_params, f)
 
-    # Print public info ONLY — NEVER print degradation details or pipeline info
-    if not args.quiet:
-        print(f"seed:           {seed}")
-    print(f"challenge_id: {ground_truth['challenge_id']}")
+    # Print public info ONLY — NEVER print degradation details, pipeline info, or seed
+    print(f"challenge_id: {challenge_id}")
+    print(f"dir: {os.path.abspath(out_dir)}")
     for i in range(NUM_PAIRS):
         deg_path = os.path.join(out_dir, f"degraded_{i}.png")
-        clean_path = os.path.join(out_dir, f"clean_{i}.png") if reference_sources[i] != "none" else "none (target-only)"
-        print(f"pair_{i}: target={os.path.abspath(deg_path)}")
-        print(f"pair_{i}: ref={os.path.abspath(clean_path) if clean_path != 'none (target-only)' else clean_path}")
-    print(f"export: {os.path.abspath(args.export_to) if args.export_to else 'none'}")
+        print(f"pair_{i}: {os.path.abspath(deg_path)}")
     if args.params_output:
-        print(f"params: {os.path.abspath(args.params_output)}")
+        print(f"params: {os.path.abspath(params_file)}")
+    if args.export_to:
+        print(f"export: {os.path.abspath(os.path.join(args.export_to, challenge_id))}")
     print(f"READY")
 
 
