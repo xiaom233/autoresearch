@@ -649,62 +649,58 @@ expN/
 
 ### 🔴 实验总结报告规范 (summarize/)
 
-每个实验完成后，`expN/summarize/` 下必须包含以下内容，缺一不可：
+每个实验完成后，`expN/summarize/` 下必须包含以下 **3 份**报告，缺一不可：
 
-#### 1. R0 盲识别报告 (`blindID_R0.md`)
+#### 1. 盲识别与反思报告 (`blindID_reflection.md`) — R0+R1 合并
 
 ```markdown
-- 盲识别方式: Agent 分配 (多少个 Agent, 各处理几个挑战)
-- 工作流: 4 步标准流程 (run_full_analysis -> compression -> blur -> peeled_noise_check -> 保存)
-- 验证模式: sigma<2 PSNR / sigma>2 信号验证
-- 逐挑战 R0 预测 vs GT 对比表 (函数+严重度+顺序)
-- 准确度统计: 完全匹配率, 类别匹配率, 单/双退化分别统计
-- 主要失败模式分类 (漏检/过预测/子类型混淆/假阳性)
-- 每个 Agent 的思考过程摘要 (来自 thinking_process.json)
+## R0 盲识别
+- Agent 分配、工作流、验证模式
+- 逐挑战 R0 预测 vs GT 对比 (函数+严重度+顺序)
+- 准确度: 完全匹配率, 类别匹配率, 按退化步数分别统计
+- 主要失败模式 (漏检/过预测/子类型混淆/假阳性)
+
+## R1 反思
+- 触发条件: 哪些挑战触发/跳过, 原因
+- 逐挑战 R0→R1 修正对比:
+  | Challenge | R0预测 | R1修正 | 信号来源 | 仿真PSNR Δ | 实际训练PSNR Δ | 效果 |
+- 反思成功率: 有效/有害, 平均PSNR改善
+- 成功案例: 信号重释如何找到被忽略/误判的信号
+- 失败案例: 为什么修正方向错误
+
+## 关键结论
+- 盲识别主要瓶颈 (步数/类型/严重度)
+- 反思有效模式 (擅长什么, 不擅长什么)
 ```
 
-#### 2. R1 反思报告 (`reflection_R1.md`)
+#### 2. 训练策略与资源报告 (`training_config.md`)
 
 ```markdown
-- 反思触发条件: 哪些挑战触发, 哪些跳过, 原因
-- 反思方式: Skill 子 Agent 分配, 信号重释工作流
-- 逐挑战 R0->R1 修正对比:
-  - R0 预测 vs R1 修正
-  - 修正的信号来源 (variance_ratio, block_boundary, gamma_suspect 等)
-  - 仿真 PSNR 变化 (PSNR 预验证结果)
-- 反思效果统计: 有效/有害数量, 平均 Delta PSNR
-- 成功案例分析 (信号重释如何找到被忽略/误判的信号)
-- 失败案例分析 (为什么修正方向错误)
+- 逐挑战 R0/R1 训练配置:
+  | Challenge | 策略 | 架构 | 参数量 | EPOCH | GPU时间 |
+- 架构选择理由 (引用 finetune_strategy.md 决策规则)
+- GPU 资源统计: 总 GPU 数, 任务分配, 墙钟时间
+- 对比基线: M_blind, DFPIR zero-shot, DFPIR-ft
 ```
 
-#### 3. 训练策略与资源报告 (`training_config.md`)
+#### 3. 最终性能对比报告 (`final_performance.md`)
 
 ```markdown
-- 逐挑战训练配置表:
-  | Challenge | 策略 (Direct/Ft) | 架构 (Swin/DualBranch/ColorPre) | 参数量 | 训练退化 | EPOCH | GPU时间 |
-- 模型参数统计: Swin base 0.455M, +DualBranch 0.458M, +ColorPre 0.455M
-- GPU 资源: 总 GPU 数, 每 GPU 任务分配, 墙钟时间
-- 训练超参: LR, batch_size, loss_fn, amp_dtype
-- 对比基线: M_blind (0.455M pretrained), DFPIR zero-shot (31.1M), DFPIR-ft (31.1M, 1.5 GPU-h)
-```
-
-#### 4. 最终性能对比报告 (`final_performance.md`)
-
-```markdown
-- 逐挑战四组对比表:
-  | Challenge | M_blind | R0_Spec | R1_Spec | DFPIR zero-shot | DFPIR-ft | Best | Delta vs DFPIR | 胜者 |
-- 按退化类型分层: 局部退化 vs 全局退化 vs 混合退化
+- 逐挑战对比表:
+  | Challenge | R0 | R1 | DFPIR | DFPIR-ft | Best | ΔvsDFPIR | Winner |
+  (DIV2K 和 LSDIR 分别列出)
 - Specialist vs DFPIR 胜率统计
-- 训练效率对比: GPU-h per dB (相同预算下谁更高效)
-- 关键结论: 盲识别质量 vs 模型规模 vs 训练预算的权衡
+- 按退化步数分层: 1步/2步/3步 退化的表现差异
+- 训练效率: GPU-h per dB
+- 关键结论 (≤5条)
 ```
 
 #### 注意事项
 
-- 所有 summarize 文件在写入后立即 chmod 600 (含 GT 对比数据)
-- thinking_process.md 从 reflection.json 的 iterations 和 thinking_process.json 提取
-- 性能对比必须包含 Delta vs DFPIR 列 (Specialist - DFPIR, 正值=Specialist 更优)
-- 架构选择理由需追溯到 finetune_strategy.md 的决策规则
+- 所有 summarize 文件写入后立即 chmod 600 (含 GT 对比数据)
+- 性能对比必须包含 DIV2K 和 LSDIR 分别列 + Delta vs DFPIR
+- 盲识别对比报告合并 R0+R1 为一份 (不再分两文件)
+- 架构选择理由追溯到 finetune_strategy.md 决策规则
 
 ## Phase 5 训练启动 ⚠️ 实操
 
