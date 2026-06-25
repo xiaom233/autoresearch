@@ -286,7 +286,14 @@ def load_degradation_params(params_path=None):
 
     pipeline = []
     for step in params.get('pipeline', []):
-        pipeline.append((step['function'], step['severity']))
+        # Handle multiple formats: dict {"function":"fn","severity":N}, dict {"name":"fn","severity":N}, str "fn:N"
+        if isinstance(step, str):
+            fn, sev = step.rsplit(':', 1)
+            pipeline.append((fn.strip(), int(sev)))
+        elif isinstance(step, dict):
+            fn = step.get('function', step.get('name', ''))
+            sev = step.get('severity', 1)
+            pipeline.append((fn, int(sev)))
 
     print(f"Loaded degradation pipeline from {params_path}:")
     for i, (func, sev) in enumerate(pipeline):
