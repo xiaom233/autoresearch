@@ -294,6 +294,35 @@ else:
    5. 严禁从 R0 模型 residual 反推"缺少哪种退化" — 解耦不可靠
 ```
 
+#### 🔴 反思验证方法强制规则 (exp37 审计)
+
+```
+反思阶段验证候选管线时，必须根据退化类型选择正确的验证方法：
+
+✅ 确定性退化 (blur/compression/contrast/brightness/saturation):
+   - 主判据: PSNR (>40dB = 正确)
+   - test_candidate.py --mode psnr
+
+✅ 随机退化 (含 noise, sigma >= 2):
+   - 主判据: verify_signals.py (MATCH/PARTIAL/WEAK/MISMATCH)
+   - test_candidate.py --mode signal
+   - PSNR 对 noise 无效 (seed 失配导致像素级对比失真)
+
+🔴 禁止:
+   - 对含 noise 的候选仅用 PSNR 做判据
+   - 因 PSNR < 20 就拒绝信号 MATCH 的噪声候选
+   - 反思时忽略 verify_signals 的 PARTIAL/MATCH 结果
+
+判定优先级:
+   1. verify_signals MATCH + 信号改善 → 即使 PSNR 不高也要保存 R1
+   2. verify_signals PARTIAL (改善) → 保存为 alternative
+   3. CI 改善 (如 7/10 → 10/10) → 即使 PSNR 相似也可能是正确方向
+   4. PSNR 改善 > 2dB → 仅确定性退化可靠
+
+来源: exp37 blind_0005/0012 — R1 反思仅用 PSNR 错误地拒绝了
+     所有噪声候选, 实际上噪声存在时 PSNR 是随机数。
+```
+
 #### 🔴 反思 Agent 强制隔离规则 (来源: exp18/exp19 泄露审计)
 
 ```
@@ -345,9 +374,9 @@ else:
 触发条件 (自参照，全程不对比外部模型):
   首次反思 (R0→R1):
     - verdict = POOR → 盲识别失败, 必须反思
-    - verdict = UNCERTAIN → 盲识别不确定, 优先反思
+    - verdict = UNCERTAIN → 盲识别不确定, 必须反思 (无论 Spec vs M_blind 如何)
     - verdict = LIKELY/GOOD + GT重评估 PSNR < 35 → 退化严重度可能误判, 反思
-    - verdict = LIKELY/GOOD + GT重评估 PSNR >= 35 → 跳过反思 (高置信+高PSNR)
+    - verdict = LIKELY/GOOD + GT重评估 PSNR >= 35 → 仅此情况跳过反思 (高置信+高PSNR)
 
   迭代反思 (Rn→Rn+1):
     - 上次修正带来 PSNR 提升 > 2dB → 可继续 (可能还有改善空间)
@@ -355,10 +384,13 @@ else:
     - 提升 < 1dB 且已 ≥ 2 轮 → 终止 (收益递减)
     - alternatives 耗尽 → 终止
 
-  不启动反思:
+  不启动反思的唯一条件:
     - 盲识别 verdict=GOOD/LIKELY + GT PSNR >= 35 (高置信 + 高PSNR, 大概率正确)
     - 所有候选 PSNR < 20 (噪声主导, 无可靠信号)
     - 已修正 ≥ 2 轮且提升 < 1dB (收益递减)
+
+  🔴 exp37 修正: 原先 "UNCERTAIN + Spec > M_blind" 也可跳过, 但这依赖 GT 评估结果.
+     修正后仅高置信 (GOOD/LIKELY + PSNR>=35) 跳过, UNCERTAIN 一律反思.
 ```
 
 #### 反思工作流 (修正版)
@@ -596,14 +628,29 @@ GPU7 留给训练，GPU0-6 跑 DFPIR，互不干扰。
 
 **对比格式**：实验报告中必须包含 DFPIR PSNR 作为参考上界。
 
-#### DFPIR-ft：同 GPU 预算 fine-tune 对比 🔴 用预测退化训练
+#### DFPIR-ft：同 GPU 预算 fine-tune 对比 🔴 用预测退化训练 + 梯度累积公平对齐
 
-与 RestoreNet Specialist 在完全相同条件下对比：**同预测退化训练，同 1.5 GPU-h 预算，GT 仅用于最终评估**。
+与 RestoreNet Specialist 在完全相同条件下对比：**同预测退化训练，同 1.5 GPU-h 预算，同 effective batch=16，GT 仅用于最终评估**。
+
+##### 🔴 公平性设计 (exp37)
+
+DFPIR 31M 参数量是 RestoreNet 0.46M 的 67 倍，单 GPU 只能跑 batch=4。必须用梯度累积对齐 effective batch：
+
+| 维度 | RestoreNet | DFPIR-ft | 公平性 |
+|------|:--:|:--:|:--:|
+| 参数量 | 0.46M | 31.1M | DFPIR 先天优势 |
+| Batch size | 16 | 4 | GPU 显存硬限制 |
+| 梯度累积 | 1 | **4** | ← 对齐 |
+| Effective batch | 16 | **16** | ✅ 一致 |
+| GPU 预算 | 1.5h | 1.5h | ✅ 一致 |
+| 优化器步数 | ~15094 | ~3500 | DFPIR 67×参数的代价 |
+
+**关键：不比较"谁步数多"，比较"同预算下谁效果更好"**。
 
 ```bash
-# 1. 训练 (8 GPU 并行, 每 GPU 2 任务串行, ~3h 墙钟)
+# 1. 训练 (8 GPU 并行, 每 GPU 3 任务串行, ~4.5h 墙钟)
 # 脚本: exp35/scripts/train_dfpir_ft.py
-# 关键参数: --params (预测退化) --time-budget 5400 --batch-size 4
+# 关键参数: --params (预测退化, R1优先R0兜底) --time-budget 5400 --batch-size 4 --accum-steps 4
 # 环境: /home/zyli/anaconda3/envs/dfpir/bin/python
 
 # 2. GT 重评估 (用 test_degradation.py --checkpoint 加载 fine-tune 权重)
@@ -617,14 +664,17 @@ done
 
 **exp35 结论**: 1.5 GPU-h fine-tune 对 31M DFPIR 几乎无效（≈ zero-shot）。同预算下 0.46M RestoreNet 从头训练效率是 DFPIR 的 68 倍。这不是 DFPIR 能力问题——如果给足够的 fine-tune 预算（如 10 GPU-h），DFPIR 应能大幅超越小模型。
 
-**对比矩阵**:
-| 模型 | 训练退化 | GPU 预算 | GT 用于 |
-|------|------|:--:|------|
-| RestoreNet R0/R1/Ft | 预测 | 1.5h | 最终评估 |
-| DFPIR-ft | 预测 | 1.5h | 最终评估 |
-| DFPIR zero-shot | N/A | 0 | 最终评估 |
+**exp37 改进**: 引入梯度累积 (batch=4 + accum=4 → effective=16) 对齐优化条件，排除梯噪差异干扰。
 
-```
+**对比矩阵**:
+| 模型 | 训练退化 | GPU 预算 | Effective Batch | GT 用于 |
+|------|------|:--:|:--:|------|
+| RestoreNet R0 | 预测 | 1.5h | 16 | 最终评估 |
+| RestoreNet R1 | 预测 | 1.5h | 16 | 最终评估 |
+| DFPIR-ft | 预测 | 1.5h | 16 | 最终评估 |
+| DFPIR zero-shot | N/A | 0 | — | 最终评估 |
+
+**效率指标**: GPU-h per dB = 训练总 GPU 小时 / (Spec PSNR - M_blind PSNR)。越低越好。```
 | 退化 | Direct | Ft | Curric | DFPIR(31M) |
 |------|--------|----|--------|------------|
 | D1   | 22.92  | 23.04 | 21.05 | 22.19      |

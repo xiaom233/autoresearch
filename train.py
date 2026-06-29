@@ -68,17 +68,10 @@ TRAIN_SHARDS = "datasets/DIV2K/DIV2K_train_HR_wds/train-*.tar"
 
 # Validation: standard SR benchmarks + DIV2K valid. Uses HR/original clean images
 # degraded with VAL_PARAMS_PATH (ground-truth degradation, NOT skill prediction).
-# 标准验证集（仅用于最终 GT 重评估，训练时不使用）
-# VAL_DIRS = [
-#     "datasets/Set5/GTmod4",
-#     "datasets/Set14/GTmod4",
-#     "datasets/B100/GTmod4",
-#     "datasets/Urban100/GTmod4",
-#     "datasets/Manga109/GTmod4",
-#     "datasets/DIV2K/DIV2K_valid_HR",
-# ]
-VAL_DIRS = []  # 训练时验证仅用 AR_CHALLENGE_DIR 指定的挑战图
-VAL_COUNT = 0                # max images per val set (0 = use all)
+# 训练时中间验证: Set14 quick val (始终) + AR_CHALLENGE_DIR 挑战图 (如设置)
+# GT 重评估 Phase 5.5 单独执行，使用 DIV2K + LSDIR + GT 退化参数
+VAL_DIRS = []
+VAL_COUNT = 0
 CHALLENGE_DIR = os.environ.get("AR_CHALLENGE_DIR", "")  # 盲识别挑战 clean 图目录
 
 # Validation degradation: specific degradation to test against.
@@ -351,8 +344,9 @@ def evaluate_all(model, val_sets, device, autocast_ctx):
         for k in overall:
             overall[k] += m[k] * n
         total_n += n
-    for k in overall:
-        overall[k] /= total_n
+    if total_n > 0:
+        for k in overall:
+            overall[k] /= total_n
     return per_set, overall
 
 

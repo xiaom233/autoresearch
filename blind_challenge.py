@@ -263,7 +263,14 @@ def _generate_one_challenge(args, challenge_id, seed, pipeline, challenge_idx):
     np.random.seed(seed)
 
     # Setup per-challenge output directory
-    out_dir = os.path.join(args.output_dir, challenge_id)
+    # If output_dir basename already looks like a challenge dir (blind_XXXX), use it as-is
+    # (avoids nesting like blind_0001/blind_0001 when user specifies exact path)
+    import re
+    out_base = os.path.basename(args.output_dir.rstrip('/'))
+    if re.match(r'^blind_\d{4}$', out_base):
+        out_dir = args.output_dir.rstrip('/')
+    else:
+        out_dir = os.path.join(args.output_dir, challenge_id)
     os.makedirs(out_dir, exist_ok=True)
 
     # Generate NUM_PAIRS (degraded, clean) pairs
@@ -361,13 +368,20 @@ def _generate_one_challenge(args, challenge_id, seed, pipeline, challenge_idx):
     # Export training-compatible params.json (silently, without step/category)
     params_file = None
     if args.params_output:
-        # If params_output is an existing directory or ends with /, treat as directory
-        if os.path.isdir(args.params_output) or args.params_output.endswith('/'):
+        # If params_output ends with .json, treat as the exact output file path
+        if args.params_output.endswith('.json'):
+            params_out_dir = os.path.dirname(args.params_output) or '.'
+            os.makedirs(params_out_dir, exist_ok=True)
+            params_file = args.params_output
+        # If params_output is a directory or ends with /, construct filename inside it
+        elif os.path.isdir(args.params_output) or args.params_output.endswith('/'):
             params_out_dir = args.params_output.rstrip('/')
+            os.makedirs(params_out_dir, exist_ok=True)
+            params_file = os.path.join(params_out_dir, f"{challenge_id}_params.json")
         else:
             params_out_dir = os.path.dirname(args.params_output) or '.'
-        os.makedirs(params_out_dir, exist_ok=True)
-        params_file = os.path.join(params_out_dir, f"{challenge_id}_params.json")
+            os.makedirs(params_out_dir, exist_ok=True)
+            params_file = os.path.join(params_out_dir, f"{challenge_id}_params.json")
         training_params = {
             "pipeline": [
                 {"function": step["function"], "severity": step["severity"]}

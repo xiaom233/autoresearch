@@ -133,14 +133,19 @@
 2. **MTF 频域信号**：lens 有 Bessel 零点、glass 有 MTF 粗糙度——这些信号不受 PSNR 影响 (zoom 暂时关闭)
 3. **跨图迁移知识**：gaussian↔lens 模型迁移 gap 仅 1-4dB ——如果 R0 选了 gaussian，换成 lens 的风险很低
 
-### Noise 反思 — PSNR 无效，但统计检查 + 模型残差有效
+### Noise 反思 — 🔴 PSNR 无效，信号验证 + 统计检查必须使用
 
 63-case 测试：28 次 PSNR 改善，0 次 GT 匹配（0%）。PSNR 对 noise 类型选择完全无用。
 
+**🔴 exp37 修正**: 反思时对含 noise 候选禁止仅用 PSNR 拒绝。必须使用 verify_signals.py 进行信号验证:
+- MATCH 的噪声候选即使 PSNR < 20 也要保留
+- CI 改善 (如 7/10→10/10) 可能是正确方向的信号
+
 **优化方向**：
-1. **§B 6-step 统计检查**（已集成）：impulse%、vm_slope、spatial_corr、rgb_ratio——这些是 noise 类型识别的主要手段
-2. **模型残差的双向推理**：R0 模型对 clean 推理 → 如果模型在 clean 上"制造"了类似 target 的噪声模式 → R0 的 noise 预测可能是对的。如果 residual 是结构化的 → noise 类型错了
-3. **噪声 severity 查表**：sigma 值与 severity 有确定对应关系，不需要 PSNR 搜索
+1. **verify_signals.py**（最优先）→ MATCH/PARTIAL/WEAK/MISMATCH 判定
+2. **§B 6-step 统计检查**（已集成）：impulse%、vm_slope、spatial_corr、rgb_ratio
+3. **peeled_noise_check.py**：剥离确定性退化后的残差噪声诊断
+4. **噪声 severity 查表**：sigma 值与 severity 有确定对应关系，不需要 PSNR 搜索
 
 ### 🔴 反思主路径: 信号重释 (exp27 修正)
 
@@ -245,6 +250,58 @@ Stage 2: 基于新信号选出候选 B → Train(model_AB, A+B, EPOCH=2)
 ### 反思优先级：从可观察信号反推根因
 
 不依赖 GT（GT 在盲识别场景下不可访问），仅用训练后可观察的 PSNR 信号判断是否需要修正：
+
+#### 🔴 触发条件 (exp37 修正)
+
+```
+首次反思 (R0→R1):
+  - verdict = POOR → 盲识别失败, 必须反思
+  - verdict = UNCERTAIN → 盲识别不确定, 必须反思 (无论 Spec vs M_blind 如何)
+  - verdict = LIKELY/GOOD + GT重评估 PSNR < 35 → 退化严重度可能误判, 反思
+  - verdict = LIKELY/GOOD + GT重评估 PSNR >= 35 → 仅此情况跳过反思 (高置信+高PSNR)
+
+迭代反思 (Rn→Rn+1):
+  - 上次修正带来 PSNR 提升 > 2dB → 可继续
+  - 提升 1-2dB 且未耗尽 alternatives → 最后尝试1次
+  - 提升 < 1dB 且已 ≥ 2 轮 → 终止 (收益递减)
+
+不启动反思的唯一条件:
+  - 盲识别 verdict=GOOD/LIKELY + GT PSNR >= 35 (高置信 + 高PSNR)
+  - 所有候选 PSNR < 20 (噪声主导, 无可靠信号)
+  - 已修正 ≥ 2 轮且提升 < 1dB (收益递减)
+
+🔴 exp37 修正: 原先 "UNCERTAIN + Spec > M_blind" 也可跳过, 但这依赖 GT 评估.
+    修正后仅高置信 (GOOD/LIKELY + PSNR>=35) 跳过, UNCERTAIN 一律反思.
+```
+
+#### 🔴 反思验证方法强制规则 (exp37 审计)
+
+```
+反思阶段验证候选管线时，必须根据退化类型选择正确的验证方法:
+
+✅ 确定性退化 (blur/compression/contrast/brightness/saturation):
+   - 主判据: PSNR (>40dB = 正确)
+   - test_candidate.py --mode psnr
+
+✅ 随机退化 (含 noise, 或 sigma >= 2):
+   - 主判据: verify_signals.py (MATCH/PARTIAL/WEAK/MISMATCH)
+   - test_candidate.py --mode signal
+   - PSNR 对 noise 无效 (seed 失配导致像素级对比失真)
+
+🔴 禁止:
+   - 对含 noise 的候选仅用 PSNR 做判据
+   - 因 PSNR < 20 就拒绝信号 MATCH 的噪声候选
+   - 反思时忽略 verify_signals 的 PARTIAL/MATCH 结果
+
+判定优先级:
+   1. verify_signals MATCH + 信号改善 → 即使 PSNR 不高也要保存 R1
+   2. verify_signals PARTIAL (改善) → 保存为 alternative
+   3. CI 改善 (如 7/10 → 10/10) → 即使 PSNR 相似也可能是正确方向
+   4. PSNR 改善 > 2dB → 仅确定性退化可靠
+
+来源: exp37 blind_0005/0012 — R1 反思仅用 PSNR 错误地拒绝了
+     所有噪声候选, 噪声存在时 PSNR 是随机数。
+```
 
 #### 条件 A (必须修正): Spec < M_blind - 3dB
 
