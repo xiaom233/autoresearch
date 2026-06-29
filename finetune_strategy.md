@@ -52,34 +52,37 @@ D3 (compression_jpeg(3)+blur_lens(4)) 是最强梯度干扰案例：Direct=20.99
 
 ---
 
-## 二、全局退化 vs 局部退化 + 🔴 exp37 真实验证
+## 二、全局退化 vs 局部退化 + 🔴 exp37/exp38 真实验证
 
 **判定管线是否包含全局退化**：管线含以下函数 → 注意，盲预训练**可能**未充分覆盖：
 
 `contrast_strengthen/weaken_scale/stretch`、`brightness_brighten/darken_shift/gamma_HSV/RGB`、
 `saturate_strengthen/weaken_HSV/YCrCb`
 
-### Random Curriculum (exp9/10, 旧称 "Ft")
+### Random Curriculum (exp9/10, 旧称 "Ft") 🔴 exp38 修正
 
 | 属性 | 局部退化 (blur/noise/comp) | 全局退化 (contrast/brightness/saturation) |
 |------|:--:|:--:|
 | 盲预训练覆盖？ | ✅ 随机管线包含 | ⚠️ contrast_weaken 等特定类型未覆盖 |
-| RandomCurric 安全性 | ✅ 已验证 (+0.1~+5 dB) | ⚠️ L2(contrast+noise)上崩溃 -4.51 dB |
-| 推荐策略 | RandomCurric | 含 contrast 时 Direct |
+| RandomCurric 安全性 | ✅ 已验证 (+0.1~+5 dB) | ⚠️ L2(contrast+noise)上 **-0.15 dB** (exp38, 未复现 exp9 的 -4.51) |
+| 推荐策略 | RandomCurric (梯度干扰场景) | 含 contrast 时 Direct 更安全 |
 
-### 各全局退化类型的差异化处理
+> 🔴 exp38 修正: exp9 L2 RandomCurric -4.51 dB 未复现。exp38 同管线仅 -0.15 dB。
+> 可能原因: 数据集/LR/代码版本差异。含 contrast 仍推荐 Direct，但风险远小于之前认为。
 
-**为什么只有 contrast 被特殊处理？** 因为不同的全局退化对策略和架构的敏感度完全不同：
+### 各全局退化类型的差异化处理 🔴 exp38 修正
 
 | 全局退化 | RandomCurric | 敏感组件 | 最佳实践 | 原因 |
 |------|:--:|------|------|------|
-| **contrast** (scale/stretch) | ❌ 崩溃 -4.51 | **FiLM-GCM +3.52, ColorPre +18.91** | Direct + 组件(自信时) | 仿射变换改变方差, 梯度方向冲突最严重 |
-| **brightness** (shift) | ✅ +0.41 | ColorMLP +0.28 | Direct 即可 | 加性变换, 梯度干扰小, MLP可处理 |
-| **brightness** (gamma) | ⚠️ 未测试 | 无 | Direct, severity 必须精确 | gamma sev 偏差代价 -17 dB, 但组件无效 |
-| **saturation** | ⚠️ 未测试 | 无 (全部 ≤ 基线) | Direct + 纯 Swin | 所有组件均有 ≤ 0 dB |
-| **quantization** (median/hist) | ⚠️ 未测试 | 无 | Direct + 纯 Swin | 信息损失不可逆, 组件无法补偿 |
+| **contrast** (scale) | ⚠️ -0.15 (安全) | **FiLM +0.47, ColorPre +0.62** | Direct + 组件(自信时) | 仿射变换改变方差, 组件有效 |
+| **stretch** | ⚠️ 未测试 | **FiLM +0.35** | Direct + FiLM可选 | exp38 验证 FiLM 在 stretch 上微益 |
+| **brightness** (shift) | ✅ +0.41 | FiLM -0.02 (安全), ColorMLP +0.28 | Direct 即可 | 加性变换, 梯度干扰小 |
+| **brightness** (gamma) | ⚠️ 未测试 | FiLM +0.05 (≈0) | Direct, severity 必须精确 | gamma sev 偏差代价 -17 dB, 组件无效 |
+| **saturation** | ⚠️ 未测试 | FiLM +0.20 (安全) | Direct + 纯 Swin | 组件均 ≈0 dB, 但 FiLM 不有害 |
 
-> 核心规律：**contrast 是唯一同时满足"策略受限 (必须 Direct)"和"组件敏感 (FiLM/ColorPre 大幅有效)"的全局退化。**
+> 🔴 exp38 修正: **FiLM-GCM 在所有非 contrast 全局退化上安全**（无 NaN/无崩溃）。
+> contrast + stretch 有效，brightness/gamma/saturation ≈0（无害）。
+> 旧结论"contrast 是唯一组件敏感全局退化" → 修正为"contrast+stretch 敏感，其余安全"。
 > 其他全局退化要么策略灵活 (brightness)，要么组件无效 (saturation/quantization/gamma)。
 
 > **术语说明**: exp9/10 中的 "Ft" (D1f, D2f...) 实际是 `AR_CURRICULUM_CONFIG=0:random,...` — 前 50% 步数随机单退化，后 50% 目标退化。这是 **Random Curriculum（随机课程学习）**，不是 Checkpoint Fine-Tune。
@@ -174,6 +177,23 @@ exp37 首次测试真正的盲预训练 checkpoint 微调 (AR_LOAD_CKPT=blind_pr
 
 **⚠️ CSN 警告**: 在纯全局退化（SF9 saturate_pure）上 -11.73 dB，在 L6 (saturate+impulse+lens) 上 -4.60 dB。仅在退化包含噪声或模糊等空间结构时安全。
 
+### FiLM-GCM 跨全局退化安全边界 🔴 exp38 新增
+
+exp38 Phase F 验证了 FiLM-GCM 在 5 种全局退化上的泛化:
+
+| 全局退化 | Swin | FiLM-GCM | Δ | 判定 |
+|------|:--:|:--:|:--:|------|
+| contrast_scale (L2) | 28.19 | 28.66 | **+0.47** | ✅ 有效 |
+| stretch (G2) | 27.79 | 28.14 | **+0.35** | ✅ 微益 |
+| gamma_triple (SF5) | — | 23.26 | +0.30 | 🟡 微益 |
+| saturation (SF7) | — | 28.78 | +0.20 | ≈0 安全 |
+| gamma_RGB (G1) | 28.58 | 28.63 | +0.05 | ≈0 安全 |
+| brightness_shift (BS) | 28.62 | 28.60 | -0.02 | ≈0 安全 |
+
+> **结论**: FiLM-GCM 在所有全局退化上安全 (无 NaN/崩溃)。contrast + stretch 有效，其余 ≈ 0。
+> **旧结论 "contrast 专用" → 修正为 "contrast+stretch 有效，其他全局安全"。**
+> lr=5e-4 下无 NaN 风险 (exp10 L1 NaN 已修复)。
+
 ### 各退化类型最佳方案 (来源: exp10 Phase 1-4)
 
 退化类型定义见 exp9/degradation/，下表汇总跨 8 组件的对比结果：
@@ -266,24 +286,25 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 
 输入退化管线，按以下流程决策：
 
-**Step 0: 判断退化难度（决定是否需要额外架构组件）**
+**Step 0: 判断退化难度（决定是否需要额外架构组件）** 🔴 exp38 修正
 
 | 难度 | 条件 | 推荐架构 | 说明 |
 |------|------|------|------|
-| 低 | gamma, shift_RGB, JPEG sev≤2 | 纯 Swin | 组件收益 ≈ 0 dB |
-| 中 | stretch, contrast+噪声 | ColorPre 或 CSN | +0.8~1K, 轻量稳定 |
-| 高 | contrast+结构化(motion/jpeg) | FiLM-GCM | +26K, 需 lr=5e-4 防 NaN |
+| 低 | gamma, shift_RGB, JPEG sev≤2, saturation | 纯 Swin | 组件收益 ≈ 0 dB (FiLM 已验证安全但无益) |
+| 中 | stretch, contrast+噪声 | FiLM-GCM 或 ColorPre | FiLM+0.35(stretch)/+0.47(contrast), ColorPre+0.62(contrast) |
+| 高 | contrast+结构化(motion/jpeg) | FiLM-GCM | +26K, 需 lr=5e-4 |
 
+> 🔴 exp38: FiLM-GCM 安全边界确认 — 所有全局退化上安全 (无 NaN), contrast+stretch 有效, 其余 ≈0。
 > 🔴 exp37: 以上组件收益在盲识别场景中未复现。仅在 GT 退化已知时有效。
 
-**Step 1: 判断训练策略 (Direct vs RandomCurric vs True Ft)**
+**Step 1: 判断训练策略 (Direct vs RandomCurric vs True Ft)** 🔴 exp38 修正
 
 | 管线特征 | 策略 | 原因 |
 |------|------|------|
-| 含 contrast_weaken/strengthen | Direct | RandomCurric 崩溃 -4.51 dB |
+| 含 contrast_weaken/strengthen | Direct (保守) | RandomCurric exp38 仅 -0.15 (未复现 exp9 -4.51)，但 Direct 仍最安全 |
 | 多步退化 (≥2步) 无 contrast | RandomCurric | 梯度干扰减少 +0.1~+5 dB |
-| 纯局部 (blur/noise/comp) | Direct | True Ft ≈ Direct (exp37) |
-| True Ft (AR_LOAD_CKPT) | 不推荐 | 1.5h 预算下无显著优势 |
+| 纯局部 (blur/noise/comp) | Direct 或 RandomCurric | True Ft ≈ Direct (exp37/38), RandomCurric 安全 |
+| True Ft (AR_LOAD_CKPT) | 不推荐 | 2-epoch 预算下 ≈ Direct (+0.03), exp37/38 双重确认 |
 
 **Step 2: 选择附加组件（与盲识别自信度挂钩）**
 
@@ -333,9 +354,10 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 | 盲识别自信度 | 匹配的退化 | 推荐组件 | 预期收益 | 来源 |
 |------|------|------|:--:|------|
 | **LIKELY + contrast+结构化** | motion/jpeg+contrast | FiLM-GCM | +3.52 | exp10 L5 |
-| **LIKELY + 纯 contrast** | contrast_scale/stretch | ColorPre | +18.91 | exp10 SF1 |
+| **LIKELY + contrast/stretch** | contrast_scale, stretch | FiLM-GCM 或 ColorPre | +0.35~0.62 | exp38 Phase F |
 | **LIKELY + 纯局部多步** | blur+noise+comp | RandomCurric | +0.1~+5 | exp9 D1-D3 |
 | **LIKELY + motion sev≥5** | motion blur | OCAB+ws16 | +1.72 | exp10 |
+| **LIKELY + 非contrast全局** | brightness/saturation/gamma | **纯 Swin** | ≈0 (FiLM 安全但无益) | exp38 Phase F |
 | **UNCERTAIN / POOR** | 任何 | **纯 Swin + Direct** | 基线 | exp37 |
 
 ### 反向规则: 什么时候不加组件
@@ -343,19 +365,33 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 | 盲识别状态 | 不加组件的原因 |
 |------|------|
 | UNCERTAIN (盲识别不确定) | 组件可能在错误退化上训练, exp37 14连败 |
-| 退化简单 (gamma/shift/JPEG sev≤2) | MLP 能隐式学到, 组件收益≈0 |
+| 退化简单 (gamma/shift/JPEG sev≤2/saturation) | MLP 能隐式学到, 组件收益≈0 (exp38 验证) |
 | 组件与退化不匹配 | 如 FiLM-GCM 对纯 noise 无效 |
 | ColorPre + 盲识别不确定 | 跨退化泛化最差 (PSNR gap 16.0 dB) |
 
-**⚠️ 组件风险速查**:
-- FiLM-GCM: brightness_HSV 上 NaN → lr=5e-4 修复
+**⚠️ 组件风险速查** 🔴 exp38 修正:
+- FiLM-GCM: lr=5e-4 下**所有全局退化安全** (exp38 验证), 仅 contrast+stretch 有收益
 - CSN: 纯全局退化上灾难 (-4.60~-11.73 dB)
 - ColorPre: 自身退化最强但跨退化最差 → **仅在盲识别高置信 + 退化匹配时用**
 - DualBranch: 鲁棒但 exp37 盲识别场景 0 胜 → **仅在盲识别自信时考虑**
 
 ---
 
-## 八、🔴 exp37 架构消融验证 (24盲识别挑战, R0参数, 1.5h Direct训练)
+## 八、🔴 exp37/38 架构消融与策略解耦验证
+
+### exp38 策略解耦验证 (32组, GT退化已知, 2-epoch Direct训练)
+
+exp38 系统验证了 exp9/10 中被策略-架构耦合污染的 5 个关键结论:
+
+| 审计发现 | exp9/10 旧结论 | exp38 修正 | 来源 |
+|------|------|------|:--:|
+| RandomCurric 安全边界 | L2 contrast 崩溃 -4.51 | **仅 -0.15, 安全** | Phase A |
+| True Ft vs RandomCurric | "Ft"=Fine-tune | **True Ft ≈ Direct, RandomCurric = 梯度干扰** | Phase D |
+| Motion Fwd/Rev sev≥5 | "Fwd 翻转" | **Swin 下 Fwd 仍胜出 +0.43** | Phase B |
+| FiLM-GCM 适用范围 | "contrast 专用" | **contrast+stretch 有效, 其余全局安全** | Phase F |
+| MDTA/OCAB vs contrast | "避免 MDTA/OCAB" | **⏳ 重跑中 (exp9 含策略耦合)** | Phase A |
+
+### exp37 架构消融验证 (24盲识别挑战, R0参数, 1.5h Direct训练)
 
 ### 消融 A: 架构优化价值
 
