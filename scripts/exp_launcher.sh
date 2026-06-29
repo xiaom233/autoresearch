@@ -1,141 +1,116 @@
 #!/bin/bash
-# exp_launcher.sh — 训练启动和清理脚本
+# exp_launcher.sh — 训练启动/清理/状态脚本 (v2)
 #
 # 用法:
 #   清理:  bash scripts/exp_launcher.sh cleanup
-#   启动:  bash scripts/exp_launcher.sh start EXP_DIR TASK_FILE [GPUS]
+#   启动:  bash scripts/exp_launcher.sh start TASK_FILE [GPUS]
 #   状态:  bash scripts/exp_launcher.sh status
+#
+# 任务文件支持两种格式:
+#   cmd|name           (gpu_runner.sh 格式, 含 GPU_ID 占位符)
+#   {"id":"...","cmd":"..."}  (JSONL 格式)
 #
 # 示例:
 #   bash scripts/exp_launcher.sh cleanup
-#   bash scripts/exp_launcher.sh start exp25 exp25/scripts/phase5_tasks.jsonl 0,1,2,3,4,5,6,7
+#   bash scripts/exp_launcher.sh start exp38/scripts/phase5_tasks.txt 0,1,2,3,4,5,6,7
 
 set -e
 
 CMD="${1:-help}"
-EXP="${2:-}"
-TASK_FILE="${3:-}"
-GPUS="${4:-0,1,2,3,4,5,6,7}"
+TASK_FILE="${2:-}"
+GPUS="${3:-0,1,2,3,4,5,6,7}"
 
 # ============================================================
-# cleanup — 彻底杀掉所有训练进程，释放 GPU
+# cleanup
 # ============================================================
 cleanup() {
     echo "=== 清理 GPU 进程 ==="
-
-    # Step 1: 杀掉所有 GPU 调度器/启动器（防止重生 worker）
-    echo "杀掉调度器..."
     pkill -9 -f "gpu_scheduler" 2>/dev/null || true
-    pkill -9 -f "phase5_launcher" 2>/dev/null || true
-    # 注意：不杀自己（当前进程）
+    pkill -9 -f "gpu_runner"    2>/dev/null || true
     sleep 1
 
-    # Step 2: 通过 nvidia-smi 杀掉所有占用 GPU 的进程（包括 DataLoader workers）
-    echo "杀掉 GPU 进程..."
     nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | sort -u | while read pid; do
         [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null || true
     done
     sleep 1
 
-    # Step 3: 杀掉所有残留的 train.py 和 bash 脚本
-    echo "杀掉残留进程..."
-    ps aux | grep -E "train.py|gpu.*_run.sh" | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true
+    pkill -9 -f "train.py" 2>/dev/null || true
     sleep 2
 
-    # Step 4: 确认
     local remaining=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | wc -l)
-    echo "GPU 残留进程: $remaining"
+    echo "GPU 残留: $remaining"
     nvidia-smi --query-gpu=index,memory.used --format=csv,noheader 2>/dev/null
     echo "=== 清理完成 ==="
 }
 
 # ============================================================
-# status — 查看 GPU 和训练状态
+# status
 # ============================================================
 status() {
-    echo "=== GPU 状态 ==="
+    echo "=== GPU ==="
     nvidia-smi --query-gpu=index,memory.used,utilization.gpu,temperature.gpu --format=csv,noheader 2>/dev/null
     echo ""
-    echo "=== 训练进程 ==="
-    ps aux | grep "train.py" | grep -v grep | grep -oP 'blind_\d+' | sort -u | while read b; do
-        echo "  $b"
+    echo "=== train.py 进程 ==="
+    ps aux | grep "train.py" | grep -v grep | awk '{print $2, $11}' | while read pid cmd; do
+        echo "  PID=$pid"
     done
-    local count=$(ps aux | grep "train.py" | grep -v grep | grep -oP 'blind_\d+' | sort -u | wc -l)
+    local count=$(ps aux | grep "train.py" | grep -v grep | wc -l)
     echo "  共 $count 个活跃训练"
 }
 
 # ============================================================
-# start — 按顺序启动训练，一个 GPU 一个任务
+# start — 使用 gpu_runner.sh 排队启动
 # ============================================================
 start() {
-    if [ -z "$EXP" ] || [ -z "$TASK_FILE" ]; then
-        echo "用法: bash scripts/exp_launcher.sh start EXP_DIR TASK_FILE [GPUS]"
+    if [ -z "$TASK_FILE" ]; then
+        echo "用法: bash scripts/exp_launcher.sh start TASK_FILE [GPUS]"
+        exit 1
+    fi
+
+    if [ ! -f "$TASK_FILE" ]; then
+        echo "❌ 任务文件不存在: $TASK_FILE"
         exit 1
     fi
 
     # 先清理
     cleanup
 
-    # 读取任务文件
-    echo "=== 启动训练: $EXP ==="
-    echo "任务文件: $TASK_FILE"
-    echo "GPU: $GPUS"
-
     IFS=',' read -ra GPU_LIST <<< "$GPUS"
-    GPU_COUNT=${#GPU_LIST[@]}
-    echo "GPU 数量: $GPU_COUNT"
+    echo "=== 启动: $TASK_FILE ==="
+    echo "GPU: $GPUS (${#GPU_LIST[@]} 张)"
 
-    # 用 Python 解析 JSONL 并生成 per-GPU 脚本
-    .venv/bin/python3 << PYEOF
-import json, os
+    # 检测任务格式
+    local first_line=$(head -1 "$TASK_FILE")
+    local task_count=$(wc -l < "$TASK_FILE")
 
-tasks = [json.loads(l) for l in open("$TASK_FILE") if l.strip()]
-gpus = [int(g) for g in "$GPUS".split(",")]
+    if echo "$first_line" | grep -q '^{'; then
+        # JSONL 格式 → 转换为 cmd|name 格式的临时文件
+        local tmp_task=$(mktemp /tmp/exp_launcher_tasks.XXXXXX)
+        .venv/bin/python3 -c "
+import json, sys
+for line in open('$TASK_FILE'):
+    t = json.loads(line.strip())
+    print(f\"{t['cmd']}|{t['id']}\")
+" > "$tmp_task"
+        echo "格式: JSONL → 转换了 $task_count 个任务"
+        TASK_FILE="$tmp_task"
+    else
+        echo "格式: cmd|name ($task_count 个任务)"
+    fi
 
-# 分配任务到 GPU
-gpu_queues = {g: [] for g in gpus}
-for i, t in enumerate(tasks):
-    gpu = gpus[i % len(gpus)]
-    cmd = t['cmd'].replace('GPU_ID', str(gpu))
-    gpu_queues[gpu].append((t['id'], cmd))
-
-# 生成 per-GPU 脚本
-for gpu in gpus:
-    script = f"$EXP/scripts/gpu{gpu}_run.sh"
-    with open(script, 'w') as f:
-        f.write("#!/bin/bash\n")
-        f.write("# Auto-generated by exp_launcher.sh\n")
-        for task_id, cmd in gpu_queues[gpu]:
-            ckpt_dir = f"$EXP/experiments/{task_id}/checkpoints"
-            logf = f"$EXP/logs/{task_id}.log"
-            # 跳过已完成
-            f.write(f'if ls {ckpt_dir}/*.pt >/dev/null 2>&1; then\n')
-            f.write(f'  echo "[$(date +%H:%M)] GPU{gpu}: {task_id} SKIP (已有ckpt)"\n')
-            f.write(f'else\n')
-            f.write(f'  echo "[$(date +%H:%M)] GPU{gpu}: {task_id} START"\n')
-            f.write(f'  {cmd}\n')
-            f.write(f'  echo "[$(date +%H:%M)] GPU{gpu}: {task_id} DONE (rc=\$?)"\n')
-            f.write(f'fi\n')
-    os.chmod(script, 0o755)
-    print(f"GPU{gpu}: {len(gpu_queues[gpu])} tasks -> {script}")
-
-# 并行启动所有 GPU 脚本
-import subprocess
-for gpu in gpus:
-    logf = f"$EXP/logs/gpu{gpu}_runner.log"
-    subprocess.Popen(["bash", f"$EXP/scripts/gpu{gpu}_run.sh"],
-                     stdout=open(logf, 'w'), stderr=subprocess.STDOUT)
-    print(f"GPU{gpu}: 已启动")
-PYEOF
+    # 启动 per-GPU workers
+    for gpu in "${GPU_LIST[@]}"; do
+        nohup bash scripts/gpu_runner.sh "$gpu" "$TASK_FILE" > /dev/null 2>&1 &
+        echo "  GPU$gpu: 已启动"
+    done
 
     echo ""
-    echo "=== 训练已启动，监控命令: ==="
+    echo "=== 监控: ==="
     echo "  watch -n 30 'nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader'"
     echo "  bash scripts/exp_launcher.sh status"
+    echo "  wc -l $TASK_FILE  # 剩余任务"
 }
 
-# ============================================================
-# main
 # ============================================================
 case "$CMD" in
     cleanup) cleanup ;;
