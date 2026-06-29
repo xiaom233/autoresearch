@@ -1,215 +1,113 @@
 # exp39: 新架构组件系统探索
 
-> 两层设计：零成本组件 (5 种, 全覆盖) + 结构组件 (4 种, 重点退化)
-> 基线: Direct + Swin (454K)
-> 总计: **75 组**
+> 9 组件 × 9 退化 = 81 组，全已实现并测试通过
+> 基线: Direct + Swin (454K), 训练尺寸 128×128 (TRAIN_CROP)
 
 ---
 
-## 一、组件清单
+## 一、测试组件（全 9 个，已实现 ✅）
 
-### Layer 1: 零/负参数组件 (全覆盖 9 退化)
-
-| # | 组件 | 来源 | Δ 参数 | 机制 |
-|:--:|------|------|:--:|------|
-| 1 | **SimpleGate** | NAFNet (ECCV 2022) | **-32K** | 通道对半分→相乘, 替代 GELU |
-| 2 | **SCA** | NAFNet (ECCV 2022) | **+512** | GAP→L2Norm→通道缩放 |
-| 3 | **SG+SCA** | 组合 | **-32K** | SimpleGate + SCA |
-| 4 | **SwiGLU** | Shazeer (2020) | +98K | 双线性门控 SiLU(w1x)*(w2x) |
-| 5 | **LearnableSkip** | — | +4 | α·conv_skip 可学习残差权重 |
-
-### Layer 2: 结构组件 (5 关键退化重点验证)
-
-| # | 组件 | 来源 | Δ 参数 | 机制 |
-|:--:|------|------|:--:|------|
-| 6 | **GDFN** | X-Restormer (2024) | +50K? | 门控 + 3×3 DWConv FFN |
-| 7 | **FPro-lite** | FPro (ECCV 2024) | +5K | FFT→高低频分解→门控调制 |
-| 8 | **DFPIR-Perturb** | DFPIR (CVPR 2025) | +10K | 通道shuffle + 注意力掩码扰动 |
-| 9 | **Swin-GCM** | exp10 已验证 | +26K | FiLM-GCM (contrast+结构化 +3.52) |
+| # | 组件 | 来源 | 参数量 | Δ | 机制 | 环境变量 |
+|:--:|------|------|:--:|:--:|------|------|
+| 0 | **Swin** | SwinIR (ICCVW 2021) | 454,531 | — | 窗口自注意力基线 | — |
+| 1 | **SimpleGate** | NAFNet (ECCV 2022) | 421,763 | **-32K** | 通道对半分→相乘, 替代 GELU | `AR_USE_SIMPLE_GATE=1` |
+| 2 | **SCA** | NAFNet (ECCV 2022) | 455,043 | +512 | GAP→L2Norm→通道缩放 | `AR_USE_SCA=1` |
+| 3 | **SG+SCA** | 组合 | 422,275 | -32K | SimpleGate + SCA | `AR_USE_SIMPLE_GATE=1 AR_USE_SCA=1` |
+| 4 | **SwiGLU** | Shazeer (2020) | 521,091 | +67K | SiLU(w1x)*(w2x) 门控 FFN | `AR_ACTIVATION=swiglu` |
+| 5 | **LearnSkip** | — | 454,535 | +4 | α·conv_skip 可学习残差 | `AR_SKIP_RSTB=learnable` |
+| 6 | **FPro** | FPro (ECCV 2024) | 455,555 | +1K | FFT→频域门控→IFFT | `AR_USE_FPRO=1` |
+| 7 | **GDFN** | X-Restormer (2024) | 541,571 | +87K | GELU+DWConv ⊙ Gate | `AR_USE_GDFN=1` |
+| 8 | **FiLM-GCM** | exp10 已验证 | 480,259 | +26K | 全局通道调制 (contrast专用) | `AR_USE_GCM=1 AR_LR=5e-4` |
 
 ---
 
-## 二、参数统计（实测, 256×256）
+## 二、退化矩阵（9 种, 1/2/3 步全覆盖）
 
-| # | 组件 | 参数量 | Δ vs Swin | 环境变量 |
-|:--:|------|:--:|:--:|------|
-| 0 | Swin (基线) | 454,531 | — | — |
-| 1 | +SimpleGate | 421,763 | **-32,768** | `AR_USE_SIMPLE_GATE=1` |
-| 2 | +SCA | 455,043 | +512 | `AR_USE_SCA=1` |
-| 3 | +SG+SCA | 422,275 | -32,256 | `AR_USE_SIMPLE_GATE=1 AR_USE_SCA=1` |
-| 4 | +SwiGLU | 521,091 | +66,560 | `AR_ACTIVATION=swiglu` |
-| 5 | +LearnSkip | 454,535 | +4 | `AR_SKIP_RSTB=learnable` |
-| 6 | +FPro | 455,555 | +1,024 | `AR_USE_FPRO=1` |
-| 7 | +GDFN | 541,571 | +87,040 | `AR_USE_GDFN=1` |
-| 8 | +FiLM-GCM | 480,259 | +25,728 | `AR_USE_GCM=1 AR_LR=5e-4` |
-
-> 所有组件已实现并测试通过 (256×256 forward pass ✅)
-
-## 三、退化矩阵
-
-### 全覆盖 (9 退化 — Layer 1 使用)
-
-| ID | 步数 | 管线 |
-|:--:|:--:|------|
-| C | 1 | contrast_weaken_scale(3) |
-| N | 1 | noise_gaussian_RGB(3) |
-| B | 1 | blur_gaussian(3) |
-| L2 | 2 | noise(3)+contrast_scale(3) |
-| D3 | 2 | JPEG(3)+blur_lens(4) |
-| G2 | 2 | noise(3)+stretch(3) |
-| BS | 2 | noise(3)+brightness_shift(3) |
-| S5 | 3 | motion(5)+noise(1)+JPEG(1) |
-| SF5 | 3 | blur(3)+noise(3)+gamma(3) |
-
-### 重点退化 (5 — Layer 2 使用)
-
-C / L2 / D3 / G2 / S5 — 覆盖 contrast、梯度干扰、stretch、三退化
+| ID | 步数 | 管线 | 类型 |
+|:--:|:--:|------|------|
+| C | 1 | contrast_weaken_scale(3) | 纯 contrast |
+| N | 1 | noise_gaussian_RGB(3) | 纯 noise |
+| B | 1 | blur_gaussian(3) | 纯 blur |
+| L2 | 2 | noise(3)+contrast_scale(3) | contrast+noise |
+| D3 | 2 | JPEG(3)+blur_lens(4) | 梯度干扰 |
+| G2 | 2 | noise(3)+stretch(3) | stretch+noise |
+| BS | 2 | noise(3)+brightness_shift(3) | brightness+noise |
+| S5 | 3 | motion(5)+noise(1)+JPEG(1) | 三退化 mixed |
+| SF5 | 3 | blur(3)+noise(3)+gamma(3) | gamma triple |
 
 ---
 
-## 三、实验矩阵
+## 三、实验矩阵（9 组件 × 9 退化 = 81 组）
 
 ### 统一配置
 
 ```
+TRAIN_CROP=128 (dataloader随机裁剪, 退化前)
 EPOCH_BUDGET=2  LR=5e-4  BATCH_SIZE=16  EMBED_DIM=64
 WINDOW_SIZE=8  ATTENTION_TYPE=swin  LOSS_FN=l1
-所有实验 Direct 训练
+所有实验 Direct 训练 (无 CURRICULUM_CONFIG, 无 LOAD_CKPT)
 ```
 
-### Phase A: Swin 基线 (9 组)
+### 81 组全矩阵
 
-| ID | 退化 |
-|------|:--:|
-| SW_C ~ SW_SF5 | 全部 9 退化 |
-
-`AR_PARAMS_PATH=exp39/degradation/{ID}.json AR_VAL_PARAMS_PATH=exp39/degradation/{ID}.json`
-
-### Phase B: SimpleGate (9 组)
-
-| ID | 退化 | 预期 |
-|------|:--:|:--:|
-| SG_C~B | 单步 3 | ≈0 |
-| SG_L2 | L2 | ≈0 |
-| SG_D3 | D3 | **+0.3~0.5** (梯度干扰) |
-| SG_G2/BS | G2/BS | ≈0 |
-| SG_S5 | S5 | **+0.3~0.5** (三退化) |
-| SG_SF5 | SF5 | ≈0 |
-
-`AR_USE_SIMPLE_GATE=1`
-
-### Phase C: SCA (9 组)
-
-| ID | 退化 | 预期 |
-|------|:--:|:--:|
-| SCA_C | C | **+0.3~0.5** (contrast) |
-| SCA_N/B | N/B | ≈0 |
-| SCA_L2 | L2 | **+0.3~0.5** |
-| SCA_D3 | D3 | ≈0 |
-| SCA_G2 | G2 | **+0.2~0.3** (stretch) |
-| SCA_BS | BS | ≈0 |
-| SCA_S5/SF5 | S5/SF5 | ≈0 |
-
-`AR_USE_SCA=1`
-
-### Phase D: SG+SCA (9 组)
-
-`AR_USE_SIMPLE_GATE=1 AR_USE_SCA=1`
-
-### Phase E: SwiGLU (9 组)
-
-| ID | 退化 | 预期 |
-|------|:--:|:--:|
-| GLU_C | C | +0.1~0.2 |
-| GLU_N/B | N/B | ≈0 |
-| GLU_L2 | L2 | +0.1~0.3 |
-| GLU_D3 | D3 | **+0.2~0.4** |
-| GLU_G2/BS | G2/BS | ≈0 |
-| GLU_S5 | S5 | **+0.2~0.4** |
-| GLU_SF5 | SF5 | ≈0 |
-
-`AR_ACTIVATION=swiglu`
-
-### Phase F: LearnableSkip (9 组)
-
-`AR_SKIP_RSTB=learnable`
-
-### Phase G: GDFN (5 组 — 重点退化)
-
-| ID | 退化 | 预期 |
-|------|:--:|:--:|
-| GDFN_C | C | +0.1~0.2 |
-| GDFN_L2 | L2 | +0.2~0.3 |
-| GDFN_D3 | D3 | **+0.3~0.5** (DWConv 帮助空间) |
-| GDFN_G2 | G2 | +0.1~0.2 |
-| GDFN_S5 | S5 | **+0.3~0.5** |
-
-`AR_USE_GDFN=1` (需实现)
-
-### Phase H: FPro-lite (5 组 — 重点退化)
-
-| ID | 退化 | 预期 |
-|------|:--:|:--:|
-| FPRO_C | C | **+0.3~0.5** (频域选频) |
-| FPRO_L2 | L2 | **+0.3~0.5** |
-| FPRO_D3 | D3 | +0.1~0.3 |
-| FPRO_G2 | G2 | +0.1~0.2 |
-| FPRO_S5 | S5 | +0.1~0.3 |
-
-`AR_USE_FPRO=1` (需实现)
-
-### Phase I: FiLM-GCM 复现 (5 组 — 重点退化)
-
-| ID | 退化 | 预期 |
-|------|:--:|:--:|
-| GCM_C | C | +0.3~0.5 |
-| GCM_L2 | L2 | +0.47 (exp38 E1 复现) |
-| GCM_D3 | D3 | ≈0 |
-| GCM_G2 | G2 | +0.35 (exp38 F9 复现) |
-| GCM_S5 | S5 | ? |
-
-`AR_USE_GCM=1 AR_LEARNING_RATE=0.0005`
+| Phase | 组件 | 变量 | 组数 | 核心假设 |
+|:--:|------|------|:--:|------|
+| A | Swin | — | 9 | 基线 |
+| B | SimpleGate | `AR_USE_SIMPLE_GATE=1` | 9 | D3/S5 受益 (减少梯度干扰) |
+| C | SCA | `AR_USE_SCA=1` | 9 | C/L2/G2 受益 (增强通道交互) |
+| D | SG+SCA | B+C 组合 | 9 | 可能叠加 |
+| E | SwiGLU | `AR_ACTIVATION=swiglu` | 9 | D3/S5 受益 (门控 FFN) |
+| F | LearnSkip | `AR_SKIP_RSTB=learnable` | 9 | 全域微益 +0.1~0.2 |
+| G | FPro | `AR_USE_FPRO=1` | 9 | C/L2 受益 (频域选频) |
+| H | GDFN | `AR_USE_GDFN=1` | 9 | D3/S5 受益 (DWConv 空间) |
+| I | FiLM-GCM | `AR_USE_GCM=1 AR_LR=5e-4` | 9 | C/L2/G2 受益 (全局调制) |
+| | | **合计** | **81** | |
 
 ---
 
-## 五、实验统计
+## 四、预测矩阵
 
-| Phase | 组件 | 退化覆盖 | 组数 | 状态 |
-|:--:|------|:--:|:--:|:--:|
-| A | Swin 基线 | 9 | 9 | ✅ |
-| B | SimpleGate | 9 | 9 | ✅ |
-| C | SCA | 9 | 9 | ✅ |
-| D | SG+SCA | 9 | 9 | ✅ |
-| E | SwiGLU | 9 | 9 | ✅ |
-| F | LearnableSkip | 9 | 9 | ✅ |
-| G | FPro | 9 | 9 | ✅ |
-| H | GDFN | 9 | 9 | ✅ |
-| I | FiLM-GCM | 9 | 9 | ✅ |
-| **合计** | **9 组件** | | **81** | |
+| 退化 | SG | SCA | SG+SCA | SwiGLU | LearnSkip | FPro | GDFN | GCM |
+|------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| C (contrast) | ≈0 | **+0.3~0.5** | +0.3~0.5 | +0.1 | +0.1 | **+0.3** | +0.1 | **+0.4** |
+| N (noise) | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 |
+| B (blur) | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 |
+| L2 (c+n) | ≈0 | **+0.3~0.5** | +0.3~0.5 | +0.2 | +0.1 | **+0.3** | +0.2 | **+0.47** |
+| D3 (j+b) | **+0.3~0.5** | ≈0 | +0.3~0.5 | **+0.3** | +0.1 | +0.1 | **+0.4** | ≈0 |
+| G2 (s+n) | ≈0 | **+0.3** | +0.3 | +0.1 | +0.1 | +0.1 | +0.1 | **+0.35** |
+| BS (b+n) | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 |
+| S5 (3x) | **+0.3~0.5** | ≈0 | +0.3~0.5 | **+0.3** | +0.1 | +0.1 | **+0.4** | ? |
+| SF5 (γ3x) | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 | ≈0 |
 
 ---
 
-## 五、预期结果对比
+## 五、评估
 
-| 组件 | 参数量 | 主要收益退化 | Best Δ | Worst Δ | 安全? |
-|------|:--:|------|:--:|:--:|:--:|
-| SimpleGate | -32K | D3/S5 | +0.3~0.5 | ≈0 | ✅ |
-| SCA | +512 | C/L2/G2 | +0.3~0.5 | ≈0 | ✅ |
-| SG+SCA | -32K | D3/L2 | 叠加 | ≈0 | ✅ |
-| SwiGLU | +98K | D3/S5 | +0.2~0.4 | ≈0 | ✅ |
-| LearnableSkip | +4 | 全域微益 | +0.1~0.2 | ≈0 | ✅ |
-| GDFN | +50K | D3/S5 | +0.3~0.5 | ? | ? |
-| FPro-lite | +5K | C/L2 | +0.3~0.5 | ? | ? |
-| FiLM-GCM | +26K | C/L2/G2 | +0.47 | ≈0 | ✅ |
+### 退化特异性
+
+每个组件在匹配退化上的 Best Δ vs Swin。
+
+### 跨退化泛化安全性
+
+| 组件 | 参数量 | Best 预期 | Worst 预期 | 安全? | 盲识别可用? |
+|------|:--:|:--:|:--:|:--:|:--:|
+| SimpleGate | -32K | +0.3~0.5 (D3/S5) | ≈0 | ✅ | ✅ 常开 |
+| SCA | +512 | +0.3~0.5 (C/L2/G2) | ≈0 | ✅ | ✅ 常开 |
+| SG+SCA | -32K | 叠加 | ≈0 | ✅ | ✅ 常开 |
+| SwiGLU | +67K | +0.3 (D3/S5) | ≈0 | ✅ | ✅ 常开 |
+| LearnSkip | +4 | +0.1~0.2 | ≈0 | ✅ | ✅ 常开 |
+| FPro | +1K | +0.3 (C/L2) | ≈0 | ✅ | ✅ 常开 |
+| GDFN | +87K | +0.4 (D3/S5) | ≈0 | ? | ? |
+| FiLM-GCM | +26K | +0.47 (L2) | ≈0 | ✅ | 需信号门控 |
 
 ---
 
 ## 六、执行
 
 ```bash
-# 全部 81 组, 9 组件全部已实现, 可直接启动
+cd /data/zyli/projects/autoresearch
 python3 exp39/scripts/generate.py
 bash scripts/exp_launcher.sh start exp39/scripts/tasks.txt 1,2,3,4,5,6,7
 ```
 
-**预计墙钟**: 81 组 × 5 min / 7 GPU ≈ **60 min**
+**预计墙钟**: 81组 × ~3-4 min / 7 GPU ≈ **40-45 min** (128×128 快于 256×256)
