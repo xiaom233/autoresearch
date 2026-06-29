@@ -776,7 +776,31 @@ expN/
 
 ### 任务生成和启动
 
-gpu_scheduler.py 的 `os.fork()` 在部分环境下不稳定。**推荐直接生成 bash 脚本并行执行**：
+**🔴 统一使用 `scripts/exp_launcher.sh`，禁止自行编写调度器。**
+
+```bash
+# 1. 生成 JSONL 任务文件
+.venv/bin/python3 << 'PYEOF'
+import json
+tasks = []
+for bid in ["blind_0001", ...]:
+    tasks.append({"id": bid, "cmd": f"CUDA_VISIBLE_DEVICES=GPU_ID AR_PARAMS_PATH=... .venv/bin/python3 train.py > expN/logs/{bid}.log 2>&1"})
+with open("expN/scripts/tasks.jsonl", "w") as f:
+    for t in tasks: f.write(json.dumps(t) + "\n")
+PYEOF
+
+# 2. 启动排队
+bash scripts/exp_launcher.sh start expN/scripts/tasks.jsonl 0,1,2,3,4,5,6,7
+
+# 3. 监控
+bash scripts/exp_launcher.sh status
+```
+
+**排队机制**：`scripts/gpu_runner.sh` 每 GPU 一个进程，`flock` 原子取任务，串行执行。来源：exp10/exp12 验证。
+
+**🔴 exp37 教训**：自行编写的 `queue_scheduler.sh` 使用 Python subprocess 启动训练，exit 144 无声失败，R1 实验全部未执行。禁止重复此错误。
+
+旧方案（直接生成 bash 脚本）备选：
 
 ```bash
 # 1. 用 Python 脚本生成 per-GPU 任务文件和 bash 启动脚本
