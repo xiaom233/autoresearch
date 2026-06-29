@@ -95,6 +95,7 @@ BATCH_SIZE = 16
 NUM_WORKERS = 4
 SHUFFLE_BUFFER = 1000
 MAX_STEPS = 0                 # 0=auto (EPOCH_BUDGET/TIME_BUDGET), >0=直接指定步数
+TRAIN_CROP = 128              # 训练随机裁剪尺寸, 默认128 (原图256→随机裁剪128)
 
 # Optimization
 LEARNING_RATE = 1e-3
@@ -174,7 +175,7 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
            "WEIGHT_DECAY", "WARMUP_STEPS", "TIME_BUDGET", "EPOCH_BUDGET",
            "MAX_STEPS",
            "CHECKPOINT_INTERVAL", "WINDOW_SIZE", "MLP_RATIO",
-           "LOG_INTERVAL", "NUM_WORKERS", "SHUFFLE_BUFFER",
+           "LOG_INTERVAL", "NUM_WORKERS", "SHUFFLE_BUFFER", "TRAIN_CROP",
            "LR_SCHEDULE", "VAL_COUNT", "DEPTHS", "NUM_HEADS", "ADAM_BETAS",
            "LOSS_FN", "HUBER_DELTA", "GRAD_CLIP", "LOSS_WEIGHTS", "AMP_DTYPE",
            "ACTIVATION", "DEG_AUGMENT", "CKPT_PREFIX", "ATTENTION_TYPE",
@@ -508,7 +509,7 @@ def main():
                     params_path=None,  # 随机模式, 使用 mixed gen
                     shards_url=TRAIN_SHARDS,
                     batch_size=BATCH_SIZE, num_workers=NUM_WORKERS,
-                    shuffle_buffer=SHUFFLE_BUFFER,
+                    shuffle_buffer=SHUFFLE_BUFFER, train_crop=TRAIN_CROP,
                 )
             _phase_loaders.append((step_start, ldr))
         _prepare.generate_random_pipeline = _orig_gen  # 恢复
@@ -539,7 +540,7 @@ def main():
                 ldr = make_dataloader_restoration(
                     params_path=_params, shards_url=TRAIN_SHARDS,
                     batch_size=BATCH_SIZE, num_workers=NUM_WORKERS,
-                    shuffle_buffer=SHUFFLE_BUFFER,
+                    shuffle_buffer=SHUFFLE_BUFFER, train_crop=TRAIN_CROP,
                 )
             _phase_loaders.append((int(step_start), ldr))
         _phase_loaders.sort(key=lambda t: t[0])
@@ -558,6 +559,7 @@ def main():
             batch_size=BATCH_SIZE,
             num_workers=NUM_WORKERS,
             shuffle_buffer=SHUFFLE_BUFFER,
+            train_crop=TRAIN_CROP,
         )
 
     x, y, epoch = next(train_loader)

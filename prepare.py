@@ -98,12 +98,12 @@ def extract_dataset():
     opt['n_thread'] = 20
     opt['compression_level'] = 3
 
-    # HR images — base crop_size=128 (reduced from 256 for faster training).
-    # For aligned LR patches: x2→64, x3→42, x4→32.
+    # HR images — base crop_size=256.
+    # For aligned LR patches: x2→128, x3→85 (256/3≈85, not divisible), x4→64.
     opt['input_folder'] = 'datasets/DIV2K/DIV2K_train_HR'
     opt['save_folder'] = 'datasets/DIV2K/DIV2K_train_HR_sub'
-    opt['crop_size'] = 128
-    opt['step'] = 64
+    opt['crop_size'] = 256
+    opt['step'] = 128
     opt['thresh_size'] = 0
     if extract_subimages(opt):
         make_webdataset(opt['save_folder'], 'datasets/DIV2K/DIV2K_train_HR_wds/train-%06d.tar')
@@ -367,7 +367,7 @@ def make_dataloader_gpt(tokenizer, B, T, split, buffer_size=1000):
 
 def make_dataloader_restoration(params_path=None, shards_url=None, batch_size=16,
                                  num_workers=4, shuffle_buffer=1000,
-                                 endless=True):
+                                 endless=True, train_crop=None):
     """Create a streaming DataLoader for image restoration training.
 
     Reads clean images from WebDataset shards, applies the degradation pipeline
@@ -382,6 +382,8 @@ def make_dataloader_restoration(params_path=None, shards_url=None, batch_size=16
         num_workers (int): Number of dataloader worker processes.
         shuffle_buffer (int): WebDataset shuffle buffer size (0 to disable).
         endless (bool): If True, loop forever incrementing epoch. If False, single pass.
+        train_crop (int or None): If set, randomly crop images to this size (e.g. 128).
+            Original patches are 256×256. Crop is applied BEFORE degradation.
 
     Yields:
         inputs: Degraded images [B, 3, H, W] float32 in [0, 1].
@@ -408,6 +410,12 @@ def make_dataloader_restoration(params_path=None, shards_url=None, batch_size=16
         for ext in ('png', 'jpg', 'jpeg', 'ppm', 'webp'):
             if ext in sample:
                 img = np.array(Image.open(io.BytesIO(sample[ext])).convert('RGB'), dtype=np.uint8)
+                # Random crop BEFORE degradation
+                if train_crop and train_crop < img.shape[0]:
+                    h, w = img.shape[:2]
+                    y = np.random.randint(0, h - train_crop + 1) if h > train_crop else 0
+                    x = np.random.randint(0, w - train_crop + 1) if w > train_crop else 0
+                    img = img[y:y+train_crop, x:x+train_crop]
                 clean = img.copy()
                 for func_name, severity in get_pipeline():
                     img = add_distortion(img, severity=severity, distortion_name=func_name)
