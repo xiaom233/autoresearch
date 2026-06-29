@@ -199,6 +199,73 @@ class OCABBlock(nn.Module):
         return x + x_norm.flatten(2).transpose(1, 2)
 
 
+class GDFN(nn.Module):
+    """Gated FFN with depthwise conv (X-Restormer, 2024).
+
+    Linear→GELU+DWConv ⊙ gate→Linear. The depthwise conv provides
+    local spatial context, and the gating mechanism suppresses noise.
+    Used as a drop-in replacement for the SwinBlock MLP.
+    """
+    def __init__(self, dim, mlp_ratio=2):
+        super().__init__()
+        hidden = int(dim * mlp_ratio)
+        self.conv1 = nn.Conv2d(dim, hidden * 2, 1)
+        self.dwconv = nn.Conv2d(hidden * 2, hidden * 2, 3, 1, 1, groups=hidden * 2)
+        self.conv2 = nn.Conv2d(hidden, dim, 1)
+
+    def forward(self, x, x_size):
+        B, L, C = x.shape
+        H, W = x_size
+        x_4d = x.transpose(1, 2).view(B, C, H, W)
+        x1, x2 = self.dwconv(self.conv1(x_4d)).chunk(2, dim=1)
+        out = self.conv2(F.gelu(x1) * x2)
+        return out.flatten(2).transpose(1, 2)
+
+
+class FProLite(nn.Module):
+    """Frequency Prompting Lite (FPro ECCV 2024 simplified).
+
+    FFT → per-channel frequency gate → magnitude modulation → IFFT.
+    ~2K params, inserted after SwinBlock MLP.
+    """
+    def __init__(self, dim):
+        super().__init__()
+        self.low_weight = nn.Parameter(torch.ones(1, dim, 1, 1))
+        self.high_weight = nn.Parameter(torch.zeros(1, dim, 1, 1))
+
+    def forward(self, x, x_size):
+        B, L, C = x.shape
+        H, W = x_size
+        x_4d = x.transpose(1, 2).view(B, C, H, W)
+
+        # FFT
+        x_fft = torch.fft.rfft2(x_4d.float(), norm='ortho')
+        mag = torch.abs(x_fft)
+        h_f, w_f = mag.shape[-2], mag.shape[-1]
+
+        # Radius-based frequency mask (0=DC center, 1=Nyquist edge)
+        y, xc = torch.meshgrid(
+            torch.arange(h_f, device=mag.device, dtype=torch.float32),
+            torch.arange(w_f, device=mag.device, dtype=torch.float32), indexing='ij')
+        dist = torch.sqrt((y - h_f/2)**2 + (xc - w_f/2)**2)
+        max_dist = torch.sqrt(torch.tensor((h_f/2)**2 + (w_f/2)**2, device=mag.device))
+        freq_ratio = dist / (max_dist + 1e-6)  # (h_f, w_f), 0=low, 1=high
+
+        # Adaptive gate: low_weight * (1-ratio) + high_weight * ratio
+        gate = (self.low_weight * (1 - freq_ratio) +
+                self.high_weight * freq_ratio)  # (1, C, h_f, w_f)
+        gate = torch.sigmoid(gate)
+
+        # Modulate magnitude
+        mag_mod = mag * gate
+
+        # IFFT
+        x_fft_mod = mag_mod * torch.exp(1j * torch.angle(x_fft))
+        x_out = torch.fft.irfft2(x_fft_mod, s=(H, W), norm='ortho').to(x.dtype)
+
+        return x_out.flatten(2).transpose(1, 2)
+
+
 class GlobalChannelModulation(nn.Module):
     """Global channel statistics → per-channel affine modulation (FiLM-style).
 
@@ -455,7 +522,8 @@ class SwinBlock(nn.Module):
 
     def __init__(self, dim, num_heads, window_size=8, shift_size=0, mlp_ratio=2,
                  activation="gelu", use_gcm=False, use_freqmod=False,
-                 use_csn=False, use_simple_gate=False, use_sca=False):
+                 use_csn=False, use_simple_gate=False, use_sca=False,
+                 use_gdfn=False, use_fpro=False):
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
         self.attn = WindowSDPA(dim, num_heads, window_size, shift_size)
@@ -464,10 +532,12 @@ class SwinBlock(nn.Module):
 
         self.use_simple_gate = use_simple_gate
         self.use_sca = use_sca
+        self.use_gdfn = use_gdfn
 
-        if use_simple_gate:
-            # SimpleGate: Linear → chunk+multiply → Linear(hidden//2, dim)
-            # Replaces GELU, slightly reduces params
+        if use_gdfn:
+            self.gdfn = GDFN(dim, mlp_ratio)
+            self.activation = "gdfn"
+        elif use_simple_gate:
             self.mlp_w1 = nn.Linear(dim, hidden)
             self.mlp_w2 = nn.Linear(hidden // 2, dim)
             self.activation = "simple_gate"
@@ -487,13 +557,16 @@ class SwinBlock(nn.Module):
             self.activation = activation
 
         self.sca = SCA(dim) if use_sca else None
+        self.fpro = FProLite(dim) if use_fpro else None
         self.gcm = GlobalChannelModulation(dim) if use_gcm else None
         self.freqmod = FreqMod(dim) if use_freqmod else None
         self.csn = CSN(dim) if use_csn else None
 
     def forward(self, x, x_size):
         x = x + self.attn(self.norm1(x), x_size)
-        if self.use_simple_gate:
+        if self.use_gdfn:
+            x = x + self.gdfn(self.norm2(x), x_size)
+        elif self.use_simple_gate:
             x_norm = self.norm2(x)
             x_hidden = self.mlp_w1(x_norm)
             x_gated = SimpleGate.forward(self, x_hidden)
@@ -503,6 +576,8 @@ class SwinBlock(nn.Module):
             x = x + self.w3(F.silu(self.w1(x_norm)) * self.w2(x_norm))
         else:
             x = x + self.mlp(self.norm2(x))
+        if self.fpro is not None:
+            x = self.fpro(x, x_size)
         if self.sca is not None:
             x = self.sca(x)
         if self.gcm is not None:
@@ -524,7 +599,8 @@ class RSTB(nn.Module):
                  activation="gelu", window_shift_ratio=0.5, skip_type="standard",
                  conv_kernel=3, attention_type="swin", use_gcm=False,
                  use_freqmod=False, use_csn=False,
-                 use_simple_gate=False, use_sca=False):
+                 use_simple_gate=False, use_sca=False,
+                 use_gdfn=False, use_fpro=False):
         super().__init__()
         if attention_type == "mdta":
             self.blocks = nn.ModuleList([
@@ -544,7 +620,9 @@ class RSTB(nn.Module):
                           use_gcm=use_gcm, use_freqmod=use_freqmod,
                           use_csn=use_csn,
                           use_simple_gate=use_simple_gate,
-                          use_sca=use_sca)
+                          use_sca=use_sca,
+                          use_gdfn=use_gdfn,
+                          use_fpro=use_fpro)
                 for i in range(depth)
             ])
         self.conv = nn.Conv2d(dim, dim, conv_kernel, 1, conv_kernel // 2)
@@ -585,7 +663,8 @@ class RestoreNet(nn.Module):
                  use_channel_curve=False, use_color_mlp=False,
                  use_freqmod=False, use_color_pre=False, use_dual_branch=False,
                  use_pcp=False, use_csn=False, use_color_mlp_output=False,
-                 use_simple_gate=False, use_sca=False):
+                 use_simple_gate=False, use_sca=False,
+                 use_gdfn=False, use_fpro=False):
         super().__init__()
         self.window_size = window_size
         self.embed_dim = embed_dim
@@ -663,7 +742,9 @@ class RestoreNet(nn.Module):
                      use_gcm=use_gcm, use_freqmod=use_freqmod,
                      use_csn=use_csn,
                      use_simple_gate=use_simple_gate,
-                     use_sca=use_sca)
+                     use_sca=use_sca,
+                     use_gdfn=use_gdfn,
+                     use_fpro=use_fpro)
             )
         self.norm = nn.LayerNorm(_dims[-1])
         self._final_dim = _dims[-1]

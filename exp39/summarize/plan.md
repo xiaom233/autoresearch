@@ -29,7 +29,23 @@
 
 ---
 
-## 二、退化矩阵
+## 二、参数统计（实测, 256×256）
+
+| # | 组件 | 参数量 | Δ vs Swin | 环境变量 |
+|:--:|------|:--:|:--:|------|
+| 0 | Swin (基线) | 454,531 | — | — |
+| 1 | +SimpleGate | 421,763 | **-32,768** | `AR_USE_SIMPLE_GATE=1` |
+| 2 | +SCA | 455,043 | +512 | `AR_USE_SCA=1` |
+| 3 | +SG+SCA | 422,275 | -32,256 | `AR_USE_SIMPLE_GATE=1 AR_USE_SCA=1` |
+| 4 | +SwiGLU | 521,091 | +66,560 | `AR_ACTIVATION=swiglu` |
+| 5 | +LearnSkip | 454,535 | +4 | `AR_SKIP_RSTB=learnable` |
+| 6 | +FPro | 455,555 | +1,024 | `AR_USE_FPRO=1` |
+| 7 | +GDFN | 541,571 | +87,040 | `AR_USE_GDFN=1` |
+| 8 | +FiLM-GCM | 480,259 | +25,728 | `AR_USE_GCM=1 AR_LR=5e-4` |
+
+> 所有组件已实现并测试通过 (256×256 forward pass ✅)
+
+## 三、退化矩阵
 
 ### 全覆盖 (9 退化 — Layer 1 使用)
 
@@ -156,20 +172,20 @@ WINDOW_SIZE=8  ATTENTION_TYPE=swin  LOSS_FN=l1
 
 ---
 
-## 四、实验统计
+## 五、实验统计
 
-| Phase | 组件 | 退化覆盖 | 组数 | 实现状态 |
+| Phase | 组件 | 退化覆盖 | 组数 | 状态 |
 |:--:|------|:--:|:--:|:--:|
-| A | Swin 基线 | 9 | 9 | ✅ 已有 |
-| B | SimpleGate | 9 | 9 | ✅ 已实现 |
-| C | SCA | 9 | 9 | ✅ 已实现 |
-| D | SG+SCA | 9 | 9 | ✅ 已实现 |
-| E | SwiGLU | 9 | 9 | ✅ 已有 `AR_ACTIVATION=swiglu` |
-| F | LearnableSkip | 9 | 9 | ✅ 已有 `AR_SKIP_RSTB=learnable` |
-| G | GDFN | 5 | 5 | 🔧 需实现 |
-| H | FPro-lite | 5 | 5 | 🔧 需实现 |
-| I | FiLM-GCM | 5 | 5 | ✅ 已有 `AR_USE_GCM=1` |
-| **合计** | **9 组件** | | **75** | |
+| A | Swin 基线 | 9 | 9 | ✅ |
+| B | SimpleGate | 9 | 9 | ✅ |
+| C | SCA | 9 | 9 | ✅ |
+| D | SG+SCA | 9 | 9 | ✅ |
+| E | SwiGLU | 9 | 9 | ✅ |
+| F | LearnableSkip | 9 | 9 | ✅ |
+| G | FPro | 9 | 9 | ✅ |
+| H | GDFN | 9 | 9 | ✅ |
+| I | FiLM-GCM | 9 | 9 | ✅ |
+| **合计** | **9 组件** | | **81** | |
 
 ---
 
@@ -191,14 +207,9 @@ WINDOW_SIZE=8  ATTENTION_TYPE=swin  LOSS_FN=l1
 ## 六、执行
 
 ```bash
-# Layer 1 (Phase A-F): 54 组, 可直接启动
-python3 exp39/scripts/generate_layer1.py
-bash scripts/exp_launcher.sh start exp39/scripts/tasks_layer1.txt 1,2,3,4,5,6,7
-
-# Layer 2 (Phase G-I): 21 组, 实现后启动
-# 需先实现: AR_USE_GDFN=1, AR_USE_FPRO=1
-python3 exp39/scripts/generate_layer2.py
-bash scripts/exp_launcher.sh start exp39/scripts/tasks_layer2.txt 1,2,3,4,5,6,7
+# 全部 81 组, 9 组件全部已实现, 可直接启动
+python3 exp39/scripts/generate.py
+bash scripts/exp_launcher.sh start exp39/scripts/tasks.txt 1,2,3,4,5,6,7
 ```
 
-**预计墙钟**: Layer1 54组 ~40min + Layer2 21组 ~15min ≈ **55min**
+**预计墙钟**: 81 组 × 5 min / 7 GPU ≈ **60 min**

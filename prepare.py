@@ -98,12 +98,12 @@ def extract_dataset():
     opt['n_thread'] = 20
     opt['compression_level'] = 3
 
-    # HR images — base crop_size=256.
-    # For aligned LR patches: x2→128, x3→85 (256/3≈85, not divisible), x4→64.
+    # HR images — base crop_size=128 (reduced from 256 for faster training).
+    # For aligned LR patches: x2→64, x3→42, x4→32.
     opt['input_folder'] = 'datasets/DIV2K/DIV2K_train_HR'
     opt['save_folder'] = 'datasets/DIV2K/DIV2K_train_HR_sub'
-    opt['crop_size'] = 256
-    opt['step'] = 128
+    opt['crop_size'] = 128
+    opt['step'] = 64
     opt['thresh_size'] = 0
     if extract_subimages(opt):
         make_webdataset(opt['save_folder'], 'datasets/DIV2K/DIV2K_train_HR_wds/train-%06d.tar')
