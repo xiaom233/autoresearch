@@ -31,6 +31,16 @@ Step 0: run_full_analysis.py → full_analysis.json
         → step4: variance_ratio, mean_shift (global)
         → 手动写入 reflection.json: initial_analysis (mode, sigma, suspected/ruled_out)
 
+Step 0.5: 🆕 Qwen 噪声门 (exp37 消融: Qwen 噪声存在性判断优于Skill)
+        IF sigma 边界 (2 < sigma < 10) 或信号矛盾:
+          → 发送原图给 Qwen: "这些图像中是否存在随机噪声(gaussian/speckle/poisson/impulse)? 只需回答 YES/NO"
+          → Qwen YES → 继续 Step 3 噪声精细诊断
+          → Qwen NO  → 跳过 Step 3, 标记 NO_NOISE
+          → 预算: 1次 API 调用, 仅边界/矛盾时触发
+        ELSE:
+          → sigma < 2 → NO_NOISE (跳过Step3)
+          → sigma > 10 → 确认有噪声 (进入Step3)
+
 Step 1: Compression (IF block_boundary>1.1)
         test_candidate.py JPEG 1-5 → PSNR 选最优 → pipeline_comp
 
