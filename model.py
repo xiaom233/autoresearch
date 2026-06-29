@@ -165,8 +165,8 @@ class OCAB(nn.Module):
         # K,V on overlapping windows via Unfold
         k_ov = F.unfold(k, kernel_size=ws+ov, stride=ws, padding=ov//2)
         v_ov = F.unfold(v, kernel_size=ws+ov, stride=ws, padding=ov//2)
-        k_ov = rearrange(k_ov, 'b (h c k) n -> (b n) k (h c)', h=self.num_heads)
-        v_ov = rearrange(v_ov, 'b (h c k) n -> (b n) k (h c)', h=self.num_heads)
+        k_ov = rearrange(k_ov, 'b (h c k) n -> (b n) k (h c)', h=self.num_heads, c=self.head_dim)
+        v_ov = rearrange(v_ov, 'b (h c k) n -> (b n) k (h c)', h=self.num_heads, c=self.head_dim)
 
         attn = (q_w @ k_ov.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
@@ -422,18 +422,56 @@ class ColorPre(nn.Module):
         return x * (1.0 + scale.unsqueeze(-1).unsqueeze(-1)) + shift.unsqueeze(-1).unsqueeze(-1)
 
 
+class SimpleGate(nn.Module):
+    """Channel-split gating activation (NAFNet, ECCV 2022). 0 parameters.
+
+    Splits channels in half and multiplies: out = x1 * x2.
+    Replaces GELU/ReLU with zero parameter cost.
+    """
+    def forward(self, x):
+        x1, x2 = x.chunk(2, dim=-1)
+        return x1 * x2
+
+
+class SCA(nn.Module):
+    """Simplified Channel Attention (NAFNet, ECCV 2022). ~0 parameters.
+
+    GAP → L2 Norm → learnable scale. No activation, no sigmoid.
+    Much simpler than SE/ECA while equally effective.
+    """
+    def __init__(self, dim):
+        super().__init__()
+        self.scale = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x):
+        # x: (B, N, C) — spatial tokens
+        gap = x.mean(dim=1, keepdim=True)  # (B, 1, C)
+        gap = gap * (gap.norm(p=2, dim=-1, keepdim=True) + 1e-6).reciprocal()
+        return x * self.scale * gap
+
+
 class SwinBlock(nn.Module):
-    """Swin Transformer block: window SDPA + MLP + optional GCM/FreqMod, pre-norm style."""
+    """Swin Transformer block: window SDPA + MLP + optional GCM/FreqMod/SCA, pre-norm style."""
 
     def __init__(self, dim, num_heads, window_size=8, shift_size=0, mlp_ratio=2,
                  activation="gelu", use_gcm=False, use_freqmod=False,
-                 use_csn=False):
+                 use_csn=False, use_simple_gate=False, use_sca=False):
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
         self.attn = WindowSDPA(dim, num_heads, window_size, shift_size)
         self.norm2 = nn.LayerNorm(dim)
         hidden = int(dim * mlp_ratio)
-        if activation == "swiglu":
+
+        self.use_simple_gate = use_simple_gate
+        self.use_sca = use_sca
+
+        if use_simple_gate:
+            # SimpleGate: Linear → chunk+multiply → Linear(hidden//2, dim)
+            # Replaces GELU, slightly reduces params
+            self.mlp_w1 = nn.Linear(dim, hidden)
+            self.mlp_w2 = nn.Linear(hidden // 2, dim)
+            self.activation = "simple_gate"
+        elif activation == "swiglu":
             self.w1 = nn.Linear(dim, hidden)
             self.w2 = nn.Linear(dim, hidden)
             self.w3 = nn.Linear(hidden, dim)
@@ -447,17 +485,26 @@ class SwinBlock(nn.Module):
                 nn.Linear(hidden, dim),
             )
             self.activation = activation
+
+        self.sca = SCA(dim) if use_sca else None
         self.gcm = GlobalChannelModulation(dim) if use_gcm else None
         self.freqmod = FreqMod(dim) if use_freqmod else None
         self.csn = CSN(dim) if use_csn else None
 
     def forward(self, x, x_size):
         x = x + self.attn(self.norm1(x), x_size)
-        if self.activation == "swiglu":
+        if self.use_simple_gate:
+            x_norm = self.norm2(x)
+            x_hidden = self.mlp_w1(x_norm)
+            x_gated = SimpleGate.forward(self, x_hidden)
+            x = x + self.mlp_w2(x_gated)
+        elif self.activation == "swiglu":
             x_norm = self.norm2(x)
             x = x + self.w3(F.silu(self.w1(x_norm)) * self.w2(x_norm))
         else:
             x = x + self.mlp(self.norm2(x))
+        if self.sca is not None:
+            x = self.sca(x)
         if self.gcm is not None:
             x = self.gcm(x, x_size)
         if self.freqmod is not None:
@@ -476,7 +523,8 @@ class RSTB(nn.Module):
     def __init__(self, dim, depth, num_heads, window_size=8, mlp_ratio=2,
                  activation="gelu", window_shift_ratio=0.5, skip_type="standard",
                  conv_kernel=3, attention_type="swin", use_gcm=False,
-                 use_freqmod=False, use_csn=False):
+                 use_freqmod=False, use_csn=False,
+                 use_simple_gate=False, use_sca=False):
         super().__init__()
         if attention_type == "mdta":
             self.blocks = nn.ModuleList([
@@ -494,7 +542,9 @@ class RSTB(nn.Module):
                           shift_size=0 if i % 2 == 0 else shift_size,
                           mlp_ratio=mlp_ratio, activation=activation,
                           use_gcm=use_gcm, use_freqmod=use_freqmod,
-                          use_csn=use_csn)
+                          use_csn=use_csn,
+                          use_simple_gate=use_simple_gate,
+                          use_sca=use_sca)
                 for i in range(depth)
             ])
         self.conv = nn.Conv2d(dim, dim, conv_kernel, 1, conv_kernel // 2)
@@ -534,7 +584,8 @@ class RestoreNet(nn.Module):
                  conv_kernel=3, attention_type="swin", use_gcm=False,
                  use_channel_curve=False, use_color_mlp=False,
                  use_freqmod=False, use_color_pre=False, use_dual_branch=False,
-                 use_pcp=False, use_csn=False, use_color_mlp_output=False):
+                 use_pcp=False, use_csn=False, use_color_mlp_output=False,
+                 use_simple_gate=False, use_sca=False):
         super().__init__()
         self.window_size = window_size
         self.embed_dim = embed_dim
@@ -610,7 +661,9 @@ class RestoreNet(nn.Module):
                 RSTB(dim, d, nh, window_size, mlp_ratio, activation,
                      window_shift_ratio, skip_type, conv_kernel, attention_type,
                      use_gcm=use_gcm, use_freqmod=use_freqmod,
-                     use_csn=use_csn)
+                     use_csn=use_csn,
+                     use_simple_gate=use_simple_gate,
+                     use_sca=use_sca)
             )
         self.norm = nn.LayerNorm(_dims[-1])
         self._final_dim = _dims[-1]

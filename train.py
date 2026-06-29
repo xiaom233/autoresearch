@@ -157,6 +157,8 @@ USE_FREQMOD = False           # FreqMod: FFT 频域调制 (❌ 已废弃, SF8 -9
 USE_CHANNEL_CURVE = False     # ChannelCurve: 通道曲线校正 (stretch +0.38, +0.1K)
 USE_DUAL_BRANCH = False       # DualBranch: 全局分支调制 (鲁棒性最强, +3K)
 USE_COLOR_MLP_OUTPUT = False  # ColorMLP Output: 输出层颜色校正 (+0.1K)
+USE_SIMPLE_GATE = False       # SimpleGate: 通道对半分→相乘替代GELU (0参数, NAFNet ECCV2022)
+USE_SCA = False               # SCA: GAP→L2Norm→通道缩放 (~0参数, NAFNet ECCV2022)
 
 # Logging
 LOG_INTERVAL = 25            # steps between PSNR logging
@@ -181,7 +183,7 @@ for _v in ("PARAMS_PATH", "VAL_PARAMS_PATH", "EMBED_DIM", "BATCH_SIZE", "LEARNIN
            "ADAPTIVE_SWITCH", "ADAPTIVE_THRESHOLD",
            "USE_GCM", "USE_CSN", "USE_COLOR_PRE", "USE_COLOR_MLP",
            "USE_PCP", "USE_FREQMOD", "USE_CHANNEL_CURVE", "USE_DUAL_BRANCH",
-           "USE_COLOR_MLP_OUTPUT"):
+           "USE_COLOR_MLP_OUTPUT", "USE_SIMPLE_GATE", "USE_SCA"):
     _env = os.environ.get(f"AR_{_v}")
     if _env is not None:
         if _v in ("PARAMS_PATH", "VAL_PARAMS_PATH"):
@@ -381,6 +383,7 @@ def main():
                   "gcm": USE_GCM, "csn": USE_CSN,
                   "color_pre": USE_COLOR_PRE, "color_mlp": USE_COLOR_MLP,
                   "pcp": USE_PCP, "dual_branch": USE_DUAL_BRANCH,
+                  "simple_gate": USE_SIMPLE_GATE, "sca": USE_SCA,
                   "channel_curve": USE_CHANNEL_CURVE},
         "training": {"epoch_budget": EPOCH_BUDGET, "batch_size": BATCH_SIZE,
                     "lr": LEARNING_RATE, "loss_fn": LOSS_FN},
@@ -426,7 +429,8 @@ def main():
                         use_color_pre=USE_COLOR_PRE, use_color_mlp=USE_COLOR_MLP,
                         use_pcp=USE_PCP, use_freqmod=USE_FREQMOD,
                         use_channel_curve=USE_CHANNEL_CURVE, use_dual_branch=USE_DUAL_BRANCH,
-                        use_color_mlp_output=USE_COLOR_MLP_OUTPUT)
+                        use_color_mlp_output=USE_COLOR_MLP_OUTPUT,
+                        use_simple_gate=USE_SIMPLE_GATE, use_sca=USE_SCA)
     model.to(device)
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Model params: {num_params:,}")
