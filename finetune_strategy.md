@@ -250,11 +250,23 @@ DualBranch 在 L5/SF1(GT已知)上大幅超越 Swin，且无 NaN 风险。但 ex
 
 lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 
-### 参数公平性规则 (来源: exp10 原则 6)
+### 🔴 参数公平性规则 (强制, 来源: exp10 原则 6 + exp38 审计)
 
-- 模块总参数 ≤ 基线 × 1.05 (≤ 477K)
-- 满足的模块：CSN (+1K), ColorPre (+0.8K), DualBranch (+3K), PCP-shared (+3K), ColorMLP (+0.1K), ChannelCurve (+0.1K)
-- 超出需重新对齐的：FiLM-GCM (+26K, 5.7%) — 但 +3.52 dB 远超 5.7% 参数可解释范围
+**任何架构对比必须在同等参数量下进行。违反此规则的结论无效。**
+
+| 规则 | 限制 | 来源 |
+|------|:--:|------|
+| 模块总参数 ≤ 基线 × 1.05 | ≤ 477K | exp10 |
+| 不同注意力类型必须对齐参数量 | 缩小 EMBED_DIM | exp38 |
+| 违反案例: MDTA/OCAB dim=64 → 2.1M (4.7×) | 收益 +0.12/-0.12 dB 无意义 | exp38 |
+
+**对齐方法**:
+- Swin (dim=64): 454K
+- MDTA (dim=30): 473K (+4.2%)
+- OCAB (dim=30): 467K (+2.9%)
+
+- 满足 5% 限制的模块：CSN (+1K), ColorPre (+0.8K), DualBranch (+3K), PCP-shared (+3K), ColorMLP (+0.1K), ChannelCurve (+0.1K)
+- 超出需重新对齐的：FiLM-GCM (+26K, 5.7%) — 部分收益来自参数增量，需减小 EMBED_DIM 后重新验证
 
 ### 废弃组件
 
