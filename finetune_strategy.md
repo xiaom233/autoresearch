@@ -134,6 +134,25 @@ exp37 首次测试真正的盲预训练 checkpoint 微调 (AR_LOAD_CKPT=blind_pr
 
 ## 五、架构-退化耦合表 (来源: exp10, 130+组, 全部 Direct 训练从零开始, GT退化已知)
 
+### 组件论文来源
+
+| 组件 | 原始论文 | 机制 | 来源路径 |
+|------|------|------|------|
+| **Swin** | SwinIR (Liang et al., ICCVW 2021) | 窗口自注意力 + shift | 基线架构 |
+| **MDTA** | Restormer (Zamir et al., CVPR 2022) | 跨通道自注意力 (Multi-Dconv head Transposed Attention) | `resource/Restormer/` |
+| **OCAB** | X-Restormer (Chen et al., 2024) | 重叠窗口空间注意力 + 相对位置嵌入 | `resource/X-Restormer/` |
+| **ColorPre** | CSEC (CVPR 2024) 设计模式 | 低分辨率颜色预处理, 仿射校正 | exp10 原创适配 |
+| **FiLM-GCM** | FiLM (Perez et al., AAAI 2018) + GCM | 特征线性调制 + 全局上下文门控 | exp10 原创适配 |
+| **CSN** | — (exp10 原创) | 通道 Shuffle + InstanceNorm 仿射 | `model.py:368` |
+| **DualBranch** | — (exp10 原创) | 全局退化分支 + 空间修复分支并行 | `model.py` |
+| **ColorMLP** | — (exp10 原创) | 逐像素通道 MLP (轻量, +0.1K) | `model.py:256` |
+| **ChannelCurve** | — (exp10 原创) | 通道特性曲线校正 (stretch, +0.1K) | `model.py:233` |
+| **PCP** | — (exp10 原创) | 层级间通道扰动 (shared +3K) | `model.py:333` |
+| **FreqMod** | — (❌ 已废弃) | FFT 频域调制 (+276K, SF8 -9.67) | `model.py:279` |
+
+> FiLM-GCM 的 GCM (Global Channel Modulation) 部分借鉴了 DFPIR (CVPR 2025) 的条件调制思想，
+> 但不依赖 CLIP 文本编码，改用 GAP→MLP 提取全局统计量。
+
 > 🔴 **关键**: 以下所有组件收益均在 **GT 退化已知** 的对照实验中测得。**实际场景不存在 GT 已知，全部为盲识别。**
 > exp37 证明：盲识别不完美时，所有组件在错误退化上训练**反而有害**（DualBranch/FiLM/ColorPre 0/24 胜）。
 > **盲识别场景唯一安全选择：纯 Swin + Direct**。
