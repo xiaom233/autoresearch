@@ -759,12 +759,40 @@ expN/
 
 ## Phase 5 训练启动 ⚠️ 实操
 
-### 训练前必读
+### 训练前必读 🔴
 
-启动 Phase 5 前必须：
-1. **重读 `finetune_strategy.md`** — 按退化类型选择策略和架构
-2. **确认 VAL 参数指向预测管线**（非 GT）— 防泄露
-3. **确认 EPOCH_BUDGET=2, LR=5e-4**
+启动 Phase 5 前**必须按顺序执行**：
+
+1. **Read `finetune_strategy.md`** — 读完整文档，不是凭记忆
+2. **对每个挑战，基于 predicted_params.json 的 per-step verdict，查表选择策略和架构**
+3. **确认 VAL 参数指向预测管线**（非 GT）— 防泄露
+4. **确认 EPOCH_BUDGET=2, LR=5e-4**
+
+### 🔴 策略选择协议（每次盲识别后通过子 Agent 强制执行）
+
+**策略选择必须通过子 Agent 执行，禁止主 Agent 写脚本批量处理。**
+
+```
+对每个挑战，启动子 Agent:
+  Agent prompt:
+    1. Read finetune_strategy.md（完整阅读，不可跳过）
+    2. 读取该挑战的 predicted_params.json（per-step verdict）
+    3. 基于 per-step verdict + full_analysis.json 原始信号，人工分析：
+       a. 每步退化匹配 finetune_strategy.md Section 七的信号门控规则
+       b. Tier S/A 信号可覆盖 UNCERTAIN verdict
+       c. 考虑组件与退化的匹配度、风险、参数公平性
+    4. 输出: (strategy, architecture, reasoning)
+    5. 保存训练决策到 {challenge_dir}/training_strategy.json
+  
+  子 Agent 必须:
+    - 逐个挑战分析，不批量处理
+    - 注明每个决策的信号来源和 finetune_strategy.md 引用
+    - 不确定时保守（纯 Swin + Direct）
+```
+
+> 🔴 禁止: 主 Agent 用 Python 脚本批量选策略（exp40 教训: 遗漏 signal-tier 门控）
+> 🔴 禁止: 凭记忆选策略（必须 Read finetune_strategy.md）
+> 🔴 每个挑战独立分析，不套模板
 
 ### 策略选择速查
 
