@@ -95,7 +95,7 @@ BATCH_SIZE = 16
 NUM_WORKERS = 4
 SHUFFLE_BUFFER = 1000
 MAX_STEPS = 0                 # 0=auto (EPOCH_BUDGET/TIME_BUDGET), >0=直接指定步数
-TRAIN_CROP = 128              # 训练随机裁剪尺寸, 默认128 (原图256→随机裁剪128)
+TRAIN_CROP = 0                # 训练随机裁剪尺寸, 0=不裁剪(原图256×256, exp37默认)
 
 # Optimization
 LEARNING_RATE = 1e-3
