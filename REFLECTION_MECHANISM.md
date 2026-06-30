@@ -251,6 +251,9 @@ Stage 2: 基于新信号选出候选 B → Train(model_AB, A+B, EPOCH=2)
 
 不依赖 GT（GT 在盲识别场景下不可访问），仅用训练后可观察的 PSNR 信号判断是否需要修正：
 
+> 🔴 exp37 修正: verdict 分退化独立评估。反思触发基于 overall_verdict (整管线级别),
+> 但修正方向只针对 UNCERTAIN/POOR 的退化步骤, LIKELY 步骤保持不变。
+
 #### 🔴 触发条件 (exp37 修正)
 
 ```

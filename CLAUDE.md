@@ -38,6 +38,11 @@ This file provides guidance to Claude Code when working with this repository.
 
 **盲识别必须通过 Skill `image-degradation-simulator` 启动子 Agent 执行。禁止用脚本或 auto_pipeline 直接生成预测。**
 
+**🔴 exp37 修正: verdict 分退化独立评估。pipeline 每步含自有 verdict，不再整体一刀切。**
+- noise 步骤 UNCERTAIN 不阻止 contrast 步骤 LIKELY 触发 FiLM-GCM
+- 组件触发看该退化自身的 verdict，不被其他步骤拖累
+- `overall_verdict` 仅作统计参考，不影响策略选择
+
 **🔴 Agent 命名和 prompt 禁止泄露退化信息（来源：exp36 审计）**：
 - Agent 名称必须中性（如 "Blind ID batch A"），**禁止**包含 "single-deg"、"double-deg"、"triple-deg" 等退化步数提示
 - Agent prompt **禁止**提及退化步数（"单退化"、"双退化"、"三退化"）
