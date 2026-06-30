@@ -149,7 +149,7 @@ exp37 首次测试真正的盲预训练 checkpoint 微调 (AR_LOAD_CKPT=blind_pr
 | **ChannelCurve** | — (exp10 原创) | 通道特性曲线校正 (stretch, +0.1K) | `model.py:233` |
 | **PCP** | — (exp10 原创) | 层级间通道扰动 (shared +3K) | `model.py:333` |
 | **SimpleGate** | NAFNet (ECCV 2022) | 通道对半分→逐元素相乘, 替代 GELU | `model.py:425` |
-| **SCA** | NAFNet (ECCV 2022) | ❌ 已废弃 — GAP→L2Norm→通道缩放, 纯contrast+13dB但8/9退化有害(-2~-7) | `model.py:437` |
+| **SCA** | NAFNet (ECCV 2022) | ❌ 已废弃 — GAP→L2Norm→通道缩放, 纯contrast+13dB但8/9退化有害(-2~-7)。**vs ColorPre: ColorPre最差仅-0.35, SCA最差-7.04, 不是一个量级** | `model.py:437` |
 | **GDFN** | X-Restormer (2024) | 门控DWConv FFN (+87K) | `model.py:202` |
 | **FProLite** | FPro (ECCV 2024) 简化 | FFT→频域门控→IFFT (+1K) | `model.py:227` |
 
