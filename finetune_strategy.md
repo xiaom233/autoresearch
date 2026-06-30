@@ -149,7 +149,7 @@ exp37 首次测试真正的盲预训练 checkpoint 微调 (AR_LOAD_CKPT=blind_pr
 | **ChannelCurve** | — (exp10 原创) | 通道特性曲线校正 (stretch, +0.1K) | `model.py:233` |
 | **PCP** | — (exp10 原创) | 层级间通道扰动 (shared +3K) | `model.py:333` |
 | **SimpleGate** | NAFNet (ECCV 2022) | 通道对半分→逐元素相乘, 替代 GELU | `model.py:425` |
-| **SCA** | NAFNet (ECCV 2022) | GAP→L2Norm→通道缩放 (~0参数) | `model.py:437` |
+| **SCA** | NAFNet (ECCV 2022) | ❌ 已废弃 — GAP→L2Norm→通道缩放, 纯contrast+13dB但8/9退化有害(-2~-7) | `model.py:437` |
 | **GDFN** | X-Restormer (2024) | 门控DWConv FFN (+87K) | `model.py:202` |
 | **FProLite** | FPro (ECCV 2024) 简化 | FFT→频域门控→IFFT (+1K) | `model.py:227` |
 
@@ -453,7 +453,6 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 | **CSN** | +1K | blur/noise存在 + 无纯全局退化 | B (需判断) | +1.39 | 纯全局退化 (-4.6~-11.7) |
 | **DualBranch** | +3K | ❌ 盲识别下不推荐 | — | 0/24胜(exp37) | 盲识别场景 |
 | **SimpleGate** 🔴 exp39 | **-32K** | **可常开** (安全首选) | — | L2+0.78, 8/9安全 | S5 三退化(-0.86) |
-| **SCA** 🔴 exp39 | +0.5K | `variance_ratio ≠ 1.0` (纯contrast) | A | C+13.08 | 8/9退化有害(-2~-7) ❌ |
 | **ColorMLP** | +0.1K | brightness_HSV 高置信 | B | +0.28 | 其他退化 |
 | **ChannelCurve** | +0.1K | stretch 高置信 | B | +0.38 | gamma (无效) |
 
@@ -464,7 +463,6 @@ run_full_analysis.py 信号
   │
   ├─ variance_ratio ≠ 1.0? (contrast 高置信)
   │   ├─ 含 motion/jpeg? → FiLM-GCM (lr=5e-4)
-  │   ├─ 纯 contrast/scale  → ColorPre 或 SCA (+13dB!)
   │   └─ 任何情况           → +SimpleGate (安全, L2+0.78)
   │
   ├─ anisotropy_ratio > 1.7? (0% FP)
@@ -492,8 +490,8 @@ run_full_analysis.py 信号
 | 组件 | 参数量 | Best Δ | Worst Δ | 安全? | 推荐 |
 |------|:--:|:--:|:--:|:--:|------|
 | **SimpleGate** | -32K | +0.78 (L2) | -0.86 (S5) | ✅ 8/9 | **默认常开** |
-| SCA | +0.5K | +13.08 (C) | -7.04 (G2) | ❌ 1/9 | 仅纯contrast |
-| SG+SCA | -32K | +11.30 (C) | -6.81 (G2) | ❌ | 不推荐 |
+| SCA | +0.5K | +13.08 (C) | -7.04 (G2) | ❌ | **已废弃** — 除纯contrast外全有害 |
+| SG+SCA | -32K | — | — | ❌ | SCA 拖累, 不推荐 |
 
 ### exp38 策略解耦验证 (32组, GT退化已知, 2-epoch Direct训练)
 
