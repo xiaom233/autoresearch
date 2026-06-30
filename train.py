@@ -304,6 +304,15 @@ def compute_ssim(pred, target):
     return ssim_map.mean().item()
 
 @torch.no_grad()
+def _pad_for_window(img, window_size=8):
+    """Pad image spatial dims to be divisible by window_size. Returns (padded, orig_H, orig_W)."""
+    _, _, H, W = img.shape
+    pad_h = (window_size - H % window_size) % window_size
+    pad_w = (window_size - W % window_size) % window_size
+    if pad_h == 0 and pad_w == 0:
+        return img, H, W
+    return F.pad(img, (0, pad_w, 0, pad_h), mode='reflect'), H, W
+
 def evaluate(model, val_dataset, device, autocast_ctx):
     """Compute PSNR/SSIM in RGB and Y over full validation set.
     直接用 DataLoader 并行加载（跳过串行预加载，大幅加速大图验证）。
@@ -314,6 +323,8 @@ def evaluate(model, val_dataset, device, autocast_ctx):
     if n == 0:
         return {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
 
+    ws = eval_model.window_size
+
     # 直接用 DataLoader 并行加载（num_workers=4 并行解码+退化）
     loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False,
                                           num_workers=4, pin_memory=True,
@@ -322,8 +333,12 @@ def evaluate(model, val_dataset, device, autocast_ctx):
     for degraded, clean in loader:
         degraded = degraded.to(device, non_blocking=True)
         clean = clean.to(device, non_blocking=True)
+        degraded, orig_H, orig_W = _pad_for_window(degraded, ws)
         with autocast_ctx:
             pred = eval_model(degraded)
+        pred = pred[:, :, :orig_H, :orig_W]  # crop padding
+        degraded = degraded[:, :, :orig_H, :orig_W]  # align for PSNR
+        clean = clean[:, :, :orig_H, :orig_W]
         pred_f = pred.float()
         clean_f = clean.float()
         metrics["psnr_rgb"] += compute_psnr(pred_f, clean_f)
@@ -448,6 +463,16 @@ def main():
         print(f"Loaded: {LOAD_CKPT} (step={ckpt.get('step', '?')})", flush=True)
 
     model = torch.compile(model, dynamic=False)
+
+    # 🔴 预检: 训练前先用 val 数据集跑一遍 forward, 确认无 shape 错误
+    if len(val_quick) > 0:
+        print("Pre-flight validation check...", flush=True)
+        try:
+            _ = evaluate(model, val_quick, device, autocast_ctx)
+            print("Pre-flight check: ✅ OK", flush=True)
+        except Exception as e:
+            print(f"Pre-flight check: ❌ FAILED — {e}", flush=True)
+            raise
 
     # Optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE,
