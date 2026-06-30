@@ -362,15 +362,21 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 | 纯局部 (blur/noise/comp) | Direct 或 RandomCurric | True Ft ≈ Direct (exp37/38), RandomCurric 安全 |
 | True Ft (AR_LOAD_CKPT) | 不推荐 | 2-epoch 预算下 ≈ Direct (+0.03), exp37/38 双重确认 |
 
-**Step 2: 选择附加组件（与盲识别自信度挂钩）**
+**Step 2: 选择附加组件（🔴 exp37修正: 按退化步骤独立匹配，非整体verdict）**
 
-| 盲识别 + 退化特征 | 组件 | 来源 |
-|------|------|------|
-| 高难度 + contrast + 结构化 | FiLM-GCM (lr=5e-4) | exp10 L5 +3.52 |
-| 中难度 + 全局退化 | ColorPre | exp10 L2 +0.81 |
-| 盲识别 UNCERTAIN | **纯 Swin + Direct** | exp37 验证 |
-| brightness_HSV 有 NaN 风险 | +ColorMLP | +0.1K |
-| 纯局部退化 | 纯 Swin + Direct | — |
+组件触发基于**该退化步骤自身的 verdict**，不会被其他步骤拖累:
+
+| 退化步骤 verdict | 退化特征 | 组件 | 来源 |
+|------|------|------|------|
+| **LIKELY + contrast** | contrast_scale/stretch | FiLM-GCM 或 ColorPre | exp10 L5+3.52, exp39+3.16 |
+| **LIKELY + motion sev≥5** | blur_motion | OCAB+ws16 | exp10 +1.72 |
+| **LIKELY + 纯局部多步** | blur+noise+comp | RandomCurric | exp9 +0.1~+5 |
+| 任意 verdict | 任何退化 | **SimpleGate (默认常开)** | exp39 -32K, 8/9安全 |
+| brightness_HSV 有 NaN 风险 | — | +ColorMLP | +0.1K |
+| UNCERTAIN/POOR (该步骤) | — | 该步骤不加组件 | exp37 验证 |
+
+> 🔴 关键: noise 步骤 UNCERTAIN 不影响 contrast 步骤 LIKELY 触发 FiLM-GCM。
+> 每个退化步骤独立判决，组件只对自信的步骤生效。
 
 **Step 3: 组件稳定性检查**
 

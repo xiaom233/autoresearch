@@ -172,16 +172,29 @@ for sev in [est-2, est-1, est+1, est+2]:  # 限制 1-5
 
 **PSNR 仅用于: 无噪声时(σ<2)的 severity 确认。有噪声时全部验证走信号模式（见上方噪声耦合信号验证表）。**
 
-### 🔴 Verdict 强制规则（来源: exp34 审计）
+### 🔴 Verdict 强制规则（来源: exp34/37 审计）
 
-**当 noise 存在时 (sigma > 2)，禁止 GOOD/LIKELY verdict。**
+**🔴 exp37 修正: verdict 按退化步骤独立评估，不再搞整体一刀切。**
 
 ```
-sigma < 2 (无噪声):  GOOD / LIKELY / UNCERTAIN / POOR  均可
-sigma > 2 (有噪声):  仅 UNCERTAIN / POOR
+确定性退化 (blur/compression/contrast/brightness/saturation):
+  PSNR >= 40dB → LIKELY  (可触发专用组件)
+  PSNR 30-40dB → UNCERTAIN (severity微调)
+  PSNR < 30dB → UNCERTAIN/POOR
+
+噪声退化 (noise_*):
+  verify_signals MATCH → UNCERTAIN (噪声seed失配, 永不LIKELY)
+  verify_signals PARTIAL → UNCERTAIN
+  其余 → POOR
+
+整体 overall_verdict:
+  所有步骤 LIKELY → LIKELY
+  任一 POOR → POOR
+  其余 → UNCERTAIN
 ```
 
-exp34 教训: 5 个 LIKELY 挑战平均 GT PSNR=21.81dB，3 个 UNCERTAIN 挑战平均=18.08dB。LIKELY 没有比 UNCERTAIN 更正确——噪声耦合时 PSNR 是随机数，Agent 的高置信度是虚假的。
+**exp34 教训**: 噪声下 PSNR 是随机数，noise 步骤永不标 LIKELY。
+**exp37 教训**: 噪声步骤 UNCERTAIN 不应阻止 contrast 步骤 LIKELY 触发 FiLM-GCM。
 
 ### 🔴 verify_signals.py 用法
 
@@ -601,7 +614,14 @@ Agent 只需手动写入 3 个字段，其余由 `test_candidate.py` 自动维�
   },
   "noise_6step_check": {"extreme_pct": 0.12, "vm_slope": 0.003, "var_slope": 0.85,
     "spatial_corr": 0.08, "rgb_ratio": 1.05, "cross_ch_corr": 0.12, "diagnosis": "..."},
-  "final_decision": {"pipeline": [...], "verdict": "LIKELY|UNCERTAIN|POOR", "rationale": "..."}
+  "final_decision": {
+    "pipeline": [
+      {"function": "...", "severity": N, "verdict": "LIKELY|UNCERTAIN|POOR"},
+      ...
+    ],
+    "overall_verdict": "LIKELY|UNCERTAIN|POOR",
+    "rationale": "..."
+  }
 }
 ```
 
