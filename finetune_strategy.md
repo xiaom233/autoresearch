@@ -148,7 +148,10 @@ exp37 首次测试真正的盲预训练 checkpoint 微调 (AR_LOAD_CKPT=blind_pr
 | **ColorMLP** | — (exp10 原创) | 逐像素通道 MLP (轻量, +0.1K) | `model.py:256` |
 | **ChannelCurve** | — (exp10 原创) | 通道特性曲线校正 (stretch, +0.1K) | `model.py:233` |
 | **PCP** | — (exp10 原创) | 层级间通道扰动 (shared +3K) | `model.py:333` |
-| **FreqMod** | — (❌ 已废弃) | FFT 频域调制 (+276K, SF8 -9.67) | `model.py:279` |
+| **SimpleGate** | NAFNet (ECCV 2022) | 通道对半分→逐元素相乘, 替代 GELU | `model.py:425` |
+| **SCA** | NAFNet (ECCV 2022) | GAP→L2Norm→通道缩放 (~0参数) | `model.py:437` |
+| **GDFN** | X-Restormer (2024) | 门控DWConv FFN (+87K) | `model.py:202` |
+| **FProLite** | FPro (ECCV 2024) 简化 | FFT→频域门控→IFFT (+1K) | `model.py:227` |
 
 > FiLM-GCM 的 GCM (Global Channel Modulation) 部分借鉴了 DFPIR (CVPR 2025) 的条件调制思想，
 > 但不依赖 CLIP 文本编码，改用 GAP→MLP 提取全局统计量。
@@ -212,6 +215,30 @@ exp38 Phase F 验证了 FiLM-GCM 在 5 种全局退化上的泛化:
 > **结论**: FiLM-GCM 在所有全局退化上安全 (无 NaN/崩溃)。contrast + stretch 有效，其余 ≈ 0。
 > **旧结论 "contrast 专用" → 修正为 "contrast+stretch 有效，其他全局安全"。**
 > lr=5e-4 下无 NaN 风险 (exp10 L1 NaN 已修复)。
+
+### SimpleGate vs SCA 跨退化泛化 🔴 exp39 新增 (36组, 128×128, BATCH=32)
+
+exp39 系统验证了 SimpleGate 和 SCA 在 9 种退化上的特异性与泛化安全性:
+
+| 退化 | Swin | SimpleGate | SCA | SG vs Swin | SCA vs Swin |
+|------|:--:|:--:|:--:|:--:|:--:|
+| C (contrast) | 24.80 | 24.52 | **37.88** | -0.28 | **+13.08** 🔥 |
+| N (noise) | 28.37 | 28.36 | 24.82 | -0.01 | **-3.55** ❌ |
+| B (blur) | 25.41 | 25.47 | 23.22 | +0.06 | **-2.19** ❌ |
+| L2 (contrast+noise) | 25.73 | **26.51** | 24.61 | **+0.78** ✅ | -1.12 ⚠️ |
+| D3 (JPEG+blur) | 23.86 | 23.88 | 21.52 | +0.02 | **-2.34** ❌ |
+| G2 (stretch+noise) | 26.70 | 26.36 | 19.66 | -0.34 | **-7.04** ❌ |
+| BS (bright+noise) | 27.77 | 27.84 | 23.68 | +0.07 | **-4.09** ❌ |
+| S5 (motion×3) | 20.85 | 19.99 | 18.73 | -0.86 ⚠️ | -2.12 ❌ |
+| SF5 (gamma×3) | 22.85 | 22.71 | 19.56 | -0.14 | **-3.29** ❌ |
+
+**结论**:
+- **SimpleGate**: 安全首选 — 9 退化中 1 负 (S5 -0.86, 三退化场景轻微有害), L2 上 +0.78。**可常开**。
+- **SCA**: 纯 contrast 上爆炸 (+13.08), 但在 8/9 退化上**严重有害** (-2~-7 dB)。**不能常开，仅纯 contrast 高置信时使用**。
+- **两者组合无优势** — SCA 的负面效应主导
+
+> SimpleGate Epoch 2 训练崩溃风险: D3 上 ckpt1=23.88→ckpt2=15.40 (模型退化)。
+> 建议 SimpleGate + LR=5e-4 + 更频繁的 checkpoint 保存。
 
 ### 各退化类型最佳方案 (来源: exp10 Phase 1-4)
 
@@ -425,6 +452,8 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 | **OCAB+ws16** | +1.7K | `anisotropy_ratio > 1.7` (0% FP) | S | +1.72 | contrast (不如Swin) |
 | **CSN** | +1K | blur/noise存在 + 无纯全局退化 | B (需判断) | +1.39 | 纯全局退化 (-4.6~-11.7) |
 | **DualBranch** | +3K | ❌ 盲识别下不推荐 | — | 0/24胜(exp37) | 盲识别场景 |
+| **SimpleGate** 🔴 exp39 | **-32K** | **可常开** (安全首选) | — | L2+0.78, 8/9安全 | S5 三退化(-0.86) |
+| **SCA** 🔴 exp39 | +0.5K | `variance_ratio ≠ 1.0` (纯contrast) | A | C+13.08 | 8/9退化有害(-2~-7) ❌ |
 | **ColorMLP** | +0.1K | brightness_HSV 高置信 | B | +0.28 | 其他退化 |
 | **ChannelCurve** | +0.1K | stretch 高置信 | B | +0.38 | gamma (无效) |
 
@@ -433,21 +462,19 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 ```
 run_full_analysis.py 信号
   │
-  ├─ variance_ratio ≠ 1.0?
+  ├─ variance_ratio ≠ 1.0? (contrast 高置信)
   │   ├─ 含 motion/jpeg? → FiLM-GCM (lr=5e-4)
-  │   └─ 纯 contrast/scale → ColorPre
+  │   ├─ 纯 contrast/scale  → ColorPre 或 SCA (+13dB!)
+  │   └─ 任何情况           → +SimpleGate (安全, L2+0.78)
   │
-  ├─ anisotropy_ratio > 1.7?
-  │   └─ → OCAB+ws16 (0% FP, 收益确定)
+  ├─ anisotropy_ratio > 1.7? (0% FP)
+  │   └─ → OCAB+ws16
   │
-  ├─ block_boundary > 1.1?
-  │   └─ → JPEG 确认 (0% FP)
+  ├─ block_boundary > 1.1? (0% FP)
+  │   └─ → JPEG 确认
   │
-  ├─ blur/noise 存在 + 无纯全局?
-  │   └─ → CSN 可选 (但需确认非纯全局)
-  │
-  └─ 以上信号均不满足?
-      └─ → 纯 Swin + Direct (安全基线)
+  └─ 默认                    → Swin + SimpleGate + Direct
+      (SimpleGate 安全, 8/9退化无显著负影响)
 ```
 
 **为什么这个策略有效（而 exp37 的失败）**:
@@ -458,7 +485,15 @@ run_full_analysis.py 信号
 
 ---
 
-## 八、🔴 exp37/38 架构消融与策略解耦验证
+## 八、🔴 exp37/38/39 架构消融与策略解耦验证
+
+### exp39 零成本组件系统验证 (36组, 128×128, BATCH=32, Direct)
+
+| 组件 | 参数量 | Best Δ | Worst Δ | 安全? | 推荐 |
+|------|:--:|:--:|:--:|:--:|------|
+| **SimpleGate** | -32K | +0.78 (L2) | -0.86 (S5) | ✅ 8/9 | **默认常开** |
+| SCA | +0.5K | +13.08 (C) | -7.04 (G2) | ❌ 1/9 | 仅纯contrast |
+| SG+SCA | -32K | +11.30 (C) | -6.81 (G2) | ❌ | 不推荐 |
 
 ### exp38 策略解耦验证 (32组, GT退化已知, 2-epoch Direct训练)
 
