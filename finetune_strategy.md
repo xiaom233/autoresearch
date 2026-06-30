@@ -169,9 +169,11 @@ exp37 首次测试真正的盲预训练 checkpoint 微调 (AR_LOAD_CKPT=blind_pr
 |:--:|------|:--:|:--:|------|
 | 低 | gamma, brightness_shift_RGB | ✅ | ~0 dB | 纯 Swin，不加组件 |
 | 中 | stretch, contrast_scale, contrast+噪声 | ❌ 部分 | +0.4~+1 dB | ColorPre/CSN (+0.8~1K) |
-| 高 | contrast + 结构化局部 (motion/jpeg) | ❌ | **+2.4~+3.5 dB** | FiLM-GCM (+26K) |
+| 高 | contrast + 结构化局部 (motion/jpeg) | ❌ | **+3.2~+3.5 dB** | FiLM-GCM (+26K) |
 
-**exp35 验证**: blind_0002 (JPEG sev=1) 纯 Swin 即可 PSNR=28.8，加组件无益。blind_0010 (blur+contrast) PSNR=18.0，属于高难度，FiLM-GCM 可能有 +2-3 dB 额外收益（未验证）。
+> **exp39 验证**: FiLM-GCM 在 GT 已知退化上 9/9 全胜, 平均 +3.16 dB (L2 +1.52, G2 +5.50, SF5 +14.63)。与 exp10 L5 +3.52 一致。
+> **exp37 验证**: SwiGLU (+0.25) 和 GDFN (+0.22) 边际, 不推荐。
+> **SCA 已废弃**: exp39 测试 8/9 有害 (最差 -7.04 dB), 已从代码移除。SimpleGate (-32K, 8/9 安全) 替代为默认常开组件。
 
 ### 注意力类型选择
 
@@ -343,12 +345,13 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 
 | 难度 | 条件 | 推荐架构 | 说明 |
 |------|------|------|------|
-| 低 | gamma, shift_RGB, JPEG sev≤2, saturation | 纯 Swin | 组件收益 ≈ 0 dB (FiLM 已验证安全但无益) |
-| 中 | stretch, contrast+噪声 | FiLM-GCM 或 ColorPre | FiLM+0.35(stretch)/+0.47(contrast), ColorPre+0.62(contrast) |
-| 高 | contrast+结构化(motion/jpeg) | FiLM-GCM | +26K, 需 lr=5e-4 |
+| 低 | gamma, shift_RGB, JPEG sev≤2, saturation | 纯 Swin + **SimpleGate** | SimpleGate -32K 常开安全, exp39 8/9 无害 |
+| 中 | stretch, contrast+噪声 | FiLM-GCM 或 ColorPre | FiLM +3.16(exp39), ColorPre +0.62(exp38) |
+| 高 | contrast+结构化(motion/jpeg) | FiLM-GCM | exp10 L5 +3.52, exp39 9/9全胜 avg +3.16 |
 
 > 🔴 exp38: FiLM-GCM 安全边界确认 — 所有全局退化上安全 (无 NaN), contrast+stretch 有效, 其余 ≈0。
-> 🔴 exp37: 以上组件收益在盲识别场景中未复现。仅在 GT 退化已知时有效。
+> 🔴 exp39: FiLM-GCM GT已知 9/9全胜 (L2+1.52, G2+5.50, SF5+14.63)。SwiGLU/GDFN边际不推荐。SCA已废弃(8/9有害)。
+> 🔴 exp37: 以上组件收益在盲识别场景中未复现。仅在 GT 退化已知/盲识别高置信时有效。
 
 **Step 1: 判断训练策略 (Direct vs RandomCurric vs True Ft)** 🔴 exp38 修正
 
@@ -480,11 +483,18 @@ run_full_analysis.py 信号
 
 ## 八、🔴 exp37/38/39 架构消融与策略解耦验证
 
-### exp39 零成本组件系统验证 (36组, 128×128, BATCH=32, Direct)
+### exp39 组件系统验证 (81组, 128×128, BATCH=32, Direct, 参数对齐 ≤477K)
 
 | 组件 | 参数量 | Best Δ | Worst Δ | 安全? | 推荐 |
 |------|:--:|:--:|:--:|:--:|------|
 | **SimpleGate** | -32K | +0.78 (L2) | -0.86 (S5) | ✅ 8/9 | **默认常开** |
+| **FiLM-GCM** | +26K→423K对齐 | **+3.16 avg** | 9/9全胜 | ✅ | contrast+结构化触发 |
+| SwiGLU | +67K→459K对齐 | +0.25 avg | — | ✅ 但边际 | 不推荐 |
+| GDFN | +87K→418K对齐 | +0.22 avg | — | ✅ 但边际 | 不推荐 |
+| FPro | +1K | 全崩 | — | ❌ | torch.fft×compile不兼容 |
+| SCA | +512 | — | -7.04 (SF5) | ❌ 8/9有害 | **已废弃** |
+
+> exp39 确认: FiLM-GCM 9/9全胜 avg +3.16 (G2+5.50, SF5+14.63)。SwiGLU/GDFN边际不推荐。
 
 ### exp38 策略解耦验证 (32组, GT退化已知, 2-epoch Direct训练)
 
