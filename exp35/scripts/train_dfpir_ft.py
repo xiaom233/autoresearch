@@ -55,9 +55,10 @@ def main():
     parser.add_argument("--params", required=True, help="degradation params.json")
     parser.add_argument("--time-budget", type=float, default=5400,
                         help="training time budget in seconds (default 1.5h)")
-    parser.add_argument("--batch-size", type=int, default=8, help="batch size (DFPIR original: 8/GPU)")
+    parser.add_argument("--batch-size", type=int, default=4, help="batch size (DFPIR 31M: 4/GPU due to VRAM)")
+    parser.add_argument("--accum-steps", type=int, default=4, help="gradient accumulation steps (effective_batch = batch_size × accum_steps = 16)")
     parser.add_argument("--lr", type=float, default=2e-4, help="LR (DFPIR original: 2e-4)")
-    parser.add_argument("--warmup-steps", type=int, default=500, help="warmup steps (DFPIR original: 500)")
+    parser.add_argument("--warmup-steps", type=int, default=500, help="warmup optimizer steps (not iterations)")
     parser.add_argument("--ckpt-prefix", required=True, help="output checkpoint prefix")
     parser.add_argument("--val-interval", type=int, default=900,
                         help="validate every N seconds (default 15min)")
@@ -98,6 +99,8 @@ def main():
     os.makedirs(os.path.dirname(args.ckpt_prefix), exist_ok=True)
 
     print(f"Time budget: {args.time_budget:.0f}s ({args.time_budget/3600:.1f}h)")
+    eff_batch = args.batch_size * args.accum_steps
+    print(f"Batch: {args.batch_size} × accum {args.accum_steps} = effective {eff_batch} (RestoreNet: 16)")
     print(f"Training...")
 
     start_time = time.time()
@@ -118,22 +121,29 @@ def main():
             with amp:
                 pred = model(x_deg)
                 loss = criterion(pred, x_clean)
-
-            optimizer.zero_grad()
+            loss = loss / args.accum_steps
             loss.backward()
-            optimizer.step()
-            scheduler.step()
 
-            # Warmup
-            if step <= args.warmup_steps:
-                for pg in optimizer.param_groups:
-                    pg['lr'] = args.lr * step / args.warmup_steps
+            # Gradient accumulation: step every accum_steps iterations
+            if (step + 1) % args.accum_steps == 0:
+                # Warmup (counted in optimizer steps, not iterations)
+                opt_step = step // args.accum_steps
+                if opt_step <= args.warmup_steps:
+                    warmup_lr = args.lr * max(opt_step, 1) / max(args.warmup_steps, 1)
+                    for pg in optimizer.param_groups:
+                        pg['lr'] = warmup_lr
+
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
 
             step += 1
             if step % 100 == 0:
-                dt = (time.time() - start_time - (step * 0.01)) / max(step, 1) * 1000
-                print(f"step {step:05d} | loss: {loss.item():.6f} | lr: {optimizer.param_groups[0]['lr']:.2e} | "
-                      f"dt: {dt:.0f}ms | elapsed: {elapsed/60:.1f}min", flush=True)
+                dt = elapsed / max(step, 1) * 1000
+                opt_step = step // args.accum_steps
+                print(f"iter {step:05d} (opt {opt_step:05d}) | loss: {loss.item()*args.accum_steps:.6f} | "
+                      f"lr: {optimizer.param_groups[0]['lr']:.2e} | dt: {dt:.0f}ms | elapsed: {elapsed/60:.1f}min",
+                      flush=True)
 
             # Periodic validation
             if time.time() - last_val_time >= args.val_interval:
@@ -142,29 +152,31 @@ def main():
                 model.train()
                 psnr = ov["psnr_rgb"]
                 last_val_time = time.time()
-                print(f"[VAL step {step:05d}] PSNR={psnr:.2f} dB (elapsed {elapsed/60:.1f}min)")
+                print(f"[VAL iter {step:05d}] PSNR={psnr:.2f} dB (elapsed {elapsed/60:.1f}min)")
 
                 if psnr > best_psnr:
                     best_psnr = psnr
                     best_ckpt = os.path.join(
                         os.path.dirname(args.ckpt_prefix),
-                        f"{os.path.basename(args.ckpt_prefix)}_step{step:05d}_psnr{psnr:.2f}.pt"
+                        f"{os.path.basename(args.ckpt_prefix)}_iter{step:05d}_psnr{psnr:.2f}.pt"
                     )
-                    torch.save({"model": model.state_dict(), "step": step, "psnr": psnr}, best_ckpt)
+                    torch.save({"model": model.state_dict(), "iter": step, "psnr": psnr}, best_ckpt)
 
         if elapsed >= args.time_budget:
             break
 
     total_time = time.time() - start_time
-    print(f"\nDone: {step} steps in {total_time/60:.1f}min, best PSNR={best_psnr:.2f}")
+    opt_steps = step // args.accum_steps
+    print(f"\nDone: {step} iters ({opt_steps} optimizer steps) in {total_time/60:.1f}min, "
+          f"best PSNR={best_psnr:.2f}")
 
     # Always save final checkpoint if no best was saved
     if best_ckpt is None:
         final_ckpt = os.path.join(
             os.path.dirname(args.ckpt_prefix),
-            f"{os.path.basename(args.ckpt_prefix)}_step{step:05d}_final.pt"
+            f"{os.path.basename(args.ckpt_prefix)}_iter{step:05d}_final.pt"
         )
-        torch.save({"model": model.state_dict(), "step": step}, final_ckpt)
+        torch.save({"model": model.state_dict(), "iter": step}, final_ckpt)
         best_ckpt = final_ckpt
         print(f"Final ckpt: {best_ckpt}")
     else:

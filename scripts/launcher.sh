@@ -40,7 +40,8 @@ CMD_PLACEHOLDER
 echo "[$(date +%H:%M)] DONE:  NAME_PLACEHOLDER"
 TASK
   sed -i "s|NAME_PLACEHOLDER|$name|g" "$GPU_DIR/tasks.sh"
-  sed -i "s|CMD_PLACEHOLDER|$cmd|g" "$GPU_DIR/tasks.sh"
+  cmd_escaped=$(echo "$cmd" | sed 's/&/\\&/g')
+  sed -i "s|CMD_PLACEHOLDER|$cmd_escaped|g" "$GPU_DIR/tasks.sh"
 done
 
 # Launch per-GPU workers

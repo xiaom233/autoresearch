@@ -179,7 +179,7 @@ exp37 首次测试真正的盲预训练 checkpoint 微调 (AR_LOAD_CKPT=blind_pr
 
 | 退化类型 | 最佳注意力 | Δ vs Swin | 备注 |
 |---------|:--------:|:--:|------|
-| motion 结构化模糊 | **OCAB** (空间) | +1.19 | ws=16 (+0.29); SwiGLU (+1.47); OCAB+ws16 (+1.72) |
+| motion 结构化模糊 | **OCAB** (空间) | +1.19 | SwiGLU (+1.47) |
 | noise 随机噪声 | 任意 | ~0 | 噪声不关心注意力 |
 | contrast 全局退化 | **Swin** | +9.78~10.38 | MDTA/OCAB 崩溃 (L2: Swin 28.70 vs MDTA 18.92, OCAB 18.32) |
 | saturate 全局 | Swin | 基线 | 无明显胜者 |
@@ -369,7 +369,7 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 | 退化步骤 verdict | 退化特征 | 组件 | 来源 |
 |------|------|------|------|
 | **LIKELY + contrast** | contrast_scale/stretch | FiLM-GCM 或 ColorPre | exp10 L5+3.52, exp39+3.16 |
-| **LIKELY + motion sev≥5** | blur_motion | OCAB+ws16 | exp10 +1.72 |
+| **LIKELY + motion sev≥5** | blur_motion | OCAB | exp10 +1.19 |
 | **LIKELY + 纯局部多步** | blur+noise+comp | RandomCurric | exp9 +0.1~+5 |
 | 任意 verdict | 任何退化 | **SimpleGate (默认常开)** | exp39 -32K, 8/9安全 |
 | brightness_HSV 有 NaN 风险 | — | +ColorMLP | +0.1K |
@@ -420,7 +420,7 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 | **S** | `unique_G < 200` | 0% | 确认 comp/quant | — |
 | **A** | `variance_ratio ≠ 1.0` | 低 | **ColorPre** (contrast) | +0.62~18.91 |
 | **A** | `variance_ratio ≠ 1.0` + 结构化局部 | 低 | **FiLM-GCM** (contrast+结构化) | +3.52 |
-| **A** | `anisotropy_ratio > 1.7` | 0% FP | **OCAB+ws16** (motion) | +1.72 |
+| **A** | `anisotropy_ratio > 1.7` | 0% FP | **OCAB** (motion) | +1.19 |
 | **B** | blur DT (depth=3) | 83.4% | Swin 即可 | — |
 | **B** | noise §B (blur→noise) | 87.4% | Swin 即可 | — |
 | **C** | noise §B (noise→blur) | 54.7% | **不加任何组件** | — |
@@ -440,7 +440,7 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 |------|------|------|:--:|------|
 | **variance_ratio≠1.0 (Tier A)** | contrast/scale | **ColorPre** | +0.62~18.91 | exp10/38 |
 | **variance_ratio≠1.0 + 结构化 (Tier A)** | motion/jpeg+contrast | **FiLM-GCM** | +3.52 | exp10 L5 |
-| **anisotropy>1.7 (Tier A, 0%FP)** | motion blur | **OCAB+ws16** | +1.72 | exp10 |
+| **anisotropy>1.7 (Tier A, 0%FP)** | motion blur | **OCAB** | +1.19 | exp10 |
 | **block_boundary>1.1 (Tier S, 0%FP)** | JPEG | JPEG专项 | — | SKILL.md |
 | Tier B (blur/noise 中等置信) | blur/noise/comp | **Swin** | 基线 | — |
 | Tier C (信号矛盾/低置信) | 任何 | **纯 Swin + Direct** | 安全兜底 | exp37 |
@@ -453,7 +453,7 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 |------|:--:|------|:--:|:--:|------|
 | **ColorPre** | +0.8K | `variance_ratio ≠ 1.0` | A (高) | +0.62~18.91 | saturation (有害 -0.34) |
 | **FiLM-GCM** | +26K | `variance_ratio ≠ 1.0` + 结构化(motion/jpeg) | A | +3.52 | brightness_HSV (lr=5e-4修复NaN) |
-| **OCAB+ws16** | +1.7K | `anisotropy_ratio > 1.7` (0% FP) | S | +1.72 | contrast (不如Swin) |
+| **OCAB** | +1.7K | `anisotropy_ratio > 1.7` (0% FP) | S | +1.19 | contrast (不如Swin) |
 | **CSN** | +1K | blur/noise存在 + 无纯全局退化 | B (需判断) | +1.39 | 纯全局退化 (-4.6~-11.7) |
 | **DualBranch** | +3K | ❌ 盲识别下不推荐 | — | 0/24胜(exp37) | 盲识别场景 |
 | **SimpleGate** 🔴 exp39 | **-32K** | **可常开** (安全首选) | — | L2+0.78, 8/9安全 | S5 三退化(-0.86) |
@@ -470,7 +470,7 @@ run_full_analysis.py 信号
   │   └─ 任何情况           → +SimpleGate (安全, L2+0.78)
   │
   ├─ anisotropy_ratio > 1.7? (0% FP)
-  │   └─ → OCAB+ws16
+  │   └─ → OCAB
   │
   ├─ block_boundary > 1.1? (0% FP)
   │   └─ → JPEG 确认

@@ -330,14 +330,14 @@ def evaluate(model, val_dataset, device, autocast_ctx):
                                           num_workers=4, pin_memory=True,
                                           persistent_workers=False)
     metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
-    for degraded, clean in loader:
+    with torch.no_grad():
+      for degraded, clean in loader:
         degraded = degraded.to(device, non_blocking=True)
         clean = clean.to(device, non_blocking=True)
         degraded, orig_H, orig_W = _pad_for_window(degraded, ws)
         with autocast_ctx:
-            pred = eval_model(degraded)
-        pred = pred[:, :, :orig_H, :orig_W]  # crop padding
-        degraded = degraded[:, :, :orig_H, :orig_W]  # align for PSNR
+            pred = eval_model(degraded)[:, :, :orig_H, :orig_W]
+        degraded = degraded[:, :, :orig_H, :orig_W]
         clean = clean[:, :, :orig_H, :orig_W]
         pred_f = pred.float()
         clean_f = clean.float()
