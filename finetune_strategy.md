@@ -308,6 +308,8 @@ lr=5e-4 修复了 L1 NaN 问题（lr=1e-3 时崩溃），但 L1 仍无收益。
 - MDTA (dim=30): 473K (+4.2%)
 - OCAB (dim=30): 467K (+2.9%)
 
+🔴 **OCAB/MDTA 必须设置 AR_EMBED_DIM=30**。默认 dim=64 下 OCAB 参数膨胀至 2.1M (4.7× 基线)，训练慢 47% (2.2h vs 1.5h)，VRAM 翻倍 (25G vs 14G)。不做参数对齐的 OCAB 对比结果无效——收益可能来自额外参数而非架构设计。
+
 - 满足 5% 限制的模块：CSN (+1K), ColorPre (+0.8K), DualBranch (+3K), PCP-shared (+3K), ColorMLP (+0.1K), ChannelCurve (+0.1K)
 - 超出需重新对齐的：FiLM-GCM (+26K, 5.7%) — 部分收益来自参数增量，需减小 EMBED_DIM 后重新验证
 
