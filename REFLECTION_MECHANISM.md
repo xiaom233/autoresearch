@@ -277,6 +277,48 @@ Stage 2: 基于新信号选出候选 B → Train(model_AB, A+B, EPOCH=2)
     修正后仅高置信 (GOOD/LIKELY + PSNR>=35) 跳过, UNCERTAIN 一律反思.
 ```
 
+#### 🔴 训练过程诊断 (exp40 新增) — 反思必须包含训练日志分析
+
+反思不能只看最终 PSNR，必须检查训练过程。以下问题会导致最终 ckpt 不代表模型真实能力：
+
+```
+训练日志诊断流程:
+
+1. 检查 NaN
+   grep "PSNR_RGB=nan" {log}
+   ├── 全部 NaN → 预测退化严重错误，训练完全失败
+   │     → 换 direct_swin ckpt 或重新盲识别
+   └── 部分 NaN → 训练后期崩溃
+         → 检查是否 GCM 诱发 (FiLM-GCM + brightness_HSV + blur)
+
+2. 检查 best≠last 发散 (🔴 exp40 发现: 11/24 strategy 实验存在)
+   grep "Loaded best checkpoint" {log}
+   ├── best step ≠ last step → 最后 ckpt 退化
+   │     原因: 训练后期过拟合错误预测或优化不稳定
+   │     解决: 评估时使用 best ckpt (非 last)
+   └── best == last → 训练稳定, 用最后 ckpt 即可
+
+3. 检查 val PSNR 抖动
+   grep "Ckpt @" {log}
+   ├── PSNR 持续上升 → 正常收敛
+   ├── PSNR 先升后降 (>2dB) → 过拟合错误预测, 用 best ckpt
+   └── PSNR 剧烈震荡 (>3dB) → 预测退化与 GT 严重不匹配
+
+4. exp40 实际案例
+   | Challenge | 问题 | 检测 | 解决 |
+   |-----------|------|------|------|
+   | blind_0007 | best=7546(32.26), last=15092(28.93) | best≠last 发散 | 用 best ckpt |
+   | blind_0018 | 2/4 NaN + 使用 GCM | 部分 NaN | 换 direct_swin |
+   | blind_0020 | 全部 NaN + 使用 GCM | 全部 NaN | 换 direct_swin |
+   | blind_0024 | best=11319(22.40), last=15092(20.14) | best≠last 发散 | 换 direct_swin |
+```
+
+**关键规则**: 
+- 反思时优先检查训练日志，再决定是否修正预测参数
+- best≠last → 先用 best ckpt 重评估，可能不需要改参数
+- 全部 NaN → 预测退化方向错误，必须修正参数或换架构
+- 部分 NaN + GCM → 架构问题优先于参数问题
+
 #### 🔴 反思验证方法强制规则 (exp37 审计)
 
 ```

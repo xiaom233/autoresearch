@@ -85,7 +85,7 @@ start() {
 
     if echo "$first_line" | grep -q '^{'; then
         # JSONL 格式 → 转换为 cmd|name 格式的临时文件
-        local tmp_task=$(mktemp /tmp/exp_launcher_tasks.XXXXXX)
+        local tmp_task=$(mktemp exp40/scripts/.exp_launcher_tasks.XXXXXX)
         .venv/bin/python3 -c "
 import json, sys
 for line in open('$TASK_FILE'):

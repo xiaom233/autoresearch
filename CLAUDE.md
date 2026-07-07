@@ -555,8 +555,14 @@ blur、noise、compression 各最多出现一次，最多 3 步。
 AR_LOSS_FN=mse AR_LR_SCHEDULE=constant AR_EMBED_DIM=96 \
 AR_PARAMS_PATH=params.json AR_VAL_PARAMS_PATH=params.json \
 AR_EPOCH_BUDGET=1 AR_CKPT_PREFIX=expN/experiments/exp_XXX \
+AR_CHALLENGE_DIR=expN/challenges/phase4/blind_XXXX \
 uv run train.py
 ```
+
+**🔴 AR_CHALLENGE_DIR (exp40 新增)**: 设置为挑战目录时，验证集使用挑战自带的 `clean_*.png` + `degraded_*.png` 成对图像（无需施加退化参数）。val PSNR 直接反映 GT 退化恢复质量，比 Set14 + 预测退化更可靠。
+- 设置后不再使用 Set14 作为 quick val
+- 每个挑战独立训练时必须设置，确保 val PSNR 监控 GT 性能
+- 批量训练示例: `AR_CHALLENGE_DIR=exp40/challenges/phase4/blind_0001`
 
 动态调度器（`expN/scripts/phase5_scheduler.py`）：维护待执行实验队列，GPU 空闲（< 15%）立即分配下一个。
 

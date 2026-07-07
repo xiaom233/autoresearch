@@ -551,3 +551,53 @@ exp38 系统验证了 exp9/10 中被策略-架构耦合污染的 5 个关键结�
 - RandomCurric + True Ft 组合是否优于单独使用?
 - 架构优化在 True Ft (而非 Direct) 下是否有效? (exp10 组件收益均在 Direct 下测得)
 - Curric 方向 (Fwd/Rev) 与 RandomCurric 的交互?
+
+---
+
+## 九、训练崩溃诊断与恢复 🔴 exp40 新增
+
+### 崩溃类型
+
+| 类型 | 表现 | 典型场景 |
+|------|------|------|
+| **GCM 诱发 NaN** | 后半段 ckpt 出现 NaN，best≠last | FiLM-GCM + brightness_HSV + blur，gaussian_blur 平滑 HSV 极端值 → GCM 学到极大 scale/shift |
+| **Pure Swin 发散** | 全部 NaN 或最后 ckpt 退化 | 盲识别预测严重错误（漏 noise、blur 类型错），模型在错误退化上无法收敛 |
+| **部分 NaN** | 前几个 ckpt 正常，后期 NaN | 训练不稳定，best ckpt 可用 |
+
+### 诊断流程
+
+```
+训练日志中 grep "PSNR_RGB=nan"
+  ├── 全部 ckpt NaN → 预测退化严重错误，架构无法学习
+  │     → 换 direct_swin ckpt（纯 Swin 最稳定）
+  │     → 或检查预测退化质量
+  │
+  ├── 部分 ckpt NaN + 使用了 GCM
+  │     → FiLM-GCM 诱发（REFLECTION_MECHANISM.md §8）
+  │     → 解决: (1) 降 lr=5e-4 (2) 换 ColorPre (3) 换 Pure Swin
+  │
+  ├── 部分 ckpt NaN + Pure Swin
+  │     → 训练后期发散，使用 best ckpt (step 中 Set14 PSNR 最高的)
+  │
+  └── 最后 ckpt 退化 (PSNR 显著下降) + best≠last
+        → 使用训练日志记录的 "Loaded best checkpoint"
+```
+
+### 恢复方案（按优先级）
+
+| 方案 | 适用 | 操作 |
+|------|------|------|
+| **1. 使用 best ckpt** | best≠last，best 可用 | 从训练日志提取 "Loaded best checkpoint" 的 step |
+| **2. 换 direct_swin** | 全部 NaN 或 best 不可用 | 复制 direct_swin_blind_XXXX 实验替换 |
+| **3. 降学习率** | GCM 诱发 NaN | lr 从 5e-4 降至 1e-4，重新训练 |
+| **4. 换 ColorPre** | GCM 诱发 NaN | GCM → ColorPre（+0.8K，更稳定）|
+| **5. 标记 abandon** | 以上均无效 | 重命名为 abandon_*，在 R0-Arch 中排除 |
+
+### exp40 实际案例
+
+| Challenge | 崩溃类型 | 恢复方案 | 结果 |
+|-----------|------|------|:--:|
+| blind_0018 | Pure Swin 发散 (GCM 实验) | 换 direct_swin | ✅ |
+| blind_0020 | 全部 NaN (GCM 实验) | 换 direct_swin | ✅ |
+| blind_0024 | Pure Swin 最后 ckpt 退化 | 换 direct_swin | ✅ |
+| blind_0007 | Pure Swin best≠last | 使用 best ckpt (step7546) | ✅ |

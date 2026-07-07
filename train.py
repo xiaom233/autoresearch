@@ -256,6 +256,35 @@ class ValDataset:
         return degraded_t, clean_t
 
 
+class PairedValDataset:
+    """Validation using pre-degraded challenge images (clean+degraded pairs).
+    No degradation application needed — uses GT degraded images directly.
+    Returns (degraded, clean) float32 tensors in [0, 1], shape [3, H, W].
+    """
+
+    def __init__(self, challenge_dir):
+        self.pairs = []
+        clean_dir = Path(challenge_dir)
+        for clean_path in sorted(clean_dir.glob("clean_*.png")):
+            # Match degraded_*.png with same index
+            idx = clean_path.stem.split("_")[1]
+            degraded_path = clean_dir / f"degraded_{idx}.png"
+            if degraded_path.exists():
+                self.pairs.append((str(degraded_path), str(clean_path)))
+        print(f"PairedValDataset: {len(self.pairs)} image pairs from {challenge_dir}")
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, idx):
+        degraded_path, clean_path = self.pairs[idx]
+        degraded = np.array(Image.open(degraded_path).convert("RGB"), dtype=np.uint8)
+        clean = np.array(Image.open(clean_path).convert("RGB"), dtype=np.uint8)
+        degraded_t = torch.from_numpy(degraded).permute(2, 0, 1).float() / 255.0
+        clean_t = torch.from_numpy(clean).permute(2, 0, 1).float() / 255.0
+        return degraded_t, clean_t
+
+
 RGB_TO_YCRCB = torch.tensor([[0.299, 0.587, 0.114],
                                   [-0.169, -0.331, 0.500],
                                   [0.500, -0.419, -0.081]])
@@ -416,25 +445,15 @@ def main():
     print(f"Params: {PARAMS_PATH}")
     print(f"Train shards: {TRAIN_SHARDS}")
 
-    # Validation: quick (Set14 only, for intermediate checkpoints) + per-dataset full sets
-    VAL_QUICK_DIRS = ["datasets/Set14/GTmod4"]
+    # Validation: use challenge paired clean+degraded images (no degradation params needed)
     with quiet_pipeline():
-        val_quick = ValDataset(VAL_QUICK_DIRS, count=0, params_path=VAL_PARAMS_PATH)
+        if CHALLENGE_DIR:
+            val_quick = PairedValDataset(CHALLENGE_DIR)
+        else:
+            # Fallback: Set14 with degradation params
+            val_quick = ValDataset(["datasets/Set14/GTmod4"], count=0, params_path=VAL_PARAMS_PATH)
         val_full_sets = [(d.split("/")[-2], ValDataset([d], count=VAL_COUNT, params_path=VAL_PARAMS_PATH))
                           for d in VAL_DIRS]
-        # Add challenge images as validation set (if AR_CHALLENGE_DIR is set)
-        if CHALLENGE_DIR:
-            import glob as _glob
-            challenge_tmp = f"/tmp/{os.path.basename(CHALLENGE_DIR)}_val"
-            os.makedirs(challenge_tmp, exist_ok=True)
-            for src in sorted(_glob.glob(f"{CHALLENGE_DIR}/clean_*.png")):
-                dst = os.path.join(challenge_tmp, os.path.basename(src))
-                if not os.path.exists(dst):
-                    shutil.copy2(src, dst)
-            challenge_clean = [f for f in _glob.glob(f"{CHALLENGE_DIR}/clean_*.png")
-                              if not f.endswith("clean.png")]  # skip backward-compat copy
-            if challenge_clean:
-                val_full_sets.append(("Challenge", ValDataset([challenge_tmp], count=0, params_path=VAL_PARAMS_PATH)))
     total_val = sum(len(v[1]) for v in val_full_sets)
     print(f"Val quick: {len(val_quick)} images  |  Val full: {total_val} images across {len(val_full_sets)} sets")
 
