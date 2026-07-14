@@ -70,6 +70,37 @@ This file provides guidance to Claude Code when working with this repository.
 
 来源: exp17 — 16 Agent 盲识别，平均 CI=8.2/10，函数正确率仅 6%。
 
+### 🔴 Agent 上下文隔离：`isolation: "worktree"` (exp41 强制规则)
+
+**当主会话已讨论过 GT 相关信息时，盲识别/反思 Agent 必须使用 worktree 隔离。**
+
+```
+原因: Agent 默认共享主会话上下文。如果主会话中讨论过盲识别准确率、
+退化类型分布、per-challenge 结果等，Agent 能直接读取这些信息，
+变相获得 GT 泄露。exp41 审计确认了此风险。
+
+❌ 无隔离:
+   Agent(description="R2 反思", subagent_type="general-purpose", prompt="...")
+   → Agent 共享主会话上下文，能读到所有历史讨论
+
+✅ Worktree 隔离:
+   Agent(description="R2 反思", subagent_type="general-purpose",
+         isolation="worktree", prompt="...")
+   → Agent 在独立 git worktree 中运行，无法访问主会话上下文
+   → 只能看到项目文件和 prompt 中给出的指令
+```
+
+**适用场景**:
+- 主会话讨论过盲识别准确率、退化类型、或任何 per-challenge GT 数据后
+- 多轮反思实验（R2, R3, ...）必须在隔离环境中执行
+- 盲识别实验如果主会话有 GT 相关讨论也应用隔离
+
+**不适用场景**:
+- 全新会话，主会话从未提及 GT 数据
+- 训练/评估脚本执行（不涉及盲识别）
+
+**注意**: worktree 会自动清理（Agent 无改动时）或保留分支供后续使用。离开 worktree 后 CWD 恢复到原始目录。
+
 #### 分类型判断框架
 
 ```
