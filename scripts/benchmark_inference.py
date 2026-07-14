@@ -107,6 +107,17 @@ elif METHOD == 'dfpir':
     is_dfpir_official = True
     text_code_dfpir = torch.randn(1, 512).to(device)
 
+elif METHOD == 'mambairv2':
+    sys.path.insert(0, os.path.join(_project_root, 'benchmark/MambaIR-main'))
+    from basicsr.archs.mambairv2_arch import MambaIRv2
+    model = MambaIRv2(upscale=1, in_chans=3, img_size=128, img_range=1.,
+                      embed_dim=174, d_state=16, depths=[6,6,6,6,6,6],
+                      num_heads=[6,6,6,6,6,6], window_size=16, inner_rank=64,
+                      num_tokens=128, convffn_kernel_size=5, mlp_ratio=2).to(device)
+    ckpt = torch.load('benchmark/MambaIR-main/experiments/pretrained_models/mambairv2_ColorDN_15.pth',
+                      map_location=device)
+    model.load_state_dict(ckpt['params'], strict=True)
+
 if model is None:
     print(f"[{METHOD}] FAILED"); sys.exit(1)
 model.eval()
@@ -172,11 +183,22 @@ for ds_name, ds_path in [('DIV2K', 'datasets/DIV2K/DIV2K_valid_HR'),
         ds_num_gpus = NUM_GPUS
     ds_gpu_offset = GPU_OFFSET
 
+    out_dir = f'{OUT_BASE}/{METHOD}/{ds_name}_gpu{ds_gpu_offset}'
     out_path = f'{OUT_BASE}/{METHOD}/{ds_name}_gpu{ds_gpu_offset}.tar'
 
-    # Resume: check existing tar for already-saved images
+    # Resume: scan output directory for already-saved images (fast directory listing)
     saved_set = set()
-    if os.path.exists(out_path):
+    if os.path.isdir(out_dir):
+        for root, dirs, files in os.walk(out_dir):
+            bid = os.path.basename(root)
+            for f in files:
+                if f.endswith('.restored.jpg'):
+                    img_name = f.rsplit('.', 2)[0]
+                    saved_set.add((bid, img_name))
+        if saved_set:
+            print(f"[{METHOD}] {ds_name}_gpu{ds_gpu_offset}: RESUME ({len(saved_set)} images from disk)")
+    elif os.path.exists(out_path):
+        # Legacy tar mode
         try:
             with tarfile.open(out_path, 'r') as t:
                 for info in t.getmembers():
@@ -185,13 +207,13 @@ for ds_name, ds_path in [('DIV2K', 'datasets/DIV2K/DIV2K_valid_HR'),
                         bid = parts[0]
                         img_name = parts[1].rsplit('.', 2)[0]
                         saved_set.add((bid, img_name))
-            print(f"[{METHOD}] {ds_name}_gpu{ds_gpu_offset}: RESUME ({len(saved_set)} already saved)")
+            print(f"[{METHOD}] {ds_name}_gpu{ds_gpu_offset}: RESUME ({len(saved_set)} from tar)")
         except:
-            print(f"[{METHOD}] {ds_name}_gpu{ds_gpu_offset}: CORRUPT, restarting")
+            print(f"[{METHOD}] {ds_name}_gpu{ds_gpu_offset}: CORRUPT tar, restarting")
             os.remove(out_path)
             saved_set = set()
 
-    out_tar = tarfile.open(out_path, 'a' if saved_set else 'w')
+    os.makedirs(out_dir, exist_ok=True)
     total = 0; saved = len(saved_set)
 
     # Pre-build (img_idx, pipeline) list → single Dataset
@@ -251,60 +273,85 @@ for ds_name, ds_path in [('DIV2K', 'datasets/DIV2K/DIV2K_valid_HR'),
                 clean = clean.to(device, non_blocking=True)
                 H, W = degraded.shape[2], degraded.shape[3]
 
-                init_pad = 64 if METHOD == 'xrestormer' else 16
-                ph, pw = (init_pad - H % init_pad) % init_pad, (init_pad - W % init_pad) % init_pad
-                dpad = F.pad(degraded, (0, pw, 0, ph), mode='reflect') if ph or pw else degraded
-
-                # Tiled forward for large images (skip for R2R which handles full image)
-                if max(H, W) > 1024 and METHOD != 'r2r':
-                    T = 1024
-                    pred = torch.zeros(1, 3, H, W, device=device, dtype=torch.bfloat16)
+                # MambaIRv2: always tiled (OOM at full res), model handles pad/norm internally
+                if METHOD == 'mambairv2':
+                    T = 512
+                    pred = torch.zeros(1, 3, H, W, device=device, dtype=torch.float32)
                     for y in range(0, H, T):
                         for x in range(0, W, T):
                             y2, x2 = min(y+T, H), min(x+T, W)
-                            tile = dpad[:, :, y:y2, x:x2]
+                            tile = degraded[:, :, y:y2, x:x2]
                             th, tw = y2-y, x2-x
-                            if th < T or tw < T:
-                                tile = F.pad(tile, (0, T-tw, 0, T-th))
-                            pad_m = 64 if METHOD == 'xrestormer' else 16
-                            ph2 = (pad_m - tile.shape[2] % pad_m) % pad_m
-                            pw2 = (pad_m - tile.shape[3] % pad_m) % pad_m
-                            if ph2 or pw2:
-                                tile = F.pad(tile, (0, pw2, 0, ph2), mode='reflect')
-                            if is_airnet:
-                                out = model(tile, tile)
-                            elif is_dfpir_official:
-                                out = model(tile, text_code_dfpir.expand(tile.shape[0], -1))
-                            else:
-                                with torch.amp.autocast('cuda', dtype=torch.bfloat16):
-                                    out = model(tile)
+                            out = model(tile)
                             if isinstance(out, (list,tuple)): out = out[0]
                             pred[:, :, y:y2, x:x2] = out[:, :, :th, :tw]
                     restored = pred.float()
                 else:
-                    if is_airnet:
-                        out = model(dpad, dpad)
-                    elif is_dfpir_official:
-                        out = model(dpad, text_code_dfpir.expand(dpad.shape[0], -1))
-                    else:
-                        with torch.amp.autocast('cuda', dtype=torch.bfloat16):
-                            out = model(dpad)
-                    if isinstance(out, (list,tuple)): out = out[0]
-                    restored = out[:, :, :H, :W].float()
+                    init_pad = 64 if METHOD == 'xrestormer' else 16
+                    ph, pw = (init_pad - H % init_pad) % init_pad, (init_pad - W % init_pad) % init_pad
+                    dpad = F.pad(degraded, (0, pw, 0, ph), mode='reflect') if ph or pw else degraded
 
-                # Save
+                    if max(H, W) > 1024 and METHOD != 'r2r':
+                        T = 1024
+                        pred = torch.zeros(1, 3, H, W, device=device, dtype=torch.float32)
+                        for y in range(0, H, T):
+                            for x in range(0, W, T):
+                                y2, x2 = min(y+T, H), min(x+T, W)
+                                tile = dpad[:, :, y:y2, x:x2]
+                                th, tw = y2-y, x2-x
+                                if th < T or tw < T:
+                                    tile = F.pad(tile, (0, T-tw, 0, T-th))
+                                pad_m = 64 if METHOD == 'xrestormer' else 16
+                                ph2 = (pad_m - tile.shape[2] % pad_m) % pad_m
+                                pw2 = (pad_m - tile.shape[3] % pad_m) % pad_m
+                                if ph2 or pw2:
+                                    tile = F.pad(tile, (0, pw2, 0, ph2), mode='reflect')
+                                if is_airnet:
+                                    out = model(tile, tile)
+                                elif is_dfpir_official:
+                                    out = model(tile, text_code_dfpir.expand(tile.shape[0], -1))
+                                else:
+                                    with torch.amp.autocast('cuda', dtype=torch.bfloat16):
+                                        out = model(tile)
+                                if isinstance(out, (list,tuple)): out = out[0]
+                                pred[:, :, y:y2, x:x2] = out[:, :, :th, :tw]
+                        restored = pred.float()
+                    else:
+                        if is_airnet:
+                            out = model(dpad, dpad)
+                        elif is_dfpir_official:
+                            out = model(dpad, text_code_dfpir.expand(dpad.shape[0], -1))
+                        else:
+                            with torch.amp.autocast('cuda', dtype=torch.bfloat16):
+                                out = model(dpad)
+                        if isinstance(out, (list,tuple)): out = out[0]
+                        restored = out[:, :, :H, :W].float()
+
+                # Save as individual JPEG files (crash-safe, no IO overhead)
                 bid_s = bid_i[0] if isinstance(bid_i, list) else bid_i
                 img_s = img_name[0] if isinstance(img_name, list) else img_name
-                for tag, t in [('degraded', degraded.float()), ('restored', restored), ('clean', clean.float())]:
-                    jpg = to_jpg(t)
-                    info = tarfile.TarInfo(name=f'{bid_s}/{img_s}.{tag}.jpg')
-                    info.size = len(jpg)
-                    out_tar.addfile(info, io.BytesIO(jpg))
+                img_dir = os.path.join(out_dir, bid_s)
+                os.makedirs(img_dir, exist_ok=True)
+                # Save restored only (clean loaded from dataset by metrics)
+                jpg = to_jpg(restored)
+                with open(os.path.join(img_dir, f'{img_s}.restored.jpg'), 'wb') as fp:
+                    fp.write(jpg)
 
                 if saved % 50 == 0:
                     print(f"  [{METHOD}] {ds_name}: {saved} imgs")
 
+    # Tar up the output directory
+    print(f"[{METHOD}] {ds_name}: Tarring {out_dir} -> {out_path}...")
+    out_tar = tarfile.open(out_path, 'w')
+    for root, dirs, files in os.walk(out_dir):
+        for f in files:
+            full = os.path.join(root, f)
+            arcname = os.path.relpath(full, out_dir)
+            out_tar.add(full, arcname)
     out_tar.close()
+    # Clean up directory after successful tar
+    import shutil
+    shutil.rmtree(out_dir)
     print(f"[{METHOD}] {ds_name}: Done ({saved} imgs)")
 
 print(f"[{METHOD}] GPU{GPU_OFFSET} Done")
