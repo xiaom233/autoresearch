@@ -14,12 +14,14 @@ import gc
 import json
 import math
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
+import lpips
 
 import random as _random
 
@@ -332,6 +334,14 @@ def compute_ssim(pred, target):
                ((mu_x2 + mu_y2 + C1) * (sigma_x2 + sigma_y2 + C2))
     return ssim_map.mean().item()
 
+_LPIPS_MODEL = None
+
+def _get_lpips(device):
+    global _LPIPS_MODEL
+    if _LPIPS_MODEL is None:
+        _LPIPS_MODEL = lpips.LPIPS(net='vgg').to(device)
+    return _LPIPS_MODEL
+
 @torch.no_grad()
 def _pad_for_window(img, window_size=8):
     """Pad image spatial dims to be divisible by window_size. Returns (padded, orig_H, orig_W)."""
@@ -358,7 +368,8 @@ def evaluate(model, val_dataset, device, autocast_ctx):
     loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False,
                                           num_workers=4, pin_memory=True,
                                           persistent_workers=False)
-    metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
+    metrics = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0, "lpips": 0.0}
+    lpips_fn = _get_lpips(device)
     with torch.no_grad():
       for degraded, clean in loader:
         degraded = degraded.to(device, non_blocking=True)
@@ -375,6 +386,7 @@ def evaluate(model, val_dataset, device, autocast_ctx):
         metrics["psnr_y"] += compute_psnr(pred_y, clean_y)
         metrics["ssim_rgb"] += compute_ssim(pred_f[0], clean_f[0])
         metrics["ssim_y"] += compute_ssim(pred_y[0], clean_y[0])
+        metrics["lpips"] += lpips_fn(pred_f * 2 - 1, clean_f * 2 - 1).item()
     model.train()
     return {k: v / n for k, v in metrics.items()}
 
@@ -385,7 +397,7 @@ def fmt_metrics(m):
 def evaluate_all(model, val_sets, device, autocast_ctx):
     """Evaluate per-dataset and overall. Returns (per_set_dict, overall_dict)."""
     per_set = {}
-    overall = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0}
+    overall = {"psnr_rgb": 0.0, "psnr_y": 0.0, "ssim_rgb": 0.0, "ssim_y": 0.0, "lpips": 0.0}
     total_n = 0
     for name, ds in val_sets:
         m = evaluate(model, ds, device, autocast_ctx)
