@@ -32,9 +32,10 @@
 | E1 0018 NaN 回退 | ✅ 完成；support 17.10，最终选中 R1 | `E1/logs/blind_0018_R1.log` |
 | E2 固定 LQ 测试 | ✅ 完成；DFPIR-ft best +0.682 DIV2K / +0.659 LSDIR | `E2/e2_test_summary.json` |
 | E4 数据 | ✅ SIDD validation lmdb（5 support/1,120 test 块 = 35 场景×32，场景不重叠）；UHDM test.tar.gz（5 support / 495 test，4K）；未下载训练集 | `datasets/E4/` |
-| E4 SIDD 基线（35 均衡子集） | M_blind 30.763；官方 DFPIR 23.678；blinded DFPIR 31.986（项目参考） | `E4/sidd/baselines/`、`E4/sidd/baselines_official/` |
-| E4 SIDD 全量 | **1,120 块（35 场景×32）**：LQ 23.660 / M_blind 30.503 / **DFPIR official release 5D 23.291** / blinded 31.218（参考）/ 规则 21.625 / AutoIR 30.533；AutoIR−M_blind +0.030（CI 跨 0），规则 −8.878，官方 −7.212 | `E4/sidd/full_eval_summary*.json` |
+| E4 SIDD 基线（35 均衡子集） | M_blind 30.763；DFPIR official release 5D 26.972（CLIP σ=25；random text 23.678 非官方）；blinded DFPIR 31.986（项目参考） | `E4/sidd/baselines/`、`E4/sidd/baselines_official/` |
+| E4 SIDD 全量 | **1,120 块（35 场景×32）**：LQ 23.660 / M_blind 30.503 / **DFPIR official release 5D 26.465（CLIP σ=25）** / blinded 31.218（参考）/ 规则 21.625 / AutoIR 30.533；AutoIR−M_blind +0.030（CI 跨 0），规则 −8.878，官方 −4.038 | `E4/sidd/full_eval_summary*.json` |
 | E4 SIDD X-Restormer | ✅ 官方 `denoise_300k.pth` zero-shot（单退化 Gaussian σ=50，非 all-in-one）；1,120 块 **32.014 / 0.7197 / 0.4221**；balanced35 32.575；比 AutoIR +1.481 dB | `E4/sidd/full_eval/X-Restormer_gpu*.jsonl`、`E4/sidd/xrestormer_summary.json` |
+| E4 SIDD 其他 4D/5D | PromptIR 24.462 / AirNet 23.891 / DCPT-5D 23.156 / R2R-5D 22.530 / DATPRL-5Task 15.673 / DATPRL-CDD11 13.182；全部低于 M_blind 30.503 | `E4/sidd/sidd_multimethod_summary.json` |
 | E4 SIDD 盲识别 | 规则：`YCrCb:5+contrast:4+sat:4` UNCERTAIN；Skill：`YCrCb:1` UNCERTAIN（拒绝全局 FP） | `E4/sidd/rule/`、`E4/sidd/skill/` |
 | E4 UHDM 盲识别 | 规则：无共识 → 单对 fallback `compression_jpeg:2`，**POOR**；AutoIR：空 pipeline + POOR + out_of_library | `E4/uhdm/rule/`、`E4/uhdm/skill/` |
 | E4 最终 specialist | SIDD 全量：规则 21.625 / AutoIR 30.533；规则过度预测造成 −8.907 dB vs AutoIR；AutoIR 相对 M_blind 不显著 | `E4/sidd/full_eval/*.jsonl` |
@@ -73,7 +74,7 @@
 
 1. **校准与测试图像重叠**：0801–0810 在 DIV2K 测试集内；不能声称独立。排除后 AutoIR DIV2K 仅 −0.005 dB，说明重叠不是性能来源，但仍需披露。
 2. **Ours 31.25/27.08 是按位置微平均**，不是整链准确率；Ours 的 R0/R1 选择依据 UNKNOWN。
-3. **E4 的 SIDD/UHDM 已执行（官方 DFPIR 为主基线）**：SIDD 全量 1,120 块上 AutoIR 与 M_blind 持平（+0.030 dB，CI 跨 0）、规则 specialist 灾难（−8.878 dB）、DFPIR official release 5D 分布外失败（23.291 < 不恢复 23.660）。SIDD support 取自 validation 场景 0–4（不是官方 train）；test 为 35/40 场景、1,120/1,280 块。UHDM support 取自 test 0–4（不是 train）；已改 full 495 对：50 子集 LQ 均值 17.752 vs 全量 17.100，M_blind 子集 17.917 vs 全量 17.307，子集高估约 0.61 dB。blinded DFPIR 31.218 仅为项目参考，不是官方权重。**E4 specialist 只训练了 R0，没有训练后 R1/R2 反思**：训练前 Skill 候选反思有 15（SIDD）/7（UHDM）次，但任务库只有 `*_R0`，无 R1 任务、日志、params、checkpoint 或停止决策记录；R0 均正常完成、无 NaN。不是 agent 判定不需要，也不是运行崩溃，而是 E4 按最小真实实验只排了单轮 R0，训练后反思流程未调度；SIDD UNCERTAIN、UHDM POOR 按协议本应触发 R1。E4 只能标为 **R0-only**，不能写成完整三轮系统。详见 `E4/EXECUTION_NOTE.md`。**E4 rain 未执行**；不能声称通用真实/库外泛化或真实数据显著提升。
+3. **E4 的 SIDD/UHDM 已执行（官方 DFPIR 为主基线）**：SIDD 全量 1,120 块上 AutoIR 与 M_blind 持平（+0.030 dB，CI 跨 0）、规则 specialist 灾难（−8.878 dB）、DFPIR official release 5D 分布外失败（CLIP σ=25 仅 26.465，低于 M_blind 4.038）。SIDD support 取自 validation 场景 0–4（不是官方 train）；test 为 35/40 场景、1,120/1,280 块。UHDM support 取自 test 0–4（不是 train）；已改 full 495 对：50 子集 LQ 均值 17.752 vs 全量 17.100，M_blind 子集 17.917 vs 全量 17.307，子集高估约 0.61 dB。blinded DFPIR 31.218 仅为项目参考，不是官方权重。**E4 specialist 只训练了 R0，没有训练后 R1/R2 反思**：训练前 Skill 候选反思有 15（SIDD）/7（UHDM）次，但任务库只有 `*_R0`，无 R1 任务、日志、params、checkpoint 或停止决策记录；R0 均正常完成、无 NaN。不是 agent 判定不需要，也不是运行崩溃，而是 E4 按最小真实实验只排了单轮 R0，训练后反思流程未调度；SIDD UNCERTAIN、UHDM POOR 按协议本应触发 R1。E4 只能标为 **R0-only**，不能写成完整三轮系统。详见 `E4/EXECUTION_NOTE.md`。**E4 rain 未执行**；不能声称通用真实/库外泛化或真实数据显著提升。
 4. **E1/E2 support 与 DIV2K test 重叠**：24 场景共 120 次抽取、74 张唯一 DIV2K 图，每场景 5/100；support-excluded 敏感性显示影响 <0.01 dB（E1）/0.007 dB（E2 best），但不能声称严格独立 test。
 5. **LQ 协议**：7/24 场景的 `make_lq` 不可复现（impulse/glass）；固定 LQ 重评显示 AutoIR/规则/DFPIR-original 差异 ≤0.02 dB，结论不变。历史 baseline 的 LQ 也未跨方法固定（18/24 随机场景），AirNet 敏感度实测 mean +0.003/−0.009 dB；严格主表仍应统一重跑。
 6. **E6 稳定性未执行**；不能声称 run-to-run/support-to-support 方差。
