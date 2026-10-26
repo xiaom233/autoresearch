@@ -34,11 +34,12 @@
 | E4 数据 | ✅ SIDD validation lmdb（5 support/1,120 test 块 = 35 场景×32，场景不重叠）；UHDM test.tar.gz（5 support / 495 test，4K）；未下载训练集 | `datasets/E4/` |
 | E4 SIDD 基线（35 均衡子集） | M_blind 30.763；官方 DFPIR 23.678；blinded DFPIR 31.986（项目参考） | `E4/sidd/baselines/`、`E4/sidd/baselines_official/` |
 | E4 SIDD 全量 | **1,120 块（35 场景×32）**：LQ 23.660 / M_blind 30.503 / **官方 DFPIR 23.291** / blinded 31.218（参考）/ 规则 21.625 / AutoIR 30.533；AutoIR−M_blind +0.030（CI 跨 0），规则 −8.878，官方 −7.212 | `E4/sidd/full_eval_summary*.json` |
+| E4 SIDD X-Restormer | ✅ 官方 `denoise_300k.pth` zero-shot（单退化 Gaussian σ=50，非 all-in-one）；1,120 块 **32.014 / 0.7197 / 0.4221**；balanced35 32.575；比 AutoIR +1.481 dB | `E4/sidd/full_eval/X-Restormer_gpu*.jsonl`、`E4/sidd/xrestormer_summary.json` |
 | E4 SIDD 盲识别 | 规则：`YCrCb:5+contrast:4+sat:4` UNCERTAIN；Skill：`YCrCb:1` UNCERTAIN（拒绝全局 FP） | `E4/sidd/rule/`、`E4/sidd/skill/` |
 | E4 UHDM 盲识别 | 规则：无共识 → 单对 fallback `compression_jpeg:2`，**POOR**；AutoIR：空 pipeline + POOR + out_of_library | `E4/uhdm/rule/`、`E4/uhdm/skill/` |
 | E4 最终 specialist | SIDD 全量：规则 21.625 / AutoIR 30.533；规则过度预测造成 −8.907 dB vs AutoIR；AutoIR 相对 M_blind 不显著 | `E4/sidd/full_eval/*.jsonl` |
 | E4 UHDM 最终（495 对全量） | M_blind 17.307 / **官方 DFPIR 15.529** / blinded 17.254（参考）/ 规则 fallback 17.373；AutoIR 空 pipeline/POOR；相对不恢复 17.100 提升 ≤0.27 dB | `E4/uhdm/full_eval_summary.json` |
-| E4 结论 | 真实数据可运行，AutoIR 避免规则式伤害并拒绝库外；但真实 SIDD 上 AutoIR 未显著超 M_blind，官方 DFPIR 分布外失败，UHDM 无库外恢复 | `02_结果与逐条回应_已填写.md` E4/T6 |
+| E4 结论 | 真实数据可运行，AutoIR 避免规则式伤害并拒绝库外；但真实 SIDD 上 AutoIR 未显著超 M_blind，且低于单退化 X-Restormer 1.481 dB；官方 DFPIR 分布外失败，UHDM 无库外恢复 | `02_结果与逐条回应_已填写.md` E4/T6 |
 | 审计报告 | ✅ 任务卡/数据规模/训练来源/评测公平性逐项审计；发现 SIDD/UHDM support 划分、UHDM 50→495、baseline LQ 未固定等问题 | `rebuttal_runs/AUDIT_2026-10-26.md`、`AUDIT_lq_evidence.json` |
 | 固定 LQ 重评 | ✅ 7 场景非确定 LQ 已物化并重评 E1/E2；E1 差异 ≤0.02 dB，结论不变；E2 DFPIR 结果写入 `E1E2_fixed_lq_summary.json` | `E1E2_fixed_lq/`、`scripts/prepare_fixed_lq.py`、`eval_fixed_lq.py` |
 | UHDM 全量 test | ✅ 495 对（500 排除 support 0–4）4 方法重评完成；M_blind 17.307 / 官方 15.529 / blinded 17.254 / 规则 17.373；不恢复 17.100 | `E4/uhdm/full_eval_summary.json` |
