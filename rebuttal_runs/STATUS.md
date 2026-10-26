@@ -41,7 +41,7 @@
 | E4 最终 specialist | SIDD 全量：规则 21.625 / AutoIR 30.533；规则过度预测造成 −8.907 dB vs AutoIR；AutoIR 相对 M_blind 不显著 | `E4/sidd/full_eval/*.jsonl` |
 | E4 UHDM 最终（495 对全量） | M_blind 17.307 / **官方 DFPIR 15.529** / blinded 17.254（参考）/ 规则 fallback 17.373；AutoIR 空 pipeline/POOR；相对不恢复 17.100 提升 ≤0.27 dB | `E4/uhdm/full_eval_summary.json` |
 | E4 结论 | 真实数据可运行，AutoIR 避免规则式伤害并拒绝库外；但真实 SIDD 上 AutoIR 未显著超 M_blind，且低于单退化 X-Restormer 1.481 dB；官方 DFPIR 分布外失败，UHDM 无库外恢复 | `02_结果与逐条回应_已填写.md` E4/T6 |
-| 审计报告 | ✅ 任务卡/数据规模/训练来源/评测公平性逐项审计；发现 SIDD/UHDM support 划分、UHDM 50→495、baseline LQ 未固定等问题 | `rebuttal_runs/AUDIT_2026-10-26.md`、`AUDIT_lq_evidence.json` |
+| 审计报告 | ✅ 任务卡/数据规模/训练来源/评测公平性逐项审计；发现 SIDD/UHDM support 划分、UHDM 50→495、baseline LQ 未固定、official DFPIR 随机 text 协议错误等问题 | `rebuttal_runs/AUDIT_2026-10-26.md`、`AUDIT_lq_evidence.json` |
 | 固定 LQ 重评 | ✅ 7 场景非确定 LQ 已物化并重评 E1/E2；E1 差异 ≤0.02 dB，结论不变；E2 DFPIR 结果写入 `E1E2_fixed_lq_summary.json` | `E1E2_fixed_lq/`、`scripts/prepare_fixed_lq.py`、`eval_fixed_lq.py` |
 | UHDM 全量 test | ✅ 495 对（500 排除 support 0–4）4 方法重评完成；M_blind 17.307 / 官方 15.529 / blinded 17.254 / 规则 17.373；不恢复 17.100 | `E4/uhdm/full_eval_summary.json` |
 | P0 状态 | ✅ E1/E2/E3/E4/E5a 主结果全部完成；T0–T10 与逐条回应已填主结果 | `02_结果与逐条回应_已填写.md` |
