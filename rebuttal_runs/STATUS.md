@@ -45,6 +45,7 @@
 | 固定 LQ 重评 | ✅ 7 场景非确定 LQ 已物化并重评 E1/E2；E1 差异 ≤0.02 dB，结论不变；E2 DFPIR 结果写入 `E1E2_fixed_lq_summary.json` | `E1E2_fixed_lq/`、`scripts/prepare_fixed_lq.py`、`eval_fixed_lq.py` |
 | UHDM 全量 test | ✅ 495 对（500 排除 support 0–4）4 方法重评完成；M_blind 17.307 / 官方 15.529 / blinded 17.254 / 规则 17.373；不恢复 17.100 | `E4/uhdm/full_eval_summary.json` |
 | P0 状态 | ✅ E1/E2/E3/E4/E5a 主结果全部完成；T0–T10 与逐条回应已填主结果 | `02_结果与逐条回应_已填写.md` |
+| DFPIR-from-scratch | 🔄 24 场景随机初始化，同 T_s/DC*/support；20 个 OOM 重跑中 | `E2_scratch/` |
 | E2 预算曲线 | ✅ T1/T2/T3 全 24 snapshot 完成：25.251 / 25.286 / 25.366 DIV2K；23.241 / 23.295 / 23.363 LSDIR；**T/3 已超 AutoIR** | `E2/budget_curve.json` |
 | T4 修正 | 旧 T1-best 子集 21.58 是选择偏差，已废弃；全 24 曲线为准 | `02_..._已填写.md` T4 |
 | E6-B support-set 稳定性 | ✅ 6 场景×3 组 support×R0–R2（规则控制器）：DIV2K 25.000/25.304/26.064；LSDIR 23.197/23.540/24.171；range 0.13–2.66 dB，场景相关 | `E6/e6_summary.json`、`E6/e6_summary.md` |
