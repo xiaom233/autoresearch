@@ -48,7 +48,7 @@
 | DFPIR-from-scratch | 🔄 24 场景随机初始化，同 T_s/DC*/support；20 个 OOM 重跑中 | `E2_scratch/` |
 | E2 预算曲线 | ✅ T1/T2/T3 全 24 snapshot 完成：25.251 / 25.286 / 25.366 DIV2K；23.241 / 23.295 / 23.363 LSDIR；**T/3 已超 AutoIR** | `E2/budget_curve.json` |
 | T4 修正 | 旧 T1-best 子集 21.58 是选择偏差，已废弃；全 24 曲线为准 | `02_..._已填写.md` T4 |
-| E6-B support-set 稳定性 | ✅ 6 场景×3 组 support×R0–R2（规则控制器）：DIV2K 25.000/25.304/26.064；LSDIR 23.197/23.540/24.171；range 0.13–2.66 dB，场景相关 | `E6/e6_summary.json`、`E6/e6_summary.md` |
+| E6-B support-set 稳定性 | ✅ 6 场景×3 组 support×R0–R2（规则控制器，33 次训练 / 64.93 GPU-h）：DIV2K 25.000/25.304/26.064；LSDIR 23.197/23.540/24.171；range 0.13–2.66 dB，场景相关 | `E6/e6_summary.json`、`E6/e6_summary.md` |
 | 未执行 | E5c 失败归因、E5b/E2-RS、E6-A agent/run-to-run、E3-G 留出、E4 rain | 明确标为未执行/限制 |
 | 旧无人值守链 | 已完成 E2 评估；E1 段因 `E1/logs` 目录缺失失败，已创建目录并另起 `run_e1_stage.sh` | `chain.log`、`E1/stage.log` |
 | E1 规则控制器决策 | ✅ 24/24 完成；R1 可用 19、R2 可用 10；候选测试 196 次；arch=20 Swin+SG / 4 GCM | `E1/decisions/` |
