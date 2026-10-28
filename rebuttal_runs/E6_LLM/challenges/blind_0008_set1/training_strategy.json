@@ -1,0 +1,81 @@
+{
+  "challenge": "blind_0008_set1",
+  "pipeline_source": "predicted_params.json (predicted pipeline only; GT never used)",
+  "pipeline": [
+    {"function": "saturate_weaken_HSV", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "depths": [2, 2, 2, 2],
+    "num_heads": [4, 4, 4, 4],
+    "mlp_ratio": 2,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_color_mlp_output": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_freqmod": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "load_ckpt": null,
+    "extra_env": {
+      "AR_ATTENTION_TYPE": "swin",
+      "AR_WINDOW_SIZE": "8",
+      "AR_EMBED_DIM": "64",
+      "AR_USE_SIMPLE_GATE": "1",
+      "AR_USE_GCM": "0",
+      "AR_USE_COLOR_PRE": "0",
+      "AR_USE_COLOR_MLP": "0",
+      "AR_USE_COLOR_MLP_OUTPUT": "0",
+      "AR_USE_DUAL_BRANCH": "0",
+      "AR_USE_CSN": "0",
+      "AR_USE_CHANNEL_CURVE": "0",
+      "AR_USE_PCP": "0",
+      "AR_USE_FREQMOD": "0",
+      "AR_USE_SCA": "0",
+      "AR_USE_GDFN": "0",
+      "AR_USE_FPRO": "0",
+      "AR_LOAD_CKPT": "None"
+    }
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "blind-ID final verdict: single step saturate_weaken_HSV:4, verdict=LIKELY, tier=1, PSNR=inf (pixel-perfect on target), support pairs 4/4 (PSNR=inf each), CI=10/10 -> deterministic, high-confidence global step -> Direct from scratch; no pretrained ckpt exists for this support-specific challenge (§六 Step 1: global degradations favor Direct; §六 Step 3: blind scenario fallback is pure Swin)",
+    "saturation_chroma_ratio=0.2055 + saturation_detected_raw=true -> severe global desaturation is the true degradation step; reflection proved clean==degraded reproduction with saturation alone (zero residual), so the Step-4 heuristic BRIGHTNESS_brighten_sev1 is a byproduct, not a real step -> treat architecture need as saturation-only",
+    "variance_ratio=1.1728 != 1.0 (Tier A contrast signal) BUT reflection: brightness_mean_shift=+7.9 and variance rise are the expected RGB effect of HSV desaturation (R,G,B collapse toward V=max channel, luma preserved); no contrast function exists in the exact-match pipeline -> ColorPre gate rejected; §七 component table lists saturation as a ColorPre disable scenario (harmful -0.34) -> use_color_pre=false",
+    "No structured local step: block_boundary=0.9964 (<1.1, JPEG negative), spectral_slope_ratio=1.0002, unique_G=256 both images, no anisotropy -> FiLM-GCM trigger (variance_ratio!=1.0 + structured motion/jpeg) not satisfied; §六 Step 0 classifies saturation as low difficulty -> pure Swin + SimpleGate; exp38 FiLM on saturation only +0.20 (~0) for +26K params -> use_gcm=false",
+    "Noise ruled out: step2 raw verdict GAUSSIAN_YCrCb is confidence=low, noise_prior_sigma=0.12 (<2), spatial_corr=0.9729, residual_intensity_corr=0.5487 explained by the deterministic tone/colour transform; exact-match simulation (PSNR=inf) leaves zero residual -> NO_NOISE -> no noise-specific architecture or component",
+    "attention_type=swin, window_size=8: §五 attention table lists saturation -> Swin (baseline, no winner), while MDTA/OCAB risk collapse on global degradations; §七 OCAB gate anisotropy_ratio>1.7 is not triggered (no motion blur) -> OCAB/MDTA excluded",
+    "use_simple_gate=true: §七 enables SimpleGate by default for any verdict (exp39: -32K params, safe on 8/9 degradations); the only known negative is S5 motionx3 (-0.86), not applicable here; guard against exp39 epoch-2 risk with lr=5e-4 (already set) and frequent checkpoints",
+    "use_dual_branch=false: §七 states DualBranch is 0/24 wins in blind-ID scenarios (exp37); full_analysis.json's generic 'multi-step/uncertain' DualBranch recommendation was premised on the pre-reflection multi-step hypothesis, which the exact PSNR=inf single-step match falsified; single deterministic LIKELY step gives no uncertainty-robustness rationale",
+    "use_color_mlp=false: §七 gate requires high-confidence brightness_HSV (L1 +0.28); the brightness step was rejected by exact-match reflection, so the gate is not met",
+    "use_csn=false: §五/§七 CSN fails catastrophically on pure global degradations (SF9 -11.73, L6 -4.60); this challenge is a pure global step -> excluded",
+    "use_channel_curve=false: §七 gate is high-confidence stretch (+0.38); saturation is not stretch -> not triggered",
+    "Train degradation = predicted pipeline (saturate_weaken_HSV:4) via AR_PARAMS_PATH; EPOCH_BUDGET=2, LR=5e-4, BATCH=16 fixed for fair comparison; no curriculum (single step, nothing to schedule)"
+  ],
+  "finetune_strategy_ref": [
+    "§六 Step 0: degradation difficulty tiers (saturation = low -> pure Swin + SimpleGate)",
+    "§六 Step 1: strategy selection (global degradation -> Direct conservative; True Ft not recommended)",
+    "§六 Step 2: per-step verdict component gating (LIKELY+contrast -> FiLM/ColorPre only; any verdict -> SimpleGate default on)",
+    "§六 Step 3: component stability check (CSN banned on pure global; blind scenario -> pure Swin safest)",
+    "§七 signal-confidence-driven component selection (Tier A variance_ratio gate; saturation disable scenario for ColorPre; Tier B/C -> Swin baseline)",
+    "§七 full component enable table (ColorPre/FiLM-GCM/OCAB/CSN/DualBranch/SimpleGate gates and disable scenarios)",
+    "§五 attention-type coupling table (saturation -> Swin) and per-degradation best-scheme table (SF5/SF7 saturate cases)"
+  ],
+  "reasoning": "盲识别结果为单步 saturate_weaken_HSV:4，verdict=LIKELY，Tier 1，且 PSNR=inf 像素级精确复现（4 个独立 support pair 全部 PSNR=inf，CI=10/10），属于确定性的高置信全局退化。reflection 明确证明 brightness_mean_shift=+7.9 与 variance_ratio=1.1728 是 HSV 去饱和时 RGB 向 V 通道坍缩的必然副产物，管线中不存在 brightness/contrast/gamma 步骤——因此虽然 variance_ratio≠1.0 命中 Tier A 的 ColorPre 门控，其前提（contrast）被推翻，且 §七 明确列出 saturation 是 ColorPre 的禁用场景（-0.34），故不启用 ColorPre。同理 brightness 步骤不存在，ColorMLP 门控不成立。无任何结构化局部退化（block_boundary=0.9964<1.1、spectral_slope_ratio=1.0002、无各向异性、无 motion/jpeg），FiLM-GCM 的 'variance_ratio+结构化' 触发条件不满足，且 saturation 属 §六 Step 0 的低难度类，故保持纯 Swin。OCAB 门控（anisotropy>1.7）不触发；MDTA/OCAB 在全局退化上有崩溃风险，§五 表中 saturation 的最佳选择即 Swin(基线)。CSN 在纯全局退化上灾难性失败（SF9 -11.73），ChannelCurve 仅适用 stretch，均禁用。DualBranch 虽被 full_analysis.json 的通用预设推荐（理由是 multi-step/uncertain），但该预设基于反思前的多步假设，已被 PSNR=inf 的单步精确复现证伪；且 §七 明确盲识别场景 DualBranch 0/24 胜，故不启用。唯一按 §七 '任意 verdict 默认常开' 启用的是 SimpleGate（-32K 参数、8/9 退化安全，唯一负例 S5 motion×3 不适用），同时用 LR=5e-4 + 较频繁 checkpoint 防范 exp39 记录的 epoch-2 训练风险。最终架构：纯 Swin（dim=64, window=8）+ SimpleGate，Direct 从零训练，2 epoch，LR=5e-4，batch=16，训练退化严格使用预测管线，不使用任何 GT 信息。",
+  "notes": {
+    "monitoring": "按 exp39 提示关注 epoch-2 稳定性（SimpleGate 在 D3 上的历史风险）；若出现 NaN 或末次 ckpt 退化，按 §九 优先使用 best checkpoint，其次退回无 SimpleGate 的纯 Swin。",
+    "fairness": "参数量低于基线（SimpleGate -32K），满足 §五 参数公平性规则（≤1.05× 基线）；EPOCH_BUDGET=2 与基线一致。",
+    "gt_isolation": "本策略仅基于 predicted_params.json / full_analysis.json / reflection.json，未读取任何 GT、degradation_gt、gt_mappings、test_metrics 或评测结果。"
+  }
+}

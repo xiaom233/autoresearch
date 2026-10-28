@@ -1,0 +1,86 @@
+{
+  "pipeline": [
+    {
+      "function": "noise_gaussian_YCrCb",
+      "severity": 3,
+      "verdict": "UNCERTAIN",
+      "signal_source": "flat-region speckle across all 5 pairs (target flat local-var p50 8.2/7.9/11.7/24.4/18.4 vs no-noise sim 0.4/0.0/1.8/19.2/14.8); chroma std +5-20% vs no-noise sim; run_full_analysis flagged GAUSSIAN_YCrCb in all 5 pairs (cross_ch 0.57-0.87); wavelet prior blind to noise->blur (verified 0.00 on noisy sims) so sigma=0 does not rule it out; pair0 statistical CI=10/10 with YCrCb:3 (vs 7/10 with RGB:3)"
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN",
+      "signal_source": "gm_ratio 0.16-0.50, spectral_slope_ratio 1.20-1.28 in all 5 pairs; severity from gm_ratio calibration against JPEG (target gm_ratio 0.164 ~ gauss3+jpeg 0.143, gauss4 0.104, gauss2 0.227); gaussian beats glass/lens/motion on PSNR at matched settings; glass_score 1.54 is JPEG-inflated (no-blur jpeg5 sim already scores 1.44-1.86)"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "LIKELY",
+      "signal_source": "block_boundary 4.24-7.15 (>>1.05, 0%FP signal) and dct_zero_ratio 0.89-0.95 in all 5 pairs; severity 4 (quality 8) from chroma-std match (target Cr/Cb 7.10/3.74 vs q8 7.47/3.73, q5 9.45/1.40); PSNR grid with ideal affine: gauss3+jpeg4 30.70dB > jpeg5 28.32dB"
+    },
+    {
+      "function": "contrast_weaken_scale",
+      "severity": 1,
+      "verdict": "UNCERTAIN",
+      "signal_source": "variance_ratio 0.639-0.734 in all 5 pairs vs 0.90-0.95 for blur+jpeg alone; mean shift follows (1-alpha)*(128-mean) with alpha=0.85-0.90 -> affine contraction toward mid-gray (observed -6.3/+10.0/+7.9/-0.9/-2.5 vs predicted -6.5/+10.1/+8.9/-0.7/-2.3). True alpha~0.88 is milder than any x_distortion contrast severity (mildest 0.75), so library sev1 is the closest; direction strong, severity overshoots"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "contrast_weaken_scale", "severity": 1}
+      ],
+      "psnr": 27.05,
+      "ci_pass_rate": "7/10",
+      "function_family": "noise (cross-family: RGB instead of YCrCb)",
+      "reason": "noise->blur ordering makes noise subtype only 54.7% identifiable per SKILL; RGB noise is the safe default; flat-var magnitude at pair0 fits stronger pre-blur RGB noise (sev4-5)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "contrast_weaken_scale", "severity": 1}
+      ],
+      "psnr": 26.96,
+      "ci_pass_rate": "9/10",
+      "function_family": "no-noise variant",
+      "reason": "if the flat-region speckle is JPEG/chroma artifact rather than an explicit noise step; better PSNR on textured pairs 3/4 (25.69/26.48 vs 23.61/24.39)"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 3},
+        {"function": "blur_lens", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "contrast_weaken_scale", "severity": 1}
+      ],
+      "psnr": 26.24,
+      "ci_pass_rate": "9/10",
+      "function_family": "blur (gaussian vs lens MTF indistinguishable)",
+      "reason": "measured on variant blur_lens:3,compression_jpeg:5,contrast_weaken_scale:1 (26.24dB, CI 9/10); ideal-affine diagnostic lens3+jpeg4 29.73dB vs gaussian 30.70dB"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 26.38,
+    "ci_pass_rate": "10/10",
+    "psnr_gap": 0.67,
+    "evidence": {
+      "support_pairs": 5,
+      "noise": "present with medium confidence; type unresolvable under noise->blur (SKILL 54.7%); statistical CI 10/10 for YCrCb:3 on pair0",
+      "blur": "presence certain (gm_ratio/spectral slope all pairs); subtype gaussian (PSNR) vs glass (confounded DT) vs lens (tied) - UNCERTAIN",
+      "compression": "JPEG certain (block_boundary 0%FP); severity 4 (q8) from chroma + PSNR grid",
+      "global": "contrast weaken toward mid-gray alpha~0.88; library sev1 (0.75) is closest but overshoots",
+      "ideal_affine_ceiling": "with exact alpha=0.88 post-affine, gauss3+jpeg4 reaches 30.70/31.02/30.41/28.00/29.22 dB across pairs 0-4",
+      "qwen_noise_gate": "unavailable (no Qwen tool/API found in skill or project)"
+    },
+    "pair0": {"psnr": 26.38, "ci_pass": "10/10"},
+    "pairs_1_4_psnr": [26.94, 26.44, 23.61, 24.39],
+    "pairs_1_4_ci": ["5/10", "4/10", "4/10", "4/10"],
+    "tested_candidates": 25,
+    "note": "Pair-level PSNR is suppressed by two irreducible mismatches: (1) true global alpha ~0.88 vs library min 0.75, (2) noise seed. Signal metrics (block boundary 3%, overshoot 1%, zero-crossing 3%, hf/lf 1%) match well."
+  }
+}

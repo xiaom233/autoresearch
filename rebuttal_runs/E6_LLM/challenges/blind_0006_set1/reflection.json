@@ -1,0 +1,610 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED (block_boundary=2.575, dct_zero_ratio=0.923, unique_G=252) — high confidence, 0% FP signal",
+      "blur": "BLUR_UNLIKELY (gm_ratio=0.615 but spectral_slope_ratio=0.993, FFT anisotropy=0.00) — gm_ratio likely depressed by JPEG smoothing; blur tests still required",
+      "noise": "GAUSSIAN_YCrCb low confidence, noise_prior_sigma=0.62; residual_intensity_corr=0.297 -> gamma-suspect warning; sigma<2 suggests little real noise",
+      "global": "NO_GLOBAL (variance_ratio=1.003, mean_shift=0.0, chroma_ratio=0.993)"
+    },
+    "support_pairs": {
+      "note": "5 pairs provided; pair 0 identical to target (md5 match: clean.png==clean_0.png, degraded.png==degraded_0.png). Supports 1-4 use different clean images.",
+      "consistency": "All 5 pairs: compression detected (block_boundary 1.28-2.58), spectral_slope_ratio 0.99-1.04 (no blur), noise_prior sigma 0.37-2.97 (erratic, JPEG-artifact-like), 4/5 NO_GLOBAL (support 2 shows saturation_chroma_ratio=0.689 alone -> likely content FP)"
+    },
+    "mode": "PSNR (sigma=0.62 < 2)",
+    "suspected": [
+      "compression_jpeg"
+    ],
+    "ruled_out": [
+      "brightness",
+      "contrast (variance_ratio~1.0)"
+    ],
+    "to_verify": [
+      "blur (peel JPEG first)",
+      "noise (peeled §B check)",
+      "saturation (support-2 outlier only)"
+    ]
+  },
+  "noise_6step_check": {
+    "peel_pipeline": "compression_jpeg:1",
+    "residual_std": 0.0,
+    "extreme_pct": 100.0,
+    "extreme_pct_note": "degenerate value — peeled residual is identically zero (std=0.0); §B IMPULSE readout is a divide-by-zero artifact, NOT real impulse noise",
+    "zero_ratio": 1.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "channel_stds": {
+      "R": 0.0,
+      "G": 0.0,
+      "B": 0.0
+    },
+    "noise_prior_sigma_before_peel": 0.62,
+    "diagnosis": "NO_NOISE — after stripping compression_jpeg:1 the residual is exactly zero, so no noise of any type is present; the initial GAUSSIAN_YCrCb/sigma=0.62 readout was JPEG-artifact pseudo-noise (support-pair sigma varied 0.37-2.97 with content, also artifact-driven)"
+  },
+  "blur_check": {
+    "gm_ratio": 0.6148,
+    "gm_ratio_note": "depressed by JPEG smoothing; not usable alone as a blur indicator (spectral slope unchanged)",
+    "spectral_slope_target": -1.4691,
+    "spectral_slope_clean": -1.4802,
+    "spectral_slope_ratio": 0.9925,
+    "spectral_slope_rule": "ratio 0.9925 < 1.08 threshold -> no blur",
+    "fft_anisotropy": 0.0,
+    "anisotropy_rule": "< 4.0 -> not motion blur",
+    "pca_ratio": 0.0,
+    "glass_score": null,
+    "diagnosis": "NO_BLUR — spectral-slope and anisotropy signals both negative; decisively, the bit-exact single-step JPEG reproduction leaves zero residual, so no blur can be present"
+  },
+  "global_check": {
+    "variance_ratio": 1.0026,
+    "mean_shift": 0.0,
+    "chroma_ratio": 0.9933,
+    "clipped_fraction": 0.0039,
+    "diagnosis": "NO_GLOBAL — contrast/brightness/saturation all within noise; support-2 saturation flag (chroma_ratio=0.689) is a content-dependent false positive, contradicted by the bit-exact JPEG-only match"
+  },
+  "support_validation": {
+    "method": "simulate compression_jpeg:1 on each clean_i and compare to degraded_i via test_candidate.py",
+    "results": [
+      {
+        "pair": 0,
+        "note": "identical to target",
+        "pipeline": "compression_jpeg:1",
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10",
+        "bit_exact": true
+      },
+      {
+        "pair": 1,
+        "pipeline": "compression_jpeg:1",
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10",
+        "bit_exact": true
+      },
+      {
+        "pair": 2,
+        "pipeline": "compression_jpeg:1",
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10",
+        "bit_exact": true
+      },
+      {
+        "pair": 3,
+        "pipeline": "compression_jpeg:1",
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10",
+        "bit_exact": true
+      },
+      {
+        "pair": 4,
+        "pipeline": "compression_jpeg:1",
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10",
+        "bit_exact": true
+      }
+    ],
+    "conclusion": "All 5 pairs reproduce bit-exactly with compression_jpeg:1 — same pipeline across the set; no residual structure of any kind"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "Step 1: block_boundary=2.575 (0%FP) confirms JPEG; test suggested severity 4 first"
+      },
+      "test_result": {
+        "psnr_rgb": 31.29,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "Step 1 severity scan: sev4 PSNR=31.29, simulated block_boundary 0.155 below target -> try stronger JPEG"
+      },
+      "test_result": {
+        "psnr_rgb": 28.7,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "Step 1 severity scan: sev4 best so far; check lower severity 3"
+      },
+      "test_result": {
+        "psnr_rgb": 32.69,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "Step 1 severity scan: PSNR improved monotonically toward weaker JPEG (sev5 28.7 -> sev4 31.3 -> sev3 32.7), test sev2"
+      },
+      "test_result": {
+        "psnr_rgb": 35.42,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "Step 1 severity scan: monotone improvement to weaker JPEG (sev2 35.4 dB, CI 8/10); test sev1 to complete 1-5 sweep"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "LIKELY",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 35.42,
+      "ci_pass": "8/10",
+      "verdict": "UNCERTAIN",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 32.69,
+      "ci_pass": "7/10",
+      "verdict": "UNCERTAIN",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 31.29,
+      "ci_pass": "4/10",
+      "verdict": "UNCERTAIN",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 28.7,
+      "ci_pass": "4/10",
+      "verdict": "POOR",
+      "mode": "psnr",
+      "round": 2
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "compression_jpeg",
+        "severity": 1,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "psnr_verification": "inf (bit-exact; all 10 CI metric differences = 0.000)",
+    "psnr_gap": "inf (next best compression_jpeg:2 at 35.42 dB)",
+    "alternatives": [],
+    "rationale": "block_boundary=2.575 (0% FP compression signal) started a 1-5 JPEG severity sweep. PSNR rose monotonically toward weaker JPEG (28.70 / 31.29 / 32.69 / 35.42 dB for sev5/4/3/2) and compression_jpeg:1 reproduced the target bit-exactly (PSNR=inf, CI 10/10, all metric diffs 0.000). A bit-exact match admits no other degradation: peeled residual is identically zero (std=0.0), so blur/noise/global are all absent. Verified independently on all 4 distinct support pairs (each also bit-exact with compression_jpeg:1). Deterministic single-step degradation -> Tier 1, PSNR>=40 -> LIKELY.",
+    "known_metric_artifacts": [
+      "'§B IMPULSE (extreme_pct=100%)' is a division-by-zero artifact on the zero-peeled residual — no noise present",
+      "'GAUSSIAN_YCrCb sigma=0.62' from run_full_analysis is JPEG pseudo-noise (support sigmas 0.37-2.97 vary with content)",
+      "support-2 saturation_chroma_ratio=0.689 false positive, contradicted by bit-exact JPEG-only match",
+      "gm_ratio=0.615 is JPEG smoothing, not blur (spectral slope unchanged, bit-exact residual zero)"
+    ],
+    "budget_used": {
+      "target_candidate_tests": 5,
+      "support_cross_checks": 4,
+      "total_psnr_tests": 9
+    }
+  },
+  "r1_summary": {
+    "trigger": "R0 verdict=LIKELY but support-pair checkpoint PSNR=32.13 (<35) at step 3773 -> protocol R1 reflection (LIKELY + PSNR<35 triggers severity re-examination).",
+    "mode": "PSNR for the deterministic candidate; noise hypotheses judged by peeled residual statistics and verify_signals (never PSNR).",
+    "signal_reanalysis": {
+      "compression": "block_boundary 1.2828-2.5752 on 5/5 pairs (all >1.05, 0% FP); dct_zero_ratio 0.6955-0.9228. R0 compression verdict re-confirmed on every pair by re-running run_full_analysis.py.",
+      "blur": "spectral_slope_ratio 0.9925-1.0400 on all pairs (threshold 1.08) and FFT anisotropy 0.00 on all 5 -> no blur. gm_ratio 0.58-1.03 varies with content/JPEG smoothing and is not usable (SKILL C2). The full-analysis heuristic 'should_still_test' was satisfied by a control test: blur_gaussian:1 before JPEG:1 drops pair 2 from inf to 26.75 dB.",
+      "noise": "noise_prior sigma 0.37/0.62/0.74/1.48/2.97 across pairs (content-dependent, not a stable noise level). After stripping compression_jpeg:1 the peeled residual is identically zero on all pairs; pair 3 (worst sigma=2.97) explicitly checked with peeled_noise_check.py: residual std=0.0, all channel stds 0.0 -> NO_NOISE. §B extreme_pct=100% is the known divide-by-zero artifact on a zero residual.",
+      "global": "variance_ratio 0.9569-1.0026 (within the 8% band), mean_shift -0.2..0.2/255, contrast_spread_ratio 0.9667-0.9956. Only pair 2 flags saturation (chroma_ratio=0.689); it is exactly reproduced by compression_jpeg:1, so it is JPEG chroma quantization on content, not a saturate step. residual_intensity_corr flips sign across pairs (+0.2928/-0.2373/+0.4815/-0.0695/+0.3699) -> content artifact, not gamma.",
+      "second_order_statistics": "variance_ratio, residual_intensity_corr, chroma_ratio and noise_prior sigma all vary strongly with image content and none survives once JPEG:1 is applied exactly; the zero peeled residual is the decisive second-order evidence that no other operator (including gamma) is present.",
+      "misattributed_signals": [
+        "GAUSSIAN_YCrCb sigma (0.37-2.97) -> JPEG pseudo-noise, not sensor noise",
+        "extreme_pct=100% -> divide-by-zero artifact on zero residual, not impulse",
+        "pair-2 saturation_chroma_ratio=0.689 -> JPEG chroma quantization, not saturation_weaken",
+        "gm_ratio 0.58-0.90 -> JPEG smoothing, not blur (spectral slope unchanged)"
+      ],
+      "borderline_signals": [
+        "pair-2 chroma_ratio 0.689 (all other pairs 0.967-0.993) -> tested and rejected",
+        "pair-3 noise_prior sigma 2.97 (>2 SIGNAL-mode trigger) -> tested and rejected",
+        "pair-2 spectral_slope_ratio 1.040 (closest to 1.08) -> blur control tested and rejected",
+        "pair-3 block_boundary 1.283 (closest to 1.05) -> severity-2 alternative tested and rejected"
+      ]
+    },
+    "peeled_noise_check_pair3": {
+      "pipeline_stripped": "compression_jpeg:1",
+      "residual_std": 0.0,
+      "extreme_pct": 100.0,
+      "extreme_pct_note": "degenerate divide-by-zero readout on the identically-zero residual; not impulse noise",
+      "vm_slope": 0.0,
+      "var_slope": 0.0,
+      "spatial_corr": null,
+      "rgb_ratio": 0.0,
+      "cross_ch_corr": null,
+      "channel_stds": {
+        "R": 0.0,
+        "G": 0.0,
+        "B": 0.0
+      },
+      "diagnosis": "NO_NOISE"
+    },
+    "candidates_tested": [
+      {
+        "pipeline": "compression_jpeg:1",
+        "role": "R0 baseline re-validation (new candidates budget not consumed)",
+        "rounds": [
+          6,
+          7,
+          8,
+          9,
+          15
+        ],
+        "result": "bit-exact PSNR=inf dB, CI 10/10 on 5/5 support pairs (pairs 1-4 and target/pair-0)",
+        "outcome": "ACCEPT"
+      },
+      {
+        "pipeline": "compression_jpeg:2",
+        "pair": 3,
+        "round": 12,
+        "result": "27.55 dB, CI 10/10",
+        "outcome": "REJECT - finite; severity 1 is exact"
+      },
+      {
+        "pipeline": "saturate_weaken_YCrCb:4,compression_jpeg:1",
+        "pair": 2,
+        "round": 10,
+        "result": "28.48 dB, CI 7/10",
+        "outcome": "REJECT - breaks bit-exact match; chroma flag is JPEG"
+      },
+      {
+        "pipeline": "blur_gaussian:1,compression_jpeg:1",
+        "pair": 2,
+        "round": 11,
+        "result": "26.75 dB, CI 6/10",
+        "outcome": "REJECT - breaks bit-exact match; no blur"
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:1",
+        "pair": 3,
+        "round": 13,
+        "mode": "signal",
+        "result": "PARTIAL (2/3), noise:sigma mismatch 133%",
+        "outcome": "REJECT"
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:1,compression_jpeg:1",
+        "pair": 3,
+        "round": 14,
+        "mode": "signal",
+        "result": "PARTIAL (2/3), noise:sigma mismatch 67% at minimum severity",
+        "outcome": "REJECT - severity scan exhausted; target has zero noise"
+      }
+    ],
+    "candidates_tested_new_count": 5,
+    "final_decision": "NO_CHANGE",
+    "pipeline": [
+      {
+        "function": "compression_jpeg",
+        "severity": 1
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "whether_to_train": false,
+    "rationale": "R1 independently reproduced compression_jpeg:1 bit-exactly on all 5 support pairs (PSNR=inf, CI 10/10, zero residual), and every tested alternative strictly degrades the match (26.75-28.48 dB for added operators; 27.55 dB for severity 2; signal mismatch for both noise severities). No pipeline or severity change is supported by the support evidence. The 32.13 dB support-pair checkpoint PSNR is therefore not a blind-ID parameter error; it is a training/architecture property of JPEG-1 restoration and cannot be addressed by modifying degradation parameters. Per REFLECTION_MECHANISM R1, record NO_CHANGE and do not force a training run.",
+    "key_signal_evidence": [
+      "5/5 support pairs bit-exact with compression_jpeg:1 (R1 rounds 6,7,8,9,15; PSNR=inf, 10/10 CI diffs 0.000)",
+      "peeled residual std=0.0 after JPEG:1 on the worst-case noise pair (pair 3, sigma_prior=2.97) -> no noise of any type",
+      "variance_ratio 0.957-1.003, mean_shift <=0.2/255, chroma flag only on content-rich pair 2 -> no global step",
+      "spectral_slope_ratio 0.993-1.040 and anisotropy 0.00 on all pairs -> no blur",
+      "residual_intensity_corr sign flips across pairs -> gamma-suspect flag is a content artifact"
+    ],
+    "r1_files": [
+      "/data/zyli/projects/autoresearch/rebuttal_runs/E6_LLM/challenges/blind_0006_set1/predicted_params_R1.json"
+    ],
+    "training_strategy_R1_written": false
+  },
+  "r1_iterations": [
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "[signal_reanalysis][PSNR_test] R1 re-validation of R0 pipeline on distinct support pair 1 (sha256 verified vs manifest). Compression block_boundary=2.357 (0%FP), slope_ratio=1.003, anisotropy=0.0, vr=0.993, mean_shift=0.2 -> expect bit-exact reproduction if R0's single-step JPEG:1 is right."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "[signal_reanalysis][PSNR_test] R1 re-validation on support pair 2, which carries the only borderline flag (saturation_chroma_ratio=0.689 with vr=0.957, spread=0.967, mean_shift=-0.2). If the chroma drop is JPEG chroma-quantization on content, JPEG:1 should still reproduce bit-exactly; if a saturation step existed, residual would be nonzero."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "[signal_reanalysis][PSNR_test] R1 re-validation on support pair 3, the worst-case pair for the noise hypothesis (noise_prior sigma=2.97 -> SIGNAL mode trigger; xch=0.765). Candidate contains no noise, so bit-exactness of the deterministic sim is the decisive evidence."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "[signal_reanalysis][PSNR_test] R1 re-validation on support pair 4 (sigma=1.48, ric=0.37 gamma-suspect flag). Bit-exact JPEG-only reproduction would show the ric flag is content/JPEG artifact, not gamma."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_YCrCb:4,compression_jpeg:1",
+        "thinking": "[signal_reanalysis] Pair 2 is the only support pair raising a global flag: saturation_chroma_ratio=0.689, variance_ratio=0.957, spread=0.967, mean_shift=-0.2. Hypothesis: a saturate step exists before JPEG (ISP->storage order). If real, adding saturate_weaken_YCrCb:4 should preserve or raise PSNR relative to finite JPEG-only alternatives; if it is JPEG chroma quantization on content, bit-exact JPEG:1 would already explain it and this candidate must break the match."
+      },
+      "test_result": {
+        "psnr_rgb": 28.48,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_YCrCb:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,compression_jpeg:1",
+        "thinking": "[signal_reanalysis] Pair 2 has the highest spectral_slope_ratio among pairs (1.040, below the 1.08 blur threshold) and gm_ratio=1.034. Control test: if any mild blur existed, adding blur_gaussian:1 before JPEG should improve match over the finite JPEG-severity alternatives; if not, it should break the bit-exact JPEG:1 match."
+      },
+      "test_result": {
+        "psnr_rgb": 26.75,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "[signal_reanalysis] Pair 3 has the lowest block_boundary among pairs (1.283, still >1.05 = JPEG) and dct_zero_ratio=0.717; hypothesis: severity 2 instead of 1 would raise block_boundary on re-encode and should beat the sev-1 candidate if sev misjudged. Deterministic candidate -> PSNR valid."
+      },
+      "test_result": {
+        "psnr_rgb": 27.55,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:1",
+        "thinking": "[signal_reanalysis][statistical_check] Pair 3 is the worst-case noise flag (noise_prior sigma=2.97, cross_channel_corr=0.765). Per noise protocol this candidate is judged by signal checks, not PSNR. However peeled_noise_check with jpeg:1 already yields an identically zero residual (std=0.0), so any seeded noise candidate must MISMATCH the target's noise statistics; test documents that."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=133%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:1,compression_jpeg:1",
+        "thinking": "[signal_reanalysis][statistical_check] Mandatory severity scan for the PARTIAL noise verdict (round 13): sigma estimate was 3, so test the minimum severity 1. Target peeled residual after jpeg:1 is identically zero, so even minimal injected noise should mismatch sigma; this establishes whether severity alone could explain the pair-3 sigma=2.97 flag."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=67%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:1,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "[signal_reanalysis][PSNR_test] R1 self-contained re-validation on the target pair (identical to support pair 0 by sha256). Baseline reference; expect bit-exact reproduction as in R0 round 5."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "r1_psnr_ranking": [
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "saturate_weaken_YCrCb:4,compression_jpeg:1",
+      "psnr_rgb": 28.48,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 27.55,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:1,compression_jpeg:1",
+      "psnr_rgb": 26.75,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    }
+  ]
+}

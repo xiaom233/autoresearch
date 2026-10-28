@@ -1,0 +1,125 @@
+{
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 26.31,
+      "stats": {"ci_pass": "7/10", "note": "inherited from R0; severity near-tie with primary (+0.02 dB)"},
+      "function_family": "blur_gaussian"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 26.28,
+      "stats": {"ci_pass": "7/10", "note": "inherited from R0; gaussian<->lens MTF-indistinguishable (SKILL section C)"},
+      "function_family": "blur_lens"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 25.49,
+      "stats": {"ci_pass": "7/10", "note": "inherited from R0; tool DT recommendation, glass_score proven JPEG/blur-amount FP"},
+      "function_family": "blur_glass"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 25.47,
+      "stats": {"ci_pass": "5/10", "note": "inherited from R0; legal representation of the unmodeled tone compression (f=0.75 overshoots measured ~0.84)"},
+      "function_family": "blur+contrast+compression"
+    },
+    {
+      "pipeline": [
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 25.28,
+      "stats": {"ci_pass": "7/10", "note": "inherited from R0; no-blur global-compression representation"},
+      "function_family": "contrast_weaken_scale"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 26.29,
+    "psnr_gap": 0.03,
+    "ci_pass_rate": "7/10",
+    "round": "R1",
+    "decision": "NO_CHANGE",
+    "r0_pipeline_retained": true,
+    "decision_basis": "R1 re-ran run_full_analysis on all 5 support pairs, peeled-noise checks on all 5 pairs, and validated 4 candidates (noise -> verify_signals; deterministic -> PSNR). No legal pipeline improved on R0. Change threshold per REFLECTION_MECHANISM: deterministic pipeline needs simulated PSNR gain > 2 dB (or > 35 dB absolute); noise candidate needs verify_signals MATCH/improvement. Best R1 alternative was 25.96 dB (-0.33 dB, CI 4/10); the missed-noise candidate returned WEAK. The residual is a systematic affine tone compression (f ~ 0.84, pivot ~ image mean) that no bank function reproduces; every legal approximation degrades PSNR/CI.",
+    "training_recommendation": "No R1 retraining. Keep R0 checkpoint (support-only PSNR 22.69 dB, step 15092) and R0 training_strategy.json (direct Swin + SimpleGate + FiLM-GCM, EPOCH=2, LR=5e-4, batch=16). training_strategy_R1.json intentionally not produced (no pipeline change).",
+    "support_psnr_validator": {
+      "r0_best_support_psnr_db": 22.69,
+      "step": 15092,
+      "note": "support-only validator; no test-set data used at any point in R1"
+    },
+    "noise_verdict": "NO_NOISE",
+    "step_evidence": {
+      "compression": {
+        "verdict": "UNCERTAIN",
+        "confidence": "high presence (Tier S), medium severity",
+        "signals": "block_boundary=7.3446 (pair0, 0% FP) / 4.4036 (pair1); dct_zero_ratio 0.9105/0.9024; unique_G 211 vs clean 215 (pair0). Severity 4 retained: PSNR 26.29 (CI 7/10) vs j5 24.76 (CI 5/10) vs j3 24.80 (CI 5/10); sigma<2 so PSNR is the valid severity arbiter (SKILL signal-trust rule). The strict verify_signals block_boundary gap with j4 is 19.5% (sim 5.915 vs target 7.3446), consistent with a post-JPEG/global tone compression amplifying block steps by 1/0.84 ~ 1.19, NOT with a stronger JPEG (j5 loses 1.5 dB everywhere else). dct_zero_ratio diff 0.0092 matches."
+      },
+      "blur": {
+        "verdict": "UNCERTAIN",
+        "confidence": "high presence and severity; subtype gaussian default",
+        "signals": "gm_ratio=0.5097 (pair0) / 0.1807 (pair1, content-driven). Signal-level confirmation on pair0 via verify_signals with the R1 noise simulation: spectral_slope target -1.2815 vs simulated -1.3151 (diff 0.0336 < 0.08 MATCH), Wiener kernel corr 0.9983 (> 0.85 MATCH). Subtype: isotropic kernel PCA=1.035; residual_anisotropy=1.4446 (pair0) and 2.2055 (pair1) both below SKILL section C motion threshold 4.0 -> motion excluded (pair1 tool MOTION verdict is a 5%-recall fallback, PCA failed due to noise); glass_score 1.39-1.50 is the documented blur-amount FP (g4+j4 sim reproduces 1.505). lens remains MTF-indistinguishable (lens4 26.28 dB, alternative). Severity: g3 vs g4 = 26.29 vs 26.31 (+0.02 dB, within noise); g2 25.90, g1 25.37 -> g3 kept."
+      },
+      "noise": {
+        "verdict": "NO_NOISE",
+        "confidence": "high after R1 statistical checks",
+        "signals": "noise_prior sigma raw across pairs 0-4 = 0.74/2.47/1.48/0.37/1.11 (variable -> not a fixed additive noise); peeled sigma with g3+j4 = 1.48/4.94/2.97/0.74/2.22 (R0 quoted only the pair0 value), BUT the peeled residual is structured in every pair: spatial_corr 0.9717/0.9722/0.9644/0.9770/0.9708 (all > 0.9), residual_intensity_corr 0.76 (pair0); peeled extreme_pct 49-73% matches the documented JPEG/blur FP (residual saturation clipping, not salt&pepper); vm_slope and var_slope have inconsistent signs across pairs (-0.09/-0.12/+0.42/-0.21/+0.01 and -0.73/-0.41/+0.40/-0.19/-0.12) -> no consistent noise-type signature. Hidden pre-blur noise was tested explicitly (gaussian sev1 sigma 12.75 is attenuated by blur sigma=3 to ~1.2 by kernel L2 norm sqrt(1/(4*pi*9))): verify_signals WEAK, noise-sigma comparison 0.0 vs 0.0, and the target-sim residual remains structured (spatial_corr 0.9306, FWHM 14.0 px, extreme_pct 47.89%). No noise function added."
+      },
+      "global": {
+        "verdict": "UNCERTAIN (unmodeled affine tone compression, no exact legal function)",
+        "signals": "variance_ratio across pairs 0-4 = 0.7898/0.7145/0.6463/0.7245/0.7036, mean_shift only -0.3 to +5.0/255 (small, sign-inconsistent); deterministic blur+jpeg peel leaves residual_std 11.2/11.5/10.2/11.9/11.2 gray levels on pairs 0-4 (constant -> one systematic missing component, not noise). R0 tone fit target_gray = P + 0.84*(clean_gray - P), pivot ~ image mean, var_ratio ~ f^2. Legal bank functions cannot reproduce f~0.84: contrast_weaken_scale:1 = 0.75 (overshoot; -0.82 dB before JPEG, -0.33 dB after JPEG and CI 4/10); contrast_weaken_stretch:1 has +35 mean shift (15.01 dB); saturate_weaken_HSV:1 (S*0.7, closest to measured chroma ratio ~0.77) tested R1 at 24.26 dB (-2.03); saturate_weaken_YCrCb:1 (S*0.6) 23.65 dB. Chroma reduction is already produced by JPEG q=8 4:2:0 in the simulation. Conclusion: unrepresented generator-side photometric/tone variation outside the blur/noise/compression bank; approximate at training time is not beneficial."
+      }
+    },
+    "r1_candidates_tested": [
+      {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:3,compression_jpeg:4",
+        "mode": "signal",
+        "result": "WEAK (3 matched / 2 mismatched): matched blur:spectral_slope (diff 0.0336), blur:wiener_kernel (0.9983), noise:sigma (0.0 vs 0.0); mismatched noise:structured_residual (FWHM 14.0 px), compression:block_boundary (19.5%)",
+        "decision": "REJECT",
+        "signal_source": "peeled sigma across 5 pairs + blur attenuation arithmetic sqrt(1/(4*pi*sigma^2))"
+      },
+      {
+        "pipeline": "blur_gaussian:3,saturate_weaken_HSV:1,compression_jpeg:4",
+        "mode": "psnr",
+        "result": "24.26 dB, CI 7/10 (same dark-clipping failures)",
+        "decision": "REJECT",
+        "signal_source": "saturation_chroma_ratio 0.8865/0.8135/0.69/0.77/0.75 across pairs; pair1 SATURATION_weaken_sev3 verdict; closest legal S*0.7"
+      },
+      {
+        "pipeline": "blur_gaussian:3,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "psnr",
+        "result": "25.96 dB, CI 4/10 (unique_R/G/B counts 25/22/21% off; contrast after JPEG creates new levels)",
+        "decision": "REJECT",
+        "signal_source": "priority-2 ISP shuffle allows JPEG->contrast; target_gray affine f~0.84"
+      },
+      {
+        "pipeline": "blur_gaussian:3,compression_jpeg:4 (SUPPORT_2 cross-validation)",
+        "mode": "psnr",
+        "result": "27.96 dB, CI 8/10, same dark-clipping residual pattern",
+        "decision": "VALIDATION",
+        "signal_source": "cross-pair stability; pair2 is worst-case tone factor f=0.771 and peeled sigma 2.97"
+      }
+    ],
+    "rationale": "R0 pipeline stands as the best legal prediction. JPEG presence is Tier-S (block_boundary, 0% FP) and severity 4 wins the PSNR/CI arbitration; blur is gaussian sev3 at signal level (Wiener corr 0.9983, slope diff 0.0336) with motion excluded by anisotropy and glass excluded as a blur-amount FP; noise is excluded by structured peeled residuals in all 5 pairs and by a WEAK hidden-noise signal test. The constant ~11 gray-level residual across pairs is a real affine tone compression (~0.84) that no legal bank function reproduces; every legal approximation (contrast before/after JPEG, saturation HSV/YCrCb) lowers PSNR and/or CI. Per REFLECTION_MECHANISM the change bar (> 2 dB deterministic, MATCH for noise) is not met -> NO_CHANGE, no R1 retraining.",
+    "verdict_rationale_short": "PSNR 26.29 < 30 and the unmodeled global remains -> severity/global unverified -> UNCERTAIN, tier 3."
+  }
+}

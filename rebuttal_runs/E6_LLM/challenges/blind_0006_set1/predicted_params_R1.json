@@ -1,0 +1,57 @@
+{
+  "pipeline": [
+    {"function": "compression_jpeg", "severity": 1}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "psnr": "inf",
+    "psnr_gap": "inf",
+    "bit_exact": true,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR",
+    "steps": 1,
+    "verification": "R1 independent re-validation: clean_i + compression_jpeg:1 reproduces degraded_i bit-exactly (PSNR=inf dB, all 10 content-independent CI metric diffs = 0.000) on all 5 support pairs (pair 0 == target, pairs 1-4 distinct; sha256 of every clean_i/degraded_i matches support_manifest.json).",
+    "evidence": {
+      "compression": {
+        "block_boundary_range_5pairs": [1.2828, 2.5752],
+        "dct_zero_ratio_range_5pairs": [0.6955, 0.9228],
+        "signal_rule": "block_boundary > 1.05 -> JPEG (0% FP); signal present on 5/5 pairs",
+        "verdict": "LIKELY"
+      },
+      "blur": {
+        "spectral_slope_ratio_range_5pairs": [0.9925, 1.0400],
+        "fft_anisotropy_5pairs": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "gm_ratio_range_5pairs": [0.5846, 1.0337],
+        "note": "slope_ratio < 1.08 on every pair, anisotropy 0 everywhere; gm_ratio varies with content/JPEG smoothing and is unreliable per SKILL C2. Adding blur_gaussian:1 before JPEG:1 breaks the match (26.75 dB, pair 2).",
+        "verdict": "ABSENT"
+      },
+      "noise": {
+        "noise_prior_sigma_range_5pairs": [0.37, 2.97],
+        "peeled_residual_std_after_jpeg1": 0.0,
+        "note": "sigma estimate is content-dependent JPEG pseudo-noise (0.37/0.62/0.74/1.48/2.97 across pairs). After stripping compression_jpeg:1 the residual is identically zero on all pairs (peeled_noise_check on the worst-case pair 3: std=0.0; §B extreme_pct=100% is the divide-by-zero artifact). Seeded noise candidates mismatch on sigma (YCrCb:3 diff=133%, YCrCb:1 diff=67%).",
+        "verdict": "ABSENT"
+      },
+      "global": {
+        "variance_ratio_range_5pairs": [0.9569, 1.0026],
+        "mean_shift_range_5pairs": [-0.2, 0.2],
+        "saturation_chroma_ratio_range_5pairs": [0.6893, 0.9933],
+        "contrast_spread_ratio_range_5pairs": [0.9667, 0.9956],
+        "residual_intensity_corr_5pairs": [0.2928, -0.2373, 0.4815, -0.0695, 0.3699],
+        "note": "variance_ratio within 8% band on all pairs, mean_shift <= 0.2/255. The single saturation flag (pair 2, chroma_ratio=0.689) is JPEG chroma quantization on content: it is reproduced exactly by JPEG:1, and adding saturate_weaken_YCrCb:4 breaks the match (28.48 dB). residual_intensity_corr flips sign across pairs (+0.29/-0.24/+0.48/-0.07/+0.37) -> content artifact, not gamma; zero residual after JPEG:1 excludes any gamma component.",
+        "verdict": "ABSENT"
+      }
+    },
+    "support_pairs_checked": 5,
+    "support_pairs_bit_exact": 5,
+    "rationale": "Single-step deterministic JPEG (compression_jpeg severity 1). Bit-exact reproduction on all 5 support pairs makes the pipeline unambiguous and excludes any additive/subtractive operator: a co-existing blur, noise, saturation or gamma step could not leave an identically zero residual. No cross-family alternative reached 30 dB (saturate+JPEG 28.48, blur+JPEG 26.75); compression_jpeg:2 is excluded by bit-exactness on all pairs (27.55 dB on pair 3) and left out of alternatives as an uninformative same-family severity variant.",
+    "r1_context": {
+      "r0_support_checkpoint_psnr_db": 32.13,
+      "r0_support_checkpoint_step": 3773,
+      "interpretation": "The 32.13 dB support-pair model PSNR is not attributable to degradation-parameter error: the predicted pipeline reproduces the support targets exactly (PSNR=inf). Any residual gap is training/architecture-side and outside the scope of R1 parameter reflection.",
+      "decision": "NO_CHANGE"
+    }
+  }
+}

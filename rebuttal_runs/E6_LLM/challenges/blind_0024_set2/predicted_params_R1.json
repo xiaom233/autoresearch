@@ -1,0 +1,133 @@
+{
+  "pipeline": [
+    {
+      "function": "noise_gaussian_RGB",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "saturate_strengthen_HSV",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_YCrCb",
+          "severity": 1
+        },
+        {
+          "function": "blur_gaussian",
+          "severity": 3
+        },
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 2
+        }
+      ],
+      "psnr": 23.12,
+      "ci_pass": "9/10",
+      "function_family": "noise-subtype alternative",
+      "r1_note": "§B on peeled residual is structured (extreme_pct 69.5%, spatial_corr 0.96, FWHM 6-8px; residual std 12.0) -> noise subtype not arbitrable (noise->blur order, SKILL 54.7%~random). rgb_ratio 1.53-1.81 derives from the same structured residual -> not admissible. Retained as alternative."
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_lens",
+          "severity": 2
+        },
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 2
+        }
+      ],
+      "psnr": 23.1,
+      "ci_pass": "8/10",
+      "function_family": "blur-family alternative (gaussian<->lens MTF-indistinguishable)",
+      "r1_note": "Blur subtype evidence unreliable in the 18-31% clipped regime: the gaussian:3 simulation itself reproduces the analyzer's GLASS_BLUR verdicts (glass_score 0.90 pair0 / 1.11 pair4). gaussian remains the safe default; Wiener kernel self-consistency 0.999."
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 1
+        },
+        {
+          "function": "blur_gaussian",
+          "severity": 2
+        },
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 2
+        }
+      ],
+      "psnr": 22.86,
+      "ci_pass": "9/10",
+      "function_family": "blur-severity alternative",
+      "r1_note": "R1 signal-mode test pair0: PARTIAL (spectral_slope diff 0.065, sigma proxy exact 0.2=0.2, Wiener 0.943); pair4: WEAK (slope diff 0.096 under-blurred, variance_ratio 24.7% off). Cross-pair conflict -> alternative only, not promoted."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 23.71,
+    "ci_pass_rate": "9.6/10 (pairs: 9,10,9,10,10)",
+    "psnr_gap": 0.36,
+    "r1_decision": "NO_CHANGE",
+    "evidence": {
+      "mode": "SIGNAL (noise present; PSNR seed-limited) + second-order statistics",
+      "r1_trigger": "R0 overall_verdict=UNCERTAIN (tier 3) -> mandatory R1 reflection",
+      "paired_support_psnr": {
+        "pair0": 23.48,
+        "pair1": 23.62,
+        "pair2": 23.43,
+        "pair3": 21.72,
+        "pair4": 26.3
+      },
+      "compression": "NO JPEG. 5-pair re-run: block_boundary 0.9983-1.0103, dct_zero 0.3387-0.449 (<0.50), unique_G 197-245. R1 control: the R0-pipeline simulation itself yields unique_G 236 (target 237, pair0) and 190 (target 197, pair4) and even triggers the analyzer's MILD_COMPRESSION_POSSIBLE (dct_zero 0.525/0.502 vs target 0.449/0.434) -> low unique_G and elevated dct are pipeline artifacts of saturation clipping; a hidden JPEG is not indicated (target shows LESS dct structure than the simulation).",
+      "global": "saturate_strengthen_HSV:2 confirmed by near-exact second-order reproduction. pair0 sim vs target: mean_shift -29.9 vs -29.8, clipped 23.6% vs 23.5%, chroma_ratio 2.43 vs 2.56, variance_ratio 1.0339 vs 1.0124. pair4 sim vs target: mean_shift -38.9 vs -39.1, clipped 31.1% vs 30.6%, chroma_ratio 2.003 vs 1.999, variance_ratio 1.2645 vs 1.2514. HSV family beats YCrCb (14.7-14.8 dB) and sev1/sev3 (18.9/18.5 dB) in R0 PSNR scan; sev2 unchanged.",
+      "blur": "blur_gaussian:3 kept. R1 cross-pair signal-mode scan: pair0 g2 PARTIAL / g3 WEAK / g1 WEAK; pair4 g2 WEAK / g3 PARTIAL. Aggregate check counts tie (g2 7/5, g3 7/5), but g3 wins the content-independent signals on both pairs: Wiener kernel corr 0.999 (vs 0.943) and variance_ratio match (pair4 5.2%, pair0 |diff| 0.021). Spectral slope is content-dependent in the clipped regime (pair0 favors g2 0.065 vs 0.153; pair4 favors g3 0.048 vs 0.096). g1 rejected (Wiener 0.730, sigma proxy 200% off).",
+      "noise": "noise_gaussian_RGB:1 kept. Sigma proxy matches sev1 (pair4 target 0.1 = sim 0.1; pair0 sim control 1.36 vs target 1.73, 22% low; sev2 would roughly double). §B subtype diagnosis unusable: peeled residual structured (extreme_pct 69.53%, spatial_corr 0.9602, FWHM 6-8px, residual std 12.0) -> SKILL false-positive regime; noise->blur order DT 54.7% ~ random. Low-confidence GAUSSIAN_YCrCb flag and rgb_ratio 1.53-1.81 derive from the structured clipping residual -> not admissible. RGB prior retained.",
+      "order": "noise -> blur -> saturate (physical priorities; g3 simulation reproduces the target's analyzer verdicts incl. brightness_darken + saturation_strengthen). saturate-first rejected earlier (CI 4/10, 5.6pp under-clipping)."
+    },
+    "r1_candidates_tested": [
+      {
+        "pair": 0,
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "signal_verdict": "WEAK (2/4 checks)",
+        "decision": "baseline reference"
+      },
+      {
+        "pair": 0,
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:2,saturate_strengthen_HSV:2",
+        "signal_verdict": "PARTIAL (4/2)",
+        "decision": "alternative only (cross-pair conflict)"
+      },
+      {
+        "pair": 0,
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:1,saturate_strengthen_HSV:2",
+        "signal_verdict": "WEAK (2/4)",
+        "decision": "REJECT"
+      },
+      {
+        "pair": 4,
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:2,saturate_strengthen_HSV:2",
+        "signal_verdict": "WEAK (3/3)",
+        "decision": "alternative only"
+      },
+      {
+        "pair": 4,
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "signal_verdict": "PARTIAL (5/1)",
+        "decision": "CONFIRM R0 blur sev3"
+      }
+    ]
+  }
+}

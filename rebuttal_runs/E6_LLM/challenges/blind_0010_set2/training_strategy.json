@@ -1,0 +1,66 @@
+{
+  "challenge": "blind_0010_set2",
+  "pipeline_used": [
+    {"step": 1, "function": "blur_gaussian", "severity": 1, "verdict": "LIKELY"},
+    {"step": 2, "function": "brightness_darken_gamma_HSV", "severity": 5, "verdict": "LIKELY"}
+  ],
+  "pipeline_unchanged": true,
+  "verdict_summary": {
+    "overall": "LIKELY",
+    "tier": 1,
+    "confidence": "very high (bit-exact reproduction, PSNR=inf, CI=10/10 on 5/5 paired supports)"
+  },
+  "strategy": "direct",
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_freqmod": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_color_mlp_output": false,
+    "use_ckpt": false,
+    "load_ckpt": null,
+    "curriculum": "none"
+  },
+  "signal_basis": [
+    "Per-step verdicts: step1 blur_gaussian:1 = LIKELY, step2 brightness_darken_gamma_HSV:5 = LIKELY; overall LIKELY, Tier 1 (deterministic only, no noise term).",
+    "Bit-exact reproduction: test_candidate.py pipeline blur_gaussian:1,brightness_darken_gamma_HSV:5 -> PSNR=inf dB (bit-identical), CI=10/10 on each of pairs 0,1,2,3,4 (5/5). This is the strongest possible gate and overrides all lower-tier/confounded signals.",
+    "Order control: reversed order brightness_darken_gamma_HSV:5,blur_gaussian:1 -> 40.42 dB CI 9/10 (not bit-exact) -> blur precedes gamma. Order does not affect architecture choice but confirms deterministic 2-step pipeline.",
+    "Blur subtype = isotropic gaussian sev1: elevated spectral_slope_ratio on 3/5 pairs (1.294/1.127/1.113; 1.045/1.005 on low-texture pairs). Anisotropy values (1.65-2.84 on pairs 1/3/4) are unstable across an identical pipeline and gamma-confounded; exact match pins isotropic blur_gaussian:1 -> OCAB motion gate NOT triggered.",
+    "Global step = HSV-V power-law gamma, not contrast and not brightness shift: V-space tone curve power law with per-pair gamma 3.2-3.6 (matches sev5 gamma=3.5); HSV S ratio 1.009-1.020 preserved (excludes saturate_weaken and RGB per-channel gamma); mean_shift -44.3..-76.2; zero/clipping fraction matches sev5 within 0.7pp (sev4 under-clips by 3.8pp).",
+    "Tier A variance_ratio = 0.198-1.002 gate checked and ATTRIBUTED TO GAMMA, not contrast: contrast preserves the mean while observed mean_shift is -44..-76; contrast_from_saturation=true; variance_ratio is content-dependent under multiplicative gamma. Therefore ColorPre / FiLM-GCM (contrast gates) NOT triggered.",
+    "Tier S compression signals checked and rejected: block_boundary 0.9915-1.0175 on all 5 pairs (all << 1.1, 0% FP rule -> NO_JPEG). unique_G=181 (<200) on pair4 is a documented false positive of extreme gamma clipping (clipped_fraction=0.556, dct_zero_ratio=0.87) and is overridden by bit-exact reproduction with no compression step.",
+    "Noise ruled out: wavelet sigma prior 0.37-3.83 inconsistent across an identical pipeline; peeled residual §B extreme_pct=71.3% with sigma<5 is the documented JPEG/blur-artifact false-positive pattern; target smooth-region local_std is below the no-noise gamma simulation at every intensity bin; 2-step deterministic pipeline reproduces targets bit-exactly. No denoise-specific design needed.",
+    "Global difficulty classification: gamma is a pointwise, low-difficulty tone curve (exp38 gamma_RGB: FiLM +0.05 ~ 0; exp10 SF5/SF7/SF9 gamma-heavy pipelines: Swin is baseline, components ~0). Mild gaussian blur sev1 is not the structured motion/JPEG case that would justify FiLM-GCM."
+  ],
+  "finetune_strategy_ref": [
+    "Section 6 Step 0 (difficulty ladder): gamma/brightness_shift are low difficulty -> 'pure Swin + SimpleGate'; high-difficulty FiLM-GCM case requires contrast + structured (motion/jpeg), not satisfied here (global is gamma, local is gaussian sev1).",
+    "Section 6 Step 1 (strategy): pipeline contains a global degradation -> Direct (conservative); gamma severity must be precise (sev4 -> sev5 sensitivity reported as -17 dB), and RandomCurric on gamma is untested -> Direct.",
+    "Section 7 signal gates: only enable components on Tier S/A signals that remain valid after attribution. SimpleGate is default-on (-32K, 8/9 safe, exp39). variance_ratio/anisotropy gates were evaluated but do not fire because the signals are fully explained by gamma and by isotropic gaussian blur respectively.",
+    "Section 2 (global degradation table): brightness gamma -> 'Direct, severity must be precise, components ineffective' (FiLM +0.05). Section 5 core principle 0: gamma/brightness_shift_RGB are learned implicitly (~0 dB) -> pure Swin without added components.",
+    "Section 5 attention table: contrast/global degradation -> Swin (+9.78~+10.38 over MDTA/OCAB); OCAB only for motion-structured blur (+1.19), not applicable.",
+    "Section 5 parameter-fairness rule: Swin dim=64 (454K) stays within the <=1.05x baseline budget; no OCAB/MDTA dim realignment needed since they are not used.",
+    "Section 7 component trigger table: DualBranch explicitly not recommended in blind scenarios (exp37 0/24 wins); CSN avoided with pure-global degradations (-4.6~-11.7 dB); ColorMLP trigger is brightness_HSV shift high-confidence (B tier) and is ineffective for gamma; ChannelCurve trigger is stretch, ineffective for gamma.",
+    "Section 8 exp37: Direct + pure Swin won 23/24 blind challenges; exp39: SimpleGate safe on 8/9 degradations (-32K params), only harmful on S5 triple-motion which does not apply here."
+  ],
+  "reasoning": "The predicted pipeline is a deterministic 2-step degradation (mild isotropic gaussian blur sigma~1.0 followed by a severe HSV-V gamma darkening sev5), verified bit-exactly on all 5 supports, so no architectural hedging for uncertainty is needed. Per finetune_strategy.md Section 6 Step 0, gamma is a low-difficulty pointwise transform: the network learns it implicitly and exp38/exp10 show components (FiLM-GCM, ColorPre) are ~0 dB on gamma (gamma_RGB FiLM +0.05). The only non-trivial spatial component is a sev1 gaussian blur, which is isotropic and weak - not the motion/JPEG structured-local case that gates FiLM-GCM, and not the anisotropy>1.7 (0% FP) case that gates OCAB (observed anisotropy 1.65-2.84 is unstable across an identical pipeline and is gamma-confounded; exact match pins gaussian:1). The Tier A variance_ratio signal (0.198-1.002) is explicitly attributed to multiplicative gamma (mean_shift -44..-76 and contrast_from_saturation=true contradict contrast), so the ColorPre gate does not fire. block_boundary<=1.02 rules out compression, and the pair4 unique_G<200 Tier S flag is an acknowledged extreme-clipping false positive contradicted by bit-exact reproduction without JPEG. Noise is excluded quantitatively. Therefore the component set is: Swin (dim 64, window 8) + SimpleGate (default-on, -32K, exp39 8/9-safe, only harmful on triple-motion which is absent) + Direct from scratch at lr 5e-4, epoch 2, batch 16, with GCM/ColorPre/ColorMLP/CSN/ChannelCurve/DualBranch all disabled. Training should use the predicted pipeline for both AR_PARAMS_PATH and AR_VAL_PARAMS_PATH (plus optional AR_CHALLENGE_DIR paired clean/degraded validation); GT must not be used. Practical note: sev5 gamma darkening yields 8-56% clipped pixels, so early/mid-epoch checkpoints should be retained with a modest checkpoint interval because the best checkpoint may precede the last one (Section 5 SimpleGate epoch-2 crash-risk note applies only at higher LR; lr=5e-4 is the recommended mitigation).",
+  "risk_notes": [
+    "Heavy clipping (clipped_fraction 0.08-0.56) means information in dark regions is partially destroyed; the specialist cannot recover clipped content, only invert the tone curve and deblur.",
+    "If training shows all-NaN or last-ckpt divergence (Section 9), fall back to best checkpoint; pure Swin is already the most stable fallback architecture (no further simplification available).",
+    "If PSNR comes out far below expectation, re-examine the gamma severity assumption (sev4 is 22.53 dB vs bit-exact sev5 on pair2), but this does not change the architecture."
+  ],
+  "val_params_source": "predicted pipeline (blur_gaussian:1,brightness_darken_gamma_HSV:5) - not GT"
+}

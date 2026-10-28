@@ -1,0 +1,86 @@
+{
+  "challenge_id": "blind_0017_set3",
+  "round": "R1",
+  "support_pairs_used": [
+    0,
+    2,
+    1,
+    3,
+    4
+  ],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "pipeline_order_note": "blur -> jpeg unchanged from R0 (physics: blur priority 1 before compression priority 2; R0 empirically rejected reverse order: CI 3/10, block_boundary mismatch 72%).",
+  "changed_from_R0": {
+    "step": "blur_gaussian",
+    "severity": "4 -> 3",
+    "source": "[signal_reanalysis]",
+    "reason": "Blur-specific calibrated signals override the R0 0.02 dB PSNR tie: spectral_slope_ratio abs-diff (SKILL threshold <0.08) is 0.010-0.047 for g3 on ALL 5 support pairs (pass) vs 0.125-0.209 for g4 (fail 5/5); gm_ratio err 3-7% (g3) vs 12-28% (g4). R0 chose g4 on kernel-shape metrics from a Wiener-PCA recovery that classifies every JPEG-composited sim as glass (known FP) and on block_boundary magnitude, which is a compression-interaction signal, not a blur signal."
+  },
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 4
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 4
+        }
+      ],
+      "psnr": 26.77,
+      "stats": {
+        "ci_pass_rate": "7/10",
+        "note": "R0 primary. PSNR tie with R1 on pair0 (-0.02 dB), pair2 26.62 vs R1 26.68. Retained as the closest competitor; only the blur-specific signals separate the two."
+      },
+      "function_family": "blur_gaussian (R0 primary, severity +1)"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 4
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 3
+        }
+      ],
+      "psnr": 27.14,
+      "stats": {
+        "ci_pass_rate": "6/10",
+        "note": "Top absolute PSNR but block_boundary 23% off (0%-FP structural signal); gap 0.37 dB < 3 dB, retained as compression-severity alternative."
+      },
+      "function_family": "compression_jpeg (severity -1)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "psnr": 26.79,
+    "ci_pass_rate": "7/10",
+    "psnr_gap": 0.02,
+    "evidence": [
+      "[signal_reanalysis] blur severity: target spectral_slope_ratio = 1.228 / 1.216 / 1.215 / 1.078 / 1.240 (pairs 0-4). g3+j4 sim = 1.247 / 1.247 / 1.249 / 1.130 / 1.249 -> abs diff 0.019 / 0.031 / 0.034 / 0.047 / 0.010, all < 0.08 (SKILL calibrated, noise-robust blur criterion). g4+j4 sim = 1.423 / 1.468 / 1.400 / 1.203 / 1.421 -> abs diff 0.195 / 0.209 / 0.162 / 0.125 / 0.157, all > 0.08. 5/5 unanimous.",
+      "[signal_reanalysis] gm_ratio: target 0.336 / 0.337 / 0.184 / 0.386 / 0.302; g3 sim 0.327 / 0.319 / 0.171 / 0.360 / 0.321 (err 3-7%); g4 sim 0.276 / 0.244 / 0.135 / 0.325 / 0.265 (err 12-28%). Sensitivity boundary check: g2 sim gives gm err +20-30% and slope abs diff 0.119-0.131 -> g2 rejected, g3 is the unique best library severity.",
+      "[signal_reanalysis] R0's g4 rationale re-interpreted: (a) 0.02 dB PSNR tie on pair0 is < 3 dB and the sim PSNR is dominated by an unrepresentable tone residual (R0 plateau 26.6-27.1 dB across 12 candidates), so it cannot rank blur severity; (b) kernel-shape metrics (pca/density/flatness) are non-discriminative under JPEG - g3 sim (pca 1.090, density 0.719, flatness 0.413) and g4 sim (1.131, 0.765, 0.410) are both classified as glass (known FP; glass_score 1.25 in every sim); (c) block_boundary magnitude is a blur x JPEG interaction signal and its mismatch direction (target blockier than all sims) is inconsistent with dct_zero_ratio (target less zeroed than every sim), i.e. an encoder-level difference, not a blur severity.",
+      "[PSNR_test] pair0 g3+j4 = 26.79 dB / CI 7/10 (R0 g4+j4 = 26.77 / 7-10); pair2 g3+j4 = 26.68 dB / CI 7/10 (R0 g4+j4 = 26.62 / 6-10). No PSNR/CI regression; +0.02 / +0.06 dB.",
+      "[PSNR_test] verify_signals (pair0): R0 g4+j4 -> WEAK (1 pass / 2 fail: blur:wiener_kernel pass; blur:spectral_slope diff 0.203 fail; compression:block_boundary diff 16% fail). R1 g3+j4 -> PARTIAL (2 pass / 1 fail: blur:spectral_slope + blur:wiener_kernel pass; compression:block_boundary diff 24% fail). Blur-step verdict improves WEAK -> PARTIAL.",
+      "[statistical_check] compression severity stays 4: presence is Tier S (block_boundary 3.32-10.64 on 5/5, 0% FP). dct_zero_ratio target 0.892-0.935 vs j4 sim 0.891-0.949 (match 0-3%). block_boundary magnitude mismatch (target 16-29% above g3+j4 sim) conflicts with dct_zero (target below j4 sim) -> not resolvable by any library JPEG severity (R0 swept j3 27.14/CI 6-10 with bb 23% off, j5 24.79/CI 5-10 with overshoot/zero-crossing failures). No change.",
+      "[statistical_check] NO_NOISE confirmed on all 5 pairs: (1) noise_prior sigma 0.37-1.61 < 2; (2) known-noise-free g3+j4 simulation yields the IDENTICAL wavelet sigma (1.48 per channel) as the target against the same clean -> zero differential evidence; (3) peeled section-B extreme_pct is degenerate on signed residuals (noise-free target-clean residual = 61.60%, peeled = 75.13%, and a real noise_impulse:1 test gives 99.50%) -> not evidence of impulse; (4) per-channel saturated pixels in targets (==0: 0.0002-0.117%, ==255: 0.0000-0.044%) are far below noise_impulse sev1 (~1% of channel elements) and LOWER than the cleans (pair4 clean 2.58% at 255); any post-blur impulse would leave saturated pixels, and any pre-blur impulse is attenuated by the sigma-3 blur to ~1/255 (unidentifiable). No noise step added.",
+      "[statistical_check] gaussian/lens: MTF-indistinguishable per SKILL; lens4 was 26.71 dB (R0) within 0.06 dB -> subtype remains gaussian with lens as theoretical ambiguity, no change. motion excluded (anisotropy 1.318-1.686 < 1.7 on pairs 0/2/4; pair1 2.604 is text-content driven: motion5 22.62 vs gaussian4 27.52 dB).",
+      "[statistical_check] Global tone compression remains unresolvable (BEYOND_CAPABILITY): var_ratio target 0.641-0.796 vs 0.90-0.97 for every blur+jpeg sim (std ratio target/sim ~0.91, p95 216 vs 228), mean_shift small (-3.5..+1.3/255). New R1 screen of the previously untested stretch family: contrast_weaken_stretch:1 = std ratio 0.541 and mean shift -34.7; stretch:2 = 0.500 / -34.2 -> far too strong (target 0.875 / -1.8). contrast_weaken_scale:1 (0.75, mean shift -0.4) was already rejected in R0 (24.66 dB). Gamma/brightness excluded by mean shift (+-20/255). No library global step can reproduce a ~0.89 contrast compression at zero mean shift."
+    ]
+  }
+}

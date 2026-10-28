@@ -1,0 +1,47 @@
+{
+  "challenge": "blind_0006_set2",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_color_mlp_output": false,
+    "use_gdfn": false,
+    "use_sca": false,
+    "use_fpro": false,
+    "use_pcp": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "预测管线唯一: compression_jpeg:1 (单步, 纯局部退化); verdict=LIKELY, tier=1, ci_pass_rate=10/10",
+    "支撑验证 5/5 pixel-perfect: compression_jpeg:1 应用到每张 clean 图后与 degraded 图 PSNR=inf (pair0-4 全部复现), 亚军 jpeg:2 仅 28.59 dB -> 严重度 1 无歧义",
+    "compression 步骤 verdict=COMPRESSION_DETECTED (high): block_boundary=1.389/1.123/1.316/1.516/2.351 全部 >1.1 (Tier S, 0% FP 规则) + unique_G_target=256 (5/5) + dct_zero_ratio 0.62-0.95",
+    "剥离 compression_jpeg:1 后剥离残差 std=0.0 -> 像素级完美复现排除任何额外 blur/noise/global 步骤",
+    "blur 步骤 verdict=BLUR_UNLIKELY: spectral_slope_target 与 clean 差 <=0.01 (阈值 0.08), FFT anisotropy_ratio=0.0 (全部 5 pair) -> OCAB 触发信号 anisotropy>1.7 不满足",
+    "noise 步骤: noise_prior sigma=0.37-1.85 (全部 <2, NO_NOISE 规则); YCrCb 标签被判定为 JPEG chroma 伪影 (cross_channel_corr 随 block_boundary 强度同步变化), 剥离后零残差 -> 无噪声",
+    "global 步骤 verdict=NO_GLOBAL: variance_ratio=0.981-1.002 (~1.0, 无 contrast 信号), mean_shift<=0.4/255, clipped_fraction<=0.048, saturation_chroma_ratio 0.86-0.98 -> ColorPre/FiLM-GCM/ColorMLP 均无正向触发信号",
+    "单步管线 -> 无多退化梯度干扰, Direct 无需 RandomCurric 的梯度干扰抑制",
+    "退化难度低 (JPEG sev<=2, Section 六 Step 0 低难度档) -> 纯 Swin + SimpleGate 即可隐式修复",
+    "SimpleGate 默认常开依据: exp39 36 组 8/9 退化安全 (仅 S5 motion x3 -0.86), D3 (JPEG+blur) +0.02, -32K 参数"
+  ],
+  "finetune_strategy_ref": [
+    "Section 六 Step 0 (退化难度): 低难度 = JPEG sev<=2/gamma/shift_RGB/saturation -> 纯 Swin + SimpleGate",
+    "Section 六 Step 1 (策略): 纯局部单步 (compression) -> Direct 或 RandomCurric; 单步无梯度干扰 + 任务要求从零训练 -> Direct",
+    "Section 六 Step 2 (逐步骤组件门控): compression 步骤 LIKELY 但映射为 JPEG 专项(无对应架构 flag), 不触发 GCM/ColorPre; UNCERTAIN/POOR 步骤不加组件 (此处全部确定性信号)",
+    "Section 六 Step 3 (稳定性): 盲识别场景组件不匹配风险 -> 不加高风险组件, 纯 Swin 最安全",
+    "Section 七 (信号分层): Tier S block_boundary>1.1 (0% FP) -> JPEG 确认; Tier A 触发条件 variance_ratio!=1.0 (ColorPre/FiLM-GCM) 与 anisotropy>1.7 (OCAB) 均不满足 -> Swin 基线",
+    "Section 七 全组件门控表: DualBranch 盲识别下不推荐 (0/24胜 exp37); CSN 需 blur/noise 存在 (此处无); ChannelCurve 需 stretch (无); ColorMLP 需 brightness_HSV 高置信 (无); SimpleGate 可常开 (exp39 8/9 安全)",
+    "Section 八 消融 A: exp37 24 盲识别挑战中 Direct+Swin 23/24 胜, 所有组件未超越纯 Swin",
+    "Section 九: 2-epoch 存在 D3 类 ckpt2 退化风险, 使用 LR=5e-4 并保留 best checkpoint (本挑战为轻度 JPEG, 风险低)"
+  ],
+  "reasoning": "预测管线为单步 compression_jpeg:1, 5/5 支撑对像素级完美复现 (PSNR=inf, CI=10/10), 是最高置信度的 Tier 1 确定性结果。按 Section 六 Step 1, 单步纯局部退化无多退化梯度干扰, 采用 Direct 从零训练。按 Step 0, JPEG sev<=2 属低难度, 网络可隐式学得, 选纯 Swin (attention_type=swin, window_size=8, embed_dim=64)。组件门控严格按 Section 七: variance_ratio=0.981-1.002 约为 1.0, 无 contrast 信号, 故 use_gcm/use_color_pre 均关闭; mean_shift<=0.4 且无 brightness 信号, use_color_mlp 关闭; anisotropy_ratio=0.0, OCAB 触发条件 (>1.7) 不满足, 保持 Swin; 无 blur/noise, use_csn 关闭; DualBranch 在盲识别场景 exp37 0/24 胜, 明确不推荐, 关闭。full_analysis.json 中 per-pair 的 recommended_architecture 建议 DualBranch, 但那是反思前基于'多步/不确定'的模板建议, 与最终单步像素级完美复现的 LIKELY 结论矛盾; 按逐步骤 verdict + Section 七 信号门控, 不采纳。SimpleGate 按 exp39 (8/9 安全, D3 +0.02, -32K 参数) 作为默认常开组件启用。最终配置: Direct + 纯 Swin(ws=8, dim=64) + SimpleGate, lr=5e-4, 2 epochs, batch=16, 不加载预训练 ckpt。训练监控建议: 保留 best ckpt, 若 ckpt2 退化则回退 ckpt1 (Section 九)。"
+}

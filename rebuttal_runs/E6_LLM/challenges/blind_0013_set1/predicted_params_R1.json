@@ -1,0 +1,79 @@
+{
+  "round": "R1",
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 3,
+      "verdict": "UNCERTAIN",
+      "evidence": "噪声必须位于 JPEG 之前: 目标残差(t-clean)高频 wavelet sigma=1.48-3.34 (R0 的 jpeg4→speckle1 模拟为 5.31-8.03), dct_zero_ratio=0.622-0.743 (R0 模拟仅 0.050-0.092), 残差 lag1=0.46-0.65 (R0 模拟 0.01-0.25)。白噪声末置于 JPEG 后不可能产生低通/块相关噪声; 强 speckle 先于 JPEG 被 q18 量化重塑则全部吻合。speckle:3 由网格+severity 扫描定位 (sp2/sp4 均偏离: dctzr .765/.678, wavsig 1.61/2.59, res_std 14.8/24.6 vs target .722/1.98/19.6); verify_signals MATCH 3/3 × 5 support pairs。按 SKILL 规则噪声步骤 verdict 上限 UNCERTAIN (seed 失配)"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "LIKELY",
+      "evidence": "JPEG sev2 (quality 18)。目标 bb=1.445-1.761 (5 对), 噪声预置时 sp3+j2 模拟 bb=1.440-1.771 (全部 <8% 差); dct_zero_ratio 0.622-0.743 与模拟 0.622-0.743 逐对一致; jpeg sev3 时 bb 偏高 25% (verify_signals WEAK), sev1 时 bb=1.338 (偏低), sev4/5 需末置白噪声才能凑出 bb (已被其他 6 信号否定)"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 2},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "function_family": "noise_speckle (severity −1)",
+      "verification": "PARTIAL (noise:sigma diff=50%)",
+      "stats": {
+        "note": "pair0 直接信号: bb=1.623, dctzr=0.765, wavsig=1.61, std/I=0.093, res_std=14.78, lag1=0.554 — 幅度整体偏小, 应劣于 sev3"
+      }
+    },
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 4},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "function_family": "noise_speckle (severity +1)",
+      "verification": "PARTIAL (noise:sigma diff=25%)",
+      "stats": {
+        "note": "pair0 直接信号: bb=1.466, dctzr=0.678, wavsig=2.59, std/I=0.140, res_std=24.55, lag1=0.405 — 幅度整体偏大, 应劣于 sev3"
+      }
+    },
+    {
+      "pipeline": [
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "noise_speckle", "severity": 1}
+      ],
+      "function_family": "R0 原始预测 (顺序+严重度不同, 保留供训练 PSNR 仲裁/回退)",
+      "verification": "PARTIAL (noise:sigma diff=267%); 7 维直接信号中 dctzr/wavsig/lag1 严重偏离 (0.069/5.81/0.14 vs target 0.722/1.98/0.47), pair4 bb 差 35%",
+      "stats": {"r0_support_psnr": 27.38}
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (含噪声, PSNR 不可用于选型; 噪声 PSNR 上限 ~20-22 dB)",
+    "order": "noise → JPEG (符合 SKILL 物理约束 '噪声/模糊 < JPEG' 与 blind_challenge 优先级 noise(0) < JPEG(2); 由 dctzr/高频/wavsig/空间相关四类信号独立支持)",
+    "psnr": 20.49,
+    "psnr_note": "含噪声候选 PSNR 19.4-21.8 dB 被 seed 失配封顶, 不用于选型; 判决基于信号统计",
+    "key_signals_pair0": {
+      "block_boundary": {"target": 1.555, "sp3_j2_sim": 1.548, "jpeg2_alone_note": "噪声末置于 jpeg4 的 R0 巧合 (1.566) 已由其他 6 信号否定"},
+      "dct_zero_ratio": {"target": 0.722, "sp3_j2_sim": 0.722, "r0_j4_sp1_sim": 0.069},
+      "residual_hf_wavelet_sigma": {"target": 1.98, "sp3_j2_sim": 1.98, "r0_j4_sp1_sim": 5.81},
+      "spectral_slope": {"target": -1.062, "sp3_j2_sim": -1.060},
+      "flat_std_over_intensity": {"target": 0.116, "sp3_j2_sim": 0.117},
+      "flat_residual_std": {"target": 19.62, "sp3_j2_sim": 19.70},
+      "noise_lag1_autocorr": {"target": 0.472, "sp3_j2_sim": 0.486},
+      "residual_cross_channel_corr": {"target": 0.919, "sp3_j2_sim": 0.918},
+      "residual_spatial_corr": {"target": 0.411, "sp3_j2_sim": 0.412}
+    },
+    "cross_pair_validation": "5/5 support pairs: verify_signals MATCH 3/3; 直接信号 7 维逐对吻合 (bb 1.445→1.440, 1.495→1.513, 1.564→1.571, 1.761→1.771; dctzr 0.622→0.622, 0.678→0.677, 0.652→0.652, 0.743→0.743)",
+    "r0_known_mismatches_resolved": "R0 认为无法建模的 '近消色差 (跨通道 corr 0.85-0.96) + 空间相关 (lag1 0.46-0.60)' 噪声, 实为 pre-JPEG speckle 经 JPEG q18 量化 (颜色变换+色度下采样+高频归零) 的必然结果, 已完全复现",
+    "seed_stability": "pair0 三个 seed (0/1/2) 的直接信号变动 < 5% (bb 1.548-1.557, dctzr 0.722-0.724, res_std 18.91-19.70)",
+    "budget": "PSNR 测试 0 次 (信号/统计判据); test_candidate signal 模式 9 次 (5 候选 + 4 跨对), 未超 25 次预算"
+  },
+  "training_params": {
+    "pipeline": [
+      {"function": "noise_speckle", "severity": 3},
+      {"function": "compression_jpeg", "severity": 2}
+    ]
+  }
+}

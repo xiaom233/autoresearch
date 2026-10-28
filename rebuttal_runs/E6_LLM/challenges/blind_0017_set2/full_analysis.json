@@ -1,0 +1,558 @@
+{
+  "challenge": "/data/zyli/projects/autoresearch/rebuttal_runs/E6_LLM/challenges/blind_0017_set2",
+  "tool": "run_full_analysis.py (SKILL v13) on all 5 paired-support images; pair0 == clean.png/degraded.png",
+  "aggregate_signal_summary": {
+    "compression": "COMPRESSION_DETECTED in 5/5 (block_boundary 7.15/4.24/5.79/4.81/6.08; dct_zero_ratio 0.892-0.948; unique_G_ratio 0.90-0.97)",
+    "blur": "GLASS_BLUR (medium) in 5/5 via glass_score (1.15-1.54), gm_ratio 0.173-0.497, spectral_slope_ratio 1.20-1.28; glass_score later shown JPEG-confounded",
+    "noise": "GAUSSIAN_YCrCb flagged in 5/5; wavelet sigma 0.0/0.37/0.37/2.35/1.11 (blindness to pre-blur noise verified); spatial_corr 0.63-0.82 (JPEG-structured)",
+    "global": "variance_ratio 0.639-0.734 in 5/5; pair0 NO_GLOBAL, pair1 CONTRAST_weaken_sev4, pair2 NO_GLOBAL, pair3 CONTRAST_weaken_sev3, pair4 SATURATION_weaken_sev4 (low confidence); cross-pair mean-shift affine analysis -> contrast contraction toward mid-gray alpha 0.85-0.90"
+  },
+  "agent_final_pipeline": [
+    {
+      "function": "noise_gaussian_YCrCb",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "LIKELY"
+    },
+    {
+      "function": "contrast_weaken_scale",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "agent_overall_verdict": "UNCERTAIN",
+  "peeled_noise_check": {
+    "pair0_pipeline_blur_gaussian:3,compression_jpeg:5,contrast_weaken_scale:1": {
+      "extreme_pct": 82.98,
+      "vm_slope": 0.1141,
+      "var_slope": -0.0109,
+      "spatial_corr": 0.9734,
+      "rgb_ratio": 1.1272,
+      "cross_ch_corr": 0.6533,
+      "wavelet_sigma": 0.0,
+      "note": "IMPULSE verdict is documented JPEG/blur FP; residual structured"
+    },
+    "pair1_pipeline_blur_gaussian:3,compression_jpeg:4,contrast_weaken_scale:1": {
+      "extreme_pct": 13.79,
+      "vm_slope": 0.111,
+      "var_slope": 0.2414,
+      "spatial_corr": 0.9753,
+      "rgb_ratio": 1.1422,
+      "cross_ch_corr": 0.6961,
+      "wavelet_sigma": 0.74
+    }
+  },
+  "pairs": {
+    "pair0": {
+      "clean": "clean_0.png",
+      "degraded": "degraded_0.png",
+      "step1_compression": {
+        "verdict": "COMPRESSION_DETECTED",
+        "confidence": "high",
+        "signals": {
+          "block_boundary": 7.1498,
+          "unique_G_target": 187,
+          "unique_G_clean": 208,
+          "unique_G_ratio": 0.899,
+          "unique_per_channel": [
+            197,
+            192,
+            187
+          ],
+          "dct_zero_ratio": 0.9483
+        },
+        "subtype": "JPEG",
+        "_for_step4": {
+          "block_uniformity": 7.1498,
+          "jpeg_detected": true
+        }
+      },
+      "step2_noise": {
+        "verdict": "GAUSSIAN_YCrCb",
+        "confidence": "low",
+        "signals": {
+          "noise_prior_sigma": 0.0,
+          "impulse_zero_ratio": 0.0984,
+          "spatial_corr": 0.6854,
+          "cross_channel_corr": 0.8739,
+          "residual_intensity_corr": -0.3536,
+          "gamma_suspect_from_noise": true
+        },
+        "estimated_severity": 3,
+        "_for_step4": {
+          "sigma": 0.0,
+          "can_fake_contrast": false,
+          "can_fake_saturation": false,
+          "can_fake_brightness": false
+        }
+      },
+      "step3_blur": {
+        "verdict": "GLASS_BLUR",
+        "confidence": "medium",
+        "signals": {
+          "gm_ratio": 0.1979,
+          "gm_ratio_usable": true,
+          "spectral_slope_target": -1.1488,
+          "spectral_slope_clean": -0.8971,
+          "spectral_slope_ratio": 1.2806,
+          "residual_anisotropy": 1.4063,
+          "mtf_roughness": 1.1621,
+          "glass_score": 1.5411,
+          "blur_pca_ratio": 1.044,
+          "blur_density": 0.781,
+          "blur_flatness": 0.4038,
+          "blur_glass_noise_floor": 19.7874,
+          "blur_kernel_method": "gradient_joint_wiener_pca",
+          "severity_source": "gm_ratio"
+        },
+        "blur_subtype": "blur_glass",
+        "subtype_confidence": "medium",
+        "note": "glass_score=1.541>0.25 (pixel shuffle高频残留).",
+        "estimated_severity": 5
+      },
+      "step4_global": {
+        "verdict": "NO_GLOBAL",
+        "signals": {
+          "brightness_mean_shift": -6.3,
+          "brightness_detected_raw": true,
+          "clipped_fraction": 0.0,
+          "heavy_clipping": false,
+          "variance_ratio": 0.7113,
+          "contrast_from_variance": false,
+          "contrast_spread_ratio": 0.8098,
+          "contrast_detected_raw": false,
+          "saturation_chroma_ratio": 0.9404,
+          "saturation_detected_raw": false,
+          "oversharpen_detected_raw": false
+        },
+        "false_positive_checks": {
+          "brightness_from_jpeg": true
+        },
+        "confidence": "low"
+      },
+      "failure_risks": [
+        "NOISE_TYPE_UNCERTAIN",
+        "FP_blur_risk",
+        "FP_YCrCb_GAMMA_SUSPECT"
+      ],
+      "recommended_architecture": {
+        "attention_type": "swin",
+        "window_size": 8,
+        "extra_flags": [
+          "AR_USE_DUAL_BRANCH=1"
+        ],
+        "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+      }
+    },
+    "pair1": {
+      "clean": "clean_1.png",
+      "degraded": "degraded_1.png",
+      "step1_compression": {
+        "verdict": "COMPRESSION_DETECTED",
+        "confidence": "high",
+        "signals": {
+          "block_boundary": 4.2427,
+          "unique_G_target": 229,
+          "unique_G_clean": 235,
+          "unique_G_ratio": 0.9745,
+          "unique_per_channel": [
+            247,
+            233,
+            229
+          ],
+          "dct_zero_ratio": 0.9389
+        },
+        "subtype": "JPEG",
+        "_for_step4": {
+          "block_uniformity": 4.2427,
+          "jpeg_detected": true
+        }
+      },
+      "step2_noise": {
+        "verdict": "GAUSSIAN_YCrCb",
+        "confidence": "low",
+        "signals": {
+          "noise_prior_sigma": 0.37,
+          "impulse_zero_ratio": 0.0387,
+          "spatial_corr": 0.8243,
+          "cross_channel_corr": 0.8369,
+          "residual_intensity_corr": 0.4077,
+          "gamma_suspect_from_noise": true
+        },
+        "estimated_severity": 3,
+        "_for_step4": {
+          "sigma": 0.37,
+          "can_fake_contrast": false,
+          "can_fake_saturation": false,
+          "can_fake_brightness": false
+        }
+      },
+      "step3_blur": {
+        "verdict": "GLASS_BLUR",
+        "confidence": "medium",
+        "signals": {
+          "gm_ratio": 0.459,
+          "gm_ratio_usable": true,
+          "spectral_slope_target": -1.3986,
+          "spectral_slope_clean": -1.1435,
+          "spectral_slope_ratio": 1.2231,
+          "residual_anisotropy": 1.1471,
+          "mtf_roughness": 0.84,
+          "glass_score": 1.1475,
+          "blur_pca_ratio": 1.031,
+          "blur_density": 0.6622,
+          "blur_flatness": 0.4101,
+          "blur_glass_noise_floor": 11.2333,
+          "blur_kernel_method": "gradient_joint_wiener_pca",
+          "severity_source": "gm_ratio"
+        },
+        "blur_subtype": "blur_glass",
+        "subtype_confidence": "medium",
+        "note": "glass_score=1.148>0.25 (pixel shuffle高频残留).",
+        "estimated_severity": 4
+      },
+      "step4_global": {
+        "verdict": "CONTRAST_weaken_sev4",
+        "signals": {
+          "brightness_mean_shift": 10.0,
+          "brightness_detected_raw": true,
+          "clipped_fraction": 0.0005,
+          "heavy_clipping": false,
+          "variance_ratio": 0.6385,
+          "contrast_from_variance": false,
+          "contrast_spread_ratio": 0.7528,
+          "contrast_detected_raw": true,
+          "saturation_chroma_ratio": 0.9671,
+          "saturation_detected_raw": false,
+          "oversharpen_detected_raw": false
+        },
+        "false_positive_checks": {
+          "brightness_from_jpeg": true,
+          "contrast_pure": true
+        },
+        "confidence": "low"
+      },
+      "failure_risks": [
+        "NOISE_TYPE_UNCERTAIN",
+        "FP_global_risk",
+        "FP_blur_risk",
+        "FP_YCrCb_GAMMA_SUSPECT"
+      ],
+      "recommended_architecture": {
+        "attention_type": "swin",
+        "window_size": 8,
+        "extra_flags": [],
+        "note": "Swin required: contrast detected (MDTA/OCAB would crash)"
+      }
+    },
+    "pair2": {
+      "clean": "clean_2.png",
+      "degraded": "degraded_2.png",
+      "step1_compression": {
+        "verdict": "COMPRESSION_DETECTED",
+        "confidence": "high",
+        "signals": {
+          "block_boundary": 5.7886,
+          "unique_G_target": 250,
+          "unique_G_clean": 250,
+          "unique_G_ratio": 1.0,
+          "unique_per_channel": [
+            254,
+            250,
+            256
+          ],
+          "dct_zero_ratio": 0.9399
+        },
+        "subtype": "JPEG",
+        "_for_step4": {
+          "block_uniformity": 5.7886,
+          "jpeg_detected": true
+        }
+      },
+      "step2_noise": {
+        "verdict": "GAUSSIAN_YCrCb",
+        "confidence": "high",
+        "signals": {
+          "noise_prior_sigma": 0.37,
+          "impulse_zero_ratio": 0.0529,
+          "spatial_corr": 0.8109,
+          "cross_channel_corr": 0.7396,
+          "residual_intensity_corr": 0.115
+        },
+        "estimated_severity": 5,
+        "_for_step4": {
+          "sigma": 0.37,
+          "can_fake_contrast": false,
+          "can_fake_saturation": false,
+          "can_fake_brightness": false
+        }
+      },
+      "step3_blur": {
+        "verdict": "GLASS_BLUR",
+        "confidence": "medium",
+        "signals": {
+          "gm_ratio": 0.4969,
+          "gm_ratio_usable": true,
+          "spectral_slope_target": -1.4704,
+          "spectral_slope_clean": -1.2234,
+          "spectral_slope_ratio": 1.2019,
+          "residual_anisotropy": 1.3505,
+          "mtf_roughness": 0.8064,
+          "glass_score": 1.3073,
+          "blur_pca_ratio": 1.07,
+          "blur_density": 0.7653,
+          "blur_flatness": 0.405,
+          "blur_glass_noise_floor": 11.0954,
+          "blur_kernel_method": "gradient_joint_wiener_pca",
+          "severity_source": "gm_ratio"
+        },
+        "blur_subtype": "blur_glass",
+        "subtype_confidence": "medium",
+        "note": "glass_score=1.307>0.25 (pixel shuffle高频残留).",
+        "estimated_severity": 4
+      },
+      "step4_global": {
+        "verdict": "NO_GLOBAL",
+        "signals": {
+          "brightness_mean_shift": 8.0,
+          "brightness_detected_raw": true,
+          "clipped_fraction": 0.0001,
+          "heavy_clipping": false,
+          "variance_ratio": 0.7336,
+          "contrast_from_variance": false,
+          "contrast_spread_ratio": 0.8725,
+          "contrast_detected_raw": false,
+          "saturation_chroma_ratio": 0.915,
+          "saturation_detected_raw": false,
+          "oversharpen_detected_raw": false
+        },
+        "false_positive_checks": {
+          "brightness_from_jpeg": true
+        },
+        "confidence": "low"
+      },
+      "failure_risks": [
+        "FP_blur_risk",
+        "FP_YCrCb_BLUR_JPEG"
+      ],
+      "recommended_architecture": {
+        "attention_type": "swin",
+        "window_size": 8,
+        "extra_flags": [
+          "AR_USE_DUAL_BRANCH=1"
+        ],
+        "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+      }
+    },
+    "pair3": {
+      "clean": "clean_3.png",
+      "degraded": "degraded_3.png",
+      "step1_compression": {
+        "verdict": "COMPRESSION_DETECTED",
+        "confidence": "high",
+        "signals": {
+          "block_boundary": 4.8144,
+          "unique_G_target": 241,
+          "unique_G_clean": 248,
+          "unique_G_ratio": 0.9718,
+          "unique_per_channel": [
+            241,
+            256,
+            256
+          ],
+          "dct_zero_ratio": 0.8922
+        },
+        "subtype": "JPEG",
+        "_for_step4": {
+          "block_uniformity": 4.8144,
+          "jpeg_detected": true
+        }
+      },
+      "step2_noise": {
+        "verdict": "GAUSSIAN_YCrCb",
+        "confidence": "high",
+        "signals": {
+          "noise_prior_sigma": 2.35,
+          "impulse_zero_ratio": 0.0572,
+          "spatial_corr": 0.6477,
+          "cross_channel_corr": 0.8288,
+          "residual_intensity_corr": -0.0693
+        },
+        "estimated_severity": 5,
+        "_for_step4": {
+          "sigma": 2.35,
+          "can_fake_contrast": false,
+          "can_fake_saturation": false,
+          "can_fake_brightness": false
+        }
+      },
+      "step3_blur": {
+        "verdict": "GLASS_BLUR",
+        "confidence": "medium",
+        "signals": {
+          "gm_ratio": 0.1725,
+          "gm_ratio_usable": true,
+          "spectral_slope_target": -1.3255,
+          "spectral_slope_clean": -1.0929,
+          "spectral_slope_ratio": 1.2129,
+          "residual_anisotropy": 1.6472,
+          "mtf_roughness": 1.2075,
+          "glass_score": 1.4949,
+          "blur_pca_ratio": 1.101,
+          "blur_density": 0.7022,
+          "blur_flatness": 0.405,
+          "blur_glass_noise_floor": 42.3302,
+          "blur_kernel_method": "gradient_joint_wiener_pca",
+          "severity_source": "gm_ratio"
+        },
+        "blur_subtype": "blur_glass",
+        "subtype_confidence": "medium",
+        "note": "glass_score=1.495>0.25 (pixel shuffle高频残留).",
+        "estimated_severity": 5
+      },
+      "step4_global": {
+        "verdict": "CONTRAST_weaken_sev3",
+        "signals": {
+          "brightness_mean_shift": -0.9,
+          "brightness_detected_raw": false,
+          "clipped_fraction": 0.0014,
+          "heavy_clipping": false,
+          "variance_ratio": 0.7,
+          "contrast_from_variance": false,
+          "contrast_spread_ratio": 0.7941,
+          "contrast_detected_raw": true,
+          "saturation_chroma_ratio": 0.9107,
+          "saturation_detected_raw": false,
+          "oversharpen_detected_raw": false
+        },
+        "false_positive_checks": {
+          "contrast_pure": true
+        },
+        "confidence": "low"
+      },
+      "failure_risks": [
+        "FP_global_risk",
+        "FP_blur_risk",
+        "FP_YCrCb_BLUR_JPEG"
+      ],
+      "recommended_architecture": {
+        "attention_type": "swin",
+        "window_size": 8,
+        "extra_flags": [],
+        "note": "Swin required: contrast detected (MDTA/OCAB would crash)"
+      }
+    },
+    "pair4": {
+      "clean": "clean_4.png",
+      "degraded": "degraded_4.png",
+      "step1_compression": {
+        "verdict": "COMPRESSION_DETECTED",
+        "confidence": "high",
+        "signals": {
+          "block_boundary": 6.0806,
+          "unique_G_target": 246,
+          "unique_G_clean": 256,
+          "unique_G_ratio": 0.9609,
+          "unique_per_channel": [
+            252,
+            246,
+            253
+          ],
+          "dct_zero_ratio": 0.9017
+        },
+        "subtype": "JPEG",
+        "_for_step4": {
+          "block_uniformity": 6.0806,
+          "jpeg_detected": true
+        }
+      },
+      "step2_noise": {
+        "verdict": "GAUSSIAN_YCrCb",
+        "confidence": "high",
+        "signals": {
+          "noise_prior_sigma": 1.11,
+          "impulse_zero_ratio": 0.0608,
+          "spatial_corr": 0.6274,
+          "cross_channel_corr": 0.5746,
+          "residual_intensity_corr": 0.0348
+        },
+        "estimated_severity": 5,
+        "_for_step4": {
+          "sigma": 1.11,
+          "can_fake_contrast": false,
+          "can_fake_saturation": false,
+          "can_fake_brightness": false
+        }
+      },
+      "step3_blur": {
+        "verdict": "GLASS_BLUR",
+        "confidence": "medium",
+        "signals": {
+          "gm_ratio": 0.192,
+          "gm_ratio_usable": true,
+          "spectral_slope_target": -1.3107,
+          "spectral_slope_clean": -1.0751,
+          "spectral_slope_ratio": 1.2191,
+          "residual_anisotropy": 1.665,
+          "mtf_roughness": 1.052,
+          "glass_score": 1.5436,
+          "blur_pca_ratio": 1.23,
+          "blur_density": 0.7333,
+          "blur_flatness": 0.404,
+          "blur_glass_noise_floor": 36.9031,
+          "blur_kernel_method": "gradient_joint_wiener_pca",
+          "severity_source": "gm_ratio"
+        },
+        "blur_subtype": "blur_glass",
+        "subtype_confidence": "medium",
+        "note": "glass_score=1.544>0.25 (pixel shuffle高频残留).",
+        "estimated_severity": 5
+      },
+      "step4_global": {
+        "verdict": "SATURATION_weaken_sev4",
+        "signals": {
+          "brightness_mean_shift": -2.5,
+          "brightness_detected_raw": false,
+          "clipped_fraction": 0.0001,
+          "heavy_clipping": false,
+          "variance_ratio": 0.7064,
+          "contrast_from_variance": false,
+          "contrast_spread_ratio": 0.8242,
+          "contrast_detected_raw": false,
+          "saturation_chroma_ratio": 0.7313,
+          "saturation_detected_raw": true,
+          "oversharpen_detected_raw": false
+        },
+        "false_positive_checks": {},
+        "confidence": "low"
+      },
+      "failure_risks": [
+        "FP_global_risk",
+        "FP_blur_risk",
+        "FP_YCrCb_BLUR_JPEG"
+      ],
+      "recommended_architecture": {
+        "attention_type": "swin",
+        "window_size": 8,
+        "extra_flags": [
+          "AR_USE_DUAL_BRANCH=1"
+        ],
+        "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+      }
+    }
+  },
+  "notes": [
+    "full per-pair raw reports originally generated by run_full_analysis.py; consolidated here",
+    "pair analysis order in time: pair0 07:38, pair1 07:49, pair2 07:54, pair3 07:59, pair4 08:1x",
+    "no GT files were read; only clean/degraded pair data + skill scripts were used"
+  ]
+}

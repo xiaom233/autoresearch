@@ -1,0 +1,165 @@
+{
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "based_on": "predicted_params_R1.json",
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 3,
+      "verdict": "UNCERTAIN",
+      "evidence": "R2 独立复验: verify_signals MATCH 3/3 × 5/5 support pairs (noise:sigma, noise:clean_residual, compression:block_boundary)。二阶统计全吻合: 残差 std 15.77 vs 15.78 (pair0), 16.71/16.69, 18.59/18.61, 15.33/15.33, 16.55/16.47; skew -0.457 vs -0.456; kurt 5.60 vs 5.61; lag1 0.425 vs 0.428; 强度分箱 std 剖面 corr=0.9999-1.0 (最大相对偏差 0.4-1.2%)。severity 定心: sp2/sp4 均 PARTIAL 且二阶统计显著偏离 (res_std 12.59/19.52 vs 15.77; 剖面偏差 24.1%/26.7%; dctzr 0.765/0.678 vs 0.722)。按 SKILL 噪声步骤 verdict 上限 UNCERTAIN (seed 失配)",
+      "verdict_note": "噪声 seed 失配 → 永不 LIKELY"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "LIKELY",
+      "evidence": "block_boundary 跨 5 对 1.445-1.761 (clean≈1.01), sim sp3+j2 逐对 <3% (1.552 vs 1.557 pair0); dct_zero_ratio 0.722 vs sim 0.7238; 模型误差残差无额外 8x8 结构 (err_ac8≈0.00); JPEG 严重度 2 (q18) 由 bb/dctzr 双信号夹逼 (R1 已扫描 sp3+j1=1.338 / sp3+j3=1.962 均偏离)"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 2},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "function_family": "noise_speckle (severity -1)",
+      "verification": "PARTIAL (noise:sigma diff=50%)",
+      "stats": {
+        "res_std": 12.59,
+        "int_profile_max_reldiff_pct": 24.1,
+        "dct_zero_ratio": 0.7647,
+        "note": "二阶统计整体偏弱, 明显劣于 sev3"
+      }
+    },
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 4},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "function_family": "noise_speckle (severity +1)",
+      "verification": "PARTIAL (noise:sigma diff=25%)",
+      "stats": {
+        "res_std": 19.52,
+        "int_profile_max_reldiff_pct": 26.7,
+        "dct_zero_ratio": 0.6775,
+        "note": "二阶统计整体偏强, 明显劣于 sev3"
+      }
+    },
+    {
+      "pipeline": [
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "noise_speckle", "severity": 1}
+      ],
+      "function_family": "R0 原始预测 (顺序+严重度不同; 仅存档参考, 已被 R1/R2 信号否定)",
+      "verification": "R1 已否定: dctzr/wavsig/lag1 严重偏离 (0.069/5.81/0.14 vs target 0.722/1.98/0.47)",
+      "stats": {"r0_support_psnr": 27.38, "r1_support_psnr": 30.12}
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (含噪声, 含噪候选 PSNR 被 seed 失配封顶, 不用于选型)",
+    "order": "noise → JPEG (符合 SKILL 物理约束与 blind_challenge 优先级; R1 已由 dctzr/wavsig/lag1/平坦区方差四类信号确认, R2 二阶统计再次确认)",
+    "r2_methods": [
+      "run_full_analysis.py 重跑 × 5 support pairs, 与 R1 记录逐项对比",
+      "二阶统计对比 (target vs R1 模拟, 固定 seed): std/skew/kurtosis/rgb_ratio/cross_ch/跨通道 std, 自相关 lag1/2/4/8/16, 强度分箱残差 std 剖面 (12 分位), variance_ratio/mean_shift/chroma_ratio 逐对, 8x8 块边界",
+      "模型误差残差完备性检验: E(target-sim0) vs E(sim1-sim0) vs E(sim2-sim0) 的 11 维统计签名等价性",
+      "5 候选 test_candidate.py --mode signal + 4 support 对交叉复验",
+      "peeled_noise_check.py (剥离 R1 全管线) §B 6 步 (用于误差残差解释, 非噪声定型)"
+    ],
+    "support_pairs_reanalysis": {
+      "run_full_analysis_5_pairs": {
+        "block_boundary": [1.5553, 1.445, 1.496, 1.564, 1.761],
+        "spectral_slope_ratio": [0.972, 0.967, 0.983, 0.984, 0.951],
+        "variance_ratio": [0.962, 0.950, 1.010, 0.960, 1.119],
+        "mean_shift_255": [-1.9, -1.9, -0.6, -1.6, -0.8],
+        "fft_anisotropy": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "verdicts": "5/5 COMPRESSION_DETECTED, BLUR_UNLIKELY, NO_GLOBAL"
+      },
+      "vs_r1": "与 R1 记录的 support_pair_diagnostics 逐项一致 (重新运行未发现任何漂移)"
+    },
+    "second_order_validation": {
+      "note": "target residual (x-clean) vs R1 模拟 residual, 5 对全部吻合",
+      "res_std_pairs": [[15.77, 15.78], [16.71, 16.69], [18.59, 18.61], [15.33, 15.33], [16.55, 16.47]],
+      "skew_pairs": [[-0.457, -0.456], [-0.399, -0.405], [-0.237, -0.235], [-0.512, -0.502], [-0.051, -0.045]],
+      "kurtosis_pairs": [[5.60, 5.61], [5.16, 5.14], [7.32, 7.30], [5.85, 5.85], [4.34, 4.34]],
+      "autocorr_lag1": [[0.425, 0.428], [0.443, 0.444], [0.145, 0.146], [0.408, 0.407], [0.456, 0.461]],
+      "autocorr_lag2_4_8_16": "逐对吻合 (<0.005), 无额外结构",
+      "intensity_profile_std": "12 分位强度分箱残差 std 剖面 corr 0.9999-1.0, 最大相对偏差 0.4-1.2%",
+      "variance_ratio_pairs": [[0.9622, 0.9615], [0.9500, 0.9495], [1.0103, 1.0124], [0.9600, 0.9612], [1.1194, 1.1191]],
+      "mean_shift_pairs": [[-0.0075, -0.0075], [-0.0075, -0.0075], [-0.0025, -0.0025], [-0.0064, -0.0063], [-0.0032, -0.0031]],
+      "chroma_ratio_pairs": [[1.0269, 1.0287], [0.9605, 0.9581], [1.0009, 1.0039], [0.9510, 0.9509], [1.0568, 1.0563]]
+    },
+    "error_residual_completeness": {
+      "note": "若 R1 管线有缺失/错误步骤, E(target-sim0) 应偏离 E(独立同分布 seed 差). 实测 11 维签名完全一致:",
+      "E_target_vs_seed_diff": {
+        "std": [20.25, 20.25],
+        "skew": [-0.0, -0.005],
+        "kurt": [5.44, 5.47],
+        "ac1": [0.443, 0.443],
+        "ac8": [0.001, -0.0],
+        "spatial_corr": [0.712, 0.713],
+        "vm_slope": [12.98, 12.90],
+        "cross_ch": [0.928, 0.928],
+        "rgb_ratio": [1.02, 1.019],
+        "extreme_pct": [52.51, 52.51],
+        "ric": [0.001, 0.001]
+      },
+      "conclusion": "目标与 R1 模拟的差异在统计上等同于一次独立噪声实现差异 → 管线在信号层面完备, 无可检测的漏检/误设步骤"
+    },
+    "ignored_or_misattributed_signal_audit": {
+      "full_analysis_step2_GAUSSIAN_YCrCb": "误归因: cross_channel_corr=0.89 与 residual_intensity_corr=0.44 来自 JPEG 颜色变换+量化, 不是 YCrCb 噪声。逐通道独立 pre-JPEG speckle 模拟即复现 cross_ch 0.918 (target 0.919), rgb_ratio 1.037 (target 1.04) — 与 R1 结论一致",
+      "peeled_sb6_extreme_pct_52.5pct_IMPULSE": "定义性假阳性: §B 对有符号残差按 (res<=0)|(res>=255) 计数, 零均值残差天然 ~50% 为负。在 sim-sim seed 差 (无任何脉冲噪声) 上同样得到 52.51% — 已证实与脉冲噪声无关",
+      "peeled_sb6_vm_slope_12.9_SPECKLE": "预期现象而非新退化: E = 两个独立乘性 speckle 实现之差, 方差 ∝ I^2。sim-sim 差同样为 12.90 → 不构成额外证据",
+      "r1_prior_known_mismatch_noise_lag1": "R1 曾记录'库内白噪声无法表达 lag1 0.46-0.65'。R2 证实该缺口已由 pre-JPEG speckle 经 JPEG q18 量化完全解释: 模拟 lag1 逐对吻合 0.425-0.461",
+      "pair4_variance_ratio_1.119_borderline": "曾是唯一超阈值的全局信号 (对比度嫌疑)。R2 逐对复现: sim variance_ratio=1.1191 (target 1.1194) → 由内容+噪声+JPEG 交互解释, 非 contrast/brightness",
+      "blur_missed_hypothesis": "在 noise→JPEG 之间插入 blur_gaussian:1 → verify WEAK (noise:sigma diff 75%, bb diff 22%), 且残差自相关 lag1-16 剖面已被无 blur 管线精确复现 → 排除漏检 blur",
+      "extra_step_after_jpeg": "无证据: unique_G=256 (clean 同为 256) 排除 quantization; dctzr/bb 与单次 JPEG q18 精确一致排除二次压缩; 残差无 lag8 结构 (ac8≈0.00)"
+    },
+    "candidates_tested": [
+      {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "MATCH (3/3) × 5/5 support pairs",
+        "decision": "ACCEPT (R2 维持 R1, NO_CHANGE)"
+      },
+      {
+        "pipeline": "noise_speckle:3,blur_gaussian:1,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "WEAK (3/5): noise:sigma diff=75%, compression:block_boundary diff=22%",
+        "decision": "REJECT (无漏检 blur)"
+      },
+      {
+        "pipeline": "compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "MATCH (1/1, 子集管线自匹配 — 见 caveat)",
+        "decision": "REJECT (二阶统计: res_std 8.33 vs 15.77; 强度剖面偏差 74.1%; dctzr 0.835 vs 0.722 → 噪声步骤必要)",
+        "caveat": "verify_signals 只校验管线自身声明的信号; 缺步管线可'自匹配'。完备性必须用残差统计检验"
+      },
+      {
+        "pipeline": "noise_speckle:2,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "PARTIAL (2/3): noise:sigma diff=50%",
+        "decision": "REJECT (二阶统计偏弱: res_std 12.59, 剖面偏差 24.1%)"
+      },
+      {
+        "pipeline": "noise_speckle:4,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "PARTIAL (2/3): noise:sigma diff=25%",
+        "decision": "REJECT (二阶统计偏强: res_std 19.52, 剖面偏差 26.7%)"
+      }
+    ],
+    "budget": "PSNR 测试 0 次 (含噪, 信号/统计判据); run_full_analysis 5 次; peeled_noise_check 1 次; test_candidate signal 模式 9 次 (5 候选 + 4 交叉复验); 未超 ≤5 候选 / ≤25 测试预算",
+    "change_decision": "NO_CHANGE",
+    "rationale": "R2 按要求重跑 5 对 support 的 run_full_analysis 并与 R1 逐项对齐 (无漂移); 新增的二阶/高阶统计 (skew, kurtosis, lag2/4/8/16 自相关, 强度分箱剖面, 逐对 variance_ratio/mean_shift/chroma_ratio) 全部被 R1 管线精确复现; 模型误差残差与纯 seed 差在 11 维签名上不可区分 → 无可检测的漏检或错误步骤。曾经存疑的 3 个信号 (full_analysis 的 YCrCb 归因、§B 的 IMPULSE 假阳性、pair4 的 variance_ratio=1.119) 均被证明可由 R1 管线完全解释。5 个候选的信号验证与二阶统计一致支持 sev3→j2。无任何被忽略/误归因/边界信号支持修改管线 → 记录 NO_CHANGE, 不强制 R2 训练。",
+    "training_note": "R1 训练 best step=15092 (末步), support PSNR 30.12 (R0 27.38, +2.74 dB) → best=last, 收敛稳定, 无 exp40 式 best≠last 发散; 预测管线未改变, 因此不生成 training_strategy_R2.json, R1 checkpoint 继续有效。训练诊断信息由编排器提供, 未读取任何训练日志 (隔离规则)。"
+  },
+  "training_params": {
+    "pipeline": [
+      {"function": "noise_speckle", "severity": 3},
+      {"function": "compression_jpeg", "severity": 2}
+    ],
+    "note": "与 R1 相同 (NO_CHANGE); 无 R2 重训"
+  }
+}

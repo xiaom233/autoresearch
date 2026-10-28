@@ -1,0 +1,41 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_pcp": false,
+    "use_channel_curve": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted_params.json: blur_gaussian:1 LIKELY + brightness_darken_gamma_HSV:5 LIKELY, overall LIKELY Tier 1. Pixel-identical reconstruction (0 differing pixels, max_abs_diff=0 on 5/5 same-image support pairs, PSNR=inf, CI 10/10) -> degradation type/severity/order are known with unusually high confidence, so no component is needed to hedge identification error.",
+    "reflection.json v_transfer_fit: implied gamma 3.50-3.73 across V bins 0.50-0.95 == library sev5 gamma=3.5; zero% 16.36 vs target 16.43; HSV S mean 120.8 vs 121.4 -> brightness_darken_gamma_HSV:5 confirmed exactly (severe global gamma darken).",
+    "reflection.json coupling_analysis: blur-first order gives inf dB vs gamma-first 41.87 dB (CI 9/10); adding blur_gaussian:1 to gamma_HSV:5 raises 32.89 -> inf dB -> blur sev1 is real but weak and was masked in gm_ratio/spectral signals by the darkening.",
+    "full_analysis.json (cross_pair_signal_summary + reflection initial_analysis): FFT anisotropy 0.00, PCA 0.0 -> anisotropy_ratio > 1.7 (Tier A OCAB gate, 0% FP) NOT triggered -> no OCAB.",
+    "full_analysis.json: block_boundary 0.9902-1.0166 (< 1.1) on 5/5 pairs and wavelet sigma 0.37-1.11 (< 2) on 5/5 -> Tier S JPEG gate not triggered, no noise step; residual after final pipeline is exactly 0.",
+    "full_analysis.json: variance_ratio 0.57-1.37 != 1.0 but false_positive_checks contrast_from_variance=false (4/5 pairs) and contrast_spread_ratio 0.74-1.08; zero residual without any contrast step proves the variance change is clipping-induced by the V-gamma -> the Tier A contrast gate does not fire -> ColorPre and FiLM-GCM both not enabled.",
+    "full_analysis.json: saturation_chroma_ratio 0.33-0.57 flagged raw, but target HSV S mean 121.4 > clean 100.7 (S increased) and residual=0 without a saturation step -> saturation false positive, explained by gamma_HSV; Section 七 Tier C -> no components.",
+    "Section 九 / exp40 crash diagnosis: FiLM-GCM + brightness_HSV + blur is the exact GCM-induced-NaN combination (gaussian_blur smooths extreme HSV values -> GCM learns extreme scale/shift). This challenge is gamma_HSV:5 + gaussian blur -> GCM excluded on stability grounds in addition to the failed contrast gate.",
+    "Section 五 组件验证: SimpleGate (exp39) -32K params, safe on 8/9 degradations (B +0.06, gamma-x3 SF5 -0.14 ~= neutral) -> default-on; CSN catastrophic on pure-global (-4.6~-11.7 dB); DualBranch blind-ID 0/24 (exp37); SCA 8/9 harmful (removed); GDFN +0.22 marginal; FPro torch.fft x compile incompatible; PCP parameter-unfair (+91K per-block, shared unverified); ChannelCurve stretch-specific, ineffective for gamma."
+  ],
+  "finetune_strategy_ref": [
+    "Section 六 Step 0 (degradation difficulty): low-mid difficulty (gamma darken + gaussian blur sev1) -> pure Swin + SimpleGate default-on.",
+    "Section 六 Step 1 (training strategy): pipeline contains a global brightness step (gamma darken) -> Direct (conservative); True Ft (AR_LOAD_CKPT) not recommended (1.5h/2-epoch budget ~ Direct, exp37); task mandates Direct from scratch.",
+    "Section 六 Step 2 (per-step component gating): both steps LIKELY, but no step matches a component-trigger signal — no contrast step, no motion (Tier A OCAB gate), no brightness_HSV NaN risk once GCM is off -> only SimpleGate fires.",
+    "Section 七 信号可靠性分层: Tier A/0%-FP gates (anisotropy_ratio > 1.7, valid variance_ratio contrast) not satisfied; Tier B/C -> Swin baseline; SimpleGate 可常开.",
+    "Section 七 全组件启用条件 / 信号->组件映射流程: only the default branch fires — Swin + SimpleGate + Direct.",
+    "Section 五 注意力类型选择 + 参数公平性: brightness+blur -> Swin baseline; gamma components ~0 dB (组件无效); OCAB only for motion sev>=5/anisotropy."
+  ],
+  "reasoning": "The predicted pipeline blur_gaussian:1 -> brightness_darken_gamma_HSV:5 is pixel-perfect (0 differing pixels on 5/5 support pairs, PSNR=inf, CI 10/10, Tier 1 LIKELY), so identification confidence is very high and no conservative architecture is needed to absorb mis-identification. Strategy: Direct from scratch per Section 六 Step 1 and the Section 二 gamma row (global brightness -> Direct; True Ft gives ~0 dB at this budget, exp37). Attention: swin at window 8 — the motion trigger for OCAB (anisotropy_ratio > 1.7, 0% FP) is absent (FFT anisotropy 0.00, PCA 0.0), and Section 五 maps brightness+blur to the Swin baseline; ws=16 is reserved for motion sev>=5. Components: variance_ratio != 1.0 is clipping-induced by the V-gamma (contrast_from_variance=false, spread_ratio 0.74-1.08, zero residual without a contrast step), so the Tier A contrast gate does not fire and neither ColorPre nor FiLM-GCM is enabled; FiLM-GCM is additionally excluded because gamma_HSV + gaussian blur is precisely the Section 九/exp40 GCM-induced-NaN combination. CSN is banned on pure-global degradation; DualBranch is not recommended in blind-ID (exp37 0/24); SCA/GDFN/FPro/PCP/ChannelCurve are deprecated, marginal, unstable, parameter-unfair, or stretch-specific. ColorMLP is a Tier B brightness_HSV aid whose NaN-mitigation purpose exists only with GCM; with GCM off and gamma being low difficulty (Section 五: gamma components ~0 dB), it stays off. SimpleGate remains on per the Section 七 default-on rule (8/9 safe, -32K). Final: Direct + pure Swin(ws=8) + SimpleGate, lr=5e-4, 2 epochs, batch 16, predicted pipeline unchanged. Caveat: exp39 saw one epoch-2 last-checkpoint collapse with SimpleGate (D3); if the last checkpoint degrades, use the best-checkpoint epoch."
+}

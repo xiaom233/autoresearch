@@ -1,0 +1,1201 @@
+{
+ "analysis_mode": "pair0=canonical; 5-pair paired-support evidence",
+ "run_full_analysis_pairs": {
+  "pair0": {
+   "step1_compression": {
+    "verdict": "COMPRESSION_DETECTED",
+    "confidence": "high",
+    "signals": {
+     "block_boundary": 1.2419,
+     "unique_G_target": 256,
+     "unique_G_clean": 256,
+     "unique_G_ratio": 1.0,
+     "unique_per_channel": [
+      256,
+      256,
+      256
+     ],
+     "dct_zero_ratio": 0.4397
+    },
+    "subtype": "JPEG",
+    "_for_step4": {
+     "block_uniformity": 1.2419,
+     "jpeg_detected": true
+    }
+   },
+   "step2_noise": {
+    "verdict": "GAUSSIAN_YCrCb",
+    "confidence": "low",
+    "signals": {
+     "noise_prior_sigma": 5.07,
+     "impulse_zero_ratio": 0.0787,
+     "spatial_corr": 0.2862,
+     "cross_channel_corr": 0.8425,
+     "residual_intensity_corr": 0.4364,
+     "gamma_suspect_from_noise": true
+    },
+    "estimated_severity": 3,
+    "_for_step4": {
+     "sigma": 5.07,
+     "can_fake_contrast": false,
+     "can_fake_saturation": true,
+     "can_fake_brightness": false
+    }
+   },
+   "step3_blur": {
+    "verdict": "BLUR_UNLIKELY",
+    "confidence": "low",
+    "signals": {
+     "gm_ratio": 1.0628,
+     "gm_ratio_usable": true,
+     "spectral_slope_target": -0.9618,
+     "spectral_slope_clean": -0.9784,
+     "spectral_slope_ratio": 0.983
+    },
+    "should_still_test": true,
+    "note": "gm_ratio=1.063 (noise-destroyed), spectral_slope_ratio=0.983 (threshold=1.08)",
+    "suggested_action": "Test 2-3 blur candidates via PSNR \u2014 noise/blur coupling can mask blur in both gm and spectral signals"
+   },
+   "step4_global": {
+    "verdict": "NO_GLOBAL",
+    "signals": {
+     "brightness_mean_shift": -4.5,
+     "brightness_detected_raw": true,
+     "clipped_fraction": 0.035,
+     "heavy_clipping": false,
+     "variance_ratio": 0.8523,
+     "contrast_from_variance": false,
+     "contrast_spread_ratio": 0.9251,
+     "contrast_detected_raw": false,
+     "saturation_chroma_ratio": 0.9147,
+     "saturation_detected_raw": false,
+     "oversharpen_detected_raw": false
+    },
+    "false_positive_checks": {
+     "brightness_from_jpeg": true
+    },
+    "confidence": "low"
+   },
+   "failure_risks": [
+    "NOISE_TYPE_UNCERTAIN",
+    "FP_blur_risk",
+    "FP_YCrCb_GAMMA_SUSPECT",
+    "NOISE_EVIDENCE_STRONG"
+   ],
+   "recommended_reflection": [
+    "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+    "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+    "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative.",
+    "noise_prior sigma=5.1>5 strongly indicates noise. Even if type uncertain, Agent MUST test at least: noise_gaussian_RGB and noise_impulse candidates."
+   ],
+   "recommended_architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "extra_flags": [
+     "AR_USE_DUAL_BRANCH=1"
+    ],
+    "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+   },
+   "summary": {
+    "detected_degradations": [
+     "compression: COMPRESSION_DETECTED",
+     "noise: GAUSSIAN_YCrCb (sev~3)",
+     "blur: BLUR_UNLIKELY"
+    ],
+    "recommended_search_order": [
+     "compression candidates: JPEG, JPEG2000",
+     "noise candidates: GAUSSIAN_YCrCb+related types",
+     "blur: BLUR_UNLIKELY (gm_ratio_usable=True)",
+     "global: none detected"
+    ],
+    "total_expected_steps": 3,
+    "confidence": "medium",
+    "failure_risks": [
+     "NOISE_TYPE_UNCERTAIN",
+     "FP_blur_risk",
+     "FP_YCrCb_GAMMA_SUSPECT",
+     "NOISE_EVIDENCE_STRONG"
+    ],
+    "reflection_strategies": [
+     "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+     "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+     "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative.",
+     "noise_prior sigma=5.1>5 strongly indicates noise. Even if type uncertain, Agent MUST test at least: noise_gaussian_RGB and noise_impulse candidates."
+    ],
+    "recommended_architecture": {
+     "attention_type": "swin",
+     "window_size": 8,
+     "extra_flags": [
+      "AR_USE_DUAL_BRANCH=1"
+     ],
+     "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+    }
+   },
+   "signal_reliability": {
+    "compression": {
+     "block_boundary": {
+      "accuracy": "0% FP (exp17: 35/35, exp18: 10/10)",
+      "rule": ">1.1 \u2192 JPEG confirmed. DO NOT override with PSNR."
+     },
+     "unique_G": {
+      "accuracy": "0% FP for compression presence (exp18: 32/32)",
+      "rule": "<200 \u2192 compression EXISTS. But JPEG may not be the cause \u2014 test JPEG2000 if PSNR fails."
+     }
+    },
+    "blur": {
+     "hybrid_dt": {
+      "accuracy": "83.4% (3840-case). gaussian=94% lens=79% motion=82% glass=79%. FP(glass)=140",
+      "rule": "Hybrid mode: glass_detected\u2192depth=4, else\u2192depth=3. Best of both worlds."
+     },
+     "depth3": {
+      "accuracy": "72.9%, gaussian=94% (safe default), FP=898"
+     },
+     "depth4": {
+      "accuracy": "75.1%, glass=79% (aggressive), FP(glass)=723"
+     }
+    },
+    "noise": {
+     "dt_depth4_blur_first": {
+      "accuracy": "87.4% (1920-case, GT-stripped). gaussian=97% speckle=82% poisson=80% impulse=90%",
+      "rule": "Trust when PSNR confirms blur\u2192noise order. Use peeled_noise_check.py \u00a7B features."
+     },
+     "dt_depth4_noise_first": {
+      "accuracy": "54.7% \u2248 random. Blur convolution Gaussianizes noise (CLT).",
+      "rule": "When noise\u2192blur confirmed, mark noise type UNCERTAIN. Classification impossible."
+     }
+    }
+   },
+   "reflection_triggers": [
+    {
+     "trigger": "noise\u2192blur \u987a\u5e8f\u68c0\u6d4b",
+     "condition": "PSNR test order: IF noise\u2192blur wins \u2192 noise type unreliable (54.7% \u2248 random)",
+     "action": "Mark noise type UNCERTAIN. Use PSNR-best noise type but set verdict=UNCERTAIN.",
+     "note": "Blur convolution Gaussianizes noise. Noise type classification only valid in blur\u2192noise order."
+    },
+    {
+     "trigger": "peeled \u00a7B extreme_pct \u5047\u9633\u6027",
+     "condition": "extreme_pct>50% AND noise_prior sigma<5 \u2192 likely JPEG/blur artifact, not real impulse",
+     "action": "Ignore \u00a7B IMPULSE diagnosis. Trust noise_prior type. Test gaussian_RGB and noise_prior type only.",
+     "note": "Known FP: JPEG/blur residuals inflate extreme_pct to 50%+ even without impulse noise."
+    }
+   ],
+   "agent_instructions": {
+    "verification_mode": "SIGNAL",
+    "reason": "sigma=5.1 \u2265 2 \u2192 PSNR\u4e0d\u53ef\u9760, \u5fc5\u987b\u7528\u4fe1\u53f7\u9a8c\u8bc1",
+    "verdict_allowed": "UNCERTAIN or POOR only (sigma>2 \u2192 NO LIKELY/GOOD)",
+    "candidates": [
+     {
+      "step": "compression",
+      "signal": "block_boundary=1.242",
+      "pipeline": "compression_jpeg:2",
+      "verify_with": "verify_signals.py"
+     },
+     {
+      "step": "blur",
+      "signal": "BLUR_UNLIKELY but should_still_test",
+      "pipeline": "blur_gaussian:1",
+      "optional": true,
+      "verify_with": "verify_signals.py"
+     },
+     {
+      "step": "noise",
+      "signal": "sigma=5.1, type=GAUSSIAN_YCrCb",
+      "pipeline": "noise_gaussian_YCrCb:3",
+      "alternatives": [
+       "noise_gaussian_RGB:3"
+      ],
+      "verify_with": "verify_signals.py",
+      "note": "PSNR\u4e0d\u53ef\u7528\u4e8e\u566a\u58f0\u9a8c\u8bc1 \u2014 \u4f7f\u7528\u4fe1\u53f7\u9a8c\u8bc1"
+     }
+    ],
+    "execution_order": [
+     "1. \u6309\u987a\u5e8f\u6d4b\u8bd5\u6bcf\u4e2a\u5019\u9009: apply_multi.py \u2192 verify_signals.py",
+     "2. \u89e3\u8bfb verify_signals.py \u8f93\u51fa:",
+     "   MATCH   \u2192 \u4fdd\u5b58, \u8fdb\u5165\u4e0b\u4e00\u6b65",
+     "   PARTIAL \u2192 \u3010severity \u626b\u63cf \u00b11\u3011: \u540c\u7c7b\u578b, sev\u00b11 \u5404\u6d4b1\u6b21 \u2192 \u9009\u6700\u4f73",
+     "   WEAK    \u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u540c\u7c7b\u578b, sev\u00b12 \u5404\u6d4b1\u6b21 \u2192 \u82e5\u6539\u5584\u2192\u4fdd\u7559; \u5426\u5219\u6362\u5b50\u7c7b\u578b",
+     "   MISMATCH\u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u5148\u626b severity, \u4ecd\u65e0\u6539\u5584\u2192\u6362\u5b50\u7c7b\u578b (\u22642\u79cd\u66ff\u4ee3)",
+     "3. \ud83d\udd34 severity \u626b\u63cf\u662f\u5f3a\u5236\u6b65\u9aa4, \u4e0d\u53ef\u8df3\u8fc7\u3002\u7981\u6b62\u5728 WEAK \u65f6\u76f4\u63a5\u6362\u7c7b\u578b\u800c\u4e0d\u626b severity\u3002",
+     "4. \u6bcf\u7c7b\u9000\u5316\u6700\u591a: 1\u4e2a\u4e3b\u5019\u9009 + 4\u4e2aseverity\u626b\u63cf + 2\u4e2a\u66ff\u4ee3\u7c7b\u578b = 7\u6b21\u6d4b\u8bd5",
+     "5. \u6240\u6709\u6b65\u9aa4\u5b8c\u6210 \u2192 \u5408\u5e76 pipeline \u2192 \u6700\u7ec8 verify_signals.py \u786e\u8ba4",
+     "6. \u4fdd\u5b58 predicted_params.json (verdict \u9075\u5b88\u5141\u8bb8\u503c)"
+    ],
+    "severity_scan_rules": {
+     "when": "verify_signals \u8f93\u51fa PARTIAL / WEAK / MISMATCH",
+     "how": "\u4fdd\u6301\u51fd\u6570\u540d\u4e0d\u53d8, severity \u4ece est-2 \u626b\u5230 est+2 (\u9650\u5236 1-5 \u8303\u56f4\u5185)",
+     "stop": "\u4efb\u4e00 severity \u8fbe\u5230 MATCH \u2192 \u7acb\u5373\u505c\u6b62\u626b\u63cf",
+     "fallback": "\u5168\u90e8 severity \u672a\u8fbe MATCH \u2192 \u9009 score \u6700\u9ad8\u7684, \u7136\u540e\u5c1d\u8bd5\u6362\u5b50\u7c7b\u578b"
+    },
+    "forbidden": [
+     "\u274c sigma>2 \u65f6\u4f7f\u7528 compare_degradation.py PSNR \u5224\u65ad\u5019\u9009\u597d\u574f",
+     "\u274c sigma>2 \u65f6\u8bbe\u7f6e verdict=LIKELY \u6216 GOOD",
+     "\u274c \u8df3\u8fc7 verify_signals.py \u76f4\u63a5\u7528 PSNR \u6392\u540d",
+     "\u274c WEAK/MISMATCH \u65f6\u8df3\u8fc7 severity \u626b\u63cf\u76f4\u63a5\u6362\u7c7b\u578b",
+     "\u274c \u6d4b\u8bd5\u8d85\u8fc7 2 \u4e2a alternatives \u4e0d\u7ec8\u6b62"
+    ]
+   }
+  },
+  "pair1": {
+   "step1_compression": {
+    "verdict": "COMPRESSION_DETECTED",
+    "confidence": "high",
+    "signals": {
+     "block_boundary": 1.7209,
+     "unique_G_target": 256,
+     "unique_G_clean": 253,
+     "unique_G_ratio": 1.0119,
+     "unique_per_channel": [
+      256,
+      256,
+      256
+     ],
+     "dct_zero_ratio": 0.7376
+    },
+    "subtype": "JPEG",
+    "_for_step4": {
+     "block_uniformity": 1.7209,
+     "jpeg_detected": true
+    }
+   },
+   "step2_noise": {
+    "verdict": "GAUSSIAN_YCrCb",
+    "confidence": "low",
+    "signals": {
+     "noise_prior_sigma": 1.85,
+     "impulse_zero_ratio": 0.1033,
+     "spatial_corr": 0.4429,
+     "cross_channel_corr": 0.8666,
+     "residual_intensity_corr": 0.4387,
+     "gamma_suspect_from_noise": true
+    },
+    "estimated_severity": 3,
+    "_for_step4": {
+     "sigma": 1.85,
+     "can_fake_contrast": false,
+     "can_fake_saturation": false,
+     "can_fake_brightness": false
+    }
+   },
+   "step3_blur": {
+    "verdict": "BLUR_UNLIKELY",
+    "confidence": "low",
+    "signals": {
+     "gm_ratio": 2.579,
+     "gm_ratio_usable": true,
+     "spectral_slope_target": -1.1208,
+     "spectral_slope_clean": -1.1498,
+     "spectral_slope_ratio": 0.9748
+    },
+    "should_still_test": true,
+    "note": "gm_ratio=2.579 (noise-destroyed), spectral_slope_ratio=0.975 (threshold=1.08)",
+    "suggested_action": "Test 2-3 blur candidates via PSNR \u2014 noise/blur coupling can mask blur in both gm and spectral signals"
+   },
+   "step4_global": {
+    "verdict": "NO_GLOBAL",
+    "signals": {
+     "brightness_mean_shift": -1.4,
+     "brightness_detected_raw": false,
+     "clipped_fraction": 0.0021,
+     "heavy_clipping": false,
+     "variance_ratio": 1.013,
+     "contrast_from_variance": false,
+     "contrast_spread_ratio": 1.0185,
+     "contrast_detected_raw": false,
+     "saturation_chroma_ratio": 0.9975,
+     "saturation_detected_raw": false,
+     "oversharpen_detected_raw": false
+    },
+    "false_positive_checks": {},
+    "confidence": "low"
+   },
+   "failure_risks": [
+    "NOISE_TYPE_UNCERTAIN",
+    "FP_blur_risk",
+    "FP_YCrCb_GAMMA_SUSPECT"
+   ],
+   "recommended_reflection": [
+    "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+    "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+    "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative."
+   ],
+   "recommended_architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "extra_flags": [
+     "AR_USE_DUAL_BRANCH=1"
+    ],
+    "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+   },
+   "summary": {
+    "detected_degradations": [
+     "compression: COMPRESSION_DETECTED",
+     "noise: GAUSSIAN_YCrCb (sev~3)",
+     "blur: BLUR_UNLIKELY"
+    ],
+    "recommended_search_order": [
+     "compression candidates: JPEG, JPEG2000",
+     "noise candidates: GAUSSIAN_YCrCb+related types",
+     "blur: BLUR_UNLIKELY (gm_ratio_usable=True)",
+     "global: none detected"
+    ],
+    "total_expected_steps": 3,
+    "confidence": "medium",
+    "failure_risks": [
+     "NOISE_TYPE_UNCERTAIN",
+     "FP_blur_risk",
+     "FP_YCrCb_GAMMA_SUSPECT"
+    ],
+    "reflection_strategies": [
+     "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+     "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+     "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative."
+    ],
+    "recommended_architecture": {
+     "attention_type": "swin",
+     "window_size": 8,
+     "extra_flags": [
+      "AR_USE_DUAL_BRANCH=1"
+     ],
+     "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+    }
+   },
+   "signal_reliability": {
+    "compression": {
+     "block_boundary": {
+      "accuracy": "0% FP (exp17: 35/35, exp18: 10/10)",
+      "rule": ">1.1 \u2192 JPEG confirmed. DO NOT override with PSNR."
+     },
+     "unique_G": {
+      "accuracy": "0% FP for compression presence (exp18: 32/32)",
+      "rule": "<200 \u2192 compression EXISTS. But JPEG may not be the cause \u2014 test JPEG2000 if PSNR fails."
+     }
+    },
+    "blur": {
+     "hybrid_dt": {
+      "accuracy": "83.4% (3840-case). gaussian=94% lens=79% motion=82% glass=79%. FP(glass)=140",
+      "rule": "Hybrid mode: glass_detected\u2192depth=4, else\u2192depth=3. Best of both worlds."
+     },
+     "depth3": {
+      "accuracy": "72.9%, gaussian=94% (safe default), FP=898"
+     },
+     "depth4": {
+      "accuracy": "75.1%, glass=79% (aggressive), FP(glass)=723"
+     }
+    },
+    "noise": {
+     "dt_depth4_blur_first": {
+      "accuracy": "87.4% (1920-case, GT-stripped). gaussian=97% speckle=82% poisson=80% impulse=90%",
+      "rule": "Trust when PSNR confirms blur\u2192noise order. Use peeled_noise_check.py \u00a7B features."
+     },
+     "dt_depth4_noise_first": {
+      "accuracy": "54.7% \u2248 random. Blur convolution Gaussianizes noise (CLT).",
+      "rule": "When noise\u2192blur confirmed, mark noise type UNCERTAIN. Classification impossible."
+     }
+    }
+   },
+   "reflection_triggers": [
+    {
+     "trigger": "peeled \u00a7B extreme_pct \u5047\u9633\u6027",
+     "condition": "extreme_pct>50% AND noise_prior sigma<5 \u2192 likely JPEG/blur artifact, not real impulse",
+     "action": "Ignore \u00a7B IMPULSE diagnosis. Trust noise_prior type. Test gaussian_RGB and noise_prior type only.",
+     "note": "Known FP: JPEG/blur residuals inflate extreme_pct to 50%+ even without impulse noise."
+    }
+   ],
+   "agent_instructions": {
+    "verification_mode": "PSNR",
+    "reason": "sigma=1.9 < 2 \u2192 PSNR\u53ef\u7528",
+    "verdict_allowed": "GOOD/LIKELY/UNCERTAIN/POOR",
+    "candidates": [
+     {
+      "step": "compression",
+      "signal": "block_boundary=1.721",
+      "pipeline": "compression_jpeg:3",
+      "verify_with": "compare_degradation.py"
+     },
+     {
+      "step": "blur",
+      "signal": "BLUR_UNLIKELY but should_still_test",
+      "pipeline": "blur_gaussian:1",
+      "optional": true,
+      "verify_with": "compare_degradation.py"
+     },
+     {
+      "step": "noise",
+      "signal": "sigma=1.9, type=GAUSSIAN_YCrCb",
+      "pipeline": "noise_gaussian_YCrCb:3",
+      "alternatives": [
+       "noise_gaussian_RGB:3"
+      ],
+      "verify_with": "compare_degradation.py",
+      "note": ""
+     }
+    ],
+    "execution_order": [
+     "1. \u6309\u987a\u5e8f\u6d4b\u8bd5\u6bcf\u4e2a\u5019\u9009: apply_multi.py \u2192 verify_signals.py",
+     "2. \u89e3\u8bfb verify_signals.py \u8f93\u51fa:",
+     "   MATCH   \u2192 \u4fdd\u5b58, \u8fdb\u5165\u4e0b\u4e00\u6b65",
+     "   PARTIAL \u2192 \u3010severity \u626b\u63cf \u00b11\u3011: \u540c\u7c7b\u578b, sev\u00b11 \u5404\u6d4b1\u6b21 \u2192 \u9009\u6700\u4f73",
+     "   WEAK    \u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u540c\u7c7b\u578b, sev\u00b12 \u5404\u6d4b1\u6b21 \u2192 \u82e5\u6539\u5584\u2192\u4fdd\u7559; \u5426\u5219\u6362\u5b50\u7c7b\u578b",
+     "   MISMATCH\u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u5148\u626b severity, \u4ecd\u65e0\u6539\u5584\u2192\u6362\u5b50\u7c7b\u578b (\u22642\u79cd\u66ff\u4ee3)",
+     "3. \ud83d\udd34 severity \u626b\u63cf\u662f\u5f3a\u5236\u6b65\u9aa4, \u4e0d\u53ef\u8df3\u8fc7\u3002\u7981\u6b62\u5728 WEAK \u65f6\u76f4\u63a5\u6362\u7c7b\u578b\u800c\u4e0d\u626b severity\u3002",
+     "4. \u6bcf\u7c7b\u9000\u5316\u6700\u591a: 1\u4e2a\u4e3b\u5019\u9009 + 4\u4e2aseverity\u626b\u63cf + 2\u4e2a\u66ff\u4ee3\u7c7b\u578b = 7\u6b21\u6d4b\u8bd5",
+     "5. \u6240\u6709\u6b65\u9aa4\u5b8c\u6210 \u2192 \u5408\u5e76 pipeline \u2192 \u6700\u7ec8 verify_signals.py \u786e\u8ba4",
+     "6. \u4fdd\u5b58 predicted_params.json (verdict \u9075\u5b88\u5141\u8bb8\u503c)"
+    ],
+    "severity_scan_rules": {
+     "when": "verify_signals \u8f93\u51fa PARTIAL / WEAK / MISMATCH",
+     "how": "\u4fdd\u6301\u51fd\u6570\u540d\u4e0d\u53d8, severity \u4ece est-2 \u626b\u5230 est+2 (\u9650\u5236 1-5 \u8303\u56f4\u5185)",
+     "stop": "\u4efb\u4e00 severity \u8fbe\u5230 MATCH \u2192 \u7acb\u5373\u505c\u6b62\u626b\u63cf",
+     "fallback": "\u5168\u90e8 severity \u672a\u8fbe MATCH \u2192 \u9009 score \u6700\u9ad8\u7684, \u7136\u540e\u5c1d\u8bd5\u6362\u5b50\u7c7b\u578b"
+    },
+    "forbidden": [
+     "\u274c PSNR<30 \u65f6\u58f0\u79f0 LIKELY",
+     "\u274c \u6d4b\u8bd5\u8d85\u8fc7 3 \u4e2a severity \u5019\u9009"
+    ]
+   }
+  },
+  "pair2": {
+   "step1_compression": {
+    "verdict": "COMPRESSION_DETECTED",
+    "confidence": "high",
+    "signals": {
+     "block_boundary": 1.3251,
+     "unique_G_target": 256,
+     "unique_G_clean": 256,
+     "unique_G_ratio": 1.0,
+     "unique_per_channel": [
+      256,
+      256,
+      256
+     ],
+     "dct_zero_ratio": 0.4836
+    },
+    "subtype": "JPEG",
+    "_for_step4": {
+     "block_uniformity": 1.3251,
+     "jpeg_detected": true
+    }
+   },
+   "step2_noise": {
+    "verdict": "GAUSSIAN_YCrCb",
+    "confidence": "low",
+    "signals": {
+     "noise_prior_sigma": 3.95,
+     "impulse_zero_ratio": 0.0708,
+     "spatial_corr": 0.2998,
+     "cross_channel_corr": 0.8213,
+     "residual_intensity_corr": 0.2723,
+     "gamma_suspect_from_noise": true
+    },
+    "estimated_severity": 3,
+    "_for_step4": {
+     "sigma": 3.95,
+     "can_fake_contrast": false,
+     "can_fake_saturation": false,
+     "can_fake_brightness": false
+    }
+   },
+   "step3_blur": {
+    "verdict": "BLUR_UNLIKELY",
+    "confidence": "low",
+    "signals": {
+     "gm_ratio": 1.4274,
+     "gm_ratio_usable": true,
+     "spectral_slope_target": -1.0915,
+     "spectral_slope_clean": -1.1187,
+     "spectral_slope_ratio": 0.9757
+    },
+    "should_still_test": true,
+    "note": "gm_ratio=1.427 (noise-destroyed), spectral_slope_ratio=0.976 (threshold=1.08)",
+    "suggested_action": "Test 2-3 blur candidates via PSNR \u2014 noise/blur coupling can mask blur in both gm and spectral signals"
+   },
+   "step4_global": {
+    "verdict": "NO_GLOBAL",
+    "signals": {
+     "brightness_mean_shift": -2.8,
+     "brightness_detected_raw": false,
+     "clipped_fraction": 0.0357,
+     "heavy_clipping": false,
+     "variance_ratio": 0.9305,
+     "contrast_from_variance": false,
+     "contrast_spread_ratio": 0.9922,
+     "contrast_detected_raw": false,
+     "saturation_chroma_ratio": 0.9107,
+     "saturation_detected_raw": false,
+     "oversharpen_detected_raw": false
+    },
+    "false_positive_checks": {},
+    "confidence": "low"
+   },
+   "failure_risks": [
+    "NOISE_TYPE_UNCERTAIN",
+    "FP_blur_risk",
+    "FP_YCrCb_GAMMA_SUSPECT"
+   ],
+   "recommended_reflection": [
+    "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+    "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+    "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative."
+   ],
+   "recommended_architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "extra_flags": [
+     "AR_USE_DUAL_BRANCH=1"
+    ],
+    "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+   },
+   "summary": {
+    "detected_degradations": [
+     "compression: COMPRESSION_DETECTED",
+     "noise: GAUSSIAN_YCrCb (sev~3)",
+     "blur: BLUR_UNLIKELY"
+    ],
+    "recommended_search_order": [
+     "compression candidates: JPEG, JPEG2000",
+     "noise candidates: GAUSSIAN_YCrCb+related types",
+     "blur: BLUR_UNLIKELY (gm_ratio_usable=True)",
+     "global: none detected"
+    ],
+    "total_expected_steps": 3,
+    "confidence": "medium",
+    "failure_risks": [
+     "NOISE_TYPE_UNCERTAIN",
+     "FP_blur_risk",
+     "FP_YCrCb_GAMMA_SUSPECT"
+    ],
+    "reflection_strategies": [
+     "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+     "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+     "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative."
+    ],
+    "recommended_architecture": {
+     "attention_type": "swin",
+     "window_size": 8,
+     "extra_flags": [
+      "AR_USE_DUAL_BRANCH=1"
+     ],
+     "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+    }
+   },
+   "signal_reliability": {
+    "compression": {
+     "block_boundary": {
+      "accuracy": "0% FP (exp17: 35/35, exp18: 10/10)",
+      "rule": ">1.1 \u2192 JPEG confirmed. DO NOT override with PSNR."
+     },
+     "unique_G": {
+      "accuracy": "0% FP for compression presence (exp18: 32/32)",
+      "rule": "<200 \u2192 compression EXISTS. But JPEG may not be the cause \u2014 test JPEG2000 if PSNR fails."
+     }
+    },
+    "blur": {
+     "hybrid_dt": {
+      "accuracy": "83.4% (3840-case). gaussian=94% lens=79% motion=82% glass=79%. FP(glass)=140",
+      "rule": "Hybrid mode: glass_detected\u2192depth=4, else\u2192depth=3. Best of both worlds."
+     },
+     "depth3": {
+      "accuracy": "72.9%, gaussian=94% (safe default), FP=898"
+     },
+     "depth4": {
+      "accuracy": "75.1%, glass=79% (aggressive), FP(glass)=723"
+     }
+    },
+    "noise": {
+     "dt_depth4_blur_first": {
+      "accuracy": "87.4% (1920-case, GT-stripped). gaussian=97% speckle=82% poisson=80% impulse=90%",
+      "rule": "Trust when PSNR confirms blur\u2192noise order. Use peeled_noise_check.py \u00a7B features."
+     },
+     "dt_depth4_noise_first": {
+      "accuracy": "54.7% \u2248 random. Blur convolution Gaussianizes noise (CLT).",
+      "rule": "When noise\u2192blur confirmed, mark noise type UNCERTAIN. Classification impossible."
+     }
+    }
+   },
+   "reflection_triggers": [
+    {
+     "trigger": "peeled \u00a7B extreme_pct \u5047\u9633\u6027",
+     "condition": "extreme_pct>50% AND noise_prior sigma<5 \u2192 likely JPEG/blur artifact, not real impulse",
+     "action": "Ignore \u00a7B IMPULSE diagnosis. Trust noise_prior type. Test gaussian_RGB and noise_prior type only.",
+     "note": "Known FP: JPEG/blur residuals inflate extreme_pct to 50%+ even without impulse noise."
+    }
+   ],
+   "agent_instructions": {
+    "verification_mode": "SIGNAL",
+    "reason": "sigma=4.0 \u2265 2 \u2192 PSNR\u4e0d\u53ef\u9760, \u5fc5\u987b\u7528\u4fe1\u53f7\u9a8c\u8bc1",
+    "verdict_allowed": "UNCERTAIN or POOR only (sigma>2 \u2192 NO LIKELY/GOOD)",
+    "candidates": [
+     {
+      "step": "compression",
+      "signal": "block_boundary=1.325",
+      "pipeline": "compression_jpeg:2",
+      "verify_with": "verify_signals.py"
+     },
+     {
+      "step": "blur",
+      "signal": "BLUR_UNLIKELY but should_still_test",
+      "pipeline": "blur_gaussian:1",
+      "optional": true,
+      "verify_with": "verify_signals.py"
+     },
+     {
+      "step": "noise",
+      "signal": "sigma=4.0, type=GAUSSIAN_YCrCb",
+      "pipeline": "noise_gaussian_YCrCb:3",
+      "alternatives": [
+       "noise_gaussian_RGB:3"
+      ],
+      "verify_with": "verify_signals.py",
+      "note": "PSNR\u4e0d\u53ef\u7528\u4e8e\u566a\u58f0\u9a8c\u8bc1 \u2014 \u4f7f\u7528\u4fe1\u53f7\u9a8c\u8bc1"
+     }
+    ],
+    "execution_order": [
+     "1. \u6309\u987a\u5e8f\u6d4b\u8bd5\u6bcf\u4e2a\u5019\u9009: apply_multi.py \u2192 verify_signals.py",
+     "2. \u89e3\u8bfb verify_signals.py \u8f93\u51fa:",
+     "   MATCH   \u2192 \u4fdd\u5b58, \u8fdb\u5165\u4e0b\u4e00\u6b65",
+     "   PARTIAL \u2192 \u3010severity \u626b\u63cf \u00b11\u3011: \u540c\u7c7b\u578b, sev\u00b11 \u5404\u6d4b1\u6b21 \u2192 \u9009\u6700\u4f73",
+     "   WEAK    \u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u540c\u7c7b\u578b, sev\u00b12 \u5404\u6d4b1\u6b21 \u2192 \u82e5\u6539\u5584\u2192\u4fdd\u7559; \u5426\u5219\u6362\u5b50\u7c7b\u578b",
+     "   MISMATCH\u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u5148\u626b severity, \u4ecd\u65e0\u6539\u5584\u2192\u6362\u5b50\u7c7b\u578b (\u22642\u79cd\u66ff\u4ee3)",
+     "3. \ud83d\udd34 severity \u626b\u63cf\u662f\u5f3a\u5236\u6b65\u9aa4, \u4e0d\u53ef\u8df3\u8fc7\u3002\u7981\u6b62\u5728 WEAK \u65f6\u76f4\u63a5\u6362\u7c7b\u578b\u800c\u4e0d\u626b severity\u3002",
+     "4. \u6bcf\u7c7b\u9000\u5316\u6700\u591a: 1\u4e2a\u4e3b\u5019\u9009 + 4\u4e2aseverity\u626b\u63cf + 2\u4e2a\u66ff\u4ee3\u7c7b\u578b = 7\u6b21\u6d4b\u8bd5",
+     "5. \u6240\u6709\u6b65\u9aa4\u5b8c\u6210 \u2192 \u5408\u5e76 pipeline \u2192 \u6700\u7ec8 verify_signals.py \u786e\u8ba4",
+     "6. \u4fdd\u5b58 predicted_params.json (verdict \u9075\u5b88\u5141\u8bb8\u503c)"
+    ],
+    "severity_scan_rules": {
+     "when": "verify_signals \u8f93\u51fa PARTIAL / WEAK / MISMATCH",
+     "how": "\u4fdd\u6301\u51fd\u6570\u540d\u4e0d\u53d8, severity \u4ece est-2 \u626b\u5230 est+2 (\u9650\u5236 1-5 \u8303\u56f4\u5185)",
+     "stop": "\u4efb\u4e00 severity \u8fbe\u5230 MATCH \u2192 \u7acb\u5373\u505c\u6b62\u626b\u63cf",
+     "fallback": "\u5168\u90e8 severity \u672a\u8fbe MATCH \u2192 \u9009 score \u6700\u9ad8\u7684, \u7136\u540e\u5c1d\u8bd5\u6362\u5b50\u7c7b\u578b"
+    },
+    "forbidden": [
+     "\u274c sigma>2 \u65f6\u4f7f\u7528 compare_degradation.py PSNR \u5224\u65ad\u5019\u9009\u597d\u574f",
+     "\u274c sigma>2 \u65f6\u8bbe\u7f6e verdict=LIKELY \u6216 GOOD",
+     "\u274c \u8df3\u8fc7 verify_signals.py \u76f4\u63a5\u7528 PSNR \u6392\u540d",
+     "\u274c WEAK/MISMATCH \u65f6\u8df3\u8fc7 severity \u626b\u63cf\u76f4\u63a5\u6362\u7c7b\u578b",
+     "\u274c \u6d4b\u8bd5\u8d85\u8fc7 2 \u4e2a alternatives \u4e0d\u7ec8\u6b62"
+    ]
+   }
+  },
+  "pair3": {
+   "step1_compression": {
+    "verdict": "COMPRESSION_DETECTED",
+    "confidence": "high",
+    "signals": {
+     "block_boundary": 1.9049,
+     "unique_G_target": 256,
+     "unique_G_clean": 256,
+     "unique_G_ratio": 1.0,
+     "unique_per_channel": [
+      256,
+      256,
+      256
+     ],
+     "dct_zero_ratio": 0.8291
+    },
+    "subtype": "JPEG",
+    "_for_step4": {
+     "block_uniformity": 1.9049,
+     "jpeg_detected": true
+    }
+   },
+   "step2_noise": {
+    "verdict": "GAUSSIAN_YCrCb",
+    "confidence": "low",
+    "signals": {
+     "noise_prior_sigma": 1.11,
+     "impulse_zero_ratio": 0.1628,
+     "spatial_corr": 0.5294,
+     "cross_channel_corr": 0.8222,
+     "residual_intensity_corr": 0.5595,
+     "gamma_suspect_from_noise": true
+    },
+    "estimated_severity": 3,
+    "_for_step4": {
+     "sigma": 1.11,
+     "can_fake_contrast": false,
+     "can_fake_saturation": false,
+     "can_fake_brightness": false
+    }
+   },
+   "step3_blur": {
+    "verdict": "BLUR_UNLIKELY",
+    "confidence": "low",
+    "signals": {
+     "gm_ratio": 1.3269,
+     "gm_ratio_usable": true,
+     "spectral_slope_target": -1.14,
+     "spectral_slope_clean": -1.1526,
+     "spectral_slope_ratio": 0.9891
+    },
+    "should_still_test": true,
+    "note": "gm_ratio=1.327 (noise-destroyed), spectral_slope_ratio=0.989 (threshold=1.08)",
+    "suggested_action": "Test 2-3 blur candidates via PSNR \u2014 noise/blur coupling can mask blur in both gm and spectral signals"
+   },
+   "step4_global": {
+    "verdict": "NO_GLOBAL",
+    "signals": {
+     "brightness_mean_shift": -1.0,
+     "brightness_detected_raw": false,
+     "clipped_fraction": 0.0021,
+     "heavy_clipping": false,
+     "variance_ratio": 0.9442,
+     "contrast_from_variance": false,
+     "contrast_spread_ratio": 1.0335,
+     "contrast_detected_raw": false,
+     "saturation_chroma_ratio": 1.0097,
+     "saturation_detected_raw": false,
+     "oversharpen_detected_raw": false
+    },
+    "false_positive_checks": {},
+    "confidence": "low"
+   },
+   "failure_risks": [
+    "NOISE_TYPE_UNCERTAIN",
+    "FP_blur_risk",
+    "FP_YCrCb_GAMMA_SUSPECT"
+   ],
+   "recommended_reflection": [
+    "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+    "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+    "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative."
+   ],
+   "recommended_architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "extra_flags": [
+     "AR_USE_DUAL_BRANCH=1"
+    ],
+    "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+   },
+   "summary": {
+    "detected_degradations": [
+     "compression: COMPRESSION_DETECTED",
+     "noise: GAUSSIAN_YCrCb (sev~3)",
+     "blur: BLUR_UNLIKELY"
+    ],
+    "recommended_search_order": [
+     "compression candidates: JPEG, JPEG2000",
+     "noise candidates: GAUSSIAN_YCrCb+related types",
+     "blur: BLUR_UNLIKELY (gm_ratio_usable=True)",
+     "global: none detected"
+    ],
+    "total_expected_steps": 3,
+    "confidence": "medium",
+    "failure_risks": [
+     "NOISE_TYPE_UNCERTAIN",
+     "FP_blur_risk",
+     "FP_YCrCb_GAMMA_SUSPECT"
+    ],
+    "reflection_strategies": [
+     "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+     "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+     "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative."
+    ],
+    "recommended_architecture": {
+     "attention_type": "swin",
+     "window_size": 8,
+     "extra_flags": [
+      "AR_USE_DUAL_BRANCH=1"
+     ],
+     "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+    }
+   },
+   "signal_reliability": {
+    "compression": {
+     "block_boundary": {
+      "accuracy": "0% FP (exp17: 35/35, exp18: 10/10)",
+      "rule": ">1.1 \u2192 JPEG confirmed. DO NOT override with PSNR."
+     },
+     "unique_G": {
+      "accuracy": "0% FP for compression presence (exp18: 32/32)",
+      "rule": "<200 \u2192 compression EXISTS. But JPEG may not be the cause \u2014 test JPEG2000 if PSNR fails."
+     }
+    },
+    "blur": {
+     "hybrid_dt": {
+      "accuracy": "83.4% (3840-case). gaussian=94% lens=79% motion=82% glass=79%. FP(glass)=140",
+      "rule": "Hybrid mode: glass_detected\u2192depth=4, else\u2192depth=3. Best of both worlds."
+     },
+     "depth3": {
+      "accuracy": "72.9%, gaussian=94% (safe default), FP=898"
+     },
+     "depth4": {
+      "accuracy": "75.1%, glass=79% (aggressive), FP(glass)=723"
+     }
+    },
+    "noise": {
+     "dt_depth4_blur_first": {
+      "accuracy": "87.4% (1920-case, GT-stripped). gaussian=97% speckle=82% poisson=80% impulse=90%",
+      "rule": "Trust when PSNR confirms blur\u2192noise order. Use peeled_noise_check.py \u00a7B features."
+     },
+     "dt_depth4_noise_first": {
+      "accuracy": "54.7% \u2248 random. Blur convolution Gaussianizes noise (CLT).",
+      "rule": "When noise\u2192blur confirmed, mark noise type UNCERTAIN. Classification impossible."
+     }
+    }
+   },
+   "reflection_triggers": [
+    {
+     "trigger": "peeled \u00a7B extreme_pct \u5047\u9633\u6027",
+     "condition": "extreme_pct>50% AND noise_prior sigma<5 \u2192 likely JPEG/blur artifact, not real impulse",
+     "action": "Ignore \u00a7B IMPULSE diagnosis. Trust noise_prior type. Test gaussian_RGB and noise_prior type only.",
+     "note": "Known FP: JPEG/blur residuals inflate extreme_pct to 50%+ even without impulse noise."
+    }
+   ],
+   "agent_instructions": {
+    "verification_mode": "PSNR",
+    "reason": "sigma=1.1 < 2 \u2192 PSNR\u53ef\u7528",
+    "verdict_allowed": "GOOD/LIKELY/UNCERTAIN/POOR",
+    "candidates": [
+     {
+      "step": "compression",
+      "signal": "block_boundary=1.905",
+      "pipeline": "compression_jpeg:3",
+      "verify_with": "compare_degradation.py"
+     },
+     {
+      "step": "blur",
+      "signal": "BLUR_UNLIKELY but should_still_test",
+      "pipeline": "blur_gaussian:1",
+      "optional": true,
+      "verify_with": "compare_degradation.py"
+     },
+     {
+      "step": "noise",
+      "signal": "sigma=1.1, type=GAUSSIAN_YCrCb",
+      "pipeline": "noise_gaussian_YCrCb:3",
+      "alternatives": [
+       "noise_gaussian_RGB:3"
+      ],
+      "verify_with": "compare_degradation.py",
+      "note": ""
+     }
+    ],
+    "execution_order": [
+     "1. \u6309\u987a\u5e8f\u6d4b\u8bd5\u6bcf\u4e2a\u5019\u9009: apply_multi.py \u2192 verify_signals.py",
+     "2. \u89e3\u8bfb verify_signals.py \u8f93\u51fa:",
+     "   MATCH   \u2192 \u4fdd\u5b58, \u8fdb\u5165\u4e0b\u4e00\u6b65",
+     "   PARTIAL \u2192 \u3010severity \u626b\u63cf \u00b11\u3011: \u540c\u7c7b\u578b, sev\u00b11 \u5404\u6d4b1\u6b21 \u2192 \u9009\u6700\u4f73",
+     "   WEAK    \u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u540c\u7c7b\u578b, sev\u00b12 \u5404\u6d4b1\u6b21 \u2192 \u82e5\u6539\u5584\u2192\u4fdd\u7559; \u5426\u5219\u6362\u5b50\u7c7b\u578b",
+     "   MISMATCH\u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u5148\u626b severity, \u4ecd\u65e0\u6539\u5584\u2192\u6362\u5b50\u7c7b\u578b (\u22642\u79cd\u66ff\u4ee3)",
+     "3. \ud83d\udd34 severity \u626b\u63cf\u662f\u5f3a\u5236\u6b65\u9aa4, \u4e0d\u53ef\u8df3\u8fc7\u3002\u7981\u6b62\u5728 WEAK \u65f6\u76f4\u63a5\u6362\u7c7b\u578b\u800c\u4e0d\u626b severity\u3002",
+     "4. \u6bcf\u7c7b\u9000\u5316\u6700\u591a: 1\u4e2a\u4e3b\u5019\u9009 + 4\u4e2aseverity\u626b\u63cf + 2\u4e2a\u66ff\u4ee3\u7c7b\u578b = 7\u6b21\u6d4b\u8bd5",
+     "5. \u6240\u6709\u6b65\u9aa4\u5b8c\u6210 \u2192 \u5408\u5e76 pipeline \u2192 \u6700\u7ec8 verify_signals.py \u786e\u8ba4",
+     "6. \u4fdd\u5b58 predicted_params.json (verdict \u9075\u5b88\u5141\u8bb8\u503c)"
+    ],
+    "severity_scan_rules": {
+     "when": "verify_signals \u8f93\u51fa PARTIAL / WEAK / MISMATCH",
+     "how": "\u4fdd\u6301\u51fd\u6570\u540d\u4e0d\u53d8, severity \u4ece est-2 \u626b\u5230 est+2 (\u9650\u5236 1-5 \u8303\u56f4\u5185)",
+     "stop": "\u4efb\u4e00 severity \u8fbe\u5230 MATCH \u2192 \u7acb\u5373\u505c\u6b62\u626b\u63cf",
+     "fallback": "\u5168\u90e8 severity \u672a\u8fbe MATCH \u2192 \u9009 score \u6700\u9ad8\u7684, \u7136\u540e\u5c1d\u8bd5\u6362\u5b50\u7c7b\u578b"
+    },
+    "forbidden": [
+     "\u274c PSNR<30 \u65f6\u58f0\u79f0 LIKELY",
+     "\u274c \u6d4b\u8bd5\u8d85\u8fc7 3 \u4e2a severity \u5019\u9009"
+    ]
+   }
+  },
+  "pair4": {
+   "step1_compression": {
+    "verdict": "COMPRESSION_DETECTED",
+    "confidence": "high",
+    "signals": {
+     "block_boundary": 1.51,
+     "unique_G_target": 256,
+     "unique_G_clean": 256,
+     "unique_G_ratio": 1.0,
+     "unique_per_channel": [
+      256,
+      256,
+      256
+     ],
+     "dct_zero_ratio": 0.5727
+    },
+    "subtype": "JPEG",
+    "_for_step4": {
+     "block_uniformity": 1.51,
+     "jpeg_detected": true
+    }
+   },
+   "step2_noise": {
+    "verdict": "GAUSSIAN_YCrCb",
+    "confidence": "low",
+    "signals": {
+     "noise_prior_sigma": 2.59,
+     "impulse_zero_ratio": 0.0885,
+     "spatial_corr": 0.4262,
+     "cross_channel_corr": 0.6806,
+     "residual_intensity_corr": 0.3536,
+     "gamma_suspect_from_noise": true
+    },
+    "estimated_severity": 3,
+    "_for_step4": {
+     "sigma": 2.59,
+     "can_fake_contrast": false,
+     "can_fake_saturation": false,
+     "can_fake_brightness": false
+    }
+   },
+   "step3_blur": {
+    "verdict": "BLUR_UNLIKELY",
+    "confidence": "low",
+    "signals": {
+     "gm_ratio": 2.1407,
+     "gm_ratio_usable": true,
+     "spectral_slope_target": -1.13,
+     "spectral_slope_clean": -1.1469,
+     "spectral_slope_ratio": 0.9853
+    },
+    "should_still_test": true,
+    "note": "gm_ratio=2.141 (noise-destroyed), spectral_slope_ratio=0.985 (threshold=1.08)",
+    "suggested_action": "Test 2-3 blur candidates via PSNR \u2014 noise/blur coupling can mask blur in both gm and spectral signals"
+   },
+   "step4_global": {
+    "verdict": "NO_GLOBAL",
+    "signals": {
+     "brightness_mean_shift": -2.9,
+     "brightness_detected_raw": false,
+     "clipped_fraction": 0.0371,
+     "heavy_clipping": false,
+     "variance_ratio": 0.9231,
+     "contrast_from_variance": false,
+     "contrast_spread_ratio": 0.9738,
+     "contrast_detected_raw": false,
+     "saturation_chroma_ratio": 0.8986,
+     "saturation_detected_raw": false,
+     "oversharpen_detected_raw": false
+    },
+    "false_positive_checks": {},
+    "confidence": "low"
+   },
+   "failure_risks": [
+    "NOISE_TYPE_UNCERTAIN",
+    "FP_blur_risk",
+    "FP_YCrCb_GAMMA_SUSPECT"
+   ],
+   "recommended_reflection": [
+    "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+    "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+    "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative."
+   ],
+   "recommended_architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "extra_flags": [
+     "AR_USE_DUAL_BRANCH=1"
+    ],
+    "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+   },
+   "summary": {
+    "detected_degradations": [
+     "compression: COMPRESSION_DETECTED",
+     "noise: GAUSSIAN_YCrCb (sev~3)",
+     "blur: BLUR_UNLIKELY"
+    ],
+    "recommended_search_order": [
+     "compression candidates: JPEG, JPEG2000",
+     "noise candidates: GAUSSIAN_YCrCb+related types",
+     "blur: BLUR_UNLIKELY (gm_ratio_usable=True)",
+     "global: none detected"
+    ],
+    "total_expected_steps": 3,
+    "confidence": "medium",
+    "failure_risks": [
+     "NOISE_TYPE_UNCERTAIN",
+     "FP_blur_risk",
+     "FP_YCrCb_GAMMA_SUSPECT"
+    ],
+    "reflection_strategies": [
+     "Re-run \u00a7B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+     "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+     "YCrCb noise detected but residual correlated with intensity \u2192 may be gamma. Test gamma candidates as alternative."
+    ],
+    "recommended_architecture": {
+     "attention_type": "swin",
+     "window_size": 8,
+     "extra_flags": [
+      "AR_USE_DUAL_BRANCH=1"
+     ],
+     "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+    }
+   },
+   "signal_reliability": {
+    "compression": {
+     "block_boundary": {
+      "accuracy": "0% FP (exp17: 35/35, exp18: 10/10)",
+      "rule": ">1.1 \u2192 JPEG confirmed. DO NOT override with PSNR."
+     },
+     "unique_G": {
+      "accuracy": "0% FP for compression presence (exp18: 32/32)",
+      "rule": "<200 \u2192 compression EXISTS. But JPEG may not be the cause \u2014 test JPEG2000 if PSNR fails."
+     }
+    },
+    "blur": {
+     "hybrid_dt": {
+      "accuracy": "83.4% (3840-case). gaussian=94% lens=79% motion=82% glass=79%. FP(glass)=140",
+      "rule": "Hybrid mode: glass_detected\u2192depth=4, else\u2192depth=3. Best of both worlds."
+     },
+     "depth3": {
+      "accuracy": "72.9%, gaussian=94% (safe default), FP=898"
+     },
+     "depth4": {
+      "accuracy": "75.1%, glass=79% (aggressive), FP(glass)=723"
+     }
+    },
+    "noise": {
+     "dt_depth4_blur_first": {
+      "accuracy": "87.4% (1920-case, GT-stripped). gaussian=97% speckle=82% poisson=80% impulse=90%",
+      "rule": "Trust when PSNR confirms blur\u2192noise order. Use peeled_noise_check.py \u00a7B features."
+     },
+     "dt_depth4_noise_first": {
+      "accuracy": "54.7% \u2248 random. Blur convolution Gaussianizes noise (CLT).",
+      "rule": "When noise\u2192blur confirmed, mark noise type UNCERTAIN. Classification impossible."
+     }
+    }
+   },
+   "reflection_triggers": [
+    {
+     "trigger": "peeled \u00a7B extreme_pct \u5047\u9633\u6027",
+     "condition": "extreme_pct>50% AND noise_prior sigma<5 \u2192 likely JPEG/blur artifact, not real impulse",
+     "action": "Ignore \u00a7B IMPULSE diagnosis. Trust noise_prior type. Test gaussian_RGB and noise_prior type only.",
+     "note": "Known FP: JPEG/blur residuals inflate extreme_pct to 50%+ even without impulse noise."
+    }
+   ],
+   "agent_instructions": {
+    "verification_mode": "SIGNAL",
+    "reason": "sigma=2.6 \u2265 2 \u2192 PSNR\u4e0d\u53ef\u9760, \u5fc5\u987b\u7528\u4fe1\u53f7\u9a8c\u8bc1",
+    "verdict_allowed": "UNCERTAIN or POOR only (sigma>2 \u2192 NO LIKELY/GOOD)",
+    "candidates": [
+     {
+      "step": "compression",
+      "signal": "block_boundary=1.510",
+      "pipeline": "compression_jpeg:3",
+      "verify_with": "verify_signals.py"
+     },
+     {
+      "step": "blur",
+      "signal": "BLUR_UNLIKELY but should_still_test",
+      "pipeline": "blur_gaussian:1",
+      "optional": true,
+      "verify_with": "verify_signals.py"
+     },
+     {
+      "step": "noise",
+      "signal": "sigma=2.6, type=GAUSSIAN_YCrCb",
+      "pipeline": "noise_gaussian_YCrCb:3",
+      "alternatives": [
+       "noise_gaussian_RGB:3"
+      ],
+      "verify_with": "verify_signals.py",
+      "note": "PSNR\u4e0d\u53ef\u7528\u4e8e\u566a\u58f0\u9a8c\u8bc1 \u2014 \u4f7f\u7528\u4fe1\u53f7\u9a8c\u8bc1"
+     }
+    ],
+    "execution_order": [
+     "1. \u6309\u987a\u5e8f\u6d4b\u8bd5\u6bcf\u4e2a\u5019\u9009: apply_multi.py \u2192 verify_signals.py",
+     "2. \u89e3\u8bfb verify_signals.py \u8f93\u51fa:",
+     "   MATCH   \u2192 \u4fdd\u5b58, \u8fdb\u5165\u4e0b\u4e00\u6b65",
+     "   PARTIAL \u2192 \u3010severity \u626b\u63cf \u00b11\u3011: \u540c\u7c7b\u578b, sev\u00b11 \u5404\u6d4b1\u6b21 \u2192 \u9009\u6700\u4f73",
+     "   WEAK    \u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u540c\u7c7b\u578b, sev\u00b12 \u5404\u6d4b1\u6b21 \u2192 \u82e5\u6539\u5584\u2192\u4fdd\u7559; \u5426\u5219\u6362\u5b50\u7c7b\u578b",
+     "   MISMATCH\u2192 \u3010severity \u626b\u63cf \u00b12\u3011: \u5148\u626b severity, \u4ecd\u65e0\u6539\u5584\u2192\u6362\u5b50\u7c7b\u578b (\u22642\u79cd\u66ff\u4ee3)",
+     "3. \ud83d\udd34 severity \u626b\u63cf\u662f\u5f3a\u5236\u6b65\u9aa4, \u4e0d\u53ef\u8df3\u8fc7\u3002\u7981\u6b62\u5728 WEAK \u65f6\u76f4\u63a5\u6362\u7c7b\u578b\u800c\u4e0d\u626b severity\u3002",
+     "4. \u6bcf\u7c7b\u9000\u5316\u6700\u591a: 1\u4e2a\u4e3b\u5019\u9009 + 4\u4e2aseverity\u626b\u63cf + 2\u4e2a\u66ff\u4ee3\u7c7b\u578b = 7\u6b21\u6d4b\u8bd5",
+     "5. \u6240\u6709\u6b65\u9aa4\u5b8c\u6210 \u2192 \u5408\u5e76 pipeline \u2192 \u6700\u7ec8 verify_signals.py \u786e\u8ba4",
+     "6. \u4fdd\u5b58 predicted_params.json (verdict \u9075\u5b88\u5141\u8bb8\u503c)"
+    ],
+    "severity_scan_rules": {
+     "when": "verify_signals \u8f93\u51fa PARTIAL / WEAK / MISMATCH",
+     "how": "\u4fdd\u6301\u51fd\u6570\u540d\u4e0d\u53d8, severity \u4ece est-2 \u626b\u5230 est+2 (\u9650\u5236 1-5 \u8303\u56f4\u5185)",
+     "stop": "\u4efb\u4e00 severity \u8fbe\u5230 MATCH \u2192 \u7acb\u5373\u505c\u6b62\u626b\u63cf",
+     "fallback": "\u5168\u90e8 severity \u672a\u8fbe MATCH \u2192 \u9009 score \u6700\u9ad8\u7684, \u7136\u540e\u5c1d\u8bd5\u6362\u5b50\u7c7b\u578b"
+    },
+    "forbidden": [
+     "\u274c sigma>2 \u65f6\u4f7f\u7528 compare_degradation.py PSNR \u5224\u65ad\u5019\u9009\u597d\u574f",
+     "\u274c sigma>2 \u65f6\u8bbe\u7f6e verdict=LIKELY \u6216 GOOD",
+     "\u274c \u8df3\u8fc7 verify_signals.py \u76f4\u63a5\u7528 PSNR \u6392\u540d",
+     "\u274c WEAK/MISMATCH \u65f6\u8df3\u8fc7 severity \u626b\u63cf\u76f4\u63a5\u6362\u7c7b\u578b",
+     "\u274c \u6d4b\u8bd5\u8d85\u8fc7 2 \u4e2a alternatives \u4e0d\u7ec8\u6b62"
+    ]
+   }
+  }
+ },
+ "cross_pair_summary": {
+  "per_pair_signals": {
+   "pair0": {
+    "block_boundary": 1.2419,
+    "dct_zero_ratio": 0.4397,
+    "gm_ratio": 1.0628,
+    "spectral_slope_ratio": 0.983,
+    "noise_prior_sigma": 5.07,
+    "cross_channel_corr": 0.8425,
+    "variance_ratio": 0.8523,
+    "mean_shift_255": -4.5,
+    "residual_std": 25.64,
+    "residual_std_over_clean_RMS": 0.185,
+    "residual_kurtosis": 4.35,
+    "residual_lag1_corr": 0.298,
+    "corr_absres_intensity": 0.43
+   },
+   "pair1": {
+    "block_boundary": 1.7209,
+    "dct_zero_ratio": 0.7376,
+    "gm_ratio": 2.579,
+    "spectral_slope_ratio": 0.9748,
+    "noise_prior_sigma": 1.85,
+    "cross_channel_corr": 0.8666,
+    "variance_ratio": 1.013,
+    "mean_shift_255": -1.4,
+    "residual_std": 15.87,
+    "residual_std_over_clean_RMS": 0.1299,
+    "residual_kurtosis": 5.31,
+    "residual_lag1_corr": 0.454,
+    "corr_absres_intensity": 0.41
+   },
+   "pair2": {
+    "block_boundary": 1.3251,
+    "dct_zero_ratio": 0.4836,
+    "gm_ratio": 1.4274,
+    "spectral_slope_ratio": 0.9757,
+    "noise_prior_sigma": 3.95,
+    "cross_channel_corr": 0.8213,
+    "variance_ratio": 0.9305,
+    "mean_shift_255": -2.8,
+    "residual_std": 22.82,
+    "residual_std_over_clean_RMS": 0.1639,
+    "residual_kurtosis": 4.12,
+    "residual_lag1_corr": 0.326,
+    "corr_absres_intensity": 0.26
+   },
+   "pair3": {
+    "block_boundary": 1.9049,
+    "dct_zero_ratio": 0.8291,
+    "gm_ratio": 1.3269,
+    "spectral_slope_ratio": 0.9891,
+    "noise_prior_sigma": 1.11,
+    "cross_channel_corr": 0.8222,
+    "variance_ratio": 0.9442,
+    "mean_shift_255": -1.0,
+    "residual_std": 10.53,
+    "residual_std_over_clean_RMS": 0.1409,
+    "residual_kurtosis": 10.39,
+    "residual_lag1_corr": 0.522,
+    "corr_absres_intensity": 0.53
+   },
+   "pair4": {
+    "block_boundary": 1.51,
+    "dct_zero_ratio": 0.5727,
+    "gm_ratio": 2.1407,
+    "spectral_slope_ratio": 0.9853,
+    "noise_prior_sigma": 2.59,
+    "cross_channel_corr": 0.6806,
+    "variance_ratio": 0.9231,
+    "mean_shift_255": -2.9,
+    "residual_std": 20.56,
+    "residual_std_over_clean_RMS": 0.1409,
+    "residual_kurtosis": 4.31,
+    "residual_lag1_corr": 0.423,
+    "corr_absres_intensity": 0.35
+   }
+  },
+  "notes": "All 5 pairs: COMPRESSION_DETECTED (bb>1.2), BLUR_UNLIKELY (slope_ratio~0.98, gm_ratio>1), global NO_GLOBAL. YCrCb noise verdict low-confidence FP (JPEG luma residual). Peel JPEG:2 => residual is multiplicative speckle (std proportional to image RMS; vm_slope>0.005). Candidate noise_speckle:3,compression_jpeg:2 reproduces target residual statistics exactly on pair0/pair3 and verify_signals MATCH on pair0."
+ }
+}

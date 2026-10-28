@@ -1,0 +1,84 @@
+{
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_speckle",
+          "severity": 2
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 2
+        }
+      ],
+      "psnr": null,
+      "stats": {
+        "pair0_sigma_target_vs_sim": [3.0, 2.2],
+        "sigma_err_pct": -27,
+        "verify": "PARTIAL (2/3: noise:clean_residual + compression:block_boundary; noise:sigma 25% low on pair0, 33% low on pair1)",
+        "note": "R1 confirms R0: sev2 is amplitude-deficient on both tested pairs; kept only as -1 bracketing option"
+      },
+      "function_family": "speckle severity -1"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_speckle",
+          "severity": 4
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 2
+        }
+      ],
+      "psnr": null,
+      "stats": {
+        "pair0_sigma_target_vs_sim": [3.0, 3.7],
+        "sigma_err_pct": 23,
+        "verify": "PARTIAL (2/3: noise:clean_residual + compression:block_boundary; noise:sigma 23-25% high)",
+        "note": "symmetric +1 overshoot; brackets sev3 as the unique in-threshold amplitude"
+      },
+      "function_family": "speckle severity +1"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": null,
+    "ci_pass_rate": "N/A (SIGNAL mode; noise seed mismatch makes PSNR non-transferable)",
+    "psnr_gap": null,
+    "per_step": {
+      "noise_speckle:3": "UNCERTAIN (random step can never be LIKELY under seed mismatch; verify_signals MATCH 3/3 on all 5 support pairs)",
+      "compression_jpeg:2": "LIKELY (block_boundary Tier S 0%FP signal; verify_signals MATCH under noise coupling; sev1 under-shoots bb by 9.0-15.1%, sev2 matches)"
+    },
+    "r1_decision": "NO_CHANGE",
+    "evidence": "R1 re-ran run_full_analysis.py on all 5 support pairs (signals reproduce R0 exactly: block_boundary 1.242/1.721/1.325/1.905/1.510 >1.1; spectral_slope_ratio 0.975-0.989 <1.08; unique_G_ratio ~1.0; NO_GLOBAL) and peeled_noise_check.py (strip compression_jpeg:2) on all 5 pairs: vm_slope 0.2411/3.6537/0.4853/1.0827/1.6107 all >0.005 (SPECKLE), var_slope 0.0085/-0.0308/-0.0072/-0.0823/-0.0648 all <1 (NOT poisson), rgb_ratio 1.0131/1.0551/1.0344/1.0395/1.1038 all <1.4 (NOT YCrCb), zero_ratio 0.066-0.177 (NOT impulse; extreme_pct 56.8-62.4% is the documented zero-mean-residual false positive). Noise severity bracketed on pair0: target wavelet sigma 3.0; speckle:2 sim 2.2 (-27%), speckle:3 3.0 (exact), speckle:4 sim 3.7 (+23%). Order reconfirmed with fresh seed: jpeg:2->speckle:3 fails (sigma 11.7 vs 3.0, +296%; dct 0.0297 vs 0.4397). JPEG sev1 (q25, untested in R0) under-shoots: pair0 bb 1.1307 vs 1.2419 (-9.0%), dct 0.3738 vs 0.4397; pair3 bb 1.6179 vs 1.9049 (-15.1%), dct 0.7807 vs 0.8291 -> sev2 correct. R0 pipeline verify_signals MATCH 3/3 on all three previously untested pairs (1, 2, 4), giving 5/5 support-pair MATCH overall. Cross-check: H1 sims reproduce target global stats (variance_ratio 1.013/1.012, 0.931/0.930, 0.923/0.923; mean_shift -1.4/-1.4, -2.8/-2.7, -2.9/-2.9; chroma_ratio 0.997/0.994, 0.911/0.909, 0.899/0.899 on pairs 1/2/4), so the apparent contrast/saturation weakening is fully explained by speckle+JPEG; no hidden global step. R1 changes nothing: pipeline stays noise_speckle:3 -> compression_jpeg:2. Overall UNCERTAIN because the random speckle step cannot reach LIKELY; JPEG step LIKELY by Tier S signal.",
+    "r1_signal_recheck_summary": {
+      "full_analysis_rerun_pairs": 5,
+      "peeled_sb6_pairs": 5,
+      "candidate_hypotheses": 5,
+      "test_candidate_runs": 9,
+      "psnr_tests": 0,
+      "verify_signals_match": "5/5 support pairs for the R0 pipeline",
+      "noise_type": "speckle (consistent across 5/5 pairs)",
+      "noise_severity": "3 (bracketed by sev2 -27% and sev4 +23%)",
+      "order": "noise -> jpeg (reversed order fails)",
+      "jpeg_severity": "2 (sev1 under-shoots bb/dct)",
+      "global_step": "none (sim reproduces variance_ratio/mean_shift/chroma to <=0.003)",
+      "blur_step": "none (spectral_slope_ratio 0.975-0.989 < 1.08)"
+    }
+  },
+  "r1_data_access": "Support pairs (clean_0..4/degraded_0..4) and R0 outputs only. No GT, no test set, no test metrics, no other challenge directories were read."
+}

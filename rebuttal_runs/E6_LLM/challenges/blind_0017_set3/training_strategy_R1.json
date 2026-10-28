@@ -1,0 +1,45 @@
+{
+  "round": "R1",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_pcp": false,
+    "use_channel_curve": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "params_path": "rebuttal_runs/E6_LLM/challenges/blind_0017_set3/predicted_params_R1.json",
+  "r0_comparison": "Strategy and architecture are IDENTICAL to R0 (training_strategy.json); the only change is AR_PARAMS_PATH -> predicted_params_R1.json (blur_gaussian 4 -> 3, compression_jpeg 4 unchanged). Single-variable R1 so the reflection effect is attributable to the corrected blur severity.",
+  "signal_basis": [
+    "blur 步骤 (blur_gaussian:3, verdict=UNCERTAIN, R1 severity 4->3): residual_anisotropy 1.318/1.649/1.686 (pairs 0/2/4) < 1.7，pair1 的 2.604 由文本内容驱动（motion5 22.62 dB vs gaussian4 27.52 dB）→ Section 七 Tier A 门控 'anisotropy_ratio > 1.7 → OCAB' 不触发；blur 子类型判别属 Tier B（blur DT hybrid 83.4%）→ Section 七 规则 Tier B → Swin 基线，不加专项组件",
+    "blur severity 变更依据（R1 核心修正，来源 [signal_reanalysis]）: spectral_slope_ratio 绝对差在 5/5 support pairs 上 g3 全部 < 0.08（0.010-0.047），g4 全部 > 0.08（0.125-0.209）；gm_ratio 误差 g3 3-7% vs g4 12-28% → 该步骤仍 UNCERTAIN（确定性 PSNR 26.79/26.68 < 30），按 Section 七 'UNCERTAIN 步骤不加组件 → Swin 基线'",
+    "compression 步骤 (compression_jpeg:4, verdict=UNCERTAIN, 不变): block_boundary 3.32-10.64 (5/5) 为 Tier S（0% FP）确认压缩存在；dct_zero_ratio 0.892-0.935 与 j4 sim 0.891-0.949 匹配；block_boundary 幅度与 dct_zero 方向矛盾 → 编码器级差异，非库内 severity → severity 保持 4；Section 七 无对应 JPEG 专项架构 flag，SimpleGate 已覆盖安全性",
+    "global 步骤 (NO_GLOBAL，不变): variance_ratio=0.641-0.796 数值上 ≠ 1.0（Tier A 门控的原始触发形态），但该步骤被信号矛盾消解 —— 库内无任何 global 函数能复现 '~0.89 对比度压缩 + 零 mean shift'（R1 新测 contrast_weaken_stretch:1/2 的 std ratio 0.541/0.500 且 mean shift -34/255，过强；scale:1=0.750 过强，R0 实测 PSNR 24.66；gamma 类 mean shift ±20）→ 按 Section 七 决策规则 'Tier C 或信号矛盾 → 纯 Swin + Direct（安全兜底）' → 不启用 ColorPre / FiLM-GCM",
+    "FiLM-GCM 触发条件为 'variance_ratio≠1.0 + 高置信 contrast 步骤'；本挑战 contrast 步骤不可表示（BEYOND_CAPABILITY），且按步骤独立判决（Section 六 Step 2）该步骤无有效预测 → 不触发",
+    "SimpleGate 默认常开：exp39 8/9 退化安全（D3 JPEG+blur +0.02，L2 +0.78），-32K 参数；Section 七 默认流程 'Swin + SimpleGate + Direct'。注意 exp39 D3 上 epoch-2 崩溃风险（ckpt1 23.88 → ckpt2 15.40）→ 保留 best ckpt（Section 九 恢复方案）",
+    "DualBranch 盲识别场景不推荐（exp37 0/24 胜）→ use_dual_branch=false（Section 七 全组件表）",
+    "CSN 触发条件为 Tier B '需判断'（blur/noise 存在 + 无纯全局）；本挑战 blur 步骤 UNCERTAIN，按保守原则不加 → 纯 Swin（Section 七 Tier B → Swin 基线）",
+    "无 noise（noise_prior sigma 0.37-1.61 < 2；已知无噪声的 g3+j4 仿真与目标得到完全相同的 wavelet sigma 1.48；目标逐通道饱和像素低于 clean；真实 impulse 残差检验证明 peeled extreme_pct 退化）/ 无 brightness（mean_shift -3.5..+1.3 < 阈值）/ 无 stretch 高置信 → ColorMLP / ChannelCurve 不触发（Section 七 组件表）",
+    "SCA 已废弃（exp39 8/9 有害）、GDFN/SwiGLU 边际、FPro 与 torch.fft×compile 不兼容、PCP 参数不公平 → 全部关闭（Section 五 废弃组件；Section 八 exp39）",
+    "window_size=8：ws=16 仅用于 motion blur sev>=5（CLAUDE.md 规则 10 / Section 五 motion 行）；本挑战 blur 为 gaussian（anisotropy < 1.7）→ 默认 8",
+    "多步局部退化（blur+jpeg，2 步，无 contrast）：Section 六 Step 1 允许 '纯局部 → Direct 或 RandomCurric'；本次按任务约束固定 Direct 从头训练（EPOCH=2, LR=5e-4, batch=16），不用预训练 ckpt（符合 exp37 True Ft ≈ Direct 结论）"
+  ],
+  "finetune_strategy_ref": "Section 六 Step 1 (纯局部 Direct 合法), Section 六 Step 2 (按步骤独立组件判决 + UNCERTAIN 不加组件), Section 六 Step 3 (盲识别场景纯 Swin 最安全; ColorPre 泛化最差), Section 六 Step 4 (compression+blur 可 RandomCurric，本任务固定 Direct), Section 七 (信号置信度驱动组件选择: Tier S block_boundary>1.1, Tier A anisotropy>1.7→OCAB / variance_ratio≠1.0→ColorPre/FiLM-GCM, Tier B→Swin, 信号矛盾→纯 Swin+Direct; 全组件启用条件表; 默认分支 Swin+SimpleGate+Direct), Section 五 (注意力类型选择表: 非 motion/无 contrast→Swin; 废弃组件), Section 八 (exp37 消融 A/B: DualBranch 盲识别 0/24 胜, True Ft≈Direct; exp39 SimpleGate 8/9 安全), Section 九 (D3 SimpleGate epoch-2 崩溃风险 → 保留 best ckpt)",
+  "reasoning": "R1 管线为 blur_gaussian:3 → compression_jpeg:4，仍是两步纯局部退化（无 noise、无可表示 global，sigma<2）。按 Section 七 信号门控：motion 专属 OCAB 因 anisotropy 1.318-1.686 < 1.7 不触发；contrast 专属 ColorPre/FiLM-GCM 因 global 步骤信号矛盾（无库内函数可复现 tone compression）不触发；block_boundary Tier S 仅确认 JPEG 存在，severity 仍 UNCERTAIN、无 JPEG 专项 flag；DualBranch/CSN 按盲识别保守原则排除。因此架构与 R0 完全一致：纯 Swin 基线 + 默认 SimpleGate（-32K），Direct 从头训练 2 epoch、lr 5e-4、batch 16。唯一变量是修正后的 blur severity（4→3），使 R1 与 R0 的差异可归因于反射修正。训练后按 Section 九 使用 best ckpt（若出现 NaN/末段退化则回退纯 Swin）。",
+  "decision_source": {
+    "params": "predicted_params_R1.json",
+    "reflection": "reflection.json#r1_summary",
+    "signal_evidence": "reflection.json#r1_summary.signal_reinterpretation (spectral_slope 5/5 g3 pass vs g4 fail; gm_ratio 3-7% vs 12-28%); verify_signals WEAK->PARTIAL; PSNR parity (26.79/26.77 pair0, 26.68/26.62 pair2)"
+  }
+}

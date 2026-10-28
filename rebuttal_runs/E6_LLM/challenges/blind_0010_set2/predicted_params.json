@@ -1,0 +1,40 @@
+{
+ "challenge": "blind_0010_set2",
+ "source": "rebuttal_runs/E6_LLM/challenges/blind_0010_set2 (5 paired supports)",
+ "pipeline": [
+  {
+   "step": 1,
+   "function": "blur_gaussian",
+   "severity": 1,
+   "verdict": "LIKELY",
+   "evidence": "Exact reproduction (PSNR=inf, bit-identical) on 5/5 pairs only when blur_gaussian:1 precedes the gamma step; spectral_slope_ratio elevated on 3/5 pairs (1.294/1.127/1.113; 1.045/1.005 on the low-texture pairs); reversed order dropout (gamma->blur 40.42dB) proves ordering"
+  },
+  {
+   "step": 2,
+   "function": "brightness_darken_gamma_HSV",
+   "severity": 5,
+   "verdict": "LIKELY",
+   "evidence": "V-space tone curve is a power law with per-pair gamma 3.2-3.6 (pair0 3.19-3.27, pair1 3.44-3.58, pair2 3.31-3.49, pair3 3.44-4.58, pair4 3.47-3.72) matching HSV sev5 gamma=3.5; HSV S ratio 1.009-1.020 rules out saturate_weaken and RGB-gamma (RGB gamma would raise S ~2x; gamma_RGB:5 test=24.90dB CI 0/10 vs HSV 30.43dB); mean_shift -44..-76; clipping matches (zero-frac delta 0.7pp at sev5 vs 3.8pp at sev4)"
+  }
+ ],
+ "alternatives": [],
+ "analysis": {
+  "verdict": "LIKELY",
+  "tier": 1,
+  "tier_note": "Deterministic degradations only (gamma blur + HSV gamma darken). No noise term: smooth-region local_std of targets is below the no-noise gamma simulation at every intensity; prior sigma spread 0.37-3.83 across an identical pipeline is a gamma-quantization artifact. Not Tier 3.",
+  "psnr": null,
+  "psnr_note": "infinite dB (bit-exact pixel match) on all 5/5 support pairs; JSON cannot encode Infinity so null is used",
+  "ci_pass_rate": "10/10",
+  "psnr_gap": null,
+  "psnr_gap_note": "unbounded: winner is bit-exact (inf). Runner-up = brightness_darken_gamma_HSV:5 alone at 30.43 dB (blur omitted), then gamma_RGB:5 24.90 dB, gamma_HSV:4 22.53 dB",
+  "qwen_noise_gate": "unavailable in this environment; replaced by quantitative decider: target smooth-region local_std <= no-noise gamma-sim local_std at every intensity bin (pair0 1.81/2.49 vs 3.94/4.93; pair1 1.18/1.14 vs 1.71/1.58; pair2 1.64/2.23 vs 2.78/4.29; pair3 1.10/1.04 vs 1.71/1.92; pair4 1.59/2.07 vs 2.30/3.29)",
+  "evidence": [
+   "test_candidate.py pipeline blur_gaussian:1,brightness_darken_gamma_HSV:5 -> PSNR=inf dB, CI=10/10 on pairs 0,1,2,3,4 (5/5 bit-exact)",
+   "order control: brightness_darken_gamma_HSV:5,blur_gaussian:1 -> 40.42 dB CI 9/10 (not bit-exact) -> blur precedes gamma",
+   "HSV S ratio degraded/clean = 1.009,1.117,1.020,1.017,1.010 (pairs 0-4, unclipped) -> saturation preserved by V-scaling; rules out saturate_weaken and per-channel RGB gamma",
+   "block_boundary 0.9915-1.0175 and unique_G 181-254 -> no compression (unique_G<200 on pair4 is a false positive of extreme gamma clipping; bit-exact match without JPEG)",
+   "noise_prior sigma 0.37-3.83 inconsistent across identical pipeline; peeled §B extreme_pct=71.3% with sigma<5 is the documented JPEG/blur-artifact false positive; final pipeline contains no noise and still reproduces targets exactly",
+   "V-bin gamma estimates 3.2-3.6 match x_distortion brightness_darken_gamma_HSV sev5 (gamma=3.5); sev4 (2.7) left sim brighter by 15-22 levels in 10-150 intensity range and clipped 3.0% vs target 6.5%"
+  ]
+ }
+}

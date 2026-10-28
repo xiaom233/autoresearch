@@ -1,0 +1,133 @@
+{
+  "round": "R2",
+  "pipeline": [
+    {
+      "function": "noise_gaussian_RGB",
+      "severity": 4,
+      "verdict": "UNCERTAIN",
+      "signal_source": "Existence: residual flat-region noise p50 (residual = target - clean, clean-gradient<8 mask) target 69.4/160.4/100.0/53.8/49.0 on pairs 0-4; matched deterministic backbone (blur3+jpeg4) leaves this unexplained. Subtype: chroma std — YCrCb3 sim Cb overshoots +55.8% on pair0 (5.77 vs target 3.71) while target Cb equals the JPEG-only level (R0 q8 calibration 3.73); over 5 pairs mean |dCb| YCrCb3 20.7% (max 55.8%) vs RGB4 6.0% (max 18.4%), mean |dCr| 6.9% vs 4.9%. Mechanism: noise_gaussian_YCrCb sev3 has sigma_chroma=1.9x sigma_luma (x_distortion/noise.py), mechanically producing chroma excess absent in the target; RGB noise has effective chroma ~0.62x luma. Severity: flat-region residual p50 ratios sim/target for RGB4 = 0.71/1.05/1.00/1.00/0.66 (exact on pairs 2/3); RGB3 is 0.27x-0.75x (far too weak, e.g. 18.8 vs 69.4 pair0); YCrCb4 overshoots 2.0x on pair0 and wrecks chroma (Cb +95%). Global second-order fit: RGB4 variance_ratio |err| mean 3.9% (max 6.8%), mean_shift |err| mean 0.75 levels (max 1.28) -> no global step required, consistent with R1's removal of contrast. Judged by verify_signals + second-order statistics; PSNR not used (noise seed mismatch). Verdict stays UNCERTAIN (SKILL: noise steps never LIKELY; noise->blur subtype is Tier C, 54.7%)."
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "LIKELY",
+      "signal_source": "Blur presence certain: spectral_slope_ratio 1.20-1.28 and gm_ratio 0.17-0.50 in 5/5 (fresh R2 run_full_analysis). Severity nailed by the noise-robust checks: with the R2 candidate, blur:spectral_slope matched in 5/5 (pair0 target -1.1488 vs sim -1.1633, diff 0.0145 < 0.08) and wiener_kernel corr 0.9994 (>0.85; matched 5/5). R2 severity scan falsifies neighbours: blur_gaussian:2 -> slope diff 0.148 (fail), blur_gaussian:4 -> slope diff 0.171 (fail), while sev3 diff 0.0145. Not motion: residual_anisotropy 1.41/1.15/1.35/1.65/1.67 < 1.7 (pairs 3/4 borderline but below). Glass_score 1.15-1.54 lies inside the no-blur JPEG sim range 1.44-1.86 -> GLASS verdict is a JPEG-confounded FP. gaussian vs lens MTF-indistinguishable; gaussian retained."
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "LIKELY",
+      "signal_source": "block_boundary 7.15/4.24/5.79/4.81/6.08 (>>1.05, 0% FP signal) and dct_zero_ratio 0.892-0.948 in 5/5 (fresh R2 run_full_analysis reproduces R1 exactly). Severity 4 retained: fresh R2 baselines reproduce R1's cross-pair split (bb diff 13%/24%/25%/match/match for jpeg4), and jpeg5 was already rejected in R1 (pair0 bb diff 40% vs 10-13% for jpeg4, worse chroma). With the R2 noise candidate (RGB4) the bb agreement improves (diff 11%/16%/match/match/match; dct zero_ratio diff 0.005-0.019) -> jpeg4 remains the best cross-pair compromise. Severity borders sev5 on pairs 1/2 but sev+-1 JPEG costs ~0.2 dB (REFLECTION_MECHANISM)."
+    }
+  ],
+  "change_vs_R1": {
+    "from": "noise_gaussian_YCrCb:3 -> blur_gaussian:3 -> compression_jpeg:4",
+    "to": "noise_gaussian_RGB:4 -> blur_gaussian:3 -> compression_jpeg:4",
+    "only_change": "noise function + severity (YCrCb:3 -> RGB:4); blur and JPEG steps unchanged",
+    "basis": "Second-order statistics on 5 matched support pairs: mean |dCb| 20.7% -> 6.0% (max 55.8% -> 18.4%), mean |dCr| 6.9% -> 4.9%, mean_shift |err| 1.15 -> 0.75 levels, flat-residual ratio error 25.9% -> 13.8%; var_ratio mean |err| 3.3% -> 3.9% (only metric slightly worse; max improves 8.6% -> 6.8%). verify_signals verdict count improves: YCrCb3 2 PARTIAL/3 WEAK -> RGB4 3 PARTIAL/2 WEAK."
+  },
+  "removed_steps": [
+    {
+      "function": "contrast_weaken_scale",
+      "severity": 1,
+      "verdict": "REMOVED_FALSE_POSITIVE (R1, re-confirmed in R2)",
+      "signal_source": "R2 fresh run_full_analysis still returns inconsistent per-pair global verdicts for the SAME pipeline (NO_GLOBAL / CONTRAST_weaken_sev4 / NO_GLOBAL / CONTRAST_weaken_sev3 / SATURATION_weaken_sev4, all low confidence) -> coupling artifact, not a real global step. The R2 noise candidate reproduces variance_ratio (mean |err| 3.9%) and mean_shift signs/magnitudes (mean |err| 0.75 levels) on all 5 pairs without any global function. Library contrast_weaken_scale sev1 (alpha=0.75) overshoots (var_ratio 0.42-0.44 in R1 tests) and is not representable closer to the implied alpha>=0.96. No global step added."
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": null,
+      "stats": "R1 primary. Second-order on 5 pairs (same basis): mean |dCr| 6.9% (max 14.1), mean |dCb| 20.7% (max 55.8), var_ratio |err| mean 3.3% (max 8.6), mean_shift |err| 1.15 levels, flat-residual ratio err mean 25.9%. R1-trained model reached support PSNR 23.63 (R0 20.56).",
+      "function_family": "noise (cross-family: YCrCb instead of RGB)",
+      "reason": "Fallback if the chroma-statistics reading is wrong; carries the only trained-model evidence so far (R1 ckpt 23.63 support). Better global var_ratio (3.3% vs 3.9%) but far worse chroma (Cb 20.7% vs 6.0%) and flat-noise fit."
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": null,
+      "stats": "Same-family lower severity. Chroma good (mean |dCr| 4.4%, |dCb| 5.5%) but flat-region residual noise 3-4x under target (pair0 18.8 vs 69.4; pair2 75.1 vs 100.0) and var_ratio overshoots (+14.3% pair0).",
+      "function_family": "noise (same family, severity-1)",
+      "reason": "Second-best noise candidate; use only if RGB4 proves too strong in training (support PSNR drop)."
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 4},
+        {"function": "blur_lens", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": null,
+      "stats": "Not re-tested in R2; MTF-indistinguishable from gaussian (gnu/lens transfer cost 1-4 dB per REFLECTION_MECHANISM).",
+      "function_family": "blur (gaussian vs lens)",
+      "reason": "Only if gaussian proves wrong in training; no available signal separates them."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (noise present; PSNR not decisive for any step; noise judged by verify_signals + second-order statistics)",
+    "psnr": null,
+    "psnr_note": "No PSNR used for the R2 decision (noise seed mismatch makes sim-vs-target PSNR a random number; REFLECTION_MECHANISM exp37 rule). Reference only: R1 best ckpt support PSNR 23.63 at step 15092 vs R0 20.56 vs identity 21.65 (R1-recorded).",
+    "change": "noise_gaussian_YCrCb:3 -> noise_gaussian_RGB:4; keep blur_gaussian:3, compression_jpeg:4",
+    "evidence": {
+      "support_pairs": 5,
+      "fresh_run_full_analysis": "R2 outputs full_analysis_R2_pair0..4.json reproduce R1: compression DETECTED 5/5 (block_boundary 7.15/4.24/5.79/4.81/6.08, dct_zero 0.948/0.939/0.940/0.892/0.902); noise GAUSSIAN_YCrCb 5/5 via cross_channel_corr (JPEG-confounded, pair-level confidence low/low/high/high/high), impulse_zero_ratio 0.098/0.039/0.053/0.057/0.061 (<<0.85, no impulse fingerprint), wavelet sigma 0.0/0.37/0.37/2.35/1.11 (wavelet blind to pre-blur noise); blur GLASS_BLUR 5/5 via glass_score 1.54/1.15/1.31/1.49/1.54 (JPEG-confounded), gm_ratio 0.198/0.459/0.497/0.173/0.192, spectral_slope_ratio 1.28/1.22/1.20/1.21/1.22, anisotropy 1.41/1.15/1.35/1.65/1.67; global verdicts NO_GLOBAL/CONTRAST4/NO_GLOBAL/CONTRAST3/SAT4 (inconsistent across pairs of the same pipeline -> coupling artifact), variance_ratio 0.711/0.639/0.734/0.700/0.706, mean_shift -6.3/+10.0/+8.0/-0.9/-2.5 levels.",
+      "noise_second_order_5pairs": {
+        "metric": "same-pair matched simulations vs target; residual flat-region p50 = median of (target-clean)^2 over clean-gradient<8 mask",
+        "target_Cr_Cb": [[7.00, 3.71], [7.34, 6.08], [5.02, 5.63], [11.22, 10.71], [9.14, 11.94]],
+        "rgb4_sim_Cr_Cb": [[7.05, 3.57], [6.59, 5.91], [4.72, 4.59], [11.81, 11.28], [9.38, 11.94]],
+        "ycbcr3_sim_Cr_Cb": [[7.28, 5.77], [6.37, 5.36], [5.28, 4.32], [12.04, 11.29], [9.54, 10.99]],
+        "mean_max_abs_pct_error": {
+          "YCrCb3": {"dCr": "6.9 / 14.1", "dCb": "20.7 / 55.8", "dvar_ratio": "3.3 / 8.6", "dmean_shift_levels": "1.15 / 1.98", "flat_ratio": "25.9 / 48.2"},
+          "RGB4": {"dCr": "4.9 / 10.1", "dCb": "6.0 / 18.4", "dvar_ratio": "3.9 / 6.8", "dmean_shift_levels": "0.75 / 1.28", "flat_ratio": "13.8 / 34.5"}
+        },
+        "flat_residual_p50_target_ycbcr3_rgb4": [[69.4, 36.0, 49.0], [160.4, 144.0, 169.0], [100.0, 81.0, 100.0], [53.8, 40.1, 53.8], [49.0, 36.0, 32.1]],
+        "target_mean_shift_ycbcr3_rgb4": [[-6.30, -4.62, -5.02], [10.04, 9.21, 10.43], [7.95, 5.98, 7.37], [-0.88, -0.65, -1.46], [-2.47, -1.43, -1.53]]
+      },
+      "verify_signals_R2": {
+        "YCrCb3_baseline": {"pair0": "WEAK 3/5 (bb 13%, FWHM 12px)", "pair1": "WEAK 3/5 (bb 24%, FWHM 8px)", "pair2": "WEAK 3/5 (bb 25%, FWHM 8px)", "pair3": "PARTIAL 4/5 (bb match, FWHM 6px)", "pair4": "PARTIAL 4/5 (bb match, FWHM 8px)"},
+        "RGB4_candidate": {"pair0": "WEAK 3/5 (bb 11%, FWHM 8px)", "pair1": "WEAK 3/5 (bb 16%, FWHM 8px)", "pair2": "PARTIAL 4/5 (bb match, FWHM 8px)", "pair3": "PARTIAL 4/5 (bb match, FWHM 6px)", "pair4": "PARTIAL 4/5 (bb match, FWHM 6px)"},
+        "blur_signals": "blur:spectral_slope + blur:wiener_kernel matched in 5/5 for RGB4 (pair0 slope target -1.1488 vs sim -1.1633, diff 0.0145; Wiener 0.9994).",
+        "note": "MATCH is unreachable while noise is present: residual FWHM stays 6-8px (>4px) because the residual contains noise-seed mismatch + JPEG-severity split; verdict counts are not the decision criterion by themselves, the second-order tables are."
+      },
+      "blur_severity_scan": {"blur_gaussian:2": "slope diff 0.148 (FAIL)", "blur_gaussian:3": "slope diff 0.0145 (MATCH)", "blur_gaussian:4": "slope diff 0.171 (FAIL)"},
+      "noise_severity_scan": {
+        "RGB2": "flat residual 0.27x-0.49x target (far too weak), bb 18%, var_ratio +21.5% (pair0)",
+        "RGB3": "chroma good but flat residual 0.27x-0.75x target, var_ratio +14.3% (pair0), bb 12-27%",
+        "RGB4": "flat residual 0.66x-1.05x target (exact pairs 2/3), var_ratio |err| mean 3.9%, bb 11%/16%/match/match/match",
+        "YCrCb2": "bb 16%, Cb +25%, flat residual 0.16x target (pair0)",
+        "YCrCb4": "bb 6% but Cb +95%, residual rgb_ratio 1.75, flat residual 2.0x target (pair0)"
+      },
+      "impulse_checks": {
+        "raw_impulse_zero_ratio": [0.0984, 0.0387, 0.0529, 0.0572, 0.0608],
+        "threshold": ">0.85 required for impulse",
+        "peeled_extreme_pct_pair0_pair1": [89.61, 26.28],
+        "peel_pipeline": "blur_gaussian:3,compression_jpeg:4",
+        "peeled_zero_ratio": [0.3230, 0.1866],
+        "peeled_spatial_corr": [0.9717, 0.9653],
+        "peeled_ivc": [0.8552, 0.8497],
+        "diagnosis": "§B IMPULSE verdict is the documented sign-fraction artifact (zero_ratio 0.19-0.32, spatial_corr 0.97, sigma<5). Impulse remains rejected."
+      },
+      "glass_blur_check": "glass_score target 1.54/1.15/1.31/1.49/1.54 vs no-blur JPEG sim range 1.44-1.86 -> signal absent / JPEG-confounded; gaussian retained.",
+      "gamma_check": "No gamma step: mean shifts flip sign across pairs (-6.3/+10.0/+8.0/-0.9/-2.5) and are reproduced by RGB4 without any tone curve (|err| 0.39-1.28 levels). R1's cross-pair argument re-confirmed.",
+      "training_log_diagnosis_R1": {
+        "log": "rebuttal_runs/E6_LLM/logs/blind_0017_set2_R1.log (predicted pipeline only, no GT)",
+        "nan": 0,
+        "curve": "ckpt 3773=23.37, 7546=23.54, 11319=23.52, 15092=23.63",
+        "best_vs_last": "best == last (step 15092) -> no post-convergence divergence; SimpleGate + 3-step local pipeline trained stably",
+        "interpretation": "R1 architecture/training strategy is stable; the remaining headroom is in the degradation parameters, not the optimizer. R2 therefore changes the predicted pipeline only; training recipe unchanged for comparability."
+      }
+    },
+    "tested_candidates_R2": 5,
+    "test_runs_R2": 21,
+    "budget_note": "5 candidate hypotheses (C1 noise subtype RGB incl. mandated severity scan 2/3/4; C2 YCrCb2; C3 YCrCb4; C4 blur2; C5 blur4), 21 test_candidate.py runs (5 baseline + 16 candidate sims), <=25 hard stop respected. Repeated per-pair sims were used for cross-pair verification, not enumeration.",
+    "note": "No GT read, no test data touched. Decision is signal/second-order based (noise PSNR invalid). Downstream arbitration: R2 training support PSNR vs R1 23.63."
+  }
+}

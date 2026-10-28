@@ -1,0 +1,43 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_pcp": false,
+    "use_freqmod": false,
+    "use_channel_curve": false,
+    "use_sca": false,
+    "use_color_mlp_output": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "per-step verdict compression_jpeg:2 = LIKELY — block_boundary 1.2419/1.7209/1.3251/1.9049/1.5100 across 5 pairs (>1.1, Tier S, 0%FP), dct_zero_ratio 0.44-0.83, unique_G_ratio ~1.0; verify_signals MATCH under noise coupling (bb 1.2419 vs 1.2480 = 0.5%, dct 0.4397 vs 0.4391). JPEG confirmed by Tier S signal.",
+    "per-step verdict noise_speckle:3 = UNCERTAIN — verify_signals MATCH 3/3 (sigma 3.0 vs 3.0, clean_residual, block_boundary); residual fingerprint exact on pair0 (std 25.64 vs 25.66, kurtosis 4.35 vs 4.37, lag1 0.298 vs 0.297) and pair3 (std 10.53 vs 10.58, kurt 10.39 vs 10.55, lag1 0.522 vs 0.520); §B vm_slope 0.24-1.08 (>0.005 → speckle), var_slope ~0 (not poisson), rgb_ratio 1.01-1.04 (equal per-channel sigma, not YCrCb). UNCERTAIN only because random step + seed mismatch forbids LIKELY.",
+    "step4_global = NO_GLOBAL on all 5 pairs — variance_ratio 0.8523/1.0130/0.9305/0.9442/0.9231, spread_ratio 0.93-1.03, chroma_ratio 0.90-1.01, mean_shift -1.0..-4.5 (pair0 brightness_detected_raw flagged as brightness_from_jpeg). No genuine contrast Tier A signal: contrast_weaken_scale sev1 would give variance_ratio ~0.56, far below observed 0.85-1.01; deviation is JPEG-quantization induced → ColorPre / FiLM-GCM gates NOT satisfied.",
+    "step3_blur = BLUR_UNLIKELY on all 5 pairs — spectral_slope_ratio 0.983/0.975/0.976/0.989/0.985 (<1.08), gm_ratio>1 attributable to JPEG blocking, residual anisotropy 0. anisotropy_ratio far below 1.7 (OCAB gate) → attention_type swin, not ocab.",
+    "No saturation/brightness step: chroma_ratio 0.90-1.01, clipped_fraction < 5%. ColorMLP gate (brightness_HSV) not triggered.",
+    "SimpleGate: Section 七 default-on (-32K params, exp39 8/9 degenerations safe: noise -0.01, JPEG+blur +0.02, contrast+noise +0.78, blur +0.06). Only negative case is triple-motion S5 (-0.86), not present here.",
+    "exp37/exp39 blind-ID ablation: pure Direct+Swin wins 23/24 vs component architectures (DualBranch/FiLM-GCM/ColorPre 0/24). full_analysis.json's generic recommended_architecture (DualBranch) is overridden by finetune_strategy.md §七 (DualBranch explicitly not recommended under blind ID).",
+    "Section 六 Step 1: pipeline is pure local (noise + compression), no contrast → Direct is a valid safe choice (row: 纯局部 → Direct 或 RandomCurric); task mandates direct."
+  ],
+  "finetune_strategy_ref": [
+    "Section 六 Step 0: 低难度 (JPEG sev≤2) → 纯 Swin + SimpleGate",
+    "Section 六 Step 1: 纯局部 (blur/noise/comp) 无 contrast → Direct 或 RandomCurric; 本任务指定 Direct 从零训练",
+    "Section 六 Step 2: 组件按 per-step verdict 独立触发 — noise_speckle=UNCERTAIN → 该步骤不加任何组件; compression_jpeg=LIKELY 但组件表无 JPEG 专用组件; SimpleGate 任意 verdict 默认常开",
+    "Section 六 Step 3: 盲识别场景 → 不加组件, 纯 Swin 最安全 (exp37 组件 0/24 胜)",
+    "Section 七 全组件启用条件: block_boundary>1.1 (Tier S, 0%FP) → JPEG confirmed; anisotropy_ratio>1.7 才触发 OCAB; variance_ratio≠1.0 才触发 ColorPre/FiLM-GCM; DualBranch 明确标注盲识别下不推荐",
+    "Section 五 注意力选择: noise → 任意 (~0 dB); contrast → Swin; OCAB 仅用于 motion 结构化模糊 (本挑战无)",
+    "Section 八 exp37/39 消融: Direct+Swin 平均 22.86, 23/24 胜; 组件收益仅在 GT 已知时成立",
+    "Section 九 崩溃诊断: 无 GCM → GCM 诱发 NaN 风险不存在; 纯 Swin 最稳定; epoch=2 时监控 last ckpt 是否退化, 退化则取 best ckpt"
+  ],
+  "reasoning": "预测管线为两步混合 (Tier 3): noise_speckle:3 (UNCERTAIN) → compression_jpeg:2 (LIKELY), 无 blur/global/motion/saturation。按 finetune_strategy.md §六 Step 0, JPEG sev≤2 属低难度结构化局部退化, 推荐纯 Swin + SimpleGate; noise 对注意力类型不敏感 (§五: noise 任意 ~0 dB), 故 attention_type=swin, window_size=8 (默认, ws=16 仅用于 sev≥5 motion blur)。策略层面管线为纯局部退化无 contrast (§六 Step 1: Direct 或 RandomCurric 均可), 且无预训练 ckpt, 采用任务指定的 Direct 从零训练, lr=5e-4, epoch=2, batch=16。组件门控严格按 §七: (1) compression_jpeg 的 block_boundary>1.1 是 Tier S 0%FP 信号, 但组件表无 JPEG 专用组件, 仅确认无需额外模块; (2) noise_speckle 该步 verdict=UNCERTAIN → 该步骤不加组件 (§六 Step 2: UNCERTAIN/POOR 该步骤不加组件; noise 亦无对应组件); (3) GCM/ColorPre 不启用: 虽然 pair0/2/3/4 的 variance_ratio 为 0.85-0.94, 但 step4_global 五对一致判 NO_GLOBAL, pair0 的亮度均值偏移被明确标为 brightness_from_jpeg 假阳性, 且真 contrast_weaken_scale sev1 的方差比应 ~0.56 (远低于观测值), 属 JPEG 量化/噪声耦合效应而非 contrast —— 不满足 §七 Tier A 'variance_ratio≠1.0' 的真实 contrast 信号, 且管线中不存在 contrast 步骤, 启用将重演 exp37 组件误配失败模式; (4) OCAB 不启用: anisotropy_ratio 远低于 1.7, 无 motion blur; (5) ColorMLP 不启用: 无 brightness_HSV; (6) DualBranch 不启用: full_analysis.json 的通用建议与 §七 明确冲突, §七 标注盲识别下 DualBranch 不推荐 (exp37 0/24 胜), 以 finetune_strategy.md 为准。SimpleGate 默认常开 (-32K 参数, exp39 8/9 安全, 最接近的 D3 JPEG+blur +0.02 / N -0.01 / L2 +0.78 均无负收益)。风险提示: 噪声步 UNCERTAIN, 残差指纹虽两图精确匹配但存在 ±1 severity 备选 (speckle:2); epoch=2 训练后若 last ckpt 退化, 按 §九 取 best ckpt 评估。"
+}

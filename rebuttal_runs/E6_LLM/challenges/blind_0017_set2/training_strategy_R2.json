@@ -1,0 +1,122 @@
+{
+  "challenge": "blind_0017_set2",
+  "round": "R2",
+  "pipeline_source": "rebuttal_runs/E6_LLM/challenges/blind_0017_set2/predicted_params_R2.json",
+  "pipeline_functions": [
+    "noise_gaussian_RGB:4 (UNCERTAIN, Tier C)",
+    "blur_gaussian:3 (LIKELY, Tier B)",
+    "compression_jpeg:4 (LIKELY, Tier S presence / severity UNCERTAIN)"
+  ],
+  "change_vs_R1": "仅退化参数改变: noise_gaussian_YCrCb:3 -> noise_gaussian_RGB:4。blur_gaussian:3 / compression_jpeg:4 不变。训练配方与 R1 完全一致（Direct, EPOCH=2, LR=5e-4, batch=16, 纯 Swin + SimpleGate），以隔离噪声步骤修改的效应，便于与 R1 支持集 PSNR 23.63 直接对比。",
+  "overall_verdict": "UNCERTAIN (Tier 3; noise 步骤按 SKILL 永不 LIKELY；噪声判定基于二阶统计而非 PSNR)",
+  "strategy": "direct",
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_color_mlp_output": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_freqmod": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false
+  },
+  "env_flags": {
+    "AR_ATTENTION_TYPE": "swin",
+    "AR_WINDOW_SIZE": "8",
+    "AR_EMBED_DIM": "64",
+    "AR_USE_SIMPLE_GATE": "1",
+    "AR_USE_GCM": "0",
+    "AR_USE_COLOR_PRE": "0",
+    "AR_USE_COLOR_MLP": "0",
+    "AR_USE_COLOR_MLP_OUTPUT": "0",
+    "AR_USE_DUAL_BRANCH": "0",
+    "AR_USE_CSN": "0",
+    "AR_USE_CHANNEL_CURVE": "0",
+    "AR_USE_PCP": "0",
+    "AR_USE_FREQMOD": "0",
+    "AR_USE_SCA": "0",
+    "AR_USE_GDFN": "0",
+    "AR_USE_FPRO": "0",
+    "AR_PARAMS_PATH": "rebuttal_runs/E6_LLM/challenges/blind_0017_set2/predicted_params_R2.json",
+    "AR_VAL_PARAMS_PATH": "rebuttal_runs/E6_LLM/challenges/blind_0017_set2/predicted_params_R2.json",
+    "AR_LEARNING_RATE": "0.0005",
+    "AR_EPOCH_BUDGET": "2",
+    "AR_BATCH_SIZE": "16",
+    "AR_QUIET_PIPELINE": "1",
+    "AR_CHALLENGE_DIR": "/data/zyli/projects/autoresearch/rebuttal_runs/E6_LLM/challenges/blind_0017_set2"
+  },
+  "signal_basis": [
+    {
+      "signal": "noise 子类型: 5 对同图匹配仿真的色度统计 —— 目标 Cb 与 JPEG-only 水平一致（R0 q8 标定 3.73 vs 目标 3.74），YCrCb3 仿真 Cb 过冲 +55.8%（5.77 vs 3.71）；5 对平均 |dCb| 20.7%（max 55.8%）→ 6.0%（max 18.4%）；|dCr| 6.9% → 4.9%",
+      "supports": "noise_gaussian_RGB:4 替代 YCrCb:3；YCrCb 噪声 sev3 的 sigma_chroma=1.9x sigma_luma，机制上必然产生目标不存在的色度过量",
+      "source": "R2 test_candidate/verify_signals 仿真（/tmp/r2_sims）+ 同基二阶统计；x_distortion/noise.py 参数表",
+      "gate": "§七 Tier C (noise->blur 54.7%) -> 该步骤不加任何架构组件；仅修改训练退化参数"
+    },
+    {
+      "signal": "noise 严重度: 平坦区残差噪声 p50（clean 梯度<8 掩码内 (target-clean)^2 中位数）目标 69.4/160.4/100.0/53.8/49.0；RGB4 仿真 49.0/169.0/100.0/53.8/32.1（比值 0.71/1.05/1.00/1.00/0.66）；RGB3 仅 0.27x-0.75x（过弱）；YCrCb4 过冲 2.0x（pair0）且色度 Cb +95%",
+      "supports": "RGB 家族内 sev4 为唯一全对折中；同时 var_ratio |err| 平均 3.9%、mean_shift |err| 平均 0.75 levels，无需任何全局步骤",
+      "source": "R2 同基二阶统计（5 对），SKILL 要求的 severity 扫描 (RGB2 / RGB3 / RGB4)",
+      "gate": "§七: variance_ratio≠1.0 的 Tier A 门控前提被匹配仿真证伪（0.64-0.73 由噪声+blur+JPEG 耦合解释）-> 不启用 ColorPre/FiLM-GCM"
+    },
+    {
+      "signal": "blur 严重度: 噪声鲁棒信号匹配 —— spectral_slope diff 0.0145（pair0, 阈值<0.08），5/5 匹配；Wiener 核相关 0.9994（>0.85），5/5 匹配；扫描 sev2 diff=0.148 / sev4 diff=0.171 均 FAIL",
+      "supports": "blur_gaussian:3 LIKELY; 非 motion（anisotropy 1.15-1.67 < 1.7）",
+      "source": "R2 verify_signals 5 对 + blur severity scan",
+      "gate": "§七 Tier B (blur DT 83.4%) -> Swin 基线，无组件；无 motion 信号 -> OCAB 关闭, window_size 8"
+    },
+    {
+      "signal": "JPEG: block_boundary 7.15/4.24/5.79/4.81/6.08 (0% FP) + dct_zero_ratio 0.892-0.948, 5/5; 新基准复现 R1 跨对分裂 (p0 13% / p1 24% / p2 25% 欠匹配, p3/p4 匹配)；R2 噪声候选使 bb 改善 (11%/16%/match/match/match)；jpeg5 已在 R1 被拒 (pair0 bb 40%)",
+      "supports": "compression_jpeg:4 LIKELY presence; 严重度 4 保持（跨对折中, sev±1 代价 ~0.2 dB）",
+      "source": "R2 run_full_analysis (5 对) + R2 verify_signals + R1 jpeg4/jpeg5 跨对测试",
+      "gate": "§七 Tier S -> JPEG 确认（无专用组件）"
+    },
+    {
+      "signal": "脉冲噪声排除: raw impulse_zero_ratio 0.039-0.098 << 0.85；剥离确定性退化 (blur3+jpeg4) 后 extreme_pct 89.6%/26.3% 是符号占比伪迹（zero_ratio 0.32/0.19, spatial_corr 0.97, ivc 0.85, sigma<5），SKILL 已文档化该 FP",
+      "supports": "不采用 noise_impulse（互换代价 21 dB）",
+      "source": "peeled_noise_check.py (pairs 0/1) + R1 记录",
+      "gate": "§七: 信号矛盾 -> 纯高斯家族, 不加组件"
+    },
+    {
+      "signal": "R1 训练日志诊断: 无 NaN; best == last (step 15092, 23.63); 曲线 23.37->23.54->23.52->23.63 单调; R1 支持集 PSNR 23.63 (R0 20.56, identity 21.65)",
+      "supports": "R1 架构/训练配方稳定，剩余提升空间在退化参数而非优化器；R2 只改预测管线，训练配方与 R1 完全一致",
+      "source": "rebuttal_runs/E6_LLM/logs/blind_0017_set2_R1.log（仅预测管线 VAL，无 GT）",
+      "gate": "§九 best==last -> 训练稳定；SimpleGate 默认常开（exp39 8/9 安全, -32K）"
+    }
+  ],
+  "finetune_strategy_ref": [
+    "§七 核心原则: 信号置信度驱动组件选择。noise 步骤为 Tier C（noise->blur 54.7%）-> 不加任何组件；blur Tier B -> Swin 基线；JPEG Tier S -> 无专用组件",
+    "§七 默认分支: 无 S/A 级组件触发信号 -> Swin + SimpleGate + Direct（安全兜底）",
+    "§七 全组件门控: ColorPre/FiLM-GCM 需 variance_ratio≠1.0 代表真实 contrast 步骤 —— R1/R2 匹配仿真证明该信号由噪声+blur+JPEG 耦合产生（RGB4 方差比误差平均 3.9%），门控前提不成立，且 R0 的 GCM 已出现 best!=last 发散",
+    "§六 Step 1: 纯局部 (blur/noise/comp) -> Direct 或 RandomCurric；本挑战按协议采用 Direct（与 R1 保持可比）",
+    "§六 Step 2/§七: LIKELY+纯局部多步本可考虑 RandomCurric，但 noise 步骤为 UNCERTAIN(Tier C) -> 按 §七 'Tier C 或信号矛盾 -> 纯 Swin + Direct' 兜底；且 R2 目的是隔离噪声参数变更，训练配方必须与 R1 一致",
+    "§九 exp39 警告: SimpleGate 在 D3 (JPEG+blur) epoch2 有 ckpt 退化先例 (23.88->15.40) -> 必须按 best ckpt 评估"
+  ],
+  "reasoning": "R2 管线 = noise_gaussian_RGB:4 -> blur_gaussian:3 -> compression_jpeg:4（3 步，唯一变更是噪声函数/严重度）。策略沿用 R1 的 Direct + EPOCH2 + LR5e-4 + batch16 + 纯 Swin + SimpleGate（GCM/ColorPre/CSN/DualBranch 等全部关闭），保证与 R1 支持集 PSNR 23.63 的可比性。组件判定按 §七 逐步骤门控：noise 步骤为 Tier C（noise->blur 下子类型识别率 54.7%），不加任何组件；blur 为 Tier B（spectral slope + Wiener 核在 5/5 匹配），Swin 基线即可；JPEG 为 Tier S（block_boundary 0%FP），无专用组件。variance_ratio≠1.0 的 Tier A 门控在本挑战被匹配仿真证伪：仅用噪声+blur+JPEG 即可把 5 对方差比匹配到平均 3.9% 误差、均值漂移匹配到平均 0.75 levels，无需真实 contrast 步骤，故不启用 ColorPre/FiLM-GCM（R0 的 GCM 亦已发散）。无 motion（anisotropy<1.7）-> OCAB 关闭，ws=8。SimpleGate 按 §七 默认常开（exp39 8/9 安全），R1 使用后训练稳定（无 NaN, best==last）。R2 训练时 AR_PARAMS_PATH / AR_VAL_PARAMS_PATH 均指向 predicted_params_R2.json（盲协议下 VAL 使用预测管线；评估时用 AR_CHALLENGE_DIR 的 clean_*/degraded_* 支持对）。未使用 GT，未使用测试数据。",
+  "risk_notes": [
+    "噪声子类型/严重度修正基于二阶统计（色度、方差比、均值漂移、平坦区残差噪声），5 对一致性好但 SKILL 明确 noise->blur 下子类型属 Tier C（54.7%）——判定仍为 UNCERTAIN。若 R2 训练后支持集 PSNR 低于 R1 的 23.63，回退 YCrCb3（alt-1）。",
+    "RGB4 的 luma 噪声显著更强（sigma=0.2*255=51 pre-blur, 约 YCrCb3 luma 的 2.9 倍），色度噪声更弱（约 31.6 vs 33.9）。若模型在真实测试图上出现过度去噪/涂抹纹理，优先考虑 RGB3（alt-2）。",
+    "JPEG 严重度在 pair1/pair2 偏向 sev5、pair0 偏向 sev4；sev±1 迁移代价约 0.2 dB，保持 sev4。",
+    "SimpleGate + JPEG/blur 有 exp39 D3 epoch2 ckpt 退化先例：必须使用 best ckpt（日志 'Loaded best checkpoint'）；若 NaN 或发散，回退纯 Swin（无 SimpleGate）。",
+    "含 noise 时 PSNR 不具备类型判别力；R2 的训练收益评估以支持集 PSNR 为准（R1 基线 23.63），并以二阶统计匹配作为参数方向的先验。",
+    "R2 若支持集提升 < 0.5 dB，按 REFLECTION_MECHANISM 收敛判定（Δ<0.3 dB 已收敛）停止继续迭代参数；不得增加 EPOCH 预算。"
+  ],
+  "fallback_architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": false,
+    "use_gcm": false,
+    "reason": "§九/§五 exp39: 若 SimpleGate 在 D3-like 管线上 epoch2 发散或 best ckpt 仍退化, 回退纯 Swin Direct (无任何组件)"
+  }
+}

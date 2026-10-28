@@ -1,0 +1,80 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": true,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_color_mlp_output": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_sca": false,
+    "use_pcp": false,
+    "use_freqmod": false,
+    "activation": "gelu",
+    "depths": "default",
+    "num_heads": "default",
+    "mlp_ratio": "default"
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "env_flags": {
+    "AR_ATTENTION_TYPE": "swin",
+    "AR_WINDOW_SIZE": 8,
+    "AR_EMBED_DIM": 64,
+    "AR_USE_SIMPLE_GATE": 1,
+    "AR_USE_GCM": 1,
+    "AR_USE_COLOR_PRE": 0,
+    "AR_USE_COLOR_MLP": 0,
+    "AR_USE_COLOR_MLP_OUTPUT": 0,
+    "AR_USE_DUAL_BRANCH": 0,
+    "AR_USE_CSN": 0,
+    "AR_USE_CHANNEL_CURVE": 0,
+    "AR_USE_SCA": 0,
+    "AR_USE_PCP": 0,
+    "AR_USE_FREQMOD": 0,
+    "AR_LOAD_CKPT": "None",
+    "AR_LEARNING_RATE": 0.0005,
+    "AR_EPOCH_BUDGET": 2,
+    "AR_BATCH_SIZE": 16
+  },
+  "signal_basis": [
+    "block_boundary=7.3446 (>1.1, Tier S, 0% FP per exp17/18 calibration) → JPEG presence confirmed; Section 七 lists JPEG only as 'JPEG专项' confirmation (no dedicated architecture component), so the baseline stays Swin and SimpleGate is kept default-on",
+    "unique_G=211 vs clean 215 (above the <200 Tier-S quant threshold, so the quant rule does not fire) → no quantization/compression-specific component; consistent with mild JPEG q=8 rather than heavy quantization",
+    "anisotropy_ratio=1.4446 (<1.7) + blur_pca_ratio=1.035 (isotropic kernel) → motion blur excluded, OCAB gate (anisotropy>1.7, Tier A 0% FP) NOT met → attention_type=swin, window_size=8 (window_size=16 is reserved for the motion-sev>=5 OCAB path, which does not apply)",
+    "variance_ratio=0.7898 (!=1.0, Tier A low-FP contrast-like signal), corroborated on all 5 pairs by the residual affine fit target=P+0.84*(clean-P) with per-pair var_ratio≈f^2 = 0.79/0.714/0.646/0.725/0.704 and raised clipping (pct<=1: 2.0%→0.39%) → a real contrast/global tone compression is present even though no legal single bank function reproduces f=0.84 (step4 emits NO_GLOBAL with low confidence, unmodeled_global=UNCERTAIN)",
+    "block_boundary=7.3446 (structured local JPEG, Tier S) simultaneously with variance_ratio!=1.0 (Tier A) → satisfies the Section 七 row 'variance_ratio!=1.0 + 结构化(motion/jpeg) → FiLM-GCM (+3.52)' and the flow-chart branch 'variance_ratio!=1.0? → 含 motion/jpeg? → FiLM-GCM (lr=5e-4)' → use_gcm=true",
+    "FiLM-GCM stability gate: no brightness_HSV in the pipeline (brightness ruled out: target mean shift only +5.05/255 while every bank brightness severity shifts >=17.8 gray), so the exp10 L1 / exp40 GCM-NaN combination does not apply; lr is fixed at 5e-4 per Section 七 and Section 九 (lr=5e-4 repairs the GCM NaN case)",
+    "Per-step verdicts for blur and JPEG are UNCERTAIN (severity/subtype ambiguity, PSNR 26.29<30, gap 0.03; gaussian sev3/4 and lens sev4 tied at 26.29/26.31/26.28), but the presence signals are Tier S/A and unambiguous → Section 七 explicit rule '盲识别 verdict UNCERTAIN/POOR 但 Tier S/A 信号明确 → 仍可启用组件' applies; this is not the exp37 failure mode (exp37 applied components with no signal gating at all)",
+    "noise verdict NO_NOISE (noise_prior sigma=0.74 raw / 1.48 peeled < 2; any x_distortion noise sev1 implies sigma>=12.75 gray-level; extreme_pct=49% matches the documented JPEG/blur residual false positive) → no noise-specific component; SimpleGate is safe on noise (exp39 N -0.01) and default-on per Section 七",
+    "no saturation/HSV degradation evidence (saturation_detected_raw=false, saturation chroma ratio 0.8865; saturate_weaken_YCrCb:1 tested 23.65 dB) → ColorPre's saturation failure mode is not the concern here, but the structured-local branch selects FiLM-GCM over ColorPre → use_color_pre=false",
+    "global affine is a possible near-pure tone compression (f≈0.84, fixed pivot 118-128) → CSN gate 'blur/noise present + 无纯全局退化' is NOT assured, and CSN is catastrophic on pure-global degradation (L6 -4.60, SF9 -11.73) → use_csn=false",
+    "stretch rejected (contrast_weaken_stretch:1 measured mean shift +35.5 vs target +5.05, PSNR 15.01) → ChannelCurve stretch gate not met → use_channel_curve=false",
+    "no brightness_HSV high-confidence signal (mean_shift=+5.05/255) → ColorMLP gate (brightness_HSV high confidence) not met → use_color_mlp=false",
+    "Section 七 explicitly marks DualBranch '❌ 盲识别下不推荐 (0/24 胜, exp37)' → use_dual_branch=false, overriding the generic pre-exp37 recommendation in full_analysis.json (recommended_architecture)",
+    "Pipeline is multi-step (blur + JPEG) with a possible contrast-like global component → Section 六 Step 1 '含 contrast_weaken/strengthen → Direct (保守)' and the general multi-step uncertainty favor Direct from scratch; True Ft is ~0 dB vs Direct (exp37/38) and Direct avoids exp37's component/transfer failure mode → strategy=direct",
+    "SCA/PCP/FreqMod are deprecated in Section 五 (SCA 8/9 harmful, PCP parameter-unfair, FreqMod -9.67) → all disabled; SwiGLU/GDFN marginal per exp39 → activation stays gelu"
+  ],
+  "finetune_strategy_ref": [
+    "§七 核心原则: 信号置信度驱动组件选择 + 信号可靠性分层 (Tier S: block_boundary>1.1 0%FP; Tier A: variance_ratio!=1.0 低FP; Tier A: anisotropy>1.7 0%FP)",
+    "§七 信号→组件映射流程 (variance_ratio!=1.0 + motion/jpeg → FiLM-GCM lr=5e-4; 默认 Swin+SimpleGate+Direct)",
+    "§七 全组件启用条件 (ColorPre/FiLM-GCM/OCAB/CSN/DualBranch/SimpleGate/ColorMLP/ChannelCurve 门控表)",
+    "§六 Step 0/1/2 策略选择框架 (难度分级 → 组件; Direct vs RandomCurric vs True Ft; 按退化步骤独立匹配, UNCERTAIN 步骤不加组件)",
+    "§五 注意力类型选择 (contrast 全局 → Swin, MDTA/OCAB 崩溃; motion → OCAB) + 参数公平性规则 (Swin dim=64 454K 基线)",
+    "§八 exp37 消融 A (无门控组件 DualBranch/FiLM-GCM/ColorPre 0/24 胜, 纯 Swin 23/24) 与消融 B (True Ft ≈ Direct, 1.5h)",
+    "§九 训练崩溃诊断 (GCM 诱发 NaN 的判定与恢复: 用 best ckpt → 降 lr → 换 ColorPre → 换 pure Swin)"
+  ],
+  "reasoning": "Per-step evidence: JPEG presence is Tier S (block_boundary=7.3446, 0% FP), blur presence is solid but subtype/severity is UNCERTAIN (isotropic kernel PCA=1.035, anisotropy=1.4446, gaussian/lens MTF-tied at 26.29/26.28 dB), noise is excluded (sigma<2 vs x_distortion minimum 12.75), and an unmodeled contrast-like affine global compression (~0.84) is supported across all 5 support pairs by variance_ratio=f^2. The overall verdict is UNCERTAIN (PSNR 26.29, gap 0.03), but Section 七 gates on signal quality: (1) anisotropy<1.7 rules out motion → no OCAB → attention_type=swin with window_size=8; (2) variance_ratio!=1.0 (Tier A) combined with structured-local JPEG (Tier S) satisfies the FiLM-GCM gate (variance_ratio!=1.0 + 结构化), whose closest reference case exp10 L5 (contrast+motion+jpeg) gained +3.52 dB at lr=5e-4 and exp38/39 confirm GCM safety on global degradations; (3) SimpleGate is default-on (-32K params, 8/9 safe, only S5 motion -0.86, no motion here); (4) ColorPre is not stacked because the structured-local branch selects FiLM-GCM and ColorPre has the worst cross-degradation generalization (16.0 dB gap); (5) CSN, ChannelCurve, ColorMLP, DualBranch are all gated off (pure-global risk / non-triggered signals / explicit blind-scenario prohibition 0/24 in exp37). Strategy is Direct from scratch (no checkpoint exists for this support-specific challenge; True Ft ≈ Direct at 1.5h per exp37/38; pipeline contains a possible contrast-like global, for which Section 六 recommends Direct). Training uses the predicted pipeline unchanged (blur_gaussian:3 → compression_jpeg:4). Risk monitoring per Section 九: if GCM experiments show NaN or last-ckpt regression, fall back to best ckpt, then ColorPre, then pure Swin; if the JPEG/blur severity mismatch is the dominant error (predicted PSNR 26.29 < 30), validation-PSNR arbitration between the stored alternatives remains the training-time decision point.",
+  "risk_monitoring": {
+    "primary_risk": "UNCERTAIN severity/subtype and the unmodeled affine global (~0.84) mean training pairs do not contain the exact global tone compression; FiLM-GCM can only partially compensate if the effect is learnable from training pairs",
+    "fallback": [
+      "If FiLM-GCM induces NaN or last-ckpt regression (Section 九): use best ckpt, then lr=1e-4, then swap to ColorPre, then pure Swin+SimpleGate",
+      "If GCM is not beneficial on val PSNR, rerun direct Swin+SimpleGate (exp37 23/24 baseline)"
+    ]
+  }
+}

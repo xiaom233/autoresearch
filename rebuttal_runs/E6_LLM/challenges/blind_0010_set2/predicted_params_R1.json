@@ -1,0 +1,63 @@
+{
+ "challenge": "blind_0010_set2",
+ "source": "rebuttal_runs/E6_LLM/challenges/blind_0010_set2 (5 paired supports); R1 reflection audit",
+ "decision": "NO_CHANGE",
+ "pipeline": [
+  {
+   "step": 1,
+   "function": "blur_gaussian",
+   "severity": 1,
+   "verdict": "LIKELY",
+   "evidence": "R1 independent re-verification: bit-exact (PSNR=inf, CI=10/10) on 5/5 support pairs only in this position/severity; R1 controls on pair0: omit blur 21.11 dB, reversed order 29.88 dB, blur sev2 29.70 dB; subtype signals (motion/glass/unlikely) flip across an identical pipeline -> gamma-confounded, exact match pins isotropic gaussian sev1"
+  },
+  {
+   "step": 2,
+   "function": "brightness_darken_gamma_HSV",
+   "severity": 5,
+   "verdict": "LIKELY",
+   "evidence": "gamma-vs-brightness second-order statistics re-examined in R1: mean_shift -72.6/-75.6/-76.2/-50.2/-44.3 (contrast would preserve mean) with variance_ratio 0.556/1.002/0.587/0.641/0.198 and residual_intensity_corr 0.617/0.205/0.541/0.609/0.906 (residual depends on intensity -> pointwise nonlinear transform) -> multiplicative HSV-V gamma, not additive shift; R1 control pure brightness_darken_shfit_HSV:5 = 19.90 dB vs inf; gamma sev4 = 24.20 dB vs inf; HSV S ratio preserved (R0) excludes RGB gamma and saturate_weaken"
+  }
+ ],
+ "alternatives": [],
+ "analysis": {
+  "verdict": "LIKELY",
+  "tier": 1,
+  "tier_note": "Deterministic 2-step pipeline only. R1 re-ran run_full_analysis.py on all 5 support pairs: the sigma-prior spread 0.37-3.83 on one identical pipeline is 8-bit HSV-gamma contouring, not additive noise; RIC 0.205-0.906 is the gamma signature. No noise term in the bit-exact reproduction.",
+  "psnr": null,
+  "psnr_note": "infinite dB (bit-exact pixel match) on all 5/5 support pairs, re-verified independently in R1; JSON cannot encode Infinity so null is used",
+  "ci_pass_rate": "10/10",
+  "psnr_gap": null,
+  "psnr_gap_note": "unbounded: winner is bit-exact (inf). R1 pair0 controls: reversed order 29.88 dB, blur sev2 29.70 dB, gamma sev4 24.20 dB, gamma-only 21.11 dB, pure brightness shift 19.90 dB",
+  "r1_signal_reanalysis": {
+   "gamma_vs_brightness": "mean_shift -72.6/-75.6/-76.2/-50.2/-44.3 rules out contrast (mean-preserving); variance_ratio 0.556/1.002/0.587/0.641/0.198 is content/clipping dependent and residual_intensity_corr 0.617/0.205/0.541/0.609/0.906 shows the residual scales with intensity -> multiplicative power law (gamma), not additive shift. Confirmed by control: pure HSV-V shift 19.90 dB vs gamma bit-exact",
+   "variance_ratio": "0.198-1.002 across pairs; not a stable contrast signal; pair4 0.198 with clipped_fraction 0.556 (brightness_clip_explains_variance=true). Under multiplicative gamma variance_ratio is content dependent -> attributing it to contrast_weaken is a misattribution (R0 already corrected; R1 re-confirms)",
+   "residual_intensity_corr": "0.205-0.906, gamma_suspect_from_noise=true on all 5 pairs; supports pointwise gamma over linear brightness/saturation transforms",
+   "noise_prior_sigma": "3.83/0.74/1.48/0.74/0.37 on identical pipeline -> estimator variance impossible for real additive noise; smooth-region local_std (R0) below the no-noise gamma simulation at every intensity bin; spatial_corr 0.69-0.99 = structured gamma residual, not noise",
+   "blur_subtype": "spectral_slope_ratio 1.005/1.294/1.044/1.128/1.113; DT flips BLUR_UNLIKELY/MOTION/GLASS across identical pipeline (anisotropy 1.65-2.84, glass_score 0.42-0.65) -> content/gamma driven; exact match pins isotropic blur_gaussian:1",
+   "compression": "block_boundary 1.0125/1.0175/1.0038/0.9915/1.0000 all << 1.1 (0% FP rule) -> NO_COMPRESSION; pair4 unique_G=181 with clipped_fraction 0.556 is the documented extreme-clipping false positive",
+   "saturation": "saturation_chroma_ratio 0.35-0.66 suggests SATURATION_weaken, but HSV S ratio 1.009-1.020 (unclipped, R0) is preserved -> chroma collapse is a V-scaling artifact; bit-exact reproduction without any saturate step confirms"
+  },
+  "r1_verification": {
+   "method": "test_candidate.py (PSNR mode, deterministic pipeline) + verify_signals.py (signal mode on pair0)",
+   "psnr_mode": "PSNR=inf dB, CI=10/10 on pairs 0,1,2,3,4 (5/5 bit-exact)",
+   "signal_mode": "MATCH 4/4 on pair0: blur:spectral_slope, blur:wiener_kernel, global:mean_shift, global:variance_ratio",
+   "order_control": "brightness_darken_gamma_HSV:5,blur_gaussian:1 = 29.88 dB pair0 (R0 pair2: 40.42 dB) -> blur precedes gamma",
+   "budget": "11 candidate tests in R1 (6 re-verification + 5 controls), within the 25-test cap"
+  },
+  "r1_controls_pair0": [
+   {"pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5", "psnr_rgb": "inf (bit-exact)", "ci": "10/10", "note": "R0 pipeline (reference)"},
+   {"pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:1", "psnr_rgb": 29.88, "ci": "9/10", "note": "reversed order"},
+   {"pipeline": "blur_gaussian:2,brightness_darken_gamma_HSV:5", "psnr_rgb": 29.7, "ci": "7/10", "note": "blur severity +1"},
+   {"pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:4", "psnr_rgb": 24.2, "ci": "8/10", "note": "gamma severity -1"},
+   {"pipeline": "brightness_darken_gamma_HSV:5", "psnr_rgb": 21.11, "ci": "5/10", "note": "blur omitted"},
+   {"pipeline": "blur_gaussian:1,brightness_darken_shfit_HSV:5", "psnr_rgb": 19.9, "ci": "3/10", "note": "pure brightness shift instead of gamma"}
+  ],
+  "r1_decision_rationale": "NO_CHANGE. The support evidence admits no better pipeline: the R0 pipeline is bit-exact on 5/5 pairs and every single-axis perturbation collapses to 19.9-29.9 dB. The R0 checkpoint's support PSNR 29.91 (<35) is therefore a training-capacity / information-loss ceiling (gamma sev5 clips 8.5-55.6% of pixels; clipped content is unrecoverable), not an identification error. Changing the pipeline would contradict the only exact evidence available; no forced training (training_strategy_R1.json not produced).",
+  "evidence": [
+   "R1 re-ran run_full_analysis.py on all 5 support pairs: signals reproduce R0's confounds (unstable blur subtype, sigma 0.37-3.83, RIC 0.205-0.906, variance_ratio 0.198-1.002, block_boundary <= 1.0175)",
+   "R1 independent bit-exact re-verification: PSNR=inf, CI=10/10 on 5/5 pairs",
+   "R1 signal verification: MATCH 4/4 (spectral_slope, wiener_kernel, mean_shift, variance_ratio) on pair0",
+   "R1 controls: gamma-only 21.11 dB, reversed order 29.88 dB, blur sev2 29.70 dB, gamma sev4 24.20 dB, pure brightness shift 19.90 dB -> all axes pinned at the R0 optimum"
+  ]
+ }
+}

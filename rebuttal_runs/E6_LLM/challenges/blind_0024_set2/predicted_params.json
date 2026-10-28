@@ -1,0 +1,130 @@
+{
+  "pipeline": [
+    {
+      "function": "noise_gaussian_RGB",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "saturate_strengthen_HSV",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_YCrCb",
+          "severity": 1
+        },
+        {
+          "function": "blur_gaussian",
+          "severity": 3
+        },
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 2
+        }
+      ],
+      "psnr": 23.12,
+      "ci_pass": "9/10",
+      "function_family": "noise-subtype alternative",
+      "stats": {
+        "pair0_psnr": 23.12,
+        "pair2_psnr": 23.21,
+        "sky_noise_RGB": [
+          2.25,
+          2.25,
+          0.45
+        ],
+        "target_sky_noise_RGB": [
+          2.42,
+          2.41,
+          1.24
+        ]
+      }
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_lens",
+          "severity": 2
+        },
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 2
+        }
+      ],
+      "psnr": 23.1,
+      "ci_pass": "8/10",
+      "function_family": "blur-family alternative (gaussian<->lens MTF-indistinguishable)",
+      "stats": {
+        "pair0_psnr": 23.1,
+        "note": "without noise step"
+      }
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 1
+        },
+        {
+          "function": "blur_gaussian",
+          "severity": 2
+        },
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 2
+        }
+      ],
+      "psnr": 22.86,
+      "ci_pass": "9/10",
+      "function_family": "blur-severity alternative",
+      "stats": {
+        "pair0_psnr": 22.86,
+        "sky_noise_RGB": [
+          2.68,
+          2.7,
+          0.54
+        ]
+      }
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 23.71,
+    "ci_pass_rate": "9.6/10 (pairs: 9,10,9,10,10)",
+    "psnr_gap": 0.36,
+    "evidence": {
+      "mode": "PSNR + CI (sigma_prior 0.49-1.98 < 2 in all pairs; CI metrics are the discriminative evidence because random noise seed is amplified ~6x by the saturation step)",
+      "paired_psnr": {
+        "pair0": 23.48,
+        "pair1": 23.62,
+        "pair2": 23.43,
+        "pair3": 21.72,
+        "pair4": 26.3
+      },
+      "paired_ci": {
+        "pair0": "9/10",
+        "pair1": "10/10",
+        "pair2": "9/10",
+        "pair3": "10/10",
+        "pair4": "10/10"
+      },
+      "compression": "NO JPEG (block_boundary 0.998-1.010, 0%-FP signal; unique_G 197-245)",
+      "global": "saturate_strengthen_HSV:2 - chroma_ratio target 2.56 vs sim 2.48; clipped 23.5% vs 23.7%; mean shift -29.8 vs -29.4 on pair0; HSV family beats YCrCb (14.7-14.8 dB) and sev1/sev3 (18.9/18.5 dB)",
+      "blur": "blur_gaussian:3 - isotropic gradients (ratio_x 0.334 = ratio_y 0.329), PSNR progression 21.12 -> 23.43 -> 23.78; blur-first order required for zero-clip match",
+      "noise": "noise_gaussian_RGB:1 - sky flat-region noise sigma R/G/B target 2.42/2.41/1.24 reproduced by sev1 attenuated through blur; type UNCERTAIN (YCrCb alternative equal CI); brightness-independent noise excludes poisson/speckle",
+      "order": "noise -> blur -> saturate (physical priorities and zero-clip evidence); saturate-first rejected (CI 4/10)",
+      "qwen_noise_gate": "unavailable (no Qwen client/API in environment)"
+    }
+  }
+}

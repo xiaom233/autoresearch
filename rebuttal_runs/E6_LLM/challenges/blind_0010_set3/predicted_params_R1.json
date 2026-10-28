@@ -1,0 +1,58 @@
+{
+  "challenge": "blind_0010_set3",
+  "reflection_round": "R1",
+  "r1_decision": "NO_CHANGE",
+  "pipeline_str": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 1,
+      "verdict": "LIKELY",
+      "evidence": "R1 re-test: blur-first order reconstructs all 5/5 support pairs pixel-identically (0 differing pixels, max_abs_diff=0, PSNR=inf, CI 10/10); removing this step drops pair0 to 32.89 dB; reversing to gamma-first drops to 41.87 dB; blur_lens:1 first reaches only 47.81 dB. blur sev1 is real but spectrally masked by the gamma darkening (spectral_slope_ratio 0.92-1.06)."
+    },
+    {
+      "function": "brightness_darken_gamma_HSV",
+      "severity": 5,
+      "verdict": "LIKELY",
+      "evidence": "R1 re-fit on all 5 pairs: median-V transfer in bins 0.50-0.95 implies gamma 3.50-3.73 == library sev5 gamma 3.5; per-bin median V shift is non-constant (-109..-45), ruling out additive brightness_darken_shfit (tested: 18.85 dB). Mean shift -49.6..-70.1; exact reconstruction with HSV:5 on 5/5 pairs."
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline_str": "blur_lens:1,brightness_darken_gamma_HSV:5",
+      "pipeline": [
+        {"function": "blur_lens", "severity": 1},
+        {"function": "brightness_darken_gamma_HSV", "severity": 5}
+      ],
+      "psnr": 47.81,
+      "ci_pass_rate": "9/10",
+      "function_family": "blur_lens",
+      "note": "R1-verified best cross-family alternative (lens-first order). Spectrally indistinguishable from gaussian sev1 per SKILL C3 but NOT pixel-identical (47.81 dB vs inf), so it is a backup only; gap is infinite, do not use for training."
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "psnr": null,
+    "psnr_detail": "inf dB (pixel-perfect: 0 differing pixels, max_abs_diff=0 on all 5 support pairs; 'inf' not JSON-representable, hence null)",
+    "ci_pass_rate": "10/10",
+    "psnr_gap": "inf (primary exact on 5/5 pairs; runner-up R1-verified blur_lens:1 at 47.81 dB)",
+    "evidence": {
+      "exact_reconstruction": "add_distortion(clean_i,1,'blur_gaussian') then add_distortion(.,5,'brightness_darken_gamma_HSV') == degraded_i for i=0..4 (R1 independent re-run; identical=True, max_abs_diff=0)",
+      "gamma_fit_R1": "median V_target vs V_clean bins 0.50-0.95 imply gamma 3.50-3.73 on all 5 pairs == library sev5 gamma 3.5 (pair2 >0.90 bins 4.12-4.14 are clipping-contaminated)",
+      "gamma_vs_brightness_R1": "additive V shift per intensity bin is non-constant (-109..-45), incompatible with any single-severity additive shift; direct test brightness_darken_shfit_HSV:5 gives 18.85 dB (CI 2/10)",
+      "noise": "ruled out: wavelet sigma 0.37-1.11 (<2) on 5/5 pairs; PSNR mode valid",
+      "compression": "ruled out: block_boundary 0.9902-1.0166 (<1.1) on 5/5 pairs; pair3 unique_G=194 is a borderline compression rule hit but exact 0-residual reconstruction without any compression step proves it is a uint8+gamma+blur artifact, not JPEG",
+      "saturation": "false positive: target HSV S mean 121.4 > clean 100.7; V-gamma raises S; 0 residual without a saturation step",
+      "contrast": "false positive: variance_ratio 0.57-1.37 is clipping-confounded (clipped_fraction 4.2-46.2%); after gamma simulation variance matches exactly (pixel-identical)",
+      "order": "blur before gamma: reverse order gives 41.87 dB vs inf for blur-first",
+      "r1_candidate_scan": {
+        "C1_blur_gaussian1_then_gammaHSV5": "inf dB, CI 10/10, 5/5 pairs (EXACT)",
+        "C2_gammaHSV5_then_blur_gaussian1": "41.87 dB, CI 9/10 (wrong order)",
+        "C3_gammaHSV5_alone": "32.89 dB, CI 5/10 (missing blur step)",
+        "C4_blur_lens1_then_gammaHSV5": "47.81 dB, CI 9/10 (subtype alternative, not exact)",
+        "C5_blur_gaussian1_then_brightness_darken_shfit_HSV5": "18.85 dB, CI 2/10 (reject: additive shift)"
+      }
+    }
+  }
+}

@@ -1,0 +1,996 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED (bock_boundary=1.555, dct_zero_ratio=0.722) — 5 个 support 对一致: bb 1.445-1.761",
+      "blur": "BLUR_UNLIKELY (gm_ratio=1.661 由 JPEG/噪声抬高; spectral_slope_ratio=0.972 < 1.08; FFT anisotropy=0) — 5 对全部 BLUR_UNLIKELY",
+      "noise": "GAUSSIAN_YCrCb sigma=1.98 (低置信); support sigma 1.48-3.34; cross_channel_corr=0.890; residual_intensity_corr=0.444 (gamma/JPEG 强度依赖嫌疑)",
+      "global": "NO_GLOBAL (variance_ratio=0.962, mean_shift=-1.9/255, clipped=0.58%) — 5 对全部 NO_GLOBAL"
+    },
+    "support_pairs_note": "support_0 与 target 字节级相同; support_1..4 为同一退化管线施加于其他图像, 用于跨内容一致性验证",
+    "mode": "PSNR (sigma=1.98 < 2, 边界; 但噪声 seed 失配风险存在, 噪声判定以 §B 剥离去噪为主)",
+    "suspected": [
+      "compression_jpeg",
+      "noise (类型待定, 或为 JPEG 伪影假阳性)"
+    ],
+    "ruled_out": [
+      "blur (spectral_slope_ratio 0.95-0.98, anisotropy=0, 跨 5 对一致)",
+      "brightness/contrast/saturation (variance_ratio 0.95-1.12, mean_shift<2/255)"
+    ]
+  },
+  "support_pair_diagnostics": {
+    "note": "support_0 与 target 字节相同; support_1..4 用于跨内容验证",
+    "block_boundary": [
+      1.5553,
+      1.445,
+      1.496,
+      1.564,
+      1.761
+    ],
+    "psnr_target_vs_clean": [
+      23.78,
+      22.93,
+      22.53,
+      23.68,
+      23.44
+    ],
+    "flat_region_noise_std_over_local_intensity": [
+      0.145,
+      0.124,
+      0.163,
+      0.122,
+      0.119
+    ],
+    "flat_region_noise_lag1_autocorr": [
+      0.598,
+      0.463,
+      0.527,
+      0.527,
+      0.527
+    ],
+    "spectral_slope_ratio": [
+      0.972,
+      0.967,
+      0.983,
+      0.984,
+      0.951
+    ],
+    "variance_ratio": [
+      0.962,
+      0.95,
+      1.01,
+      0.96,
+      1.119
+    ]
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py --pipeline compression_jpeg:4 (§B 数值) + 直接平坦区测量 (5 对 support)",
+    "extreme_pct": 54.56,
+    "vm_slope": 0.7217,
+    "var_slope": -0.0133,
+    "spatial_corr": 0.7587,
+    "rgb_ratio": 1.0858,
+    "cross_ch_corr": 0.848,
+    "peeled_residual_std": 19.1,
+    "noise_prior_sigma_wavelet": 3.95,
+    "flat_region_measurements": {
+      "per_channel_within_block_var_target": 161,
+      "per_channel_within_block_var_jpeg4_then_speckle1": 182,
+      "per_channel_within_block_var_speckle2_then_jpeg4": 21,
+      "per_channel_within_block_var_gaussian2_then_jpeg4": 23,
+      "flat_var_vs_intensity_slope_target": 2.86,
+      "flat_var_vs_intensity_slope_speckle1_sim": 3.6,
+      "flat_var_vs_intensity_slope_gaussian1_sim": 0.03,
+      "dark_pair_example": "pair2 平坦区中位亮度 I=24: 观测噪声 std=3.90, speckle c=0.14 预测 3.36, 加法 gaussian sev1 (12.75) 不可能"
+    },
+    "diagnosis": "噪声存在且为乘性 (std ∝ 局部亮度 c≈0.12-0.16, 均值 0.135 ≈ noise_speckle sev1 的 c=0.14); extreme_pct=54.6% 为已知 JPEG 伪影假阳性 (SKILL: extreme_pct>50% + noise_prior<5 → 忽略 IMPULSE); wavelet sigma=3.95 低估 (JPEG 存在时不可靠), 直接平坦区测量 std≈12.6-13 (核心区) 更可靠; 噪声必须在 JPEG 之后 (noise→jpeg 平坦区噪声被量化抹平: per-channel var 4-58 vs target 161); 残差跨通道 corr 0.85-0.96、逐通道等幅 → 生成器的噪声为近消色差乘性噪声, 库内 noise_speckle 为逐通道独立 (近似建模); 残差 lag1 自相关 0.46-0.60 (库噪声为白噪声, 无法表达, 已知残差)"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "block_boundary=1.555 (0%FP, 5 support pairs 1.445-1.761), dct_zero_ratio=0.722 -> JPEG 确认; 扫描 severity 1-5 找最优"
+      },
+      "test_result": {
+        "psnr_rgb": 23.94,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "block_boundary=1.555 (0%FP, 5 support pairs 1.445-1.761), dct_zero_ratio=0.722 -> JPEG 确认; 扫描 severity 1-5 找最优"
+      },
+      "test_result": {
+        "psnr_rgb": 23.86,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "block_boundary=1.555 (0%FP, 5 support pairs 1.445-1.761), dct_zero_ratio=0.722 -> JPEG 确认; 扫描 severity 1-5 找最优"
+      },
+      "test_result": {
+        "psnr_rgb": 23.2,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "block_boundary=1.555 (0%FP, 5 support pairs 1.445-1.761), dct_zero_ratio=0.722 -> JPEG 确认; 扫描 severity 1-5 找最优"
+      },
+      "test_result": {
+        "psnr_rgb": 22.48,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "block_boundary=1.555 (0%FP, 5 support pairs 1.445-1.761), dct_zero_ratio=0.722 -> JPEG 确认; 扫描 severity 1-5 找最优"
+      },
+      "test_result": {
+        "psnr_rgb": 21.55,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "block_boundary 最接近 (diff 2%) -> 验证 JPEG5 模拟误差本身的统计特征"
+      },
+      "test_result": {
+        "psnr_rgb": 21.55,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_poisson:1,compression_jpeg:5",
+        "thinking": "5对 support 的平坦区 var~I 斜率 2.0-3.4 (信号依赖噪声, var∝I), var_slope 信号指向 poisson; block_boundary=1.555 -> JPEG5; 物理顺序 noise->JPEG"
+      },
+      "test_result": {
+        "psnr_rgb": 21.52,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,compression_jpeg:5",
+        "thinking": "5对 support 的平坦区 var~I 斜率 2.0-3.4 (信号依赖噪声, var∝I), var_slope 信号指向 poisson; block_boundary=1.555 -> JPEG5; 物理顺序 noise->JPEG"
+      },
+      "test_result": {
+        "psnr_rgb": 21.53,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5,noise_gaussian_RGB:1",
+        "thinking": "目标平坦区 within-block var=158.6 (真像素噪声) vs noise->JPEG5 模拟仅 3.2 -> 噪声在 JPEG 之后; 平残差跨通道 corr=0.96 等幅 -> gaussian RGB; std~12.6 ≈ sev1 (0.05*255=12.75)"
+      },
+      "test_result": {
+        "psnr_rgb": 20.27,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5,noise_gaussian_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5,noise_poisson:1",
+        "thinking": "目标平坦区 within-block var=158.6 (真像素噪声) vs noise->JPEG5 模拟仅 3.2 -> 噪声在 JPEG 之后; 平残差跨通道 corr=0.96 等幅 -> gaussian RGB; std~12.6 ≈ sev1 (0.05*255=12.75)"
+      },
+      "test_result": {
+        "psnr_rgb": 19.43,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5,noise_poisson:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4,noise_gaussian_RGB:1",
+        "thinking": "bb 精测: target=1.555, jpeg5+noise末=1.868 (过高) -> JPEG 严重度需降低; 平坦区 within-block var=158.6 且跨通道 corr=0.96 等幅 std~12.6 ≈ gaussian sev1 (12.75), 噪声必须在 JPEG 之后（noise->jpeg 会被抹平）"
+      },
+      "test_result": {
+        "psnr_rgb": 20.94,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4,noise_gaussian_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3,noise_gaussian_RGB:1",
+        "thinking": "bb 精测: target=1.555, jpeg5+noise末=1.868 (过高) -> JPEG 严重度需降低; 平坦区 within-block var=158.6 且跨通道 corr=0.96 等幅 std~12.6 ≈ gaussian sev1 (12.75), 噪声必须在 JPEG 之后（noise->jpeg 会被抹平）"
+      },
+      "test_result": {
+        "psnr_rgb": 21.43,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3,noise_gaussian_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4,noise_speckle:1",
+        "thinking": "主候选: (1) block_boundary: target=1.555, jpeg4->noise=1.567 (0.8%), jpeg3=1.362, jpeg5=1.838 -> JPEG sev4; 平坦块 DCstd target=4.06 vs sim 4.35; (2) 噪声在 JPEG 之后: 平坦区 within-block 像素方差 target=161, jpeg4->noise=182 vs noise->jpeg 仅 4-58; (3) 噪声幅度正比局部亮度 (5 对 support: std/I = 0.119-0.163, 均值 0.135 ≈ speckle c=0.14 sev1; 暗图 pair2 I=24 -> std=3.9, 加法 gaussian 12.75 不可能), 平坦区 var~I 斜率 target=2.86 vs speckle 3.6 vs gaussian 0.03 -> noise_speckle:1"
+      },
+      "test_result": {
+        "psnr_rgb": 20.49,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4,noise_speckle:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": 23.94,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 23.86,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 23.2,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 22.48,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 21.55,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 21.55,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,compression_jpeg:5",
+      "psnr_rgb": 21.53,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "noise_poisson:1,compression_jpeg:5",
+      "psnr_rgb": 21.52,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:3,noise_gaussian_RGB:1",
+      "psnr_rgb": 21.43,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "compression_jpeg:4,noise_gaussian_RGB:1",
+      "psnr_rgb": 20.94,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "compression_jpeg:4,noise_speckle:1",
+      "psnr_rgb": 20.49,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "compression_jpeg:5,noise_gaussian_RGB:1",
+      "psnr_rgb": 20.27,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:5,noise_poisson:1",
+      "psnr_rgb": 19.43,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "compression_jpeg",
+        "severity": 4,
+        "verdict": "LIKELY",
+        "evidence": "block_boundary=1.555 (0%FP 信号, 5 对 support 1.445-1.761, clean=1.009); 噪声后稀释建模: jpeg4→noise bb=1.567 (0.8%), jpeg3=1.362, jpeg5=1.838; 平坦 8x8 块 DCstd target=4.06 vs jpeg4 模拟 4.35 (jpeg5=6.43)"
+      },
+      {
+        "function": "noise_speckle",
+        "severity": 1,
+        "verdict": "UNCERTAIN",
+        "evidence": "乘性噪声 std ∝ 局部亮度: 5 对 support 的 平坦区 std/I = 0.119-0.163 (均值 0.135 ≈ c=0.14 = sev1); 暗图 (I≈24) 实测 std=3.9, 加法 gaussian 12.75 不可能; 平坦区 var~I 斜率 target=2.86 vs speckle1 3.6 vs gaussian1 0.03; 噪声在 JPEG 之后; 跨通道 corr 0.85-0.96 (库内逐通道独立, 白噪声 vs 观测 lag1≈0.5 空间相关 — 已知近似误差)"
+      }
+    ],
+    "order_note": "经验顺序 JPEG → noise, 与 SKILL 物理约束 (noise<JPEG) 相反, 由三组独立证据支持: (1) 平坦区 within-block 像素方差 target=161 ≈ jpeg4→noise=182, 而 noise→jpeg4 仅 4-23/通道 (量化抹平); (2) block_boundary target=1.555 匹配 jpeg4→noise (1.567), noise→jpeg4 为 2.73 (噪声使 JPEG 量化决策随机化, 产生过强块效应); (3) 5 个 support 对全部一致",
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 20.49,
+    "ci_pass_rate": "6/10",
+    "psnr_gap_to_ranking_top": 3.45,
+    "psnr_note": "PSNR 排名不可用于本挑战候选选择: 含 noise 候选 PSNR 全部 19.4-21.5 dB, 被噪声 seed 失配封顶 (σ≈13 时两独立实现的 PSNR 上限 ≈ 20.5 dB)。按 SKILL 规则 σ≥2 → 改用信号验证; 决定性判据 = 平坦区方差/强度比例/bb/DCstd/顺序证据",
+    "rationale": "JPEG 存在性由 0%FP 的 block_boundary 确定 (跨 5 对一致), 严重度由噪声稀释后的 bb (1.567 vs 1.555) 与平坦块 DCstd (4.35 vs 4.06) 确定为 sev4。噪声存在性由平坦区 within-block 像素方差 (161, 远超 JPEG 在平坦区的贡献) 确定; 类型由跨 5 图的 std/I 恒定比例 (~0.135) 确定为乘性 speckle sev1; 顺序由噪声是否被 JPEG 量化抹平判定为 JPEG 在前。blur/global 已由跨 5 对一致的 spectral_slope_ratio (0.95-0.98)、anisotropy=0、variance_ratio (0.95-1.12) 排除",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "compression_jpeg",
+            "severity": 4
+          },
+          {
+            "function": "noise_gaussian_RGB",
+            "severity": 1
+          }
+        ],
+        "psnr": 20.94,
+        "function_family": "noise_gaussian_RGB",
+        "stats": "平坦区 per-channel var 162 与 target 161 精确匹配 (幅度对), bb=1.585; 但 flat var~I 斜率 0.03 vs target 2.86; 暗图 support2 失配 (预测 12.75 vs 实测 3.9) → 幅度对但信号依赖错"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "compression_jpeg",
+            "severity": 5
+          },
+          {
+            "function": "noise_speckle",
+            "severity": 1
+          }
+        ],
+        "psnr": 19.88,
+        "function_family": "compression_jpeg (sev 备选)",
+        "stats": "全局线性拟合 b=0.938 与 target b=0.940 最匹配, 但 bb=1.838 (偏高 20%), 平坦 DCstd 6.43 (target 4.06) → 块效应过强"
+      }
+    ],
+    "support_validation": "同一管线 (compression_jpeg:4,noise_speckle:1) 在 support pair 1/4: block_boundary diff 2%/2%, hf_lf_ratio diff 0%/1%, unique RGB 0%, CI 6/10, PSNR 19.98/19.63 dB (噪声 seed 封顶) — 跨内容一致",
+    "evidence_files": [
+      "full_analysis.json",
+      "full_analysis_support_1.json",
+      "full_analysis_support_2.json",
+      "full_analysis_support_3.json",
+      "full_analysis_support_4.json"
+    ]
+  },
+  "r1_summary": {
+    "round": "R1",
+    "date": "2026-10-28",
+    "trigger": "R0 overall_verdict=UNCERTAIN (noise step) + R0 支持集 PSNR 27.38 < 35 → REFLECTION_MECHANISM exp37 触发条件 (UNCERTAIN 一律反思)",
+    "isolation": "反思仅使用 degraded_*/clean_* support 对 + R0 预测文件 + Skill 脚本; 未读取任何 GT/.gt_mappings/degradation_gt/训练日志/测试集",
+    "methods": [
+      "run_full_analysis.py × 5 support pairs (重跑; 信号与 R0 完全一致)",
+      "peeled_noise_check.py (剥离 compression_jpeg:4) × 5 pairs → §B 6 步 + noise_prior",
+      "直接信号测量 (Skill 脚本同款 DCT/wavelet/bb 函数 + 平坦区统计): dct_zero_ratio, 残差 HH wavelet sigma, lag1 自相关, std~I 剖面, 平坦区残差 std, 跨通道相关",
+      "假设网格 + severity 扫描 (noise 1-5 × JPEG 1-5 × 两种顺序), pair0 定标后 pairs1-4 交叉验证",
+      "test_candidate.py --mode signal: 5 候选 (pair0) + R1 管线在 pairs1-4 复验"
+    ],
+    "signal_reanalysis": {
+      "r0_contradictions_found": [
+        "dct_zero_ratio: target=0.722 vs R0 候选 (jpeg4→speckle1) 模拟=0.069 — 白噪声末置会填满高频 AC; 目标的高 DCT 稀疏性说明像素噪声几乎不含高频",
+        "残差高频 (target-clean) wavelet HH sigma: target=1.48-3.34 vs R0 模拟=5.31-8.03 — 同样说明目标噪声为低通",
+        "噪声 lag1 自相关: target=0.46-0.65 vs R0 模拟=0.01-0.25 — 目标噪声空间相关, 库内白噪声无法表达",
+        "R0 的 '近消色差' 残差 (跨通道 corr 0.85-0.96) 无法由逐通道独立的末置 speckle 复现, 但可由 JPEG 颜色变换+色度下采样产生"
+      ],
+      "hypothesis": "目标噪声来自 JPEG 之前的强 speckle, 被 JPEG q18 量化重塑: 高频系数归零 → dctzr 高/wavelet sigma 低; 量化误差呈 8x8 块相关 → lag1 高; 颜色变换 → 跨通道相关",
+      "grid_result_pair0": "noise_speckle:3 → compression_jpeg:2 在 7 个独立信号上全吻合: bb 1.551-1.557 (target 1.555), dctzr 0.722-0.724 (0.722), wavsig 1.98 (1.98), spectral_slope -1.060~-1.062 (-1.062), std/I 0.113-0.117 (0.116), res_std 18.91-19.70 (19.62), lag1 0.469-0.494 (0.472); 3 个 seed 稳定",
+      "severity_scan_pair0": {
+        "sp2_j2": "bb 1.623, dctzr 0.765, wavsig 1.61, std/I 0.093, res 14.78 (偏弱)",
+        "sp4_j2": "bb 1.466, dctzr 0.678, wavsig 2.59, std/I 0.140, res 24.55 (偏强)",
+        "sp3_j1": "bb 1.338, dctzr 0.661, wavsig 2.47, res 21.93 (JPEG 偏弱)",
+        "sp3_j3": "bb 1.962, dctzr 0.788, wavsig 1.61, res 17.22 (JPEG 偏强)"
+      },
+      "residual_statistics_confirmation": {
+        "note": "残差 (x - clean) 的噪声场统计; 目标与 sp3→j2 模拟完全一致",
+        "pair0": {
+          "target": {
+            "std": 16.4,
+            "rgb_ratio": 1.04,
+            "cross_ch": 0.919,
+            "spatial_corr": 0.411
+          },
+          "sp3_j2_sim": {
+            "std": 16.4,
+            "rgb_ratio": 1.037,
+            "cross_ch": 0.918,
+            "spatial_corr": 0.412
+          }
+        },
+        "pair2": {
+          "target": {
+            "std": 19.0,
+            "rgb_ratio": 1.013,
+            "cross_ch": 0.942,
+            "spatial_corr": 0.142
+          },
+          "sp3_j2_sim": {
+            "std": 19.1,
+            "rgb_ratio": 1.014,
+            "cross_ch": 0.942,
+            "spatial_corr": 0.142
+          }
+        }
+      },
+      "sb6_notes": "peeled_noise_check 的 extreme_pct=53.5-56.7% 被自动诊断判为 IMPULSE — 已知定义性假阳性: 脚本按 (res<=0)|(res>=255) 计数, 零均值有符号残差天然约 50% 为负, 与脉冲噪声无关 (真实脉冲 sev5 仅 10% 像素且会摧毁图像)。vn_slope 0.29-3.22 与强度依赖均指向乘性噪声"
+    },
+    "candidates_tested": [
+      {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "MATCH (3/3)",
+        "matched": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "decision": "ACCEPT (R1 主预测)"
+      },
+      {
+        "pipeline": "compression_jpeg:4,noise_speckle:1 (R0)",
+        "mode": "signal",
+        "verdict": "PARTIAL (2/3)",
+        "mismatched": [
+          "noise:sigma (diff=267%)"
+        ],
+        "decision": "降为 alternative (训练仲裁/回退)"
+      },
+      {
+        "pipeline": "noise_speckle:2,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "PARTIAL (2/3)",
+        "mismatched": [
+          "noise:sigma (diff=50%)"
+        ],
+        "decision": "alternative (severity −1)"
+      },
+      {
+        "pipeline": "noise_speckle:4,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "PARTIAL (2/3)",
+        "mismatched": [
+          "noise:sigma (diff=25%)"
+        ],
+        "decision": "alternative (severity +1)"
+      },
+      {
+        "pipeline": "noise_speckle:3,compression_jpeg:3",
+        "mode": "signal",
+        "verdict": "WEAK (1/3)",
+        "mismatched": [
+          "noise:sigma (diff=50%)",
+          "compression:block_boundary (diff=25%)"
+        ],
+        "decision": "REJECT (JPEG sev 过大)"
+      }
+    ],
+    "cross_pair_validation": {
+      "R1_pipeline": "noise_speckle:3,compression_jpeg:2",
+      "verify_signals": "MATCH 3/3 on 5/5 support pairs (pairs 0-4)",
+      "direct_7_signal": {
+        "pair1": {
+          "target": "bb 1.445, dctzr 0.622, wavsig 2.22, specSl -1.052, std/I 0.075, res 19.01, lag1 0.463",
+          "sim": "bb 1.440, dctzr 0.622, wavsig 2.22, specSl -1.057, std/I 0.077, res 19.31, lag1 0.455"
+        },
+        "pair2": {
+          "target": "bb 1.495, dctzr 0.678, wavsig 3.34, specSl -0.904, std/I 0.132, res 16.98, lag1 0.471",
+          "sim": "bb 1.513, dctzr 0.677, wavsig 3.34, specSl -0.904, std/I 0.137, res 17.68, lag1 0.505"
+        },
+        "pair3": {
+          "target": "bb 1.564, dctzr 0.652, wavsig 1.48, specSl -1.130, std/I 0.127, res 18.43, lag1 0.483",
+          "sim": "bb 1.571, dctzr 0.652, wavsig 1.48, specSl -1.128, std/I 0.128, res 18.63, lag1 0.491"
+        },
+        "pair4": {
+          "target": "bb 1.761, dctzr 0.743, wavsig 1.48, specSl -1.209, std/I 0.118, res 9.71, lag1 0.647",
+          "sim": "bb 1.771, dctzr 0.743, wavsig 1.48, specSl -1.206, std/I 0.118, res 9.63, lag1 0.655"
+        }
+      }
+    },
+    "decision": "CHANGE",
+    "decision_rationale": "R0 的 6/9 维信号 (dctzr/高频 wavelet sigma/lag1/std-I 剖面/res_std/跨通道+空间相关) 与 R1 假设矛盾, 且 R1 候选在 5 个独立 support 图像上逐维复现目标统计 (含 3 seed 稳定) — 这不是 PSNR 排序而是信号一致性结论。R0 的 bb 匹配被证明是 jpeg4 强压缩 + 末置白噪声稀释的巧合。R1 管线符合 SKILL 物理约束与 challenge 生成优先级 (noise < JPEG)",
+    "r1_pipeline": [
+      {
+        "function": "noise_speckle",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 2,
+        "verdict": "LIKELY"
+      }
+    ],
+    "r0_pipeline": [
+      {
+        "function": "compression_jpeg",
+        "severity": 4
+      },
+      {
+        "function": "noise_speckle",
+        "severity": 1
+      }
+    ],
+    "training_strategy_R1": {
+      "strategy": "direct",
+      "architecture": "swin, embed_dim=64, ws=8, simple_gate=on, 其余组件全关",
+      "lr": 0.0005,
+      "epoch_budget": 2,
+      "batch_size": 16,
+      "note": "架构与 R0 相同 (无新的 Tier S/A 触发); 仅训练 PARAMS 换为 predicted_params_R1.json; VAL 保持 AR_CHALLENGE_DIR 支持集以与 R0 27.38 可比; 评估用 best ckpt (R0 best=step7546, nan=false)",
+      "file": "training_strategy_R1.json"
+    },
+    "training_not_executed": "本 R1 会话仅完成反思与参数交付; 训练由后续 Phase 5 调度执行 (EPOCH=2, LR=5e-4, batch=16, Direct)",
+    "budget_usage": {
+      "psnr_tests": 0,
+      "signal_tests": 9,
+      "limit": "≤25 PSNR tests / ≤5 新候选; 未超限"
+    }
+  },
+  "reflection_R1": {
+    "trigger_condition": "R0 overall_verdict=UNCERTAIN + 支持集 PSNR 27.38 (<35) → 反思触发",
+    "signal_source_tag": "[signal_reanalysis] + [statistical_check] (未使用模型 residual 作诊断, 未使用 PSNR 选型)",
+    "corrections": [
+      {
+        "change": "管线顺序 compression_jpeg:4→noise_speckle:1 改为 noise_speckle:3→compression_jpeg:2",
+        "signal_source": "[signal_reanalysis] dct_zero_ratio target=0.722 vs R0 模拟=0.069; 残差 HH wavelet sigma target=1.98 vs R0 模拟=5.81; 噪声 lag1 target=0.47-0.65 vs R0 模拟=0.01-0.25 → 目标噪声低通/块相关, 只能由 pre-JPEG 强噪声被 q18 量化重塑产生 (亦符合 SKILL 物理约束 noise<JPEG)"
+      },
+      {
+        "change": "noise severity 1 → 3",
+        "signal_source": "[signal_reanalysis] 网格+severity 扫描: speckle:3 在 std/I=0.116, res_std=19.6, dctzr=0.722, wavsig=1.98 四维精确居中; sp2 (0.093/14.8/0.765/1.61) 与 sp4 (0.140/24.6/0.678/2.59) 均偏离"
+      },
+      {
+        "change": "JPEG severity 4 → 2",
+        "signal_source": "[signal_reanalysis] sp3+j2 bb=1.548-1.557 vs target 1.555 (5 对 <8%); j3 时 bb=1.962 (verify WEAK, diff 25%), j1 时 bb=1.338; j4/j5 只能借助末置白噪声凑 bb 且被 dctzr/wavsig/lag1 否定"
+      },
+      {
+        "change": "R0 known_mismatches (近消色差/空间相关) 不再视为不可建模",
+        "signal_source": "[statistical_check] sp3→j2 模拟残差统计与目标一致: pair0 std 16.4 vs 16.4, cross_ch 0.919 vs 0.918, spatial_corr 0.411 vs 0.412; pair2 19.0 vs 19.1, 0.942 vs 0.942, 0.142 vs 0.142"
+      }
+    ],
+    "verification": "test_candidate.py --mode signal: MATCH 3/3 × 5/5 support pairs (noise:sigma, noise:clean_residual, compression:block_boundary); 全程 0 次 PSNR 选型 (含噪, seed 失配)",
+    "decision": "CHANGE"
+  },
+  "r2_summary": {
+    "round": "R2",
+    "date": "2026-10-28",
+    "trigger": "R1 修正带来 support PSNR 提升 +2.74 dB (27.38→30.12, best step 15092=末步) > 2 dB → 按 REFLECTION_MECHANISM 迭代反思条件继续一轮",
+    "isolation": "仅使用 degraded_*/clean_* support 对 + R0/R1 预测文件 + Skill 脚本 (run_full_analysis/peeled_noise_check/test_candidate/verify_signals); 未读取任何 GT/.gt_mappings/degradation_gt/训练日志/测试集",
+    "methods": [
+      "run_full_analysis.py 重跑 × 5 support pairs, 与 R1 记录逐项对比 (无漂移)",
+      "二阶/高阶统计对比 (target vs R1 模拟, 固定 seed): std, skew, kurtosis, rgb_ratio, cross_ch, 自相关 lag1/2/4/8/16, 强度分箱残差 std 剖面 (12 分位), 逐对 variance_ratio/mean_shift/chroma_ratio, 8x8 块边界",
+      "模型误差完备性检验: E(target-sim0) vs E(sim1-sim0) vs E(sim2-sim0) 的 11 维统计签名等价性",
+      "5 个候选 test_candidate.py --mode signal (pair0) + R1 管线的 4 对交叉复验",
+      "peeled_noise_check.py (剥离 R1 全管线) §B 6 步 — 仅用于解释模型误差残差, 不用于噪声定型"
+    ],
+    "signal_reanalysis": {
+      "run_full_analysis_5_pairs": {
+        "block_boundary": [
+          1.5553,
+          1.445,
+          1.496,
+          1.564,
+          1.761
+        ],
+        "spectral_slope_ratio": [
+          0.972,
+          0.967,
+          0.983,
+          0.984,
+          0.951
+        ],
+        "variance_ratio": [
+          0.962,
+          0.95,
+          1.01,
+          0.96,
+          1.119
+        ],
+        "mean_shift_255": [
+          -1.9,
+          -1.9,
+          -0.6,
+          -1.6,
+          -0.8
+        ],
+        "fft_anisotropy": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "verdicts": "5/5 COMPRESSION_DETECTED + BLUR_UNLIKELY + NO_GLOBAL; 与 R1 support_pair_diagnostics 逐项一致"
+      },
+      "second_order_validation": {
+        "res_std_t_vs_s": [
+          [
+            15.77,
+            15.78
+          ],
+          [
+            16.71,
+            16.69
+          ],
+          [
+            18.59,
+            18.61
+          ],
+          [
+            15.33,
+            15.33
+          ],
+          [
+            16.55,
+            16.47
+          ]
+        ],
+        "skew_t_vs_s": [
+          [
+            -0.457,
+            -0.456
+          ],
+          [
+            -0.399,
+            -0.405
+          ],
+          [
+            -0.237,
+            -0.235
+          ],
+          [
+            -0.512,
+            -0.502
+          ],
+          [
+            -0.051,
+            -0.045
+          ]
+        ],
+        "kurt_t_vs_s": [
+          [
+            5.6,
+            5.61
+          ],
+          [
+            5.16,
+            5.14
+          ],
+          [
+            7.32,
+            7.3
+          ],
+          [
+            5.85,
+            5.85
+          ],
+          [
+            4.34,
+            4.34
+          ]
+        ],
+        "autocorr_lag1_t_vs_s": [
+          [
+            0.425,
+            0.428
+          ],
+          [
+            0.443,
+            0.444
+          ],
+          [
+            0.145,
+            0.146
+          ],
+          [
+            0.408,
+            0.407
+          ],
+          [
+            0.456,
+            0.461
+          ]
+        ],
+        "autocorr_lag2_4_8_16": "逐对吻合 (<0.005)",
+        "intensity_profile_std": "12 分位强度分箱剖面 corr=0.9999-1.0, 最大相对偏差 0.4-1.2%",
+        "variance_ratio_t_vs_s": [
+          [
+            0.9622,
+            0.9615
+          ],
+          [
+            0.95,
+            0.9495
+          ],
+          [
+            1.0103,
+            1.0124
+          ],
+          [
+            0.96,
+            0.9612
+          ],
+          [
+            1.1194,
+            1.1191
+          ]
+        ],
+        "mean_shift_t_vs_s": [
+          [
+            -0.0075,
+            -0.0075
+          ],
+          [
+            -0.0075,
+            -0.0075
+          ],
+          [
+            -0.0025,
+            -0.0025
+          ],
+          [
+            -0.0064,
+            -0.0063
+          ],
+          [
+            -0.0032,
+            -0.0031
+          ]
+        ],
+        "chroma_ratio_t_vs_s": [
+          [
+            1.0269,
+            1.0287
+          ],
+          [
+            0.9605,
+            0.9581
+          ],
+          [
+            1.0009,
+            1.0039
+          ],
+          [
+            0.951,
+            0.9509
+          ],
+          [
+            1.0568,
+            1.0563
+          ]
+        ],
+        "dct_zero_ratio_pair0_t_vs_s": [
+          0.722,
+          0.7238
+        ]
+      },
+      "error_residual_completeness": {
+        "note": "E(target-sim0) 与 E(sim1-sim0) (纯 seed 差) 的 11 维签名不可区分 → 管线信号层面完备",
+        "E_target_vs_seed_diff": {
+          "std": [
+            20.25,
+            20.25
+          ],
+          "skew": [
+            -0.0,
+            -0.005
+          ],
+          "kurt": [
+            5.44,
+            5.47
+          ],
+          "ac1": [
+            0.443,
+            0.443
+          ],
+          "ac8": [
+            0.001,
+            -0.0
+          ],
+          "spatial_corr": [
+            0.712,
+            0.713
+          ],
+          "vm_slope": [
+            12.98,
+            12.9
+          ],
+          "cross_ch": [
+            0.928,
+            0.928
+          ],
+          "rgb_ratio": [
+            1.02,
+            1.019
+          ],
+          "extreme_pct": [
+            52.51,
+            52.51
+          ],
+          "ric": [
+            0.001,
+            0.001
+          ]
+        }
+      },
+      "ignored_misattributed_borderline": {
+        "full_analysis_step2_GAUSSIAN_YCrCb": "误归因 — cross_channel_corr 0.89 / residual_intensity_corr 0.44 来自 JPEG 颜色变换+量化; 逐通道独立 pre-JPEG speckle 模拟复现 cross_ch 0.918 (target 0.919), rgb_ratio 1.037 (target 1.04)",
+        "peeled_sb6_extreme_pct_52.5_IMPULSE": "定义性假阳性 — 有符号残差 (res<=0)|(res>=255) 天然 ~50% 为负; sim-sim seed 差在无脉冲噪声时同样 52.51%",
+        "peeled_sb6_vm_slope_12.9_SPECKLE": "两独立乘性 speckle 实现之差的预期现象 (方差 ∝ I^2); sim-sim 差同样 12.90, 非新退化证据",
+        "r1_prior_lag1_known_mismatch": "R1 记录的'白噪声无法表达 lag1 0.46-0.65'缺口已完全闭合: pre-JPEG speckle 经 JPEG q18 量化后 lag1 逐对吻合 0.425-0.461",
+        "pair4_variance_ratio_1.119_borderline": "对比度嫌疑被排除 — sim variance_ratio 1.1191 vs target 1.1194 (内容+噪声+JPEG 交互)",
+        "blur_missed_hypothesis": "noise→JPEG 间插入 blur_gaussian:1 → WEAK (noise:sigma diff 75%, bb diff 22%); 残差 lag1-16 剖面已被无 blur 管线精确复现 → 排除",
+        "extra_step_after_jpeg": "无证据 — unique_G=256 排除 quantization; dctzr/bb 与单次 JPEG q18 一致排除二次压缩; ac8≈0.00 无额外块结构"
+      }
+    },
+    "candidates_tested": [
+      {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "MATCH (3/3) × 5/5 support pairs",
+        "decision": "ACCEPT (维持 R1)"
+      },
+      {
+        "pipeline": "noise_speckle:3,blur_gaussian:1,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "WEAK (noise:sigma 75%, bb 22%)",
+        "decision": "REJECT"
+      },
+      {
+        "pipeline": "compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "MATCH (1/1) — 子集管线自匹配 caveat",
+        "decision": "REJECT (二阶: res_std 8.33 vs 15.77, 剖面 74.1%, dctzr 0.835 vs 0.722)"
+      },
+      {
+        "pipeline": "noise_speckle:2,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "PARTIAL (sigma 50%)",
+        "decision": "REJECT (res_std 12.59, 剖面 24.1%)"
+      },
+      {
+        "pipeline": "noise_speckle:4,compression_jpeg:2",
+        "mode": "signal",
+        "verdict": "PARTIAL (sigma 25%)",
+        "decision": "REJECT (res_std 19.52, 剖面 26.7%)"
+      }
+    ],
+    "caveat_verify_signals_completeness": "verify_signals 仅校验管线自身声明的信号 — 缺步管线可'自匹配' (jpeg2-only 得 MATCH 1/1)。管线完备性必须由残差统计 (强度剖面/二阶矩/seed 差等价) 检验, 本次已执行",
+    "decision": "NO_CHANGE",
+    "decision_rationale": "R2 重跑 5 对 run_full_analysis 与 R1 完全一致; 全部新增二阶统计被 R1 管线精确复现; 模型误差残差与纯 seed 差在 11 维签名上不可区分; 3 个存疑信号 (YCrCb 归因 / IMPULSE 假阳性 / pair4 var_ratio) 均被证明可由 R1 管线解释。无任何被忽略/误归因/边界信号支持修改管线 → NO_CHANGE, 不强制 R2 训练",
+    "training_diagnosis": {
+      "source": "编排器提供 (未读取训练日志, 隔离规则)",
+      "r1_best_step": 15092,
+      "r1_is_final_step": true,
+      "r1_support_psnr": 30.12,
+      "r0_support_psnr": 27.38,
+      "delta_db": 2.74,
+      "best_eq_last": "训练稳定, 无 exp40 式 best≠last 发散; 无 NaN 迹象 (PSNR 合理)"
+    },
+    "training_strategy_R2": null,
+    "training_strategy_note": "NO_CHANGE → 不生成 training_strategy_R2.json; R1 checkpoint 继续有效",
+    "budget_usage": {
+      "psnr_tests": 0,
+      "signal_tests": 9,
+      "run_full_analysis": 5,
+      "peeled_noise_check": 1,
+      "limit": "≤5 候选 / ≤25 测试 — 未超限"
+    },
+    "artifacts": [
+      "predicted_params_R2.json (NO_CHANGE, 管线同 R1)",
+      "/tmp/r2_0013_set1/second_order.json",
+      "/tmp/r2_0013_set1/candidate_second_order.json",
+      "/tmp/r2_0013_set1/fa_pair0..4.json",
+      "/tmp/r2_0013_set1/peeled_R1_pair0.json"
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "challenge": "blind_0013_set3",
+  "pipeline": [
+    {"function": "noise_speckle", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 2},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": null,
+      "stats": {"verify_signals": "PARTIAL", "matched": ["noise:clean_residual", "compression:block_boundary"], "mismatched": ["noise:sigma (diff=50%)"]},
+      "function_family": "noise_speckle+compression_jpeg",
+      "note": "severity lower-bound backup (multiplicative noise slightly weaker)"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 2},
+        {"function": "compression_jpeg", "severity": 1}
+      ],
+      "psnr": null,
+      "stats": {"verify_signals": "PARTIAL", "matched": ["noise:sigma", "noise:clean_residual"], "mismatched": ["compression:block_boundary (diff=10%)"]},
+      "function_family": "noise_speckle+compression_jpeg",
+      "note": "JPEG severity lower-bound backup (q25 instead of q18)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": null,
+    "ci_pass_rate": "N/A (SIGNAL mode; verify_signals MATCH 5/5 support pairs)",
+    "psnr_gap": null,
+    "evidence": {
+      "compression": "block_boundary target 1.400-1.720 in 5/5 pairs (>1.1, 0% FP JPEG signal). verify_signals compression:block_boundary MATCH for noise_speckle:3+compression_jpeg:2 in 5/5 pairs. JPEG:1 alone matched only 3/5 (pairs 1/2 blockier in sim than target); stronger JPEG:2 is required once speckle is present.",
+      "noise": "peeled residual after JPEG strip: vm_slope=2.41 (>>0.01 speckle threshold), intensity_var_corr=0.93, residual_intensity_corr=0.59 -> multiplicative noise. noise_speckle:3 (c=0.28) + JPEG:2 gives verify_signals MATCH (noise:sigma, noise:clean_residual, compression:block_boundary) on ALL 5 pairs. Additive alternatives rejected: gaussian RGB 21.48 dB / 22.92 dB; YCrCb WEAK sigma diff 372%; poisson excluded by var_slope<=0.10; impulse extreme_pct is SKILL-known JPEG-artifact FP.",
+      "blur": "spectral_slope_ratio 0.948-0.996 (<1.08) in 5/5; FFT anisotropy 0.0; JPEG+blur_gaussian:1 PSNR 23.07 vs 23.00 (+0.07 dB within noise) with CI 3/10 -> blur rejected.",
+      "global": "mean_shift -0.6..-6.8 levels far below darken sev1 (-25.5); variance_ratio 0.88-1.06 with contrast_spread_ratio 0.97-1.05; chroma_ratio 0.96-1.06 (pair4 1.41 flagged brightness_from_jpeg FP, saturate_strengthen sev1 would multiply chroma variance ~9x) -> no supported global step.",
+      "order": "noise_speckle:3 -> compression_jpeg:2 follows the physical constraint noise before JPEG storage; reversed/joint alternatives were weaker (speckle:2+jpeg:1 PARTIAL, speckle:3+jpeg:1 WEAK, speckle:1+jpeg:1 PARTIAL).",
+      "verdict_reason": "Noise step: verify_signals MATCH but per rule noise is never LIKELY (seed mismatch) -> UNCERTAIN. Compression step: block_boundary 0%FP signal matched 5/5 -> LIKELY. Mixed pipeline (Tier 3) -> overall UNCERTAIN.",
+      "qwen_noise_gate": "unavailable"
+    }
+  }
+}

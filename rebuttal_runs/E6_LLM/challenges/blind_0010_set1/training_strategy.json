@@ -1,0 +1,40 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "per-step verdicts: blur_gaussian:1 LIKELY + brightness_darken_gamma_HSV:5 LIKELY, full_analysis PSNR=Infinity (pixel-exact), CI 10/10, tier=1 → 识别置信度极高，基线架构即可，无需保守兜底组件（§七 决策规则: 仅 Tier S/A 信号触发组件）",
+    "block_boundary=0.9932 < 1.05/1.1 (Tier S JPEG 门控未触发) + 两步管线像素级复现（PSNR=Inf, 无任何压缩步骤） → NO_COMPRESSION；unique_G=187<200 由 gamma darken + clipping 完全解释（同管线仿真 unique_G=188），不是压缩证据 → 无 JPEG 专项处理",
+    "variance_ratio=0.330 ≠ 1.0 (形似 Tier A) BUT full_analysis false_positive_checks: contrast_from_clipping=true, contrast_from_saturation=true, gamma_from_clipping=true, brightness_clip_explains_variance=true；最终函数为 gamma_HSV（非 contrast_scale/stretch） → 方差下降由 gamma+clipping 解释，ColorPre/FiLM-GCM 的 contrast 门控不满足；§二 brightness(gamma) 行明确组件无效 (FiLM +0.05) → use_gcm=false, use_color_pre=false",
+    "FFT anisotropy=0.00, pca=0.0 → anisotropy_ratio>1.7 的 OCAB 门控 (Tier A, 0%FP, motion blur) 未触发；blur 为各向同性 blur_gaussian:1（像素级确认） → attention_type=swin, window_size=8（非 OCAB/ws16）",
+    "peeled residual std=0.0（residual_std=0.0, zero_ratio=1.0）, noise_prior sigma=1.48 < 2 → NO_NOISE，确定性管线完整解释目标图 → 无噪声专项组件",
+    "SimpleGate: exp39 9 种退化 8/9 安全（仅 S5 motion×3 为 -0.86），本案组合近似 B(+0.06)/SF5 gamma×3(-0.14)，且 -32K 参数 → use_simple_gate=true（§七 默认常开）",
+    "DualBranch: §七 全组件启用条件表明确『盲识别下不推荐 / exp37 0/24 胜』；full_analysis.recommended_architecture 的 DualBranch 建议来自 multi-step/uncertain 启发式，而两步现已 LIKELY + 像素级精确 → use_dual_branch=false",
+    "ColorMLP: 门控条件为 brightness_HSV (V-shift) 高置信 (+0.28)；本案为 brightness_darken_gamma_HSV（gamma 型，§二 明确 gamma 组件无效），且 severity 已像素级精确（无 ±1 偏差问题） → use_color_mlp=false",
+    "CSN: §五/§七 纯全局退化上灾难性失败 (-4.6~-11.7 dB)，本案含强全局 gamma(sev5) 主导 → use_csn=false；ChannelCurve 仅 stretch 有效、gamma 无效 → use_channel_curve=false",
+    "strategy=direct: §六 Step 1 含全局 brightness/gamma → Direct 最安全；无专用预训练 ckpt（True Ft 不可用，且 exp37 证明 1.5h 预算下 True Ft ≈ Direct）；lr=5e-4 满足 §四（LR 微调 <0.3dB）与 SimpleGate 2-epoch 崩溃风险建议（§五 exp39 注）"
+  ],
+  "finetune_strategy_ref": [
+    "§六 Step 0: 退化难度分层（gamma 属低难度 → 纯 Swin + SimpleGate）",
+    "§六 Step 1: Direct vs RandomCurric vs True Ft（含全局退化 → Direct）",
+    "§六 Step 2: 按退化步骤独立匹配组件（LIKELY+contrast 才触发 FiLM-GCM/ColorPre；任意 verdict → SimpleGate 默认常开）",
+    "§六 Step 3: 组件稳定性检查（盲识别场景不加额外组件，纯 Swin 最安全）",
+    "§七 全组件启用条件与信号→组件映射（variance_ratio/block_boundary/anisotropy 门控）",
+    "§二 全局退化差异化处理（brightness gamma: Direct, 组件无效）",
+    "§五 参数公平性与 GPU 预算（Swin dim=64 为 454K 基线）"
+  ],
+  "reasoning": "盲识别结果为两步确定性管线 blur_gaussian:1 → brightness_darken_gamma_HSV:5，且经 reflection 的 PSNR 排序与顺序测试达到像素级精确复现（PSNR=Infinity, CI 10/10, 两步 verdict 均 LIKELY, tier=1），这是 Tier 1 最高置信场景。按 §七 的『信号置信度驱动组件选择』：block_boundary=0.993 未触发 JPEG 门控；FFT anisotropy=0.00 未触发 OCAB 门控（gaussian blur 各向同性，非 motion）；variance_ratio=0.330 虽形似 Tier A，但 false_positive_checks 全部指向 gamma darken + clipping 的方差衰减（contrast_from_clipping/contrast_from_saturation/gamma_from_clipping 均为 true），实际步骤为 gamma 而非 contrast/stretch，§二 明确 brightness(gamma) 场景组件无效，故不启用 ColorPre/FiLM-GCM；噪声被 peeled residual std=0.0 排除。唯一默认常开的是 SimpleGate（-32K 参数，exp39 8/9 安全，本案近似 B/SF5 退化均无显著负收益）。DualBranch 虽被 full_analysis 启发式推荐，但 §七 明确『盲识别下不推荐（exp37 0/24 胜）』且其触发理由（multi-step/uncertain）已被 pixel-exact LIKELY 取代，故关闭。最终架构为纯 Swin (dim=64, ws=8) + SimpleGate，Direct 从零训练 2 epoch、lr=5e-4、batch=16，与 §六 的低难度全局退化（gamma）+ 各向同性弱模糊场景一致。训练监控提示：若 SimpleGate 在 epoch 2 出现末端退化（§五 exp39 D3 注），按 §九 使用 best checkpoint。"
+}

@@ -1,0 +1,47 @@
+{
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_speckle",
+          "severity": 2
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 2
+        }
+      ],
+      "psnr": null,
+      "stats": {
+        "pair0_residual_std": [22.58, 25.64],
+        "pair3_residual_std": [8.69, 10.53],
+        "note": "simulated vs target; same structural fingerprint (kurtosis 4.35 vs 4.35 pair0, lag1 0.51 vs 0.52 pair3) but amplitude 15-25% low"
+      },
+      "function_family": "speckle severity -1 (within ±1 tolerance)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": null,
+    "ci_pass_rate": "N/A (SIGNAL mode; noise seed mismatch makes PSNR non-transferable)",
+    "psnr_gap": null,
+    "per_step": {
+      "noise_speckle:3": "UNCERTAIN (noise step never LIKELY; verify_signals MATCH)",
+      "compression_jpeg:2": "LIKELY (block_boundary diff 0.5% < 5%, dct_zero_ratio diff 0.0006 < 0.05 under noise coupling)"
+    },
+    "evidence": "5 paired-support images, all pairs: block_boundary 1.24-1.91 (>1.1, 0%FP JPEG), blur ruled out (spectral_slope_ratio 0.975-0.989, gm_ratio>1 = JPEG blocking, anisotropy 0), global ruled out (variance_ratio 0.85-1.01, spread 0.93-1.03, chroma 0.90-1.01). After peeling JPEG q18 (sev2), residual is multiplicative: residual_std/RMS(clean) = 0.185/0.130/0.164/0.141/0.141 across pairs 0-4 (constant scaling with image RMS; target also re-lowers 255-saturated pixels: pair0 7.68%->1.26%), vm_slope 0.24-1.08 (>0.005 speckle), var_slope ~0 (not poisson), rgb_ratio 1.01-1.04 (equal per-channel sigma, NOT YCrCb). Candidate noise_speckle:3 -> compression_jpeg:2 reproduces target residual statistics exactly: pair0 std 25.66 vs 25.64, kurtosis 4.37 vs 4.35, lag1 0.297 vs 0.298, corr(|r|,I) 0.42 vs 0.43; pair3 std 10.58 vs 10.53, kurt 10.55 vs 10.39, lag1 0.520 vs 0.522, corr 0.54 vs 0.53. verify_signals pair0 = MATCH (3/3): noise sigma 3.0 vs 3.0, block_boundary 1.2419 vs 1.2480, residual autocorr FWHM 0 (<4px). Order confirmed: JPEG->speckle order fails (std 37.55, lag1 0.129; verify WEAK, sigma diff 296%). Rejected: gaussian_RGB (std 19.1, corr(I) 0.14), poisson (std 20.2, corr 0.22), YCrCb (rgb_ratio~1), jitter/glass (kurt 16-31 vs 4.3-10.4; PSNR below jpeg-only baseline). Overall UNCERTAIN because the random speckle step cannot reach LIKELY (seed mismatch); JPEG step LIKELY by signal match under noise coupling."
+  }
+}

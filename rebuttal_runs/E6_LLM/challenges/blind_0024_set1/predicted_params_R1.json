@@ -1,0 +1,123 @@
+{
+  "challenge_id": "blind_0024_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "pipeline": [
+    {
+      "step": 1,
+      "category": "noise",
+      "function": "noise_gaussian_YCrCb",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "step": 2,
+      "category": "blur",
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "step": 3,
+      "category": "global",
+      "function": "saturate_strengthen_HSV",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"step": 1, "category": "noise", "function": "noise_gaussian_YCrCb", "severity": 3},
+        {"step": 2, "category": "blur", "function": "blur_lens", "severity": 3},
+        {"step": 3, "category": "global", "function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "function_family": "blur_lens",
+      "psnr": null,
+      "psnr_note": "gaussian<->lens MTF indistinguishable (SKILL C.3); R1 smooth-region high-pass bracket under fixed YCC3+sat2 cannot separate them either (hf attenuation of a disk radius-4 kernel is within the noise-severity degeneracy)",
+      "status": "UNRESOLVED_ALTERNATIVE"
+    },
+    {
+      "pipeline": [
+        {"step": 1, "category": "noise", "function": "noise_gaussian_YCrCb", "severity": 3},
+        {"step": 2, "category": "blur", "function": "blur_glass", "severity": 5},
+        {"step": 3, "category": "global", "function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "function_family": "blur_glass",
+      "psnr": 22.04,
+      "psnr_note": "R0 deterministic-subset test (glass:5 -> 22.04 dB vs gaussian:3 -> 23.72 dB). Not re-tested: glass at severity <=4 smooths even less than glass:5 while target gm_ratio=0.329 requires a strong energy-reducing blur",
+      "status": "REJECTED_PRIORITY"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 23.72,
+    "psnr_gap": 0.15,
+    "psnr_note": "Retained from R0: deterministic-subset (blur_gaussian:3 + saturate_strengthen_HSV:2) PSNR=23.72 dB (blur sev3 > sev4 23.57 > sev2 23.25; glass:5 22.04; sat-only 20.01). Full-pipeline PSNR remains invalid (noise seed mismatch) and was not used for R1 decisions.",
+    "ci_pass_rate": "7/10",
+    "ci_note": "Retained from R0 (deterministic-subset CI). R1 used verify_signals + second-order statistics, not CI, for arbitration.",
+    "support_psnr_r0": 26.20,
+    "support_psnr_note": "R0 best checkpoint (step 15092, best=last) support-only PSNR; no test/GT evaluation used.",
+    "mode": "SIGNAL for the noise step (pipeline contains noise -> PSNR invalid) + second-order statistics for deterministic steps (smooth unclipped-region per-channel high-pass, HSV S/V, clipping fraction)",
+    "r1_seed_stability": "5-seed replicate of the full pipeline: S mean sd=0.1-0.3 (0-255), hf mean sd<=0.01, clip sd<=0.002 -> simulation statistics are effectively deterministic, so target-vs-sim deltas are meaningful",
+    "r1_evidence": {
+      "noise_gaussian_YCrCb:3": "[signal_reanalysis] peeled residual (blur_gaussian:3 + saturate_strengthen_HSV:2): rgb_ratio=1.5446 (>1.4 -> YCrCb), per-channel sigma ratio 2.0 (>1.4 -> YCrCb), ch_stds R/G/B=[13.5,20.8,14.5]; extreme_pct=64.22 is the documented clipping false positive (zero_ratio=0.2567, sigma_prior<5 -> ignore IMPULSE per SKILL). Smooth unclipped-region high-pass on canonical pair0: target mean hf=2.66, YCC3=2.71 (+1.8%), S-hf target=7.94, YCC3=7.99 (+0.6%), channel pattern 2.88/2.85/2.39 vs target 2.79/2.79/2.40. Severity bracket (pair0, blur3+sat2 fixed): YCC2 -14.7%/-16.6%, YCC3 +1.8%/+0.6%, YCC4 +20.3%/+17.9% (hf mean / S-hf). Noise-before-blur ordering corroborated by noise_prior sigma 1.48 (luma wavelet) consistent with sigma_l(sev3)=0.07*255 attenuated by blur sigma=3 (~1.7 levels), not raw additive noise.",
+      "blur_gaussian:3": "[signal_reanalysis] blur presence and severity re-confirmed by the same smooth-region statistic: with YCC3+sat2 fixed, blur sev2 gives hf +122.9%/S-hf +120.0%, sev3 +1.8%/+0.6%, sev4 -22.0%/-26.2% (target matched only by sev3; a no-blur pipeline would be far above +122%). Peel residual std blur:3=16.6 vs blur:4=16.9 (sev3 marginally cleaner). FFT anisotropy 1.29/1.70 (pairs 0-1) < 1.7 motion threshold; gm_ratio 0.329 pair0 (pairs 2-4 gm_ratio 0.77/1.00/1.90 are masked by saturation clipping edges, consistent with SKILL mixed-degradation recall drop, not evidence against blur).",
+      "saturate_strengthen_HSV:2": "[signal_reanalysis] HSV V invariant across all 5 pairs (target V 137.7/177.3/150.0/126.1/160.0 vs clean 139.7/182.1/152.4/126.5/166.5) while S is amplified (target S 227.9/253.6/218.1/207.8/186.9 vs clean 85.5/234.1/62.7/76.2/44.0) and clipping appears -> saturation, not brightness (the raw brightness_darken_sev1-3 heuristic is a clipping artifact of the RGB mean drop). Full-sim pair0 S=229.3/clip=0.745 vs target 227.9/0.739; sat sev3 full-sim S=247.0/clip=0.910 and verify_signals WEAK 2/6 (mean_shift diff 0.0182, variance_ratio 32%) -> sev3 decisively rejected.",
+      "compression": "[signal_reanalysis] block_boundary per pair 0.9935/1.0070/0.9979/0.9945/0.9969 (all < 1.05); unique_G 216-241; R0 pair0 no-JPEG sim match re-verified (bb 0.9935 vs 0.9931, dct_zero_ratio 0.3764 vs 0.3756). No compression step."
+    },
+    "r1_candidates_tested_pair0": [
+      {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "control (R0 pipeline)",
+        "verify_signals": "PARTIAL 4/6 (matched spectral_slope, wiener_kernel, noise:sigma, mean_shift; mismatched FWHM=6px intrinsic to noise-before-blur, variance_ratio 10%)",
+        "second_order": "hf +1.7%, S-hf +0.1%, channel-wise within 3%",
+        "outcome": "BEST"
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "noise severity +1 boundary",
+        "verify_signals": "PARTIAL 5/6 (variance_ratio flips to pass)",
+        "second_order": "hf +20.3%, S-hf +17.9% (noise texture over-amplitude)",
+        "outcome": "REJECTED"
+      },
+      {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "noise subtype equal-amplitude control",
+        "verify_signals": "PARTIAL 5/6 (variance_ratio passes)",
+        "second_order": "hf -11.3% (2.36 vs 2.66), S-hf -12.9%, B-channel texture 1.96 vs 2.40",
+        "outcome": "REJECTED"
+      },
+      {
+        "pipeline": "noise_speckle:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "noise subtype alternative",
+        "verify_signals": "PARTIAL 5/6 (FWHM=8px)",
+        "second_order": "hf -21.0%, S-hf -25.7%",
+        "outcome": "REJECTED"
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:3",
+        "role": "saturation severity +1 boundary",
+        "verify_signals": "WEAK 2/6 (mean_shift diff 0.0182, variance_ratio 32%, noise:sigma 50%)",
+        "second_order": "S=247.0 vs target 227.9, clip=0.910 vs 0.739, hf +83%",
+        "outcome": "REJECTED"
+      }
+    ],
+    "r1_cross_pair_validation": {
+      "pair0": "canonical target (degraded.png == degraded_0.png, sha256 verified); control matches hf +1.7% / S-hf +0.1%",
+      "pair1": "deterministic blur3+sat2 S=253.9 vs target 253.6 (exact)",
+      "pair2": "full sim dS=+0.4, hf +7.4%, S-hf +3.3%; verify_signals WEAK 3/6 (noise:sigma at estimator floor 0.2 vs 0.1 levels is uninformative; mean_shift diff 0.0073 marginal; blur + variance_ratio matched)",
+      "pair3": "deterministic blur3+sat2 S=206.8 vs target 207.8 (close)",
+      "pair4": "OUTLIER: dS=+12.0 (~38 seed-sd), hf +16.2%, S-hf +6.3% -> target responds like a weaker-noise variant. Cannot be produced by any seed of the same pipeline (seed sd 0.1-0.3). Most likely content nonlinearity of the S*6+clip transform at the lowest clean-S image (clean S=44.0) or support-set per-pair variation. Decision unaffected: the canonical target is pair0 and 4/5 supports (pairs 0-3) are consistent with the R0 pipeline."
+    },
+    "r1_conclusion": "NO_CHANGE. Every tested alternative either degraded the second-order noise texture (11-22% error) or, for sat:3, broke the deterministic global statistics outright. The only verify_signals gain for YCC4/RGB3/speckle2 (5/6 vs 4/6) came from a marginal whole-image variance_ratio threshold flip (a global statistic dominated by saturation/clipping variance, which pair4 shows is content-sensitive by ~9% at the same pipeline), while the direct smooth-region noise texture degraded. Per REFLECTION_MECHANISM judgement priority: no MATCH was achievable (FWHM mismatch is intrinsic to noise-before-blur) and no coherent signal improvement was found -> keep R0.",
+    "training_note": "NO_CHANGE -> no training_strategy_R1.json; existing training_strategy.json (Direct, Swin+SimpleGate, EPOCH=2, LR=5e-4, batch=16) stands. No additional training authorized by R1.",
+    "unresolved": [
+      "blur gaussian vs lens MTF-indistinguishable (lens:3 kept as alternative; risk 1-4 dB per REFLECTION_MECHANISM migration table)",
+      "support pair4 deviates from the fixed-pipeline simulation (S +12, hf +16%); no legal pipeline that fits pair0 better was found",
+      "noise-before-blur ordering assumed from challenge generator constraints (noise priority 0 < blur priority 1); reversing it would produce unattenuated noise (sigma ~18-34 levels) contradicted by the peeled residual"
+    ],
+    "budget": "5 pair run_full_analysis + 2 peeled_noise_check + 5 candidate pipelines (control + 4 alternatives) + 2 cross-pair validations = 7 test_candidate calls, far below the 25-test ceiling"
+  }
+}

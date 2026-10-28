@@ -1,0 +1,124 @@
+{
+  "challenge": "blind_0017_set2",
+  "round": "R1",
+  "pipeline_source": "predicted_params_R1.json",
+  "pipeline_functions": [
+    "noise_gaussian_YCrCb:3 (UNCERTAIN, Tier C)",
+    "blur_gaussian:3 (LIKELY, Tier B)",
+    "compression_jpeg:4 (LIKELY, Tier S presence / severity UNCERTAIN)"
+  ],
+  "removed_vs_R0": "contrast_weaken_scale:1 (false positive: variance_ratio 0.64-0.73 is explained by noise+blur+JPEG coupling; matched no-contrast sims give 0.645-0.772 vs target 0.639-0.734 on all 5 support pairs, while cw1 gives 0.42-0.44)",
+  "overall_verdict": "UNCERTAIN (Tier 3; noise subtype/severity unresolvable under noise->blur)",
+  "strategy": "direct",
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_color_mlp_output": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_freqmod": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false
+  },
+  "env_flags": {
+    "AR_ATTENTION_TYPE": "swin",
+    "AR_WINDOW_SIZE": "8",
+    "AR_EMBED_DIM": "64",
+    "AR_USE_SIMPLE_GATE": "1",
+    "AR_USE_GCM": "0",
+    "AR_USE_COLOR_PRE": "0",
+    "AR_USE_COLOR_MLP": "0",
+    "AR_USE_COLOR_MLP_OUTPUT": "0",
+    "AR_USE_DUAL_BRANCH": "0",
+    "AR_USE_CSN": "0",
+    "AR_USE_CHANNEL_CURVE": "0",
+    "AR_USE_PCP": "0",
+    "AR_USE_FREQMOD": "0",
+    "AR_USE_SCA": "0",
+    "AR_USE_GDFN": "0",
+    "AR_USE_FPRO": "0",
+    "AR_PARAMS_PATH": "rebuttal_runs/E6_LLM/challenges/blind_0017_set2/predicted_params_R1.json",
+    "AR_VAL_PARAMS_PATH": "rebuttal_runs/E6_LLM/challenges/blind_0017_set2/predicted_params_R1.json",
+    "AR_LEARNING_RATE": "0.0005",
+    "AR_EPOCH_BUDGET": "2",
+    "AR_BATCH_SIZE": "16",
+    "AR_QUIET_PIPELINE": "1",
+    "AR_CHALLENGE_DIR": "/data/zyli/projects/autoresearch/rebuttal_runs/E6_LLM/challenges/blind_0017_set2"
+  },
+  "signal_basis": [
+    {
+      "signal": "spectral_slope diff 0.0315/0.0348 (<0.08) and Wiener kernel corr 0.9989/0.9984 (>0.85) under the R1 no-contrast pipeline; gm_ratio 0.17-0.50; residual_anisotropy 1.15-1.67 (<1.7)",
+      "supports": "blur_gaussian:3 LIKELY; NOT motion; glass_score JPEG-confounded (target 1.15-1.54 vs no-blur JPEG sim 1.44-1.86)",
+      "source": "R1 verify_signals runs P101-R114; full_analysis_R1 pair0/pair1 step3_blur",
+      "gate": "§七 Tier B (blur DT) -> Swin baseline, no component; anisotropy < 1.7 -> OCAB disabled; window_size 8"
+    },
+    {
+      "signal": "block_boundary 4.24-7.15 (>>1.05, 0%FP) + dct_zero_ratio 0.892-0.948 in 5/5",
+      "supports": "compression_jpeg:4 LIKELY",
+      "source": "full_analysis_R1 pairs; R1 jpeg4-vs-jpeg5 cross-pair tests (R108 pair2, R110 pair0)",
+      "gate": "§七 Tier S -> JPEG confirmed (no dedicated model component exists); severity 4 retained as cross-pair compromise (jpeg5 matched pair2 but broke pair0: bb diff 40% vs 10-13%)"
+    },
+    {
+      "signal": "noise existence: flat-region variance p75 target 0.10/0.19 vs no-noise sim 0.05/0.05 (pairs 0/2); chroma +5-20% over no-noise sims; impulse rejected (raw impulse_zero_ratio 0.039-0.098 << 0.85; impulse sim flat p75 0.05)",
+      "supports": "noise_gaussian_YCrCb:3 UNCERTAIN",
+      "source": "R1 second-order statistics on peeled/matched sims; R0 statistical_checks.flat_region + chroma; R103/R109 impulse tests",
+      "gate": "§七 Tier C (noise->blur 54.7%) -> no component attributed to the noise step"
+    },
+    {
+      "signal": "variance_ratio target 0.639-0.734 is fully explained without any global step: noiseYCrCb3+blur3+jpeg4 sims give 0.772/0.645/0.748/0.714/0.732 (pairs 0-4) with mean/std within 0.5-2.5 levels; R0's contrast step (alpha=0.75) overshoots to 0.437/0.419 and inflates peeled-residual FWHM to 62-334px (no-contrast: 6-12px)",
+      "supports": "DROP contrast_weaken_scale:1; do NOT apply the §七 'variance_ratio!=1.0 -> ColorPre / FiLM-GCM' gate because the signal is a noise+JPEG coupling artifact here, not a contrast step",
+      "source": "R1 cross-pair second-order statistics (P102/P106/P111/P113/P114 sims); predicted_params_R1.removed_steps",
+      "gate": "§七 'A: variance_ratio != 1.0 -> ColorPre/FiLM-GCM' premise falsified for this challenge; §八 exp37: blind scenario pure Swin 23/24 wins over components; R0 GCM best!=last divergence (20.56@3773 -> 20.03@15092)"
+    },
+    {
+      "signal": "R0 architecture used FiLM-GCM and diverged after step 3773; no NaN observed (grep count 0), best 20.56 < identity baseline 21.65",
+      "supports": "pure Swin + SimpleGate, Direct, no GCM for R1",
+      "source": "E6_LLM/logs/blind_0017_set2_R0.log (predicted-pipeline only, no GT); identity PSNR computed on support pairs",
+      "gate": "§九 best!=last -> use best ckpt; architecture simplification"
+    },
+    {
+      "signal": "JPEG+blur multi-step local degradation (D3-like); SimpleGate exp39 D3: ckpt1 +0.02 (23.86->23.88)",
+      "supports": "SimpleGate default-on (weak positive)",
+      "source": "finetune_strategy.md §五 SimpleGate table",
+      "gate": "§七 '可常开' default-on rule"
+    }
+  ],
+  "finetune_strategy_ref": [
+    "§六 Step 1: 纯局部 (blur/noise/comp) -> Direct 或 RandomCurric; Direct chosen per R1 protocol",
+    "§六 Step 2: 每个退化步骤独立匹配组件; noise UNCERTAIN -> 不加组件; blur Tier B -> Swin; JPEG Tier S -> 无专用组件",
+    "§七 核心原则: 信号置信度驱动组件选择; Tier C/信号矛盾 -> 纯 Swin + Direct 安全兜底",
+    "§七 全组件启用条件: ColorPre/FiLM-GCM 需 variance_ratio != 1.0 代表真实 contrast 步骤 — R1 证明该信号在本挑战由 noise+JPEG 耦合产生，门控前提不成立",
+    "§五 注意力: contrast 全局退化才需 Swin-only 约束; 本管线不含 contrast; 无 motion (anisotropy<1.7) -> OCAB 关闭, ws=8",
+    "§八 exp37: 盲识别场景组件 0/24 胜, 纯 Swin 23/24",
+    "§九 exp39 警告: SimpleGate 在 D3 (JPEG+blur) epoch2 ckpt 退化先例 (23.88 -> 15.40) -> 必须按 best ckpt 评估"
+  ],
+  "reasoning": "R1 管线 = noise_gaussian_YCrCb:3 -> blur_gaussian:3 -> compression_jpeg:4 (3 步, 删除 R0 的 contrast_weaken_scale:1)。策略: 纯局部多步退化，无 contrast，§六 Step 1 允许 Direct（且盲识别场景 True Ft≈Direct，exp37/38），按协议采用 Direct 从头训练，EPOCH=2, LR=5e-4, batch=16，与基线公平一致。注意力: 无全局退化约束、无 motion（5 对残差各向异性 1.15-1.67 < 1.7），Swin + ws=8；blur 信号(spectral slope/Wiener)匹配良好。组件: noise 步骤为 Tier C（noise->blur 下子类型 54.7% 不可辨），不加任何组件；blur 为 Tier B，Swin 基线即可。R0 启用的 FiLM-GCM 基于 variance_ratio 门控，但 R1 已证明该信号由 noise+blur+JPEG 耦合解释（无任何 global 步骤即可把 5 对 variance_ratio 匹配到 1.4-12%），门控前提不成立；且 R0 GCM 训练 best@3773 后发散（20.56 -> 20.03），exp37 盲识别场景纯 Swin 23/24 胜。故 use_gcm=0。SimpleGate 按 §七 默认常开（-32K, exp39 8/9 安全; D3 +0.02@ckpt1），但需警惕 D3 epoch2 退化先例，评估时取 best ckpt。ColorPre/CSN/DualBranch/ColorMLP/ChannelCurve 均不满足门控或已废弃，全部关闭。R1 启动时按上方 env_flags 显式传参（关键是 AR_USE_GCM=0，取代 R0 的 AR_USE_GCM=1）。未使用 GT，未使用测试数据。",
+  "risk_notes": [
+    "噪声子类型/严重度不可辨（YCrCb vs RGB, sev2-4 均有部分证据）；若 R1 训练/评估仍差，优先换 noise_gaussian_RGB:3 复核（成本 1-5 dB 量级，远低于 impulse 的 21 dB，故不采用 impulse）。",
+    "真实管线可能含一个库函数无法表示的温和全局收缩（等效 alpha>=0.96）；R1 选择省略该步（variance_ratio 误差 1.4-12%）而非使用过度收缩的 cw1（误差 95-118%）。若评估发现系统性对比度残留，cw1 是回退备选。",
+    "JPEG severity 在 pair0（偏向 q8/se v4）与 pair2（偏向 q5/se v5）之间分裂；sev±1 的迁移代价约 0.2 dB，保留 sev4。",
+    "SimpleGate + JPEG/blur 有 exp39 D3 epoch2 ckpt 退化先例：必须使用 best ckpt（日志 'Loaded best checkpoint'）；若 NaN 或发散，回退为纯 Swin（无 SimpleGate）。",
+    "R0 显式使用 AR_USE_GCM=1；R1 必须显式传 AR_USE_GCM=0（train.py 默认值为 False，但显式传参便于审计）。",
+    "噪声 seed 失配使含 noise 候选的 PSNR 仅供指示；判定以 verify_signals/二阶统计为准。",
+    "若 R1 Direct 未能显著超越 R0 基线，R2 候选方向（按序）: (a) RandomCurric（§六: 多步无 contrast +0.1~+5 dB, compression+blur +0.6, 但 exp37/38 提示收益不稳定），(b) 复核 noise RGB:3。"
+  ],
+  "fallback_architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": false,
+    "use_gcm": false,
+    "reason": "§九/§五 exp39: 若 SimpleGate 在 D3-like 管线上 epoch2 发散或 best ckpt 仍退化, 回退纯 Swin Direct (无任何组件)"
+  }
+}

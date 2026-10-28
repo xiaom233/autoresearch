@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_pcp": false,
+    "use_channel_curve": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted_params.json / reflection.json: 单步 saturate_weaken_HSV:4, verdict=LIKELY, Tier 1; 5/5 support pair 上位精确复现 (PSNR=inf, MSE=0, CI 10/10), peel 后残差 std=0.0 → 确定性全局单步退化。→ §六 Step 1「含全局退化 → Direct」+ §二 saturation 行「Direct + 纯 Swin」; 单步无梯度干扰, 不需要 RandomCurric。",
+    "full_analysis.cross_pair_summary: saturation_chroma_ratio_target = 0.0247/0.2003/0.2029/0.2083/0.1995 (各彩色对 ~0.20), brightness_mean_shift = 0.0/8.9/18.8/11.1/20.6, variance_ratio = 1.0001/0.9964/0.7963/1.0698/1.1896; 每对 step4_global.verdict = SATURATION_weaken。",
+    "full_analysis step4_global.signals: contrast_detected_raw=false 且 contrast_from_variance=false (全部 5 对); variance_ratio≠1.0 是 HSV V-preserving S 缩放的位精确伴生效应而非 contrast。→ §七 Tier C「saturation/HSV 信号 → 不加组件 (ColorPre 有害 -0.34)」: use_color_pre=false; §七 FiLM-GCM 门控要求 contrast + 结构化局部 (motion/JPEG), 本挑战无结构化局部 → use_gcm=false。",
+    "full_analysis: FFT anisotropy=0.0 (reflection initial_analysis), gm_ratio=0.951-1.042, spectral_slope_ratio=0.991-1.030 (阈值 1.08), blur=BLUR_UNLIKELY 全部 5 对 → 无 motion。§七 OCAB 门控 anisotropy_ratio>1.7 不满足; §五 全局退化最佳注意力为 Swin (MDTA/OCAB 崩溃) → attention_type=swin; window_size=8 (ws16 仅用于 OCAB/motion sev≥5)。",
+    "full_analysis.cross_pair_summary.block_boundary_target ≈ block_boundary_clean_self (delta 0.0-0.38%; pair3 1.5717 vs clean_self 1.5657 为源图固有 8x8 伪影), unique_G=256 → 无 JPEG/量化 (§七 Tier S block_boundary/unique_G 门控不成立)。",
+    "full_analysis.cross_pair_summary.noise_prior_sigma = 0.0/0.0/0.12/0.0/0.25 (均 <2); reflection noise_6step_check residual_std_after_peel=0.0, extreme_pct=100% 为零残差退化伪影 → NO_NOISE。§五/§七: CSN 在纯全局退化上灾难性失败 (-4.6~-11.7 dB) → use_csn=false。",
+    "§六 Step 0 (低难度全局退化 saturation → 纯 Swin + SimpleGate) + §六 Step 2 / §七 信号→组件默认流程 (SimpleGate 默认常开: -32K 参数, exp39 8/9 安全, L2 +0.78; 唯一显著负例为 S5=motion×3) → use_simple_gate=true (本挑战为单步 saturation, 非 S5)。",
+    "§七 / §八 exp37: DualBranch 在盲识别场景 0/24 胜 → use_dual_branch=false; full_analysis 脚本的通用推荐 (DualBranch for multi-step/uncertain) 不适用于本挑战 (单步 + LIKELY + 位精确)。",
+    "§五 / §七 废弃与边际组件: SCA 已废弃 (8/9 有害), GDFN (+0.22) 边际不推荐, FPro 全崩 (torch.fft×compile 不兼容), PCP per-block 参数不公平; ColorMLP 仅 brightness_HSV 高置信触发, ChannelCurve 仅 stretch 高置信 → 均 false。"
+  ],
+  "finetune_strategy_ref": "finetune_strategy.md §二 (全局退化: saturation → Direct + 纯 Swin), §五 (注意力类型选择: 全局退化 → Swin; 各退化类型最佳方案; 废弃组件), §六 Step 0 (低难度 → 纯 Swin + SimpleGate), §六 Step 1 (含全局退化 → Direct), §六 Step 2 / Step 3 (按步骤 verdict 的信号门控与稳定性检查), §七 (信号置信度驱动组件选择; 全组件启用条件表; 信号→组件映射流程; Tier C 纯 Swin + Direct 安全兜底), §八 exp37 (盲识别场景 DualBranch 0/24 胜)",
+  "reasoning": "盲识别在 5/5 support pair 上位精确复现 (PSNR=inf, MSE=0, CI 10/10), peel 后残差恒为零, 属确定性单步全局退化 (saturate_weaken_HSV:4, Tier 1, LIKELY), 因此按高置信全局退化处理: 从零 Direct 训练 (不加载预训练 ckpt), 2 epoch, lr=5e-4, batch=16。架构上, 管线不含 motion/JPEG/noise/blur 等空间结构, §七 的组件门控全部不满足: OCAB 需 anisotropy>1.7 (实测 0.0), ColorPre/FiLM-GCM 需 contrast 或 contrast+结构化局部 (contrast_detected_raw=false, variance_ratio≠1.0 已被证明是 HSV S 缩放的位精确伴生效应), CSN 需 blur/noise 存在 (纯全局退化上灾难性), ColorMLP 仅 brightness_HSV, ChannelCurve 仅 stretch, DualBranch 盲识别场景 0/24 胜。注意力选 Swin (全局退化最佳, 避免 MDTA/OCAB 崩溃), window_size=8。依 §六 Step 0 与 §七 默认流程启用 SimpleGate (参数 -32K, exp39 8/9 安全, 属安全默认而非激进组件)。SCA/GDFN/FPro/PCP 因废弃/边际/不兼容/参数不公平全部关闭。不修改预测管线, 未使用任何 GT 信息。"
+}

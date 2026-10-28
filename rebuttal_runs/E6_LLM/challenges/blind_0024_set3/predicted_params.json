@@ -1,0 +1,58 @@
+{
+  "challenge": "blind_0024_set3",
+  "pipeline": [
+    {"step": 1, "function": "noise_gaussian_RGB", "severity": 3},
+    {"step": 2, "function": "blur_gaussian", "severity": 3},
+    {"step": 3, "function": "saturate_strengthen_HSV", "severity": 2}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 1},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "psnr": 21.38,
+      "stats": {"ci_pass_rate": "10/10", "pair1_psnr": 22.64, "pair3_psnr": 23.59},
+      "function_family": "noise_speckle",
+      "note": "best PSNR variant (pair0 21.38), CI 10/10; contradicts flat-patch scaling slope (-1.01 vs target -0.41), kept as cross-family backup"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 2},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "psnr": 21.16,
+      "stats": {"ci_pass_rate": "10/10"},
+      "function_family": "noise_poisson",
+      "note": "intensity-dependent-variance hypothesis, intermediate between additive and multiplicative"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 2},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "psnr": 20.85,
+      "stats": {"ci_pass_rate": "10/10"},
+      "function_family": "noise_gaussian_RGB",
+      "note": "same family, severity -1 alternative"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 20.34,
+    "ci_pass_rate": "10/10",
+    "psnr_gap": 1.7,
+    "evidence": [
+      "Compression excluded: block_boundary = 1.001/0.996/0.996/1.003/0.999 across the 5 pairs (0% FP signal), unique_G ~240-256.",
+      "Blur: gm_ratio 0.507/0.356/0.645/0.400/0.640 (all << 0.85); verify_signals gives blur spectral_slope MATCH and wiener_kernel MATCH for blur_gaussian:3; gaussian3 beats glass4 by 1.70 dB on pair1 (22.64 vs 20.95). psnr_gap 1.70 refers to this subtype margin.",
+      "Global step is NOT brightness: per-channel mean shifts are strongly hue-dependent (pair3 target [-52.6,-42.3,-33.3]; saturate_strengthen_HSV:2 gives [-53.7,-43.7,-31.3]); brightness_darken_* yields near-equal channels. Adding an explicit brightness step degrades PSNR (18.6-19.1 dB vs 20.9 dB).",
+      "The large mean_shift (-27.4..-42.7) and dark clipping (12.7-26.2%) are side effects of HSV saturation clipping (min/mid channels pushed down, V preserved). chroma_ratio 2.94 (sim) vs 3.05 (target).",
+      "Noise: flat-sky colourful mottling is real additive noise (flat regions are invariant to glass pixel shuffling); target flat-patch log-sigma vs log-intensity slope -0.41 matches additive Gaussian (-0.45) rather than speckle (-1.01); post-blur sigma match 1.48 vs 1.48 and clipped-fraction match 0.127 vs 0.126 with noise_gaussian_RGB:3.",
+      "Noise type/severity remains the main uncertainty: noise precedes blur, so §B on the peeled residual is structured (spatial_corr 0.99) and cannot certify type; PSNR is seed-limited, so speckle:1/poisson:2/RGB:2 stay as statistically supported alternatives (all CI 10/10)."
+    ]
+  }
+}

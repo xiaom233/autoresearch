@@ -1,0 +1,48 @@
+{
+  "challenge": "blind_0013_set1",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_gdfn": false,
+    "use_sca": false,
+    "use_freqmod": false,
+    "use_pcp": false,
+    "use_color_mlp_output": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "block_boundary=1.555 (clean=1.009; 5 support pairs 1.445-1.761), dct_zero_ratio=0.722 → Tier S 0%FP 信号 → compression_jpeg 确认 (sev4, LIKELY); Section 七 Tier S 行对 JPEG 只做确认、无对应注意力组件 → 保持 swin，不切 OCAB/MDTA",
+    "variance_ratio=0.962 (5 pairs 0.950-1.119), mean_shift=-1.9/255, clipped_fraction=0.58%, contrast_from_variance=false → step4 verdict=NO_GLOBAL → Tier A 信号 'variance_ratio≠1.0' 未触发 → use_color_pre=false, use_gcm=false (Section 七 全组件启用条件表)",
+    "saturation_chroma_ratio=1.0269, saturation_detected_raw=false → ColorPre 禁用场景之一 (saturation 上 -0.34) → 进一步确认 use_color_pre=false",
+    "brightness_mean_shift=-1.9/255, brightness_detected_raw=false → ColorMLP 仅在 brightness_HSV 高置信时触发 → use_color_mlp=false",
+    "spectral_slope_ratio=0.972 (5 pairs 0.951-0.984), step3 verdict=BLUR_UNLIKELY, FFT anisotropy=0 → motion blur 不存在 → anisotropy_ratio>1.7 未满足 → 不用 OCAB; motion sev≥5 的 ws=16 规则不适用 → window_size=8 (Section 七 anisotropy 行)",
+    "noise_speckle verdict=UNCERTAIN (乘法噪声 std/I≈0.119-0.163≈c=0.14 支持 speckle，但库内白噪声/逐通道独立与观测的空间相关 (lag1≈0.5)/近消色差残差存在已知失配) → Section 七 Step 2: 'UNCERTAIN/POOR (该步骤) → 该步骤不加组件'; noise 类别本身也不触发任何架构组件 → swin 基线",
+    "SimpleGate 默认常开: exp39 -32K 参数、8/9 退化安全 (最差 S5 motion×3 -0.86 不适用——本管线无 motion; N -0.01, D3 JPEG+blur +0.02) → use_simple_gate=true (Section 六 Step 0 低难度行 + Section 七 组件表)",
+    "DualBranch: reflection.json 的 R0 推荐与之相反，但 Section 七 明确 'DualBranch ❌ 盲识别下不推荐 (exp37 0/24胜)' → use_dual_branch=false",
+    "CSN: Tier B (需判断), 触发要求 'noise存在 + 无纯全局退化' 形式上满足，但 Section 七 信号→组件默认流 ('默认 → Swin + SimpleGate + Direct') 不含 CSN，且 noise 步骤为 UNCERTAIN → 保守不加 → use_csn=false",
+    "pipeline 仅含局部退化 (compression_jpeg + noise_speckle), 无 contrast → Section 六 Step 1 '纯局部 (blur/noise/comp) → Direct 或 RandomCurric'; 本任务规定从头训练且无预训练 ckpt → strategy=direct (exp37: 1.5h 预算下 True Ft ≈ Direct)",
+    "GCM 诱发 NaN 的高风险组合 (brightness_HSV + blur) 不存在; 仍按协议 lr=5e-4、epoch=2、batch=16 (Section 九 崩溃诊断)",
+    "参数公平性: swin dim=64 ≈ 454K ≤ 477K (≤1.05× 基线); 未启用 OCAB 故无需 AR_EMBED_DIM=30 对齐 (Section 五 参数公平性规则)"
+  ],
+  "finetune_strategy_ref": [
+    "Section 七 核心原则 '信号置信度驱动组件选择' + Tier S/A/B/C 分层表",
+    "Section 七 '全组件启用条件（按盲识别信号严格门控）' 表: ColorPre/FiLM-GCM/OCAB/CSN/SimpleGate/DualBranch 触发与禁用条件",
+    "Section 七 '信号→组件映射流程' (variance_ratio / anisotropy / block_boundary → 默认 Swin+SimpleGate+Direct)",
+    "Section 七 Step 2 '按退化步骤独立匹配' — UNCERTAIN 的 noise 步骤不加组件",
+    "Section 六 Step 0 难度判定 (JPEG sev4 + 乘性噪声, 无 contrast → 默认 Swin + SimpleGate) 与 Step 1 策略判定 (纯局部 → Direct 或 RandomCurric)",
+    "Section 五 注意力类型选择 (noise: 任意注意力 ~0; JPEG 无 OCAB 优势) + SimpleGate 跨退化泛化 (exp39, 8/9 安全)",
+    "Section 八 消融 A: exp37 盲识别场景 24 挑战 Direct+Swin 纯基线 23/24 胜, DualBranch/FiLM/ColorPre 0/24"
+  ],
+  "reasoning": "预测管线为 compression_jpeg:4 (LIKELY) + noise_speckle:1 (UNCERTAIN)，全部为局部退化，无 contrast/brightness/saturation/stretch (step4 NO_GLOBAL, variance_ratio 0.950-1.119, mean_shift -1.9/255)，无 blur (spectral_slope_ratio 0.951-0.984, anisotropy=0)。按 Section 七 信号门控: 唯一的 Tier S 信号 block_boundary=1.555 只确认 JPEG 存在性与 sev4，不触发任何注意力/组件切换 (JPEG 无专项架构组件); Tier A 的 variance_ratio≠1.0 未触发 (0.962 在噪声/JPEG 正常波动内, verdict=NO_GLOBAL)，因此 FiLM-GCM 与 ColorPre 均不启用——这同时避开了 ColorPre 跨退化泛化最差的风险和 saturation 禁用场景。noise 步骤为 UNCERTAIN (speckle 乘法信号强, 但与库内白噪声/逐通道独立模型存在已知失配)，按 Step 2 该步骤不加组件。最终采用纯 Swin (dim=64, ws=8, 参数 454K 满足 ≤1.05× 公平性) + SimpleGate 常开 (-32K, exp39 8/9 安全; 唯一负例为三退化 motion, 本管线不适用)。reflection.json 的 DualBranch 建议被 Section 七/exp37 (盲识别 0/24 胜) 明确否决，不采纳。策略为从头 Direct 训练 (无预训练 ckpt; exp37 证明 1.5h 预算下 True Ft ≈ Direct)，EPOCH=2、lr=5e-4、batch=16 与基线一致。风险备注: 预测顺序为 JPEG→noise (与 SKILL 物理约束相反, 但有平坦区方差/bb/DCstd 三组证据)，若该顺序或 noise 子类型错误导致发散，按 Section 九 优先使用 best ckpt，纯 Swin 本身是最稳定的兜底架构。"
+}

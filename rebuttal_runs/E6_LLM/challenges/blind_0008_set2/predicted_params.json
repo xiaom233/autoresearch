@@ -1,0 +1,35 @@
+{
+  "pipeline": [
+    {
+      "function": "saturate_weaken_HSV",
+      "severity": 4,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "psnr": null,
+    "psnr_gap": null,
+    "ci_pass_rate": "10/10",
+    "psnr_rgb": "inf (pixel-perfect, bit-exact reproduction on all 5 support pairs)",
+    "psnr_note": "Infinity is not representable in JSON; simulation with saturate_weaken_HSV:4 reproduced every degraded_*.png exactly (MSE=0) on pairs 0-4, so psnr is recorded as null/inf. psnr_gap is null because there is no runner-up within 10 dB (the winner is exact).",
+    "evidence": [
+      "saturation_chroma_ratio = 0.199/0.203/0.204/0.202/0.210 on pairs 0-4 (rock-stable ~80% chroma reduction); x_distortion saturate_weaken_HSV sev4 scales S by 0.2 -> matches; YCrCb sev3 also maps to 0.2 but is refuted by bit-exact PSNR",
+      "test_candidate.py saturate_weaken_HSV:4 -> PSNR=inf dB, CI=10/10 on ALL FIVE support pairs (pixel-perfect, MSE=0)",
+      "peeled residual after stripping saturate_weaken_HSV:4 has std=0.0 -> no hidden compression/blur/noise steps; the §B 'IMPULSE 100%' on the peeled residual is the known degenerate all-zero-residual artifact (correlations nan)",
+      "no compression: block_boundary=0.987-1.009 (all < 1.05, JPEG rule threshold 1.1, 0% FP); unique_G=254-256",
+      "no noise: noise_prior sigma=0.00-0.25 (<2) on all pairs; Qwen noise gate not available in this environment and not triggered (sigma far below 2, no signal contradiction)",
+      "no blur: gm_ratio=0.977-1.100, spectral_slope_ratio=0.994-1.129; pair0 glass_score=1.81 is an isolated FP (4/5 pairs BLUR_UNLIKELY, and exact saturation-only reproduction leaves zero room for a blur step)",
+      "channel-mean shifts all positive (pair0 R=0.0/G=+36.5/B=+45.5; pair3 +11.8/+22.4/+30.6) consistent with HSV desaturation raising sub-max channels toward V; brightness_detected flip-flops across pairs (FP of the mean-shift heuristic), no coherent brightness step"
+    ],
+    "per_step_verdicts": {
+      "saturate_weaken_HSV:4": "LIKELY (bit-exact on 5/5 pairs)",
+      "compression": "absent (block_boundary < 1.01 all pairs)",
+      "blur": "absent (gm_ratio ~1.0; pair0 glass FP)",
+      "noise": "absent (sigma <= 0.25; peeled residual std=0.0)"
+    },
+    "qwen_noise_gate": "unavailable (no Qwen tooling in skill environment); not required since sigma=0.0-0.25 << 2 and no signal contradiction"
+  }
+}

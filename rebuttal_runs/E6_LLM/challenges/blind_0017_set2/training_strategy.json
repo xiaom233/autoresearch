@@ -1,0 +1,122 @@
+{
+  "challenge": "blind_0017_set2",
+  "pipeline_functions": [
+    "noise_gaussian_YCrCb:3 (UNCERTAIN)",
+    "blur_gaussian:3 (UNCERTAIN)",
+    "compression_jpeg:4 (LIKELY)",
+    "contrast_weaken_scale:1 (UNCERTAIN)"
+  ],
+  "overall_verdict": "UNCERTAIN (Tier 3)",
+  "strategy": "direct",
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": true,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_color_mlp_output": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_freqmod": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false
+  },
+  "env_flags": {
+    "AR_ATTENTION_TYPE": "swin",
+    "AR_WINDOW_SIZE": "8",
+    "AR_EMBED_DIM": "64",
+    "AR_USE_SIMPLE_GATE": "1",
+    "AR_USE_GCM": "1",
+    "AR_USE_COLOR_PRE": "0",
+    "AR_USE_COLOR_MLP": "0",
+    "AR_USE_COLOR_MLP_OUTPUT": "0",
+    "AR_USE_DUAL_BRANCH": "0",
+    "AR_USE_CSN": "0",
+    "AR_USE_CHANNEL_CURVE": "0",
+    "AR_USE_PCP": "0",
+    "AR_USE_FREQMOD": "0",
+    "AR_USE_SCA": "0",
+    "AR_USE_GDFN": "0",
+    "AR_USE_FPRO": "0",
+    "AR_LEARNING_RATE": "0.0005",
+    "AR_EPOCH_BUDGET": "2",
+    "AR_BATCH_SIZE": "16",
+    "AR_QUIET_PIPELINE": "1",
+    "AR_CHALLENGE_DIR": "/data/zyli/projects/autoresearch/rebuttal_runs/E6_LLM/challenges/blind_0017_set2"
+  },
+  "signal_basis": [
+    {
+      "signal": "variance_ratio = 0.639/0.711/0.734/0.700/0.706 in 5/5 pairs (vs 0.75-0.92 for blur+jpeg alone)",
+      "supports": "contrast_weaken_scale step (verdict UNCERTAIN, but Tier A signal: variance_ratio != 1.0, low FP)",
+      "source": "full_analysis.json stats_signal_summary.global + statistical_checks.variance_ratio; predicted_params.json step4 signal_source",
+      "gate": "Tier A -> FiLM-GCM (variance_ratio != 1.0 + structured local present)"
+    },
+    {
+      "signal": "mean-shift affine fit toward mid-gray: observed shifts -6.3/+10.0/+7.9/-0.9/-2.5 vs alpha~0.89 predicted -6.5/+10.1/+8.9/-0.7/-2.3; implied alpha 0.852-0.902 across all 5 pairs",
+      "supports": "global step is a contrast contraction (not brightness; sign flips across pairs are explained by anchor-128 affine)",
+      "source": "full_analysis.json statistical_checks.mean_shift_affine_fit_toward_128; reflection.json initial_analysis.ruled_out",
+      "gate": "confirms contrast direction for FiLM-GCM; rules out ColorMLP (brightness_HSV gate not met)"
+    },
+    {
+      "signal": "block_boundary 7.15/4.24/5.79/4.81/6.08 (>>1.05) + dct_zero_ratio 0.892-0.948 + unique_G_target=187 (<200) in all 5 pairs",
+      "supports": "compression_jpeg:4 (LIKELY), Tier S 0% FP",
+      "source": "full_analysis.json aggregate_signal_summary.compression; pairs.*.step1_compression",
+      "gate": "structured local component present -> satisfies the 'variance_ratio != 1.0 + structured (motion/jpeg)' FiLM-GCM condition; no dedicated JPEG model component exists to enable"
+    },
+    {
+      "signal": "gm_ratio 0.173-0.497 and spectral_slope_ratio 1.20-1.28 in 5/5 pairs; residual_anisotropy 1.147-1.665 (max < 1.7); motion tested worst (PSNR 24.06, R6)",
+      "supports": "blur_gaussian:3 (UNCERTAIN subtype) present; NOT motion blur",
+      "source": "full_analysis.json aggregate_signal_summary.blur; pairs.*.step3_blur.residual_anisotropy; reflection.json iterations R6",
+      "gate": "anisotropy_ratio > 1.7 NOT met -> OCAB disabled; no motion -> window_size 8 (not 16)"
+    },
+    {
+      "signal": "wavelet sigma prior blind to noise applied before blur (0.00 on noisy sims); noise type accuracy 54.7% under noise->blur; flat-region speckle/chroma excess present but type unidentifiable",
+      "supports": "noise_gaussian_YCrCb:3 (UNCERTAIN, Tier C)",
+      "source": "full_analysis.json statistical_checks.wavelet_noise_prior_blindness + coupling_analysis.noise_type_unidentifiable; reflection.json final_noise_diagnosis",
+      "gate": "Tier C -> no component attributed to the noise step (Section 七)"
+    },
+    {
+      "signal": "contrast + noise combination (closest analogue L2) and JPEG+blur (closest analogue D3); SimpleGate 8/9 degradation-safe, L2 +0.78 dB, only negative case S5 motion absent here",
+      "supports": "SimpleGate default-on",
+      "source": "full_analysis.json pipeline composition; finetune_strategy.md Section 七 SimpleGate table / exp39 results",
+      "gate": "SimpleGate '可常开' (default-on) rule"
+    }
+  ],
+  "finetune_strategy_ref": [
+    "§六 Step 1 策略表: 含 contrast_weaken/strengthen -> Direct (保守); True Ft (AR_LOAD_CKPT) 不推荐, 2-epoch 下 ≈ Direct (exp37/38)",
+    "§七 核心原则: 信号置信度驱动组件选择 — '盲识别 verdict UNCERTAIN/POOR 但 Tier S/A 信号明确 -> 仍可启用组件'",
+    "§七 全组件启用条件表: FiLM-GCM ← variance_ratio != 1.0 + 结构化(motion/jpeg), Tier A, +3.52 dB (exp10 L5)",
+    "§七 信号→组件映射: variance_ratio != 1.0 + motion/jpeg -> FiLM-GCM (lr=5e-4); anisotropy > 1.7 -> OCAB; 默认 -> Swin + SimpleGate + Direct",
+    "§五 注意力类型表: contrast 全局退化 -> Swin (+9.78~10.38 vs MDTA/OCAB); OCAB 需 anisotropy_ratio > 1.7 (未满足)",
+    "§五 FiLM-GCM 跨全局退化安全边界: contrast_scale +0.47, lr=5e-4 无 NaN 风险 (exp38)",
+    "§五/§七 组件禁用: DualBranch 盲识别 0/24 胜 (exp37); CSN 纯全局退化灾难 (-4.6~-11.7 dB); ColorPre 跨退化泛化最差 (16.0 dB gap), 仅极高置信时用; SCA 已废弃 (8/9 有害); SwiGLU/GDFN 边际不推荐",
+    "§九 训练崩溃诊断: GCM 诱发 NaN -> 优先使用 best ckpt, 再降 lr / 换 ColorPre / 换纯 Swin"
+  ],
+  "reasoning": "管线为 noise_gaussian_YCrCb:3 -> blur_gaussian:3 -> compression_jpeg:4 -> contrast_weaken_scale:1，整体 Tier 3/UNCERTAIN，但逐步信号门控清晰。(1) 策略: 管线含 contrast_weaken_scale，§六 Step 1 规定含 contrast 用 Direct 保守训练；无预训练 ckpt 可用，且 exp37/38 双重确认 True Ft ≈ Direct，故选 direct 从头训练，EPOCH=2, LR=5e-4, batch=16，与基线公平一致。(2) 注意力: contrast 全局退化在 §五 明确要求 Swin（OCAB/MDTA 在 contrast 上崩溃）；同时 OCAB 的 Tier A 门控 anisotropy_ratio>1.7 未满足（5 对残差各向异性 1.147-1.665，均 <1.7），运动模糊已被否定（其 PSNR 24.06 最差）。故 attention_type=swin, window_size=8（ws=16 仅用于 motion sev>=5，不适用）。(3) FiLM-GCM: contrast 步骤 verdict 虽为 UNCERTAIN，但 Tier A 信号 variance_ratio=0.639-0.734 在 5/5 对中成立，且独立的均值偏移仿射拟合（alpha 0.852-0.902，锚定 128）在 5/5 对中吻合，排除了 brightness（跨图符号翻转恰为仿射收缩所致）——这是 §七 允许的 'Tier A 信号覆盖 UNCERTAIN verdict' 情形；同时结构化局部退化明确存在（JPEG 为 LIKELY + Tier S block_boundary 4.24-7.15，0%FP；另有 blur），命中 §七 'variance_ratio!=1.0 + 结构化(motion/jpeg) -> FiLM-GCM (+3.52, exp10 L5)' 专用门控。因此 use_gcm=true，lr=5e-4（§五 确认该学习率下 GCM 无 NaN 风险）。(4) ColorPre 未启用: 与 GCM 为互斥的二选一映射；本挑战全局判决跨对不一致（pair0/2 NO_GLOBAL、pair4 SATURATION），且 ColorPre 跨退化泛化最差、仅限极高置信场景，另有对 saturation 有害的禁用条件；同样的 contrast 信号已由更特异的 '结构化+GCM' 门控承接。(5) ColorMLP 未启用: 其门控是 brightness_HSV 高置信，而 brightness 已被均值偏移仿射分析排除。(6) DualBranch 未启用: 虽 full_analysis 的 per-pair 提示建议 DualBranch，但 §七 明确盲识别场景 0/24 胜、不推荐，以 finetune_strategy.md 为准。(7) SimpleGate 默认常开（§七/exp39: -32K 参数，8/9 退化安全，L2 contrast+noise +0.78）；唯一负例 S5 motion 不适用。(8) CSN/ChannelCurve 均不满足门控（CSN 为 Tier B 且有纯全局灾难风险；ChannelCurve 仅 stretch 高置信），其余废弃组件全部关闭。noise 步骤为 Tier C（noise->blur 次序下类型 54.7% 不可辨），不为其添加任何组件；预测管线未做任何改动，未使用 GT。",
+  "risk_notes": [
+    "FiLM-GCM +26K 参数约 +5.7%，略超 §五 参数公平性上限 (≤5%)；本实验非架构对比实验，为跨挑战可比性保持 embed_dim=64（exp39 已在对齐维度下验证 GCM 423K 仍有效）。",
+    "SimpleGate 在 D3(JPEG+blur) 有 epoch2 ckpt 退化先例 (§五 exp39 警告: 23.88 -> 15.40)；本管线含 JPEG+blur+contrast，需按 §九 使用 best ckpt（日志 'Loaded best checkpoint'），必要时退回纯 Swin + SimpleGate。",
+    "contrast 库内最轻 sev1 (alpha=0.75) 仍强于真实 alpha~0.88，训练退化略过度收缩；属预测管线固有的严重度不匹配，不改变策略（管线不改动）。",
+    "噪声类型 (YCrCb vs RGB) 在 noise->blur 次序下不可辨，R0 保留 RGB:3 为备选；若 GT 重评估显著低于预期，按反思协议优先复核噪声类型。",
+    "GCM 若出现 NaN（§九 类型 GCM 诱发），回退顺序: best ckpt -> lr 1e-4 -> ColorPre -> 纯 Swin direct。"
+  ],
+  "fallback_architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "reason": "§九 崩溃恢复方案 2: GCM 诱发 NaN 或 best ckpt 不可用时改用纯 Swin + SimpleGate Direct"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "challenge": "blind_0024_set3",
+  "round": "R1",
+  "r0_pipeline": [
+    {"step": 1, "function": "noise_gaussian_RGB", "severity": 3},
+    {"step": 2, "function": "blur_gaussian", "severity": 3},
+    {"step": 3, "function": "saturate_strengthen_HSV", "severity": 2}
+  ],
+  "pipeline": [
+    {"step": 1, "function": "noise_gaussian_RGB", "severity": 4},
+    {"step": 2, "function": "blur_gaussian", "severity": 3},
+    {"step": 3, "function": "saturate_strengthen_HSV", "severity": 2}
+  ],
+  "change": "noise_gaussian_RGB severity 3 -> 4; blur_gaussian:3 and saturate_strengthen_HSV:2 unchanged; order unchanged (noise -> blur -> saturation, physical order)",
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "function_family": "noise_gaussian_RGB",
+      "support": "R0 pipeline (severity -1 backup). verify_signals pair0 WEAK 2/6 (noise sigma diff 33%, mean_shift diff 0.0062, variance_ratio diff 77%); flat-patch HP-MAD only 0.84-0.85x target on all 5 channels. Kept only as severity fallback; statistically underfits the target noise."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "per_step_verdicts": [
+      {
+        "step": 1,
+        "function": "noise_gaussian_RGB",
+        "severity": 4,
+        "verdict": "UNCERTAIN",
+        "evidence": "Noise is never LIKELY (seed mismatch). Type RGB: flat-patch HP-MAD channel fingerprint R/G=1.04, G/B=0.98, Cr/Cb=1.05 (target) matches RGB sim 1.02/0.99/1.05; YCrCb:3 rejected (R/G 9.70, G/B 0.10); speckle:1 rejected (intensity slope +0.40 vs target +0.01); post-pipeline S/B6 rgb_ratio 1.155 (<1.3 = RGB). Severity 4: flat-patch amplitude ratios sim/target 0.99/1.01/1.01/1.00/1.00 (pair0) and 0.94/0.98/0.99/0.99/0.98 (pair1) vs 0.84-0.85 for sev3; verify_signals sigma diff 0.0% (sev3: 33%), global variance_ratio now matches (2.4% vs 77%), mean_shift diff 0.0002."
+      },
+      {
+        "step": 2,
+        "function": "blur_gaussian",
+        "severity": 3,
+        "verdict": "LIKELY",
+        "evidence": "Noise-robust signals on the final pipeline: spectral_slope diff 0.0005 (pair0), 0.0445 (sev3 control) - both < 0.08; Wiener kernel corr 0.9986-0.9987 > 0.85. blur DT glass FP (glass_score 0.59/0.65 on pairs 1/3) rejected in R0 by 1.70 dB Gaussian-vs-glass margin and by flat-region invariance (pixel shuffle cannot create flat-sky mottling). No motion anisotropy consistent across pairs. Severity 3 confirmed (R0 scan: blur3 > blur2 by 0.89 dB under noise; blur3 > blur4 by 0.05 dB without noise)."
+      },
+      {
+        "step": 3,
+        "function": "saturate_strengthen_HSV",
+        "severity": 2,
+        "verdict": "LIKELY",
+        "evidence": "Deterministic calibration over all 5 pairs (clean -> blur_gaussian:3 -> saturate_strengthen_HSV:N vs target): HSV2 shift MAE 2.76 levels, chroma|d| 0.09, dark-clip|d| 0.010, var|d| 0.097; HSV1 12.88/0.52/0.260/0.063, HSV3 6.30/0.32/0.226/0.146, HSV5 10.22/0.66/0.388/0.170; saturate_strengthen_YCrCb N=1..5 all 27.7-30.9 MAE (rejected). Final full pipeline verify_signals: mean_shift diff 0.0002 and variance_ratio diff 2.4% (pair0), matched on pairs 1/3. The hue-dependent per-channel mean shifts rule out explicit brightness/gamma. Note: run_full_analysis raw verdict SATURATION_strengthen_sev5 is a severity-calibration bias - rejected by the 5-pair deterministic sweep."
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "signal_verification": {
+      "pair0": "PARTIAL 5/6 (blur spectral_slope diff 0.0005; wiener 0.9987; noise sigma 0.0%; mean_shift diff 0.0002; variance_ratio diff 2.4%; only residual FWHM 6px mismatched - inherent when noise seeds differ)",
+      "pair1": "PARTIAL 5/6 (same five signals matched; FWHM 6px)",
+      "pair3": "PARTIAL 5/6 (same five signals matched; FWHM 8px)"
+    },
+    "psnr_note": "PSNR deliberately not used for noise-coupled steps (independent noise seeds make pixel-level PSNR uninformative). R0 support checkpoint PSNR 22.91 (step 15092) is training-side context only.",
+    "evidence": [
+      "Compression excluded: block_boundary 0.996-1.003 and unique_G 236-247 on all 5 pairs (0% FP signal), unchanged in the R1 rerun.",
+      "R0's noise severity was anchored on a degenerate estimator: wavelet MAD on target-clean residual returns exactly 1.483 for every candidate (sev2/3/4, YCrCb3, speckle1) - zero discriminating power. Replaced by flat-patch high-pass MAD over clean-defined flat regions (1795 patches pair0, 807 pair1), a seed-robust second-order statistic.",
+      "Noise subtype RGB (not YCrCb despite run_full_analysis GAUSSIAN_YCrCb on 4/5 pairs): that verdict is the low-confidence gamma-suspect code path (cross_channel_corr>0.12 + residual_intensity_corr>0.15), polluted by blur/saturation structure; the flat-patch channel fingerprint and §B rgb_ratio 1.155 support RGB.",
+      "Noise severity 4: amplitude ratios 0.99-1.01 (pair0) and 0.94-0.99 (pair1) across R/G/B/Cr/Cb; additive intensity slope target +0.01 vs sim +0.01 (pair1 +0.30 vs +0.30, pair3 +0.19 vs +0.21).",
+      "Saturation severity 2 (not 5): blur3->satN sweep over 5 pairs; sat2 uniquely reproduces per-channel shift vector, chroma ratio 3.05->2.88 (pair0), dark clipping and variance. Brightness excluded (equal-channel shifts would be required; observed shifts are hue-dependent).",
+      "Blur gaussian:3 double-confirmed by Wiener kernel corr 0.9987 and spectral_slope diff 0.0005 under the corrected noise severity; glass FP is content/glass-DT artifact."
+    ]
+  }
+}

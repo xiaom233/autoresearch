@@ -1,0 +1,39 @@
+{
+  "pipeline": [
+    {"function": "compression_jpeg", "severity": 1}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "psnr": null,
+    "psnr_note": "inf dB (pixel-perfect reproduction) on all 5 support pairs, independently re-verified by R1 reflection",
+    "ci_pass_rate": "10/10",
+    "psnr_gap": null,
+    "psnr_gap_note": "infinite — runner-up compression_jpeg:2 = 28.59 dB on pair0 (R1 re-test); blur_gaussian:1 control = 26.85 dB; noise_gaussian_RGB:1 = WEAK in signal mode (sigma error 1633%)",
+    "r1_decision": "NO_CHANGE",
+    "r1_verification": {
+      "trigger": "R0 verdict=LIKELY + support-set PSNR 30.92 (<35) at step 3773 -> reflect (severity may be misjudged)",
+      "fresh_analysis": "run_full_analysis.py re-run on all 5 support pairs -> full_analysis_R1_pair0..4.json",
+      "result": "compression_jpeg:1 applied to each clean_i.png reproduces degraded_i.png pixel-for-pixel on all 5 pairs (PSNR=inf, CI=10/10); peeled residual std=0.0"
+    },
+    "evidence": [
+      "R1 re-analysis: block_boundary = 1.389 / 1.123 / 1.316 / 1.516 / 2.351 on pairs 0-4 (all > 1.1, JPEG 0% FP rule)",
+      "R1 re-verification: compression_jpeg:1 reproduces all 5 support targets EXACTLY (PSNR=inf, CI=10/10, 5/5 pixel-perfect)",
+      "Severity: compression_jpeg:2 gives 28.59 dB on pair0 (CI 8/10) -> severity 1 unambiguous; block_boundary magnitude -> severity heuristic (suggesting jpeg 1/2/2/3/4 per pair) is content-dependent and not a severity caliper",
+      "Peeled residual after stripping compression_jpeg:1 = 0.0 std on all pairs -> no noise/blur/global step can exist (any extra step would break exact reproduction); peeled auto IMPULSE label is the trivial all-zero artifact (zero_ratio=1.0)",
+      "No blur: spectral_slope target-vs-clean diff 0.001-0.010 (threshold 0.08), FFT anisotropy 0.00; gm_ratio dips in pairs 3/4 (0.844/0.649) are JPEG gradient destruction; blur_gaussian:1 control = 26.85 dB (CI 4/10)",
+      "No noise: noise_prior sigma 0.37-1.85 (<2); GAUSSIAN_YCrCb label with estimated_severity=5 at sigma=0.74 is internally inconsistent and co-varies with block_boundary (cross_channel_corr 0.28-0.88) -> JPEG chroma artifact; noise_gaussian_RGB:1 fails signal check (sigma error 1633%)",
+      "No global: variance_ratio 0.981-1.002, mean_shift <= 0.4/255, contrast_spread_ratio 0.977-1.003, saturation_chroma_ratio 0.86-0.98, clipped_fraction <= 0.048; pair1 residual_intensity_corr=0.514 is explained by JPEG rounding vs intensity (exact zero residual after peel)"
+    ],
+    "support_validation": {
+      "pair0": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci_pass": "10/10"},
+      "pair1": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci_pass": "10/10"},
+      "pair2": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci_pass": "10/10"},
+      "pair3": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci_pass": "10/10"},
+      "pair4": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci_pass": "10/10"}
+    },
+    "mode": "PSNR (sigma < 2 on all pairs; peeled residual std=0.0)",
+    "qwen_noise_gate": "not triggered (sigma < 2 on all pairs; no gate script shipped with Skill)"
+  }
+}

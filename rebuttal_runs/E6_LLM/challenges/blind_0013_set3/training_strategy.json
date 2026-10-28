@@ -1,0 +1,42 @@
+{
+  "challenge": "blind_0013_set3",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_pcp": false,
+    "use_channel_curve": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "Per-step verdicts (predicted_params.json): noise_speckle:3 = UNCERTAIN (verify_signals MATCH 5/5, but noise never LIKELY due to seed mismatch); compression_jpeg:2 = LIKELY (block_boundary 1.400-1.720 > 1.1, 0% FP Tier S signal, MATCH 5/5 pairs). Overall Tier 3 mixed noise+compression -> UNCERTAIN.",
+    "Compression (Tier S): block_boundary 1.40-1.72 in 5/5 pairs (0% FP, >=1.1 threshold); dct_zero_ratio 0.52-0.70; unique_G = 256 (>=200, so no quantize evidence). Section 七: block_boundary > 1.1 is Tier S/0%FP -> JPEG confirmed, but no architecture component maps to compression -> Swin baseline.",
+    "Noise (UNCERTAIN): peeled residual after JPEG strip vm_slope = 2.41 (>> 0.01), intensity_var_corr = 0.93, residual_intensity_corr = 0.59 -> multiplicative speckle (c=0.28), 5/5 verify_signals MATCH. Section 七: noise step UNCERTAIN (Tier C-class for noise attribution) -> no component for this step, Swin baseline.",
+    "Blur ruled out: spectral_slope_ratio 0.948-0.996 (< 1.08 threshold) in 5/5 pairs; fft_anisotropy = 0.0 (anisotropy_ratio not > 1.7) -> OCAB Tier A trigger NOT met; gm_ratio 1.44-5.35 is JPEG/noise-gradient inflation. Section 七: anisotropy > 1.7 is the only OCAB gate -> no OCAB.",
+    "Global ruled out: mean_shift -0.6..-6.8 levels far below darken sev1 (-25.5); variance_ratio 0.878-1.057 but contrast_spread_ratio 0.97-1.05 ~= 1.0, and pair4 saturation flag (chroma_ratio 1.41) is a brightness_from_jpeg FP (saturate_strengthen sev1 would multiply chroma variance ~9x). Section 七: variance_ratio deviation not attributable to contrast (signal contradiction) -> Tier C -> no ColorPre/FiLM-GCM/ChannelCurve.",
+    "Section 七 SimpleGate gate: 'can be always on, safe first choice', -32K params, 8/9 degradations safe in exp39; the only negative case S5 (motion blur x3, -0.86) does not apply to this 2-step noise+JPEG pipeline with no motion blur -> enable use_simple_gate.",
+    "Section 六 Step 0/1: 2-step pure-local pipeline (noise+compression, no global/contrast, no motion) -> Direct (pure local allows Direct; no contrast so no Direct-safety concern). Section 八 exp37: True Ft ~= Direct at 1.5h and blind-scenario components 0/24 -> Direct + pure Swin is the safe choice."
+  ],
+  "finetune_strategy_ref": [
+    "Section 五 attention-type table: noise -> any attention ~0, contrast -> Swin; here noise+JPEG -> Swin",
+    "Section 六 Step 0: low/medium difficulty, no contrast+structured global pair -> pure Swin + SimpleGate",
+    "Section 六 Step 1: pure local (blur/noise/comp) -> Direct or RandomCurric; Direct selected (task constraint, no pretrained ckpt)",
+    "Section 六 Step 2: components trigger per-step verdict only; UNCERTAIN noise step adds no component; LIKELY JPEG step has no mapped component",
+    "Section 六 Step 3: blind-scenario component mismatch risk -> do not add components beyond SimpleGate",
+    "Section 七 signal tiers: block_boundary Tier S (0% FP) -> JPEG confirmed; anisotropy Tier A gate not met -> no OCAB; variance_ratio Tier A gate attribution contradicted -> no ColorPre/FiLM-GCM",
+    "Section 七 component gate table: SimpleGate always-on (8/9 safe, disabled only for S5 motion x3); DualBranch not recommended in blind scenario (0/24 exp37); SCA deprecated (8/9 harmful); GDFN marginal (+0.22); FPro compile-incompatible; PCP parameter-unfair (deprecated)",
+    "Section 八 exp37: Direct+Swin 23/24 wins vs component architectures in blind prediction setting"
+  ],
+  "reasoning": "Pipeline: noise_speckle:3 (UNCERTAIN) -> compression_jpeg:2 (LIKELY), Tier 3 mixed, overall UNCERTAIN. Training: Direct from scratch (no pretrained checkpoint) per task; Section 六 Step 1 states pure-local pipelines may use Direct, and Section 八 exp37 shows True Ft ~= Direct. No contrast / brightness / saturation step exists, so the Direct-safety rules for global degradation are moot. Architecture: Swin baseline (Section 五 attention table: noise indifferent to attention type; JPEG has no mapped attention component) with window_size 8 (motion-blur ws=16 rule not applicable). SimpleGate enabled: Section 七 classifies it as always-on-safe (-32K params, 8/9 degradations neutral-or-positive in exp39, L2 contrast+noise +0.78); its single negative case S5 is a 3-step motion-blur pipeline, not this 2-step noise+JPEG case. OCAB rejected: the Tier A gate anisotropy_ratio > 1.7 (0% FP) is not met (fft_anisotropy = 0.0, spectral_slope_ratio 0.948-0.996 excludes blur; inflated gm_ratio is JPEG/noise artifact). FiLM-GCM rejected: its trigger requires a confident contrast signal (variance_ratio != 1.0 attributable to contrast + structured local); here variance_ratio 0.878-1.057 with contrast_spread_ratio ~1.0 and mean_shift far below darken sev1, and the challenge analysis explicitly attributes the variance deviation to JPEG smoothing/noise coupling, i.e., signal contradiction -> Section 七 Tier C fallback (pure Swin); additionally exp37 showed blind-scenario component additions went 0/24. ColorPre rejected for the same reason plus its worst cross-degradation generalization (16 dB gap in Section 五 robustness ranking); saturation trigger is a documented JPEG FP. ColorMLP/ChannelCurve rejected (require high-confidence brightness_HSV / stretch, neither present). DualBranch rejected outright by Section 七 (not recommended under blind identification, 0/24 exp37). CSN rejected: Section 七 maps Tier B signals to Swin baseline; noise attribution is UNCERTAIN and the pipeline's JPEG structure offers no clear CSN benefit. SCA deprecated (exp39 8/9 harmful); GDFN only marginal +0.22 (exp39, not recommended); FPro compile-incompatible (all crash); PCP deprecated and parameter-unfair (+20%). All chosen components satisfy the parameter-fairness rule (Swin dim=64 454K; SimpleGate -32K, well within <=477K). No changes to the predicted pipeline; alternatives (speckle:2 + jpeg:2 / jpeg:1) stay within the same function families, so the architecture decision is invariant to them. Training watch item: Section 五 notes SimpleGate epoch-2 collapse on D3 (JPEG+blur: ckpt1 23.88 -> ckpt2 15.40); EPOCH=2 with lr=5e-4 is the documented mitigation - use the best checkpoint if the last checkpoint degrades, and monitor for NaN per Section 九."
+}

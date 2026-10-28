@@ -1,0 +1,49 @@
+{
+  "challenge": "blind_0010_set3",
+  "pipeline_str": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 1,
+      "verdict": "LIKELY",
+      "evidence": "blur-first order with gamma_HSV:5 reconstructs target pixel-identically on 5/5 support pairs; adding it raised PSNR from 32.89 (gamma alone) to inf dB"
+    },
+    {
+      "function": "brightness_darken_gamma_HSV",
+      "severity": 5,
+      "verdict": "LIKELY",
+      "evidence": "V-transfer median fit implied gamma 3.50-3.73 across V bins 0.5-0.95 == library sev5 gamma=3.5; mean shift -49.6..-70.1 consistent across 5 pairs; HSV S mean 120.8 vs target 121.4; zero% 16.36 vs 16.43"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline_str": "blur_lens:1,brightness_darken_gamma_HSV:5",
+      "pipeline": [
+        {"function": "blur_lens", "severity": 1},
+        {"function": "brightness_darken_gamma_HSV", "severity": 5}
+      ],
+      "psnr": 40.98,
+      "ci_pass_rate": "8/10",
+      "function_family": "blur_lens",
+      "note": "MTF-indistinguishable with gaussian blur (SKILL.md C3); PSNR >= 40 so retained as supported cross-family alternative"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "psnr": null,
+    "psnr_detail": "inf dB (pixel-perfect: 0 differing pixels, max_abs_diff=0 on all 5 support pairs; 'inf' not JSON-representable, hence null)",
+    "ci_pass_rate": "10/10",
+    "psnr_gap": "inf (primary pixel-perfect; runner-up alternative blur_lens:1 at 40.98 dB)",
+    "evidence": {
+      "exact_reconstruction": "add_distortion(clean_i, 1, 'blur_gaussian') then add_distortion(., 5, 'brightness_darken_gamma_HSV') == degraded_i for i=0..4 (identical=True, 0/8298720 and 0/9840960 differing pixels)",
+      "gamma_fit": "median V_target vs V_clean bins 0.50-0.95 imply gamma 3.50-3.73 == sev5 gamma 3.5",
+      "noise": "ruled out: wavelet sigma 0.37-1.11 (<2) on 5/5 pairs; PSNR mode valid",
+      "compression": "ruled out: block_boundary 0.990-1.017 (<1.1) on 5/5 pairs; residual after final pipeline is exactly 0 so no hidden JPEG step",
+      "saturation": "saturate_weaken false positive: target HSV S mean 121.4 > clean 100.7 (S increased), fully explained by V-gamma darkening; zero residual confirms no saturation step",
+      "contrast": "contrast false positive: variance_ratio 0.57-1.37 and spread_ratio 0.74-1.08 confounded by clipping; zero residual confirms no contrast step",
+      "order": "blur before brightness: reverse order (gamma->blur) gives 41.87 dB vs blur-first inf dB",
+      "severity_scan": {"gamma_HSV": {"1": "not tested (stats clearly mismatched)", "2": 17.10, "3": 19.96, "4": 24.28, "5": "inf"}, "gamma_RGB_3": 20.48, "blur_gaussian": {"1": "inf", "2": 35.25}, "blur_lens_1": 40.98}
+    }
+  }
+}

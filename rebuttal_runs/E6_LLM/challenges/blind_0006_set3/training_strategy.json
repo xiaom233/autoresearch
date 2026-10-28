@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": 1,
+    "use_gcm": 0,
+    "use_color_pre": 0,
+    "use_color_mlp": 0,
+    "use_dual_branch": 0,
+    "use_csn": 0,
+    "use_sca": 0,
+    "use_gdfn": 0,
+    "use_fpro": 0,
+    "use_pcp": 0,
+    "use_channel_curve": 0
+  },
+  "lr": 5e-4,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "Per-step verdict: 唯一一步 compression_jpeg:1 (severity=1), verdict=LIKELY, Tier 1, PSNR=inf (5/5 pairs 位级精确复现, CI 10/10, block_boundary diff=0.000)。管线无其他步骤，组件触发只看该步 -> Section 六 Step 2 'LIKELY + 纯局部多步' 不成立（单步），不触发 RandomCurric 相关组件。",
+    "block_boundary = 1.5285/1.3279/1.8650/1.6937/1.1281（5 pairs 全部 >1.1）-> Tier S 信号，0% FP，JPEG confirmed (Section 七 信号可靠性分层 + 全组件启用条件表)。允许的架构 flag 中无 JPEG 专项组件（FPro 因 FFT×compile 不兼容已废弃，Section 八 exp39），故不追加任何组件。",
+    "variance_ratio = 0.989/0.990/0.989/0.992/0.957 (~1.0), mean_shift 0.1-0.3/255, saturation_chroma_ratio 0.85-0.99 -> NO_GLOBAL: Tier A 的 variance_ratio≠1.0 信号不存在 => ColorPre (触发信号 variance_ratio≠1.0) 与 FiLM-GCM (variance_ratio≠1.0 + 结构化局部) 均不启用 (Section 七 全组件启用条件; Section 五 FiLM-GCM 安全边界)。",
+    "spectral_slope_ratio = 0.996/1.000/1.004/0.990/1.000 (阈值 1.08), FFT anisotropy = 0.00 (< 1.7) -> 无 blur，OCAB 触发信号 anisotropy_ratio>1.7 不满足 => 保持 Swin (Section 七; Section 五 注意力类型选择: JPEG/compression 无 OCAB 收益)。",
+    "peeled residual after compression_jpeg:1 = exactly 0.0（pair4 原始 noise_prior sigma=4.57 属 JPEG 伪影污染，§B IMPULSE 为零残差退化伪迹）-> NO_NOISE => CSN 触发条件 'blur/noise 存在 + 无纯全局退化' 不满足，不启用 (Section 七 组件表; Section 五 CSN 警告仅在含空间结构噪声/模糊时安全)。",
+    "Step 0 难度分级: 'JPEG sev≤2' 显式列为低难度 -> 纯 Swin + SimpleGate (Section 六 Step 0)。SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全, D3 (JPEG+blur) +0.02 dB, 无负收益风险 (Section 五 SimpleGate 跨退化泛化; Section 七 '任意 verdict 任何退化 SimpleGate 默认常开')。",
+    "盲识别置信度: verdict=LIKELY + 5/5 pairs PSNR=inf 精确复现 + 无 alternatives -> 高置信，但架构组件仍需各自信号门控，Signal 不满足一律不加 (Section 七; Section 八 exp37: 盲识别场景统加组件 0/24 胜)。"
+  ],
+  "finetune_strategy_ref": "Section 六 Step 0 (难度分级: JPEG sev≤2 -> 低 -> 纯 Swin + SimpleGate); Section 六 Step 1 (纯局部退化 -> Direct 可用); Section 七 核心原则/信号可靠性分层 (block_boundary Tier S 0% FP; variance_ratio/anisotropy Tier A 门控); Section 七 全组件启用条件表 (ColorPre/FiLM-GCM/OCAB/CSN/ColorMLP/ChannelCurve 触发信号均未满足; DualBranch 盲识别不推荐 0/24; SimpleGate 可常开); Section 五 注意力类型选择 (compression 用 Swin); Section 八 exp37/exp39 (盲识别场景纯 Swin 基线 23/24 胜; SimpleGate 安全)",
+  "reasoning": "该挑战的最终管线为单步确定性退化 compression_jpeg:1（LIKELY, Tier 1），5 个 support pair 全部 PSNR=inf 位级精确复现，severity 扫描唯一确定 sev=1（jpeg:2 仅 31.10 dB，gap=inf），reflection 已排除 noise（剥离 jpeg:1 后残差恰为 0.0）、blur（spectral_slope_ratio≈1.0）、global（variance_ratio≈0.99）。训练策略按 Section 六 Step 1 取 Direct（从零训练，不含 RandomCurric/ckpt），EPOCH=2、LR=5e-4、BATCH=16 遵循项目公平性约束。架构按 Section 六 Step 0 难度分级：JPEG sev≤2 属低难度 -> 纯 Swin + SimpleGate。逐信号核对 Section 七 门控：block_boundary>1.1 为 Tier S 的 JPEG 确认信号（0% FP），但允许的 flag 列表中没有 JPEG 专项组件（FPro 已废弃），故不加；variance_ratio≈1.0（0.989-0.994）说明 contrast/stretch 的 Tier A 信号不存在，ColorPre 与 FiLM-GCM 均不启用；anisotropy=0.00<1.7，OCAB 不启用，attention_type 保持 swin、window_size=8（ws=16 仅用于 motion sev≥5）；无 noise/blur 步骤，CSN 的触发条件（blur/noise 存在）不满足；brightness_HSV 与 stretch 均不存在，ColorMLP/ChannelCurve 不启用；SCA 已废弃（8/9 有害）、GDFN 边际（+0.22 不推荐）、PCP 参数不公平、FPro 不兼容，均关闭。full_analysis.json 中的 recommended_architecture 建议 DualBranch，但那是基于反射前的 'multi-step/uncertain, total_expected_steps=3' 假设，反射已用零残差与位级精确复现证伪；且 Section 七 明确 DualBranch 在盲识别场景 0/24 胜、不推荐，故 use_dual_branch=0。SimpleGate 为 exp39 验证的默认常开组件（-32K 参数，8/9 退化安全，JPEG/blur 场景 +0.02 dB），故 use_simple_gate=1。最终选择：Direct + 纯 Swin(ws=8) + SimpleGate，零风险兜底、无错误退化上的组件风险。"
+}

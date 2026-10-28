@@ -1,0 +1,37 @@
+{
+  "challenge": "blind_0024_set3",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_pcp": false,
+    "use_channel_curve": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "策略 Direct: 管线含全局退化 saturate_strengthen_HSV:2 (第 3 步), 按 Section 六 Step 1「含全局退化 → Direct (保守)」+ CLAUDE.md 规则 8 (全局退化不用 Ft/课程, 用 Direct); exp37 盲识别场景 Direct+Swin 23/24 胜, True Ft (AR_LOAD_CKPT) 在 1.5h 预算下 ≈ Direct (Section 八) 且本任务不提供预训练 ckpt.",
+    "总体置信度: predicted_params analysis.verdict=UNCERTAIN, tier=3, psnr_gap=1.7 (noise 类型未定); Section 七 Tier C 兜底规则 → 纯 Swin + Direct; exp37 消融盲识别场景组件 0/24 胜.",
+    "注意力 Swin + ws=8: blur 步 LIKELY 且子类型为 blur_gaussian:3 (gm_ratio 0.356-0.645 全部 << 0.85; verify_signals spectral_slope MATCH + wiener_kernel MATCH; pair1 gaussian3 22.64 dB 比 glass4 20.95 dB 高 1.70 dB). residual_anisotropy 2.14/1.97 (>1.7) 仅出现在两个 GLASS 判决对 (glass_score 0.59/0.65), 属 hybrid blur DT 已知 FP(glass)=140 (Section 七 signal_reliability), reflection 明确结论「no strong directional motion」→ motion/OCAB 门控不成立 (Section 七 anisotropy 门; Section 五 注意力表: 全局退化 → Swin, noise → 任意 ~0).",
+    "use_simple_gate=true: Section 七「SimpleGate 默认常开」(exp39: -32K 参数, 8/9 退化安全, 唯一负例 S5 motion×3 -0.86 与本管线无关); exp39 建议 epoch-2 场景配 LR=5e-4, 本配置满足.",
+    "use_color_pre=false: 第 3 步全局退化为 saturation (hue-dependent 逐通道均值位移在 pair0/3/4 与 sat2 吻合 1-2 级, chroma_ratio 2.94 vs 3.05; 显式 brightness 步实测 18.6-19.1 dB 劣于 20.88 dB, contrast/stretch 候选 16.0-16.6 dB POOR), 而 Section 七 ColorPre 禁用场景 = saturation (有害 -0.34); variance_ratio 0.81-1.33 偏离是 saturation 裁剪侧效应 (5 对 contrast_detected_raw 全为 false), 不构成 contrast Tier A 触发.",
+    "use_gcm=false: FiLM-GCM 门控 = variance_ratio≠1.0 + 结构化局部 (motion/jpeg) (Section 七); 压缩已被 0%-FP 信号排除 (block_boundary 0.996-1.003), 无 motion, 结构化步仅为 gaussian blur; exp38 显示 FiLM-GCM 在 saturation 上 Δ=+0.20 ≈ 0 (安全但无收益), Tier 3 UNCERTAIN 下保守不加.",
+    "use_color_mlp=false: ColorMLP 触发条件为 brightness_HSV 高置信 (Section 七); 本挑战 brightness 已被显式排除 (逐通道位移 hue-dependent, 加 brightness 步 PSNR 反降).",
+    "use_dual_branch=false: Section 七 明确「DualBranch ❌ 盲识别下不推荐」(exp37 盲识别 0/24 胜); 尽管 full_analysis 各对的通用 recommended_architecture 字段建议 DualBranch, 该建议未按信号门控, 以 finetune_strategy.md Section 七 为准.",
+    "use_csn=false: 管线含纯全局退化步 (saturation) → CSN 灾难性失败风险 (exp10 L6 -4.60, SF9 -11.73 dB, Section 五/七); 且 CSN 为 Tier B 需判断, 不满足信号触发条件.",
+    "noise 步骤 (noise_gaussian_RGB:3, UNCERTAIN) 不加任何组件: noise→blur 顺序下 peeled 残差 spatial_corr 0.92-0.99 仍结构化, §B 类型推断准确率仅 54.7% ≈ 随机 (Section 七 Tier C), 仅可用于 flat-patch 强度缩放佐证 (target slope -0.41 ≈ additive gaussian -0.45, 非 speckle -1.01), 不触发组件.",
+    "use_sca=false (SCA 已废弃, exp39 8/9 有害), use_gdfn=false (边际 +0.22 不推荐), use_fpro=false (torch.compile 不兼容全崩), use_pcp=false (参数不公平 +91K 已废弃), use_channel_curve=false (仅 stretch 高置信触发; 本挑战 stretch 实测 16.0-16.6 dB POOR, 无 stretch 信号)."
+  ],
+  "finetune_strategy_ref": "finetune_strategy.md Section 六 Step 1 (含全局退化 → Direct), Section 六 Step 2/3 + Section 七 全组件启用条件 (Tier C 兜底纯 Swin, SimpleGate 默认常开), Section 五 注意力类型选择 (全局退化 → Swin; noise → 任意; OCAB 仅 motion), Section 八 exp37 消融 (盲识别 UNCERTAIN → Pure Swin + Direct, 组件 0/24; True Ft ≈ Direct), exp38 (FiLM-GCM saturation ≈0), exp39 (SimpleGate 8/9 安全, -32K).",
+  "reasoning": "Pipeline (noise_gaussian_RGB:3 → blur_gaussian:3 → saturate_strengthen_HSV:2, Tier 3 / UNCERTAIN) 在 Section 七 信号门控下不满足任何组件触发条件: (1) noise 步 UNCERTAIN 且处于 noise→blur 耦合 (peeled §B 准确率 54.7%) → 不加组件, 噪声对注意力类型不敏感; (2) blur 步 LIKELY 但子类型为 gaussian (spectral_slope + wiener_kernel 双 MATCH, 对 glass 有 1.70 dB 优势), 仅有的 anisotropy>1.7 信号来自已知 glass FP 对且 reflection 否认强方向性 motion → 不启用 OCAB (OCAB 还需 AR_EMBED_DIM=30 做参数对齐, 偏差更大); (3) 全局步为 saturation (逐通道 hue-dependent 位移特征与 sat2 吻合, brightness/contrast/stretch 均被 PSNR 排除), Section 七 明确 saturation 禁用 ColorPre (有害), FiLM-GCM 在 saturation 上收益 ≈0 (exp38), ColorMLP 的 brightness 前提不成立 → 全局步不加组件; (4) 管线含纯全局退化, CSN 有 -4.6~-11.7 dB 灾难史 → 禁用. 综合 UNCERTAIN/Tier 3 与 exp37 盲识别结论 (纯 Swin + Direct 23/24 胜, 组件 0/24), 采用 Direct + Swin(ws=8) + SimpleGate (默认常开, -32K, 8/9 安全, 本管线无 motion 负例) 的保守配置. 训练固定 2 epoch / lr 5e-4 / batch 16 (满足 exp39 epoch-2 稳定性建议; 若后程 NaN 或 ckpt 退化, 按 Section 九 使用 best ckpt/降 lr 恢复)."
+}

@@ -1,0 +1,46 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_color_mlp_output": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression verdict LIKELY (Tier 1, bit-exact): block_boundary=2.5752 >> 1.1 (Tier S, 0% FP) + dct_zero_ratio=0.9228 + unique_G=252 → predicted pipeline compression_jpeg:1 confirmed; severity 1 sweep ended bit-exact (PSNR=inf, CI 10/10) on target and all 4 distinct support pairs → no extra operators, Direct training on the predicted single-step pipeline",
+    "blur verdict ABSENT: spectral_slope_ratio=0.9925 (< 1.08 threshold), fft_anisotropy=0.0, peeled residual std=0.0 → anisotropy_ratio > 1.7 Tier A OCAB trigger NOT fired → attention_type=swin (Section 七: OCAB only for anisotropic/motion blur, Section 五 motion +1.19)",
+    "no blur → no severe motion blur → window_size=8 (Section 三/五: ws=16 reserved for motion blur sev>=5; CLAUDE.md rule 10)",
+    "noise verdict ABSENT: peeled residual after compression_jpeg:1 is identically zero (std=0.0); sigma=0.62 is JPEG pseudo-noise, extreme_pct=100% is a divide-by-zero artifact (per reflection noise_6step_check) → no noise component gate fires; no structure for CSN (Section 七 CSN trigger requires blur/noise present) → use_csn=false",
+    "global verdict ABSENT: variance_ratio=1.0026 ~= 1.0, mean_shift=0.0, chroma_ratio=0.9933 → Tier A variance_ratio != 1.0 gate NOT fired → use_gcm=false (FiLM-GCM requires variance_ratio != 1.0 + structured local), use_color_pre=false (ColorPre requires variance_ratio != 1.0; also worst cross-degradation generalization, 16.0 dB gap, Section 五)",
+    "no brightness (mean_shift=0.0) → ColorMLP/ColorMLP-Output gates not fired → use_color_mlp=false, use_color_mlp_output=false (Section 七: ColorMLP only for high-confidence brightness_HSV)",
+    "no stretch (variance_ratio=1.0, contrast_spread_ratio=0.9956) → use_channel_curve=false (Section 七: ChannelCurve only for high-confidence stretch)",
+    "use_dual_branch=false: Section 七 explicitly marks DualBranch ❌ not recommended under blind recognition (exp37 0/24 wins); full_analysis.json's generic recommended_architecture (DualBranch) is a pre-reflection heuristic assuming multi-step/uncertain, contradicted by the final bit-exact single-step LIKELY resolution with all other steps ABSENT",
+    "use_simple_gate=true: Section 七 'SimpleGate 默认常开' — exp39 8/9 safe, -32K params; only negative case S5 (motion x3, -0.86) not applicable (no motion blur); Step 0 low-difficulty (JPEG sev<=2) recommends pure Swin + SimpleGate",
+    "single-step deterministic degradation, no multi-degradation gradient interference → Direct; Section 六 Step 1: pure-local pipelines are Direct-safe (True Ft ~= Direct per exp37/38, and no checkpoint available anyway)",
+    "use_sca=false / use_gdfn=false / use_fpro=false / use_pcp=false: deprecated or marginal components (Section 八: SCA 8/9 harmful, FPro torch.fft x compile incompatible, GDFN +0.22 marginal, PCP per-block parameter-unfair)"
+  ],
+  "finetune_strategy_ref": [
+    "Section 六 Step 0 (difficulty ladder: JPEG sev<=2 → low → pure Swin + SimpleGate)",
+    "Section 六 Step 1 (pure-local pipeline → Direct safe; True Ft not applicable, no ckpt)",
+    "Section 六 Step 2 (per-step verdict component gating; UNCERTAIN/absent step adds no component)",
+    "Section 七 signal-confidence table (block_boundary Tier S 0% FP → JPEG confirmed; variance_ratio Tier A gate not met → no ColorPre/GCM; anisotropy Tier A gate not met → no OCAB; SimpleGate default-on)",
+    "Section 五 attention table (compression/JPEG: no OCAB advantage; contrast is the OCAB/MDTA crash scenario, absent here)",
+    "Section 八 exp37 (blind-recognition DualBranch 0/24 wins → not recommended) + exp39 (SimpleGate -32K, 8/9 safe)"
+  ],
+  "reasoning": "Predicted pipeline is a single deterministic compression_jpeg:1 verified bit-exactly (PSNR=inf, CI 10/10) on the target and all 4 distinct support pairs, which uniquely rules out blur, noise, and global degradation (peeled residual identically zero; variance_ratio=1.0026, mean_shift=0.0, chroma_ratio=0.9933). Under Section 六/七 signal gating, the only Tier S/A signal fired is block_boundary=2.5752 (JPEG, 0% FP); the Tier A gates that would license architecture components — anisotropy>1.7 (OCAB) and variance_ratio!=1.0 (ColorPre/FiLM-GCM) — are NOT met. Therefore the safe, evidence-backed choice is pure Swin (attention_type=swin, window_size=8, embed_dim=64, 454K) + SimpleGate (default-on per exp39, 8/9 safe, -32K; its one negative case is motion x3 which is absent) with all other components off (GCM, ColorPre, ColorMLP, ColorMLP-Output, ChannelCurve, CSN, DualBranch, PCP, SCA, GDFN, FPro). Training is Direct from scratch on the predicted degradation (no pretrained checkpoint available; exp37/38 show True Ft ~= Direct at this budget anyway), 2 epochs, lr=5e-4, batch=16. Note full_analysis.json's generic recommended_architecture suggests DualBranch, but that heuristic assumes multi-step/uncertain degradation and predates the reflection's bit-exact single-step resolution; Section 七/exp37 explicitly disqualify DualBranch under blind recognition, so it is not adopted. SimpleGate epoch-2 instability was observed only on D3 (JPEG+blur) at 128x128; with JPEG-only severity 1 and lr=5e-4, risk is low — retain best-checkpoint selection from the training log as a precaution.",
+  "val_config_note": "VAL uses the predicted pipeline (compression_jpeg:1), NOT ground truth; AR_CHALLENGE_DIR can point at this challenge for GT-free val PSNR monitoring of the predicted degradation."
+}

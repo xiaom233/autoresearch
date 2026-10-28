@@ -1,0 +1,72 @@
+{
+  "challenge_id": "blind_0024_rep1",
+  "pipeline": [
+    {
+      "step": 1,
+      "category": "noise",
+      "function": "noise_gaussian_YCrCb",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "step": 2,
+      "category": "blur",
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "step": 3,
+      "category": "global",
+      "function": "saturate_strengthen_HSV",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"step": 1, "category": "noise", "function": "noise_gaussian_YCrCb", "severity": 3},
+        {"step": 2, "category": "blur", "function": "blur_lens", "severity": 3},
+        {"step": 3, "category": "global", "function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "function_family": "blur_lens",
+      "psnr": null,
+      "psnr_note": "noise seed mismatch makes PSNR invalid; lens/gaussian MTF indistinguishable (SKILL C.3)",
+      "stats": {"shared_evidence": "spectral_slope ratio 1.113, FFT anisotropy 1.29 (isotropic), pca_ratio 1.07"}
+    },
+    {
+      "pipeline": [
+        {"step": 1, "category": "noise", "function": "noise_gaussian_YCrCb", "severity": 3},
+        {"step": 2, "category": "blur", "function": "blur_glass", "severity": 5},
+        {"step": 3, "category": "global", "function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "function_family": "blur_glass",
+      "psnr": 22.04,
+      "psnr_note": "deterministic subset test (glass:5+saturate:2) = 22.04 dB vs gaussian:3 = 23.72 dB",
+      "stats": {"glass_score": 0.72, "note": "initial signal suggestion; weaker PSNR and texture match"}
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 23.72,
+    "psnr_gap": 0.15,
+    "psnr_note": "23.72 dB = deterministic subset (blur_gaussian:3 + saturate_strengthen_HSV:2) in PSNR mode before noise was added; final 3-step pipeline PSNR is invalid due to noise seed mismatch. Deterministic ranking: blur gaussian sev3 23.72 > sev4 23.57 > sev2 23.25, glass sev5 22.04, global-only 20.01. psnr_gap = rank1-rank2 (0.15 dB).",
+    "ci_pass_rate": "7/10",
+    "ci_note": "CI of deterministic subset in PSNR mode; final pipeline evaluated in signal mode (verify_signals PARTIAL 5/7 with compression check, 4/6 without).",
+    "per_step_evidence": {
+      "noise_gaussian_YCrCb:3": "peeled residual rgb_ratio=1.54>1.4, noise_prior per-channel sigma ratio 2.0>1.4; smooth-sky high-pass noise target R/G/B = [2.17,4.55,3.06] vs YCrCb:3 sim [2.08,4.52,2.96] (match), RGB:2 [2.00,3.38,2.75], speckle:1 [2.04,3.17,2.78], noise-free blur3+sat2 [1.98,2.36,2.74] (G 44% low). verify_signals sigma matched at sev2 and sev3; sev3 chosen by sky texture amplitude. FWHM=6px structure mismatch is intrinsic to noise-before-blur ordering (generator priority 0 < 1).",
+      "blur_gaussian:3": "gm_ratio=0.329, spectral_slope_diff=0.0797<0.08 (matched), Wiener kernel corr=0.9980>0.85, FFT anisotropy 1.29<1.7 rules out motion, PSNR peak at sev3. Blur precedes global (priority 1<2).",
+      "saturate_strengthen_HSV:2": "HSV V invariant across all 5 pairs (e.g. 139.7->137.7) while HSV S 85.1->227.8 and low-channel clipping 0.011->0.250; sim sev2 reproduces S=226.9/clip=0.266/RGB mean=78.1 vs target 227.8/0.250/77.6; sev2 also best on pairs 1-3 (pair4 slightly lower S). mean_shift matched exactly (-0.1604 vs -0.1601). YCrCb saturation variant ruled out (would raise V to 210-230).",
+      "compression": "ruled out: block_boundary 0.9935 vs no-JPEG sim 0.9931 (0.0% diff), dct_zero_ratio 0.3764 vs 0.3756; unique_G reduction explained by saturation clipping."
+    },
+    "support_pairs": {
+      "usage": "all 5 pairs share the same pipeline; used for global function/severity identification and final cross-validation (distributional stats + smooth-patch texture)",
+      "consistency": "pairs 0-3 near-exact (S within 0.3-7.7, V within 1.2, clip within 0.028); pair4 S 12 lower, mean 7.7 higher (residual uncertainty)",
+      "files": ["degraded_0..4.png / clean_0..4.png (degraded.png == degraded_0.png)"]
+    },
+    "mode": "PSNR for deterministic ranking (sigma_prior 1.48<2) + SIGNAL mode for noise step",
+    "rationale": "Legal 3-step pipeline, one function per category: sensor noise -> optical blur -> ISP saturation. Global step is unambiguous from V-invariant / S-amplified statistics across all five support pairs. Blur family/severity supported by two independent noise-robust signals plus PSNR ranking. Noise presence proven by smooth-sky texture (target grain cannot be produced by any noise-free blur severity; channel pattern R<B<G matches YCrCb chroma noise clipped in R/B). All steps marked UNCERTAIN because no deterministic-only PSNR can reach 40 dB under noise seed mismatch."
+  }
+}

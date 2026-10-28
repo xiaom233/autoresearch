@@ -1,0 +1,98 @@
+{
+  "challenge_id": "blind_0017_set3",
+  "support_pairs_used": [
+    0,
+    2,
+    1,
+    3,
+    4
+  ],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "pipeline_order_note": "blur -> jpeg (physics: blur priority 1 before compression priority 2; reverse order rejected: CI 3/10, block_boundary mismatch 72%)",
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 3
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 4
+        }
+      ],
+      "psnr": 26.79,
+      "stats": {
+        "ci_pass_rate": "7/10",
+        "note": "blur severity ambiguity: g3 vs g4 PSNR tie (26.79 vs 26.77) on pair0; g4 preferred because kernel-shape signals (pca/density/flatness) and block_boundary match better"
+      },
+      "function_family": "blur_gaussian (severity sweep -1)"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 4
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 3
+        }
+      ],
+      "psnr": 27.14,
+      "stats": {
+        "ci_pass_rate": "6/10",
+        "note": "top PSNR but block_boundary 23% off (target bb=3.909 vs jpeg3 sim much lower) -> jpeg4 preferred on the 0%-FP structural signal; retained because gap 0.37 dB < 3 dB"
+      },
+      "function_family": "compression_jpeg (severity sweep -1)"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_lens",
+          "severity": 4
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 4
+        }
+      ],
+      "psnr": 26.71,
+      "stats": {
+        "ci_pass_rate": "7/10",
+        "note": "gaussian/lens MTF indistinguishable per SKILL; lens4 within 0.06 dB of gaussian4"
+      },
+      "function_family": "blur_lens (subtype ambiguity gaussian/lens)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "psnr": 26.77,
+    "ci_pass_rate": "7/10",
+    "psnr_gap": 0.37,
+    "evidence": [
+      "compression: block_boundary=3.909 (pair0) / 7.399 (pair2) >> 1.1 (0% FP signal, 14400-case calibrated), dct_zero_ratio=0.906, unique_G=248 -> JPEG present; severity 4 best matches block_boundary magnitude (jpeg3 23% off, jpeg5 10% off with overshoot/zero-crossing failing 33%/45%)",
+      "blur: gm_ratio=0.336, spectral_slope_ratio=1.228 (pair2: 1.215, consistent), residual_anisotropy=1.318 < 1.7 -> not motion (motion5+jpeg4 PSNR=21.16 dB). glass_score=1.249 is a JPEG-induced false positive: gaussian5+jpeg4 sim glass_score=1.345, glass5+jpeg4 sim=1.275, both > target -> glass NOT supported. Kernel shape metrics match gaussian4 sim: pca 1.112 vs 1.131, density 0.779 vs 0.765, flatness 0.414 vs 0.410",
+      "order: blur then JPEG confirmed (JPEG->blur CI 3/10, block_boundary diff 72%)",
+      "noise: NO_NOISE. noise_prior sigma=0.74 (pair0) / 1.61 (pair2) < 2; peeled residual §B extreme_pct=74.68% is the documented JPEG/blur residual false positive (sigma<5 trigger); vm_slope=-0.072, var_slope=0.229, spatial_corr=0.974 (structural), rgb_ratio=1.216 (<1.4)",
+      "global: NO_GLOBAL. brightness/contrast/saturation raw detectors all false; mean_shift=-1.8/255 (pair0) / +1.3/255 (pair2). Systematic mild tone compression (std target 64.4 vs 68-71 for all sims; var_ratio 0.766/0.773 across pairs vs sim 0.90-0.92; spread_ratio 0.892/0.893) is NOT reproducible by any available global severity: contrast_weaken_scale:1 (scale 0.75) drops PSNR to 24.66 (CI 5/10) and saturate_weaken_HSV:1 to 24.66; brightness/gamma excluded by near-zero mean shift; quantization excluded by unique_G=248",
+      "cross-pair validation: gaussian4+jpeg4 on support pair2 (2040x1320, different content) gives PSNR=26.62 dB, CI 6/10, block_boundary diff 4% - consistent with pair0",
+      "residual unresolved: PSNR plateau ~26.6-27.1 dB across all blur subtypes/severities indicates an OOD/tone-mapping component beyond x_distortion's parameterization; no further library candidate improved it (14 test_candidate iterations)",
+      "5-pair consistency: compression COMPRESSION_DETECTED on all 5 pairs (bb 3.32-10.64, dct_zero 0.892-0.935); sigma 0.37-1.61 (<2) on all -> NO_NOISE; slope_ratio 1.078-1.240 (blur present on all); var_ratio 0.641-0.796 and spread_ratio 0.779-0.893 on all (systematic mild tone compression, content-scattered thresholds: pair1 CONTRAST sev3, pair4 SATURATION sev3, others NO_GLOBAL -> detector-threshold noise, no reproducible library step)",
+      "blur subtype cross-content checks: pair0 gaussian4 26.77 vs motion5 21.16 dB; pair1 (text, anisotropy 2.604 content-driven) gaussian4 27.52 vs motion5 22.62 dB -> motion ruled out; glass_score FP proven via gaussian sims (1.263-1.345 >> 0.25)",
+      "pair1 validation: gaussian4+jpeg4 PSNR 27.52 dB, CI 7/10 (best of 3 validated pairs; pair0 26.77/7-10, pair2 26.62/6-10)"
+    ]
+  }
+}

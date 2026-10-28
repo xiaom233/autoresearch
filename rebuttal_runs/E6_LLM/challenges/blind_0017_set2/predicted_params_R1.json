@@ -1,0 +1,107 @@
+{
+  "round": "R1",
+  "pipeline": [
+    {
+      "function": "noise_gaussian_YCrCb",
+      "severity": 3,
+      "verdict": "UNCERTAIN",
+      "signal_source": "Existence: flat-region luminance variance p75 (thr8 low-gradient patches) target 0.10/0.19 (pairs 0/2) vs no-noise sim 0.05/0.05; R0 flat-region p50 8.16/7.95/11.66 (pairs 0-2) vs no-noise sims 0.45/0.00/1.82; chroma std +5-20% over no-noise sims in 5/5. Type NOT identifiable under noise->blur (SKILL: 54.7% ~ random); cross_channel_corr 0.57-0.87 is JPEG-confounded. Impulse explicitly rejected: raw impulse_zero_ratio 0.039-0.098 << 0.85 sparsity fingerprint; peeled extreme_pct 80-90% is a sign artifact (residual spatial_corr 0.97, ivc 0.89, 80% pixels of one sign), extreme-flag also fires on a no-impulse strip; impulse sim leaves flat-region p75 0.05 vs target 0.10 (sparse s&p does not reproduce the target's distributed flat noise). Severity 3 kept: after dropping the contrast step the simulated variance ratio matches target on all 5 pairs (0.772/0.645/0.748/0.714/0.732 vs target 0.711/0.639/0.734/0.700/0.706)."
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "LIKELY",
+      "signal_source": "Signal-level match on the noise-robust blur checks: spectral_slope diff 0.0315/0.0348 (<0.08) and Wiener kernel corr 0.9989/0.9984 (>0.85) on pairs 0/2 (R1 candidate pipeline). gm_ratio 0.17-0.50 and spectral_slope_ratio 1.20-1.28 in 5/5. Not motion: residual_anisotropy 1.15-1.67 < 1.7. Glass_score 1.15-1.54 is below/at the no-blur JPEG sim range 1.44-1.86 -> GLASS verdict is a JPEG-confounded FP. gaussian vs lens MTF-indistinguishable (MEMORY); gaussian wins the R0 matched grid (30.70 vs 29.73 dB) and keeps lens as alternative. Severity 3 from gm_ratio calibration (target 0.164 vs gauss3+jpeg5 0.143, gauss4 0.104, gauss2 0.227) and R0 gauss2/4 scans."
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "LIKELY",
+      "signal_source": "block_boundary 4.24-7.15 in 5/5 pairs (0% FP signal) plus dct_zero_ratio 0.892-0.948. Severity 4 (q8) retained after R1 re-test: jpeg5 (q5) matched pair2 block_boundary (diff 1.8%) but broke pair0 (diff 40% vs 10-13% for jpeg4) and degraded chroma on both (pair2 Cr/Cb 4.63/3.75 vs target 5.02/5.63; pair0 q5 Cr 9.45 vs target 7.10 per R0 calibration). jpeg4 is the best cross-pair compromise; severity uncertainty borders sev5 but SEV+-1 JPEG costs ~0.2 dB per REFLECTION_MECHANISM."
+    }
+  ],
+  "removed_steps": [
+    {
+      "function": "contrast_weaken_scale",
+      "severity": 1,
+      "verdict": "REMOVED_FALSE_POSITIVE",
+      "signal_source": "R0 attributed variance_ratio 0.64-0.73 (vs blur+jpeg 0.75-0.92) plus an anchor-128 mean-shift affine fit (implied alpha 0.85-0.90) to a contrast step. R1 falsifies this with matched simulations: noise_YCrCb3+blur3+jpeg4 WITHOUT any global step reproduces the target variance ratio on all 5 pairs (0.772/0.645/0.748/0.714/0.732 vs 0.711/0.639/0.734/0.700/0.706; mean within 0.3-2.0 levels, std within 0.2-1.7), because clipping of the strong pre-blur YCrCb noise supplies the apparent mid-gray contraction. The library's mildest contrast_weaken_scale (alpha=0.75) overshoots to variance ratio 0.437/0.419 (pairs 0/2) vs target 0.711/0.734 and inflates the peeled-residual autocorr FWHM from 8-12px (no contrast) to 62-334px. Library cannot represent the residual ~alpha>=0.96 contraction; omitting the step is the closest representable approximation."
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": null,
+      "stats": "not re-tested in R1 (candidate budget); R0 pair0 CI 7/10 (YCrCb 10/10); noise subtype unresolvable under noise->blur",
+      "function_family": "noise (cross-family: RGB instead of YCrCb)",
+      "reason": "Safe default if the chroma-noise reading is a JPEG-chroma artifact; identical deterministic backbone as R1 primary."
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "contrast_weaken_scale", "severity": 1}
+      ],
+      "psnr": 26.37,
+      "stats": "sim-vs-target PSNR 26.37/26.42 dB (pairs 0/2) vs 28.19/29.12 for R1; variance_ratio 0.437/0.419 vs target 0.711/0.734",
+      "function_family": "global (R0 4-step pipeline retained as fallback)",
+      "reason": "True pipeline likely contains a mild global contraction (alpha~0.96) that the library cannot represent; if a trained R1 model under-corrects contrast on test, this is the fallback."
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 3},
+        {"function": "blur_lens", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 26.24,
+      "stats": "R0 measured lens3+jpeg5+cw1 26.24 dB, CI 9/10 (pair0); MTF-indistinguishable from gaussian",
+      "function_family": "blur (gaussian vs lens)",
+      "reason": "Only if gaussian proves wrong in training; not distinguishable by available signals."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (noise present; PSNR not decisive for noise steps)",
+    "psnr": 28.42,
+    "psnr_note": "mean sim-vs-target PSNR over 5 support pairs (28.19/29.70/29.12/27.34/27.74); includes noise seed mismatch, indicative only",
+    "psnr_gap": 2.2,
+    "psnr_gap_note": "R1 minus R0-4step sim PSNR on the two pairs where both were measured (pair0 +1.82, pair2 +2.70 dB); decisive evidence is signal-level (variance-ratio mismatch 95-118% -> 1.4-8.6%, residual FWHM 62-334px -> 6-12px)",
+    "change_vs_R0": "DROP contrast_weaken_scale:1; keep noise_gaussian_YCrCb:3, blur_gaussian:3, compression_jpeg:4",
+    "evidence": {
+      "support_pairs": 5,
+      "contrast_step": "removed (false positive from noise/JPEG variance coupling; library cw1 alpha=0.75 overshoots)",
+      "noise": "present (flat-region + chroma excess); subtype/severity UNCERTAIN (noise->blur 54.7%); impulse rejected",
+      "blur": "presence/modelled subtype LIKELY via spectral slope + Wiener kernel; gaussian sev3",
+      "compression": "JPEG LIKELY (block_boundary 0%FP); severity 4 retained after cross-pair jpeg4/jpeg5 split",
+      "residual_structure": "R1 peeled-residual autocorr FWHM 6-12px vs R0 62-334px (still >4px: residual noise-seed + JPEG-split mismatch)",
+      "signal_verdicts_R1": {"pair0": "WEAK 3/5", "pair1": "WEAK 3/5", "pair2": "WEAK 3/5", "pair3": "PARTIAL 4/5", "pair4": "PARTIAL 4/5"},
+      "signal_verdicts_R0": {"pair0": "WEAK 3/7 (global mean_shift + variance_ratio fail)", "pair2": "WEAK 3/7 (global mean_shift + variance_ratio fail)"},
+      "second_order_variance_ratio": {
+        "target": [0.711, 0.639, 0.734, 0.700, 0.706],
+        "R1_no_contrast_sim": [0.772, 0.645, 0.748, 0.714, 0.732],
+        "R0_with_cw1_sim": [0.437, "n/a", 0.419, "n/a", "n/a"]
+      },
+      "second_order_mean_shift_levels": {
+        "target": [-6.30, 10.04, 7.95, -0.88, -2.47],
+        "R1_no_contrast_sim": [-4.62, 9.20, 6.00, -0.60, -1.42],
+        "abs_delta": [1.68, 0.84, 1.95, 0.28, 1.05]
+      },
+      "impulse_checks": {
+        "raw_impulse_zero_ratio": [0.0984, 0.0387, 0.0529, 0.0572, 0.0608],
+        "threshold": ">0.85 required for impulse",
+        "peeled_extreme_pct_with_contrast": [79.97, 13.79],
+        "note": "peeled extreme_pct is a residual-sign statistic under global mismatch (spatial_corr 0.97); with a matched no-contrast peel the run_full_analysis-class extreme flag is explained. Impulse sim flat-region p75 0.05 vs target 0.10."
+      },
+      "qwen_noise_gate": "unavailable (no Qwen tool/API in this environment)"
+    },
+    "tested_candidates_R1": 5,
+    "test_runs_R1": 13,
+    "note": "Candidate budget respected (5 new pipelines); per-pair repeats used for cross-pair verification of the winning candidate. Noise steps judged by verify_signals/§B statistics, not PSNR. No GT, no test data touched."
+  }
+}

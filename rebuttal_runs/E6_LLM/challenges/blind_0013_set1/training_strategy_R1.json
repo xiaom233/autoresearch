@@ -1,0 +1,56 @@
+{
+  "challenge": "blind_0013_set1",
+  "round": "R1",
+  "based_on_pipeline": "predicted_params_R1.json",
+  "params_path": "/data/zyli/projects/autoresearch/rebuttal_runs/E6_LLM/challenges/blind_0013_set1/predicted_params_R1.json",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "embed_dim": 64,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_gdfn": false,
+    "use_sca": false,
+    "use_freqmod": false,
+    "use_pcp": false,
+    "use_color_mlp_output": false
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "changed_vs_R0": {
+    "pipeline": "compression_jpeg:4→noise_speckle:1 改为 noise_speckle:3→compression_jpeg:2 (顺序反转 + 严重度修正)",
+    "architecture": "不变 (R0 已按 Section 七 信号门控选择纯 Swin + SimpleGate, R1 无新的 Tier S/A 架构触发信号)",
+    "reason": "R1 只修正盲识别 (REFLECTION_MECHANISM 第 1 层), 不调整架构/策略 (第 2/3 层)"
+  },
+  "signal_basis": [
+    "block_boundary=1.445-1.761 (5 support pairs, clean≈1.01), Tier S 0%FP → JPEG 确认, R1=sev2 (sp3+j2 模拟逐对 <8% 差; sev3 差 25%, sev1 bb=1.338) → Section 七 组件表 'block_boundary>1.1 (Tier S) → JPEG 专项' 仅确认存在性, 无对应注意力组件 → 保持 swin, 不切 OCAB/MDTA",
+    "noise_speckle:3 → compression_jpeg:2, verify_signals MATCH 3/3 × 5 support pairs (7 维直接信号全吻合: bb/dctzr/wavsig/specSl/std-I/res_std/lag1)。按 SKILL verdict 规则噪声步骤上限 UNCERTAIN (seed 失配) → Section 七 Step 2 'UNCERTAIN/POOR (该步骤) → 该步骤不加组件' → 不加 CSN/DualBranch 等",
+    "variance_ratio=0.950-1.119 (5 pairs), mean_shift≤1.9/255, clipped_fraction≤4.4%, contrast_from_variance=false → step4 verdict=NO_GLOBAL → Tier A 'variance_ratio≠1.0' 未触发 → use_color_pre=false, use_gcm=false (Section 七 全组件启用条件表)",
+    "saturation_chroma_ratio=0.951-1.057, saturation_detected_raw=false → ColorPre 禁用场景 (saturation 上 -0.34) 不触发 → 进一步确认 use_color_pre=false",
+    "spectral_slope_ratio=0.951-0.984 (<1.08), FFT anisotropy=0, step3 verdict=BLUR_UNLIKELY → motion blur 不存在 → anisotropy_ratio>1.7 未满足 → 不用 OCAB; motion sev≥5 的 ws=16 规则不适用 → window_size=8 (Section 七 anisotropy 行)",
+    "SimpleGate 默认常开: exp39 -32K 参数、8/9 退化安全 (最差 S5 motion×3 -0.86 不适用——本管线无 motion) → use_simple_gate=true (Section 六 Step 0 'JPEG sev≤2 → 纯 Swin + SimpleGate' + Section 七 组件表)",
+    "DualBranch ❌ 盲识别场景不推荐 (exp37 0/24 胜) → use_dual_branch=false (Section 七)",
+    "CSN: Tier B (需判断), 默认信号→组件流 ('默认 → Swin + SimpleGate + Direct') 不含 CSN; noise 步骤 UNCERTAIN → 保守不加 → use_csn=false",
+    "pipeline 仅含局部退化 (noise_speckle + compression_jpeg), 无 contrast → Section 六 Step 1 '纯局部 (blur/noise/comp) → Direct 或 RandomCurric'; 本任务指定 Direct; exp37/38: 2-epoch 预算下 True Ft ≈ Direct, 无预训练 ckpt → strategy=direct",
+    "GCM 诱发 NaN 的高风险组合 (brightness_HSV + blur) 不存在; 仍按协议 lr=5e-4、epoch=2、batch=16 (Section 九 崩溃诊断)",
+    "参数公平性: swin dim=64 ≈ 454K ≤ 477K (≤1.05× 基线); 未启用 OCAB 故无需 AR_EMBED_DIM=30 对齐 (Section 五 参数公平性规则)"
+  ],
+  "finetune_strategy_ref": [
+    "Section 七 核心原则 '信号置信度驱动组件选择' + Tier S/A/B/C 分层表",
+    "Section 七 '全组件启用条件（按盲识别信号严格门控）' 表: block_boundary→仅确认 JPEG; noise UNCERTAIN→不加组件; SimpleGate 常开",
+    "Section 七 '信号→组件映射流程' (variance_ratio / anisotropy / block_boundary → 默认 Swin+SimpleGate+Direct)",
+    "Section 六 Step 0 低难度判定 (JPEG sev≤2 → 纯 Swin + SimpleGate) 与 Step 1 策略判定 (纯局部 → Direct)",
+    "Section 五/六 SimpleGate 跨退化泛化 (exp39, 8/9 安全)",
+    "Section 八 消融 A: exp37 盲识别场景 24 挑战 Direct+Swin 纯基线 23/24 胜, DualBranch/FiLM/ColorPre 0/24"
+  ],
+  "reasoning": "R1 预测为 noise_speckle:3 → compression_jpeg:2 (纯局部退化, 无 blur/global/contrast; step3 BLUR_UNLIKELY, step4 NO_GLOBAL)。按 Section 七 信号门控: 唯一 Tier S 信号 block_boundary 只确认 JPEG 存在与 sev2, JPEG 无专项架构组件; noise 步骤 verify_signals MATCH ×5 但按 SKILL 噪声 verdict 上限为 UNCERTAIN, Section 七 Step 2 规定该步骤不加组件; variance_ratio 0.950-1.119 未触发 Tier A → FiLM-GCM/ColorPre 均不启用; saturation_chroma_ratio 无异常; 无 anisotropy → 不用 OCAB、ws=8。最终架构与 R0 相同: 纯 Swin (dim=64, ws=8, 454K ≤ 477K) + SimpleGate 常开 (-32K, exp39 8/9 安全)。策略从头 Direct (无预训练 ckpt; exp37 证明 2-epoch 预算下 True Ft ≈ Direct), EPOCH=2、lr=5e-4、batch=16 与基线一致。风险备注: (1) R1 仅改训练 PARAMS, VAL 必须继续用 AR_CHALLENGE_DIR (challenge 自带 clean_*/degraded_* 对) 以保证与 R0 的 27.38 支持集 PSNR 可比; (2) R0 训练 best_step=7546 (中期) 且 nan=false → 评估取 best ckpt 而非 last, 并对比 R0/R1 best; (3) 若 R1 支持集 PSNR 未超过 R0 27.38, 说明信号吻合并未转化为训练收益, 回退 R0 (见 predicted_params_R1.json alternatives[2])。",
+  "training_command_template": "CUDA_VISIBLE_DEVICES=GPU_ID AR_ATTENTION_TYPE=swin AR_EMBED_DIM=64 AR_WINDOW_SIZE=8 AR_USE_SIMPLE_GATE=1 AR_USE_GCM=0 AR_USE_COLOR_PRE=0 AR_USE_COLOR_MLP=0 AR_USE_DUAL_BRANCH=0 AR_USE_CSN=0 AR_USE_SCA=0 AR_USE_GDFN=0 AR_USE_FPRO=0 AR_USE_PCP=0 AR_USE_CHANNEL_CURVE=0 AR_USE_FREQMOD=0 AR_PARAMS_PATH=rebuttal_runs/E6_LLM/challenges/blind_0013_set1/predicted_params_R1.json AR_VAL_PARAMS_PATH=rebuttal_runs/E6_LLM/challenges/blind_0013_set1/predicted_params_R1.json AR_CHALLENGE_DIR=rebuttal_runs/E6_LLM/challenges/blind_0013_set1 AR_EPOCH_BUDGET=2 AR_LEARNING_RATE=0.0005 AR_BATCH_SIZE=16 AR_LOSS_FN=l1 AR_SEED=42 AR_SKIP_FINAL_VAL=1 AR_QUIET_PIPELINE=1 AR_CKPT_PREFIX=rebuttal_runs/E6_LLM/runs/blind_0013_set1/R1 .venv/bin/python3 train.py > rebuttal_runs/E6_LLM/logs/blind_0013_set1_R1.log 2>&1",
+  "evaluation_note": "R0 基线: best ckpt step7546, 支持集 PSNR 27.38 (nan=false)。R1 训练后同口径 (AR_CHALLENGE_DIR, 5 对 support) 对比 best ckpt; 提升 > 0.5 dB 视为 R1 有效, ≤0 则回退 R0 参数。"
+}

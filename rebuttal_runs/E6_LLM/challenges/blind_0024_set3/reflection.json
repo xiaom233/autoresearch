@@ -1,0 +1,1289 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION in all 5 pairs (block_boundary 0.996-1.003, unique_G 240-256, far below 1.05/200 thresholds)",
+      "blur": "BLUR present: gm_ratio 0.355/0.507/0.640/0.400/0.640 across pairs 0-4 (all <0.85). DT split: glass_score 0.59/0.65 on pairs 1,3; BLUR_UNLIKELY otherwise. spectral_slope_ratio 1.04-1.13 (near threshold). FFT anisotropy 0-2.14 (no strong directional motion).",
+      "noise": "noise_prior sigma 1.11-1.73 (all <2 nominally), type guesses YCrCb (4 pairs) / POISSON (pair4). BUT visual: flat sky in degraded_0 is covered by heavy colorful pixel-level mottling absent in clean; post-blur wavelet sigma is attenuated. Chroma noise likely real and stronger than sigma suggests.",
+      "global": "Consistent across all 5 pairs: mean_shift -27.4/-30.4/-33.2/-42.7/-31.7 (darkening), clipped_fraction 0.13-0.26, chroma_ratio 1.57-3.05 (chroma spread up), variance_ratio 0.81-1.33. residual_intensity_corr 0.37-0.87. Single global function only (generator allows one per category)."
+    },
+    "mode": "SIGNAL (sigma nominal 1.1-1.7 post-blur, but chroma noise visible; PSNR used only for deterministic components, noise judged by §B statistics)",
+    "verification_result": "run_full_analysis 5 pairs: NO_COMPRESSION (block_boundary 0.996-1.003), blur present (gm_ratio 0.356-0.645), noise sigma 1.10-1.73 (post-blur attenuated), global darkening (mean_shift -27.4..-42.7, clipped 12.7-26.2%). verify_signals(final): blur spectral_slope MATCH + wiener_kernel MATCH + noise sigma MATCH; global mean_shift near-match (diff 0.0065); variance_ratio mismatch (73%) → global step kept UNCERTAIN."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,brightness_darken_gamma_RGB:2",
+        "thinking": "Round1-A: 全局信号 mean_shift=-27.4 且 chroma_ratio=3.05(residual-intensity corr=0.37) → 单通道 gamma 暗化会使 chroma 展宽并产生强度依赖残差; 暂用 blur_gaussian:2 作占位"
+      },
+      "test_result": {
+        "psnr_rgb": 16.93,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,brightness_darken_gamma_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,brightness_darken_shfit_RGB:2",
+        "thinking": "Round1-B: 对照: RGB 常量减暗 (c=0.15→-38) 可解释 mean_shift 与暗部 clipping, 但无法解释 chroma_ratio=3.05"
+      },
+      "test_result": {
+        "psnr_rgb": 18.07,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,brightness_darken_shfit_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:1",
+        "thinking": "Round1-C: 对照: chroma std ×3 可直接由 S×3 解释, 但 HSV 饱和度不改变亮度均值"
+      },
+      "test_result": {
+        "psnr_rgb": 19.0,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,contrast_strengthen_stretch:1",
+        "thinking": "Round1-D: 对照: 逐通道均值S曲线 c=2 → 亮部压到255/暗部压到0, 可同时解释 mean_shift=-27, chroma std 上升, 11%纯255"
+      },
+      "test_result": {
+        "psnr_rgb": 16.63,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,contrast_strengthen_stretch:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,contrast_strengthen_stretch:2",
+        "thinking": "Round1-E: 同 S曲线 c=4 (更强二值化)"
+      },
+      "test_result": {
+        "psnr_rgb": 16.04,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,contrast_strengthen_stretch:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+        "thinking": "Round2: 全局=saturate_strengthen_HSV:2 (per-ch 位移模式+chromaR=3.1 三对均吻合); 现扫 blur_gaussian severity"
+      },
+      "test_result": {
+        "psnr_rgb": 20.12,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Round2: 全局=saturate_strengthen_HSV:2 (per-ch 位移模式+chromaR=3.1 三对均吻合); 现扫 blur_gaussian severity"
+      },
+      "test_result": {
+        "psnr_rgb": 20.42,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,saturate_strengthen_HSV:2",
+        "thinking": "Round2: 全局=saturate_strengthen_HSV:2 (per-ch 位移模式+chromaR=3.1 三对均吻合); 现扫 blur_gaussian severity"
+      },
+      "test_result": {
+        "psnr_rgb": 20.37,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,saturate_strengthen_HSV:2",
+        "thinking": "Round2: glass/lens 候选 — run_full_analysis 在 pair1/3 给出 glass_score 0.59/0.65 (pixel shuffle 高频残留); 验证 glass severity"
+      },
+      "test_result": {
+        "psnr_rgb": 19.72,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,saturate_strengthen_HSV:2",
+        "thinking": "Round2: glass/lens 候选 — run_full_analysis 在 pair1/3 给出 glass_score 0.59/0.65 (pixel shuffle 高频残留); 验证 glass severity"
+      },
+      "test_result": {
+        "psnr_rgb": 19.8,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:2",
+        "thinking": "Round2: glass/lens 候选 — run_full_analysis 在 pair1/3 给出 glass_score 0.59/0.65 (pixel shuffle 高频残留); 验证 glass severity"
+      },
+      "test_result": {
+        "psnr_rgb": 19.7,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_lens:3,saturate_strengthen_HSV:2",
+        "thinking": "Round2: glass/lens 候选 — run_full_analysis 在 pair1/3 给出 glass_score 0.59/0.65 (pixel shuffle 高频残留); 验证 glass severity"
+      },
+      "test_result": {
+        "psnr_rgb": 20.21,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Round3: 加入噪声 — 平坦天空 HP 噪声 target R3.97/G2.61/B2.13; RGB 通道均衡(rgb_ratio1.08) → gaussian_RGB; 扫噪声强度(物理顺序 noise→blur→sat)"
+      },
+      "test_result": {
+        "psnr_rgb": 20.88,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Round3: 加入噪声 — 平坦天空 HP 噪声 target R3.97/G2.61/B2.13; RGB 通道均衡(rgb_ratio1.08) → gaussian_RGB; 扫噪声强度(物理顺序 noise→blur→sat)"
+      },
+      "test_result": {
+        "psnr_rgb": 20.85,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:2,saturate_strengthen_HSV:2",
+        "thinking": "Round3: 加入噪声 — 平坦天空 HP 噪声 target R3.97/G2.61/B2.13; RGB 通道均衡(rgb_ratio1.08) → gaussian_RGB; 扫噪声强度(物理顺序 noise→blur→sat)"
+      },
+      "test_result": {
+        "psnr_rgb": 19.96,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:2,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Round3: 加入噪声 — 平坦天空 HP 噪声 target R3.97/G2.61/B2.13; RGB 通道均衡(rgb_ratio1.08) → gaussian_RGB; 扫噪声强度(物理顺序 noise→blur→sat)"
+      },
+      "test_result": {
+        "psnr_rgb": 20.34,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,brightness_darken_shfit_RGB:1,saturate_strengthen_HSV:2",
+        "thinking": "Round4: 亮度分箱残差显示 target 亮部(>220)比 sat2 额外暗 -22, 低饱和像素额外暗 -16 → 假设存在额外 brightness 步; 测 brightness+sat 组合与顺序"
+      },
+      "test_result": {
+        "psnr_rgb": 19.11,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,brightness_darken_shfit_RGB:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,brightness_darken_gamma_RGB:1,saturate_strengthen_HSV:2",
+        "thinking": "Round4: 亮度分箱残差显示 target 亮部(>220)比 sat2 额外暗 -22, 低饱和像素额外暗 -16 → 假设存在额外 brightness 步; 测 brightness+sat 组合与顺序"
+      },
+      "test_result": {
+        "psnr_rgb": 18.63,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,brightness_darken_gamma_RGB:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,saturate_strengthen_HSV:2,brightness_darken_shfit_RGB:1",
+        "thinking": "Round4: 亮度分箱残差显示 target 亮部(>220)比 sat2 额外暗 -22, 低饱和像素额外暗 -16 → 假设存在额外 brightness 步; 测 brightness+sat 组合与顺序"
+      },
+      "test_result": {
+        "psnr_rgb": 18.82,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,saturate_strengthen_HSV:2,brightness_darken_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Round5: 亮部额外暗化可能来自乘性/强度依赖噪声+高光裁剪 (speckle/poisson), 或 YCrCb 色度噪声; 逐一验证噪声类型"
+      },
+      "test_result": {
+        "psnr_rgb": 21.16,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Round5: 亮部额外暗化可能来自乘性/强度依赖噪声+高光裁剪 (speckle/poisson), 或 YCrCb 色度噪声; 逐一验证噪声类型"
+      },
+      "test_result": {
+        "psnr_rgb": 21.38,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Round5: 亮部额外暗化可能来自乘性/强度依赖噪声+高光裁剪 (speckle/poisson), 或 YCrCb 色度噪声; 逐一验证噪声类型"
+      },
+      "test_result": {
+        "psnr_rgb": 20.07,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Round6 跨对验证 (pair1, glass_score=0.59): speckle1+sat2 基准; gaussian vs glass 对比"
+      },
+      "test_result": {
+        "psnr_rgb": 22.64,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_glass:4,saturate_strengthen_HSV:2",
+        "thinking": "Round6 跨对验证 (pair1, glass_score=0.59): speckle1+sat2 基准; gaussian vs glass 对比"
+      },
+      "test_result": {
+        "psnr_rgb": 20.95,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_speckle:1,blur_glass:4,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Round6 跨对验证 (pair3 最强暗化 mean_shift -42.7, glass_score 0.65): 最终候选泛化检查"
+      },
+      "test_result": {
+        "psnr_rgb": 23.59,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R1-C1 control: sigma_match 1.48 vs 1.48, flat-patch additive slope -0.41 vs gauss -0.45, blur spectral_slope+wiener MATCH, sat2 blur->sat per-channel shift MAE 2.76 across 5 pairs"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=33%)",
+          "noise:structured_residual (FWHM=6.0px)",
+          "global:mean_shift (diff=0.0062)",
+          "global:variance_ratio (diff=77%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R1-C2: flat-patch HP-MAD target 2.03/1.94/1.98 vs C1 rgb3 sim 1.73/1.63/1.66 (target ~1.18x higher; channel ratios match 1.04/0.98 vs 1.06/0.98) -> severity +1 (sigma 0.15->0.20) hypothesis"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=6.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R1-C3: severity -1 bracket (sigma 0.10); if additive-RGB severity estimated >=3 from flat-patch amplitude, this should underfit target noise MAD by ~30 percent"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.093)",
+          "noise:sigma (diff=33%)",
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:mean_shift (diff=0.0139)",
+          "global:variance_ratio (diff=149%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R1-C4: run_full_analysis noise verdict GAUSSIAN_YCrCb on 4/5 pairs (low-confidence gamma-suspect path, cc 0.26-0.45); test chroma-heavy subtype at matched severity index 3"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)",
+          "global:mean_shift (diff=0.0209)",
+          "global:variance_ratio (diff=143%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R1-C5: cross-family check; R0 best support PSNR (21.38) but multiplicative speckle predicts positive intensity-slope; target flat-patch slope is +0.01 (additive-like)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.097)",
+          "noise:sigma (diff=33%)",
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:mean_shift (diff=0.0105)",
+          "global:variance_ratio (diff=83%)"
+        ],
+        "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R1 cross-pair check (pair1, glass_score=0.59 FP, sigma_prior 1.73): same R1 pipeline as pair0 winner; flat-patch amplitude/ratio fingerprint should generalize"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=6.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R1 cross-pair check (pair3, glass_score=0.65 FP, strongest darkening -42.7, sigma_prior 1.36): same R1 pipeline; verifies noise severity 4 and sat2 against the most saturated pair"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "step": 1,
+        "function": "noise_gaussian_RGB",
+        "severity": 3,
+        "verdict": "UNCERTAIN",
+        "evidence": "sigma match 1.48 vs 1.48, clipped fraction 0.127 vs 0.126, flat-patch scaling slope -0.41 (additive) vs gaussian -0.45/speckle -1.01; noise under blur is never LIKELY per SKILL"
+      },
+      {
+        "step": 2,
+        "function": "blur_gaussian",
+        "severity": 3,
+        "verdict": "LIKELY",
+        "evidence": "gm_ratio 0.356-0.645 across 5 pairs; verify_signals spectral_slope MATCH + wiener_kernel MATCH; gaussian beats glass by 1.70 dB on pair1; severity scan blur3>blur2 (+0.89 dB)"
+      },
+      {
+        "step": 3,
+        "function": "saturate_strengthen_HSV",
+        "severity": 2,
+        "verdict": "UNCERTAIN",
+        "evidence": "per-channel mean-shift signature matches sat2 within 1-2 levels on pairs 0/3/4 (hue-dependent); chroma_ratio 2.94 vs 3.05; but verify_signals variance_ratio mismatch (73%) keeps it UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "rationale": "Multi-step mixed pipeline. Compression excluded by 0%-FP block_boundary. The large darkening is NOT a brightness function — it is the side effect of HSV saturation clipping (sev2), confirmed by per-channel shift signatures on 3 pairs and by explicit brightness-step tests failing (18.6-19.1 dB). Blur is Gaussian σ≈3, confirmed by two independent blur signals and a 1.70 dB win over glass. The flat-sky colourful mottling is additive Gaussian RGB noise (sev≈3) amplified ×6 by the saturation step; flat-patch intensity scaling matches additive (not speckle). Noise type remains the main uncertainty (seed mismatch, blur coupling).",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "noise_speckle",
+            "severity": 1
+          },
+          {
+            "function": "blur_gaussian",
+            "severity": 3
+          },
+          {
+            "function": "saturate_strengthen_HSV",
+            "severity": 2
+          }
+        ],
+        "psnr": 21.38,
+        "support": "CI 10/10; pair0 21.38 / pair1 22.64 / pair3 23.59 — best PSNR, but flat-patch slope -1.01 contradicts target -0.41"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "noise_poisson",
+            "severity": 2
+          },
+          {
+            "function": "blur_gaussian",
+            "severity": 3
+          },
+          {
+            "function": "saturate_strengthen_HSV",
+            "severity": 2
+          }
+        ],
+        "psnr": 21.16,
+        "support": "CI 10/10; intensity-dependent variance, intermediate hypothesis"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "noise_gaussian_RGB",
+            "severity": 2
+          },
+          {
+            "function": "blur_gaussian",
+            "severity": 3
+          },
+          {
+            "function": "saturate_strengthen_HSV",
+            "severity": 2
+          }
+        ],
+        "psnr": 20.85,
+        "support": "CI 10/10; same family, severity alternative (±1)"
+      }
+    ]
+  },
+  "psnr_ranking": [
+    {
+      "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 23.59,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 22.64,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 21.38,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "noise_poisson:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 21.16,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "noise_speckle:1,blur_glass:4,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.95,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.88,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.85,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.42,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:4,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.37,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.34,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_lens:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.21,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.12,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.07,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:2,blur_gaussian:2,saturate_strengthen_HSV:2",
+      "psnr_rgb": 19.96,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_glass:4,saturate_strengthen_HSV:2",
+      "psnr_rgb": 19.8,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_glass:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 19.72,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_glass:5,saturate_strengthen_HSV:2",
+      "psnr_rgb": 19.7,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,brightness_darken_shfit_RGB:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 19.11,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:1",
+      "psnr_rgb": 19.0,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,saturate_strengthen_HSV:2,brightness_darken_shfit_RGB:1",
+      "psnr_rgb": 18.82,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,brightness_darken_gamma_RGB:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 18.63,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_gaussian:2,brightness_darken_shfit_RGB:2",
+      "psnr_rgb": 18.07,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_gaussian:2,brightness_darken_gamma_RGB:2",
+      "psnr_rgb": 16.93,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:2,contrast_strengthen_stretch:1",
+      "psnr_rgb": 16.63,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:2,contrast_strengthen_stretch:2",
+      "psnr_rgb": 16.04,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    }
+  ],
+  "statistical_checks": {
+    "noise_6step_check": {
+      "extreme_pct": 63.37,
+      "vm_slope": -0.0511,
+      "var_slope": 2.308,
+      "ivc": 0.6675,
+      "spatial_corr": 0.9926,
+      "rgb_ratio": 1.0778,
+      "cross_ch_corr": 0.2041,
+      "peeled_noise_prior_sigma": 2.72,
+      "diagnosis": "peeled via blur_gaussian:3,saturate_strengthen_HSV:2; spatial_corr=0.9926 → residual still structured (saturation quantisation mismatch), so §B type inference is NOT reliable (consistent with SKILL: noise→blur coupling makes §B ~random). extreme_pct 63% is a known JPEG/blur/saturation-artefact FP per SKILL reflection_triggers."
+    },
+    "noise_prior_sigma_target_residual": [
+      1.48,
+      1.73,
+      1.11,
+      1.36,
+      1.1
+    ],
+    "flat_patch_noise_scaling_slope": {
+      "definition": "slope of log(high-pass noise sigma) vs log(patch mean) over flat clean patches (pair0); 0=additive, ~0.5=Poisson, ~1=Speckle",
+      "target": -0.41,
+      "gaussian_RGB_sim": -0.45,
+      "speckle_sim": -1.01,
+      "interpretation": "target scales like additive Gaussian RGB noise, not multiplicative speckle"
+    },
+    "flat_sky_highpass_mad": {
+      "target": {
+        "R": 3.97,
+        "G": 2.61,
+        "B": 2.13,
+        "Cr": 2.19,
+        "Cb": 2.04
+      },
+      "no_noise_sim_blur3_sat2": {
+        "Cr": 0.53,
+        "Cb": 0.3
+      },
+      "final_sim_gauss3_blur3_sat2": {
+        "Cr": 1.93,
+        "Cb": 1.73
+      },
+      "note": "flat-sky mottling is real noise (cannot be glass shuffle: flat regions are invariant to pixel shuffling)"
+    },
+    "signal_vector_final_vs_target_pair0": {
+      "mean_shift": {
+        "target": -27.4,
+        "sim_gauss3": -25.7
+      },
+      "clipped_fraction": {
+        "target": 0.127,
+        "sim_gauss3": 0.126
+      },
+      "variance_ratio": {
+        "target": 0.919,
+        "sim_gauss3": 0.979
+      },
+      "chroma_ratio": {
+        "target": 3.05,
+        "sim_gauss3": 2.94
+      },
+      "gm_ratio": {
+        "target": 0.507,
+        "sim_gauss3": 0.441
+      },
+      "noise_sigma": {
+        "target": 1.48,
+        "sim_gauss3": 1.48
+      },
+      "cross_channel_corr": {
+        "target": 0.287,
+        "sim_gauss3": 0.318
+      },
+      "residual_intensity_corr": {
+        "target": 0.369,
+        "sim_gauss3": 0.256
+      }
+    },
+    "per_channel_mean_shift_global_type_test": {
+      "method": "simulate each global function alone on downsample(clean) and compare per-channel mean shifts + chroma ratio (pairs 0/3/4)",
+      "pair0": {
+        "target": [
+          -26.8,
+          -23.0,
+          -32.3
+        ],
+        "saturate_strengthen_HSV:2": [
+          -22.0,
+          -15.5,
+          -25.1
+        ],
+        "brightness_darken_gamma_RGB:2": [
+          -32.2,
+          -32.5,
+          -31.7
+        ],
+        "brightness_darken_shfit_RGB:2": [
+          -37.0,
+          -37.8,
+          -37.4
+        ]
+      },
+      "pair3": {
+        "target": [
+          -52.6,
+          -42.3,
+          -33.3
+        ],
+        "saturate_strengthen_HSV:2": [
+          -53.7,
+          -43.7,
+          -31.3
+        ]
+      },
+      "pair4": {
+        "target": [
+          -27.2,
+          -14.7,
+          -53.2
+        ],
+        "saturate_strengthen_HSV:2": [
+          -25.8,
+          -12.3,
+          -53.6
+        ]
+      },
+      "conclusion": "hue-dependent darkening (min channel drops most) is the saturation signature; brightness functions give near-equal per-channel shifts → ruled out"
+    },
+    "compression_check": {
+      "block_boundary_all_pairs": [
+        1.001,
+        0.996,
+        0.996,
+        1.003,
+        0.999
+      ],
+      "verdict": "NO_COMPRESSION (0% FP signal, far below 1.05/1.10)"
+    },
+    "qwen_noise_gate": "unavailable in this environment (no Qwen API tool); noise presence/type decided from signal statistics only",
+    "budget": "25 test_candidate PSNR tests (hard cap reached); 3 rounds; no further enumeration performed"
+  },
+  "coupling_analysis": {
+    "order": "noise → blur → saturate (physical order: noise p0, blur p1, ISP saturation p2)",
+    "noise_blur_coupling": "noise precedes blur, so post-blur wavelet sigma (1.1-1.7) is strongly attenuated; §B type inference on peeled residual is unreliable (spatial_corr 0.99). Noise type resolved instead by flat-patch intensity scaling (additive, slope -0.41 ≈ gaussian -0.45 vs speckle -1.01), sigma match (1.48 vs 1.48), and clipped-fraction match (0.127 vs 0.126).",
+    "saturation_noise_coupling": "saturation gain (S×6, sev2) amplifies chroma fluctuations, turning mild additive RGB noise into the strong colourful mottling seen in flat sky; blur before saturation keeps V≤255 (target has ~0% pure-255 values, whereas gamma/shift-darken sims produced 11pp extra 255s → those were rejected).",
+    "darkening_is_saturation_side_effect": "HSV S-scaling leaves V untouched but pushes min/mid channels down, darkening the RGB mean (mean_shift -27..-43) and creating dark clipping (12.7-26.2%). Adding an explicit brightness step over-darkens: blur3+shift_RGB:1+sat2 → 19.11 dB, blur3+gamma_RGB:1+sat2 → 18.63 dB, vs 20.88 dB without → brightness ruled out.",
+    "glass_false_positive": "run_full_analysis reported glass_score 0.59/0.65 on pairs 1/3, but on pair1 gaussian3 (22.64 dB) beats glass4 (20.95 dB) by 1.70 dB, and flat-sky mottling cannot come from pixel shuffling (flat patches invariant). blur spectral_slope + wiener_kernel both MATCH for gaussian:3.",
+    "cropping_note": "blur_gaussian severity scan with noise: blur2 → 19.96 dB, blur3 → 20.85 dB (+0.89); without noise blur3 20.42 > blur4 20.37 > blur2 20.12. Severity 3 selected, ±1 possible."
+  },
+  "r1_summary": {
+    "round": "R1",
+    "trigger": "R0 overall verdict UNCERTAIN -> mandatory R1 reflection (REFLECTION_MECHANISM). R0 support PSNR 22.91 (step 15092) is training-side context only.",
+    "scope": "Re-ran run_full_analysis.py on all 5 support pairs (full_analysis_R1_pair0..4.json); noise subtype/severity, blur, saturation, second-order statistics",
+    "reanalysis_highlights": [
+      "1) Refractory estimator found: R0's noise severity rested on wavelet MAD of the target-clean residual, which returns EXACTLY 1.483 for every candidate (sev2/3/4, YCrCb3, speckle1) - zero resolving power in uint8. Replaced with flat-patch high-pass MAD on clean-defined flat regions (pair0: 1795 patches of 12192; pair1: 807), a seed-robust second-order statistic.",
+      "2) Noise subtype = RGB: target flat-patch channel fingerprint R/G=1.04, G/B=0.98, Cr/Cb=1.05 matches RGB sim (1.02/0.99/1.05); YCrCb:3 gives R/G=9.70, G/B=0.10 (G nearly noise-free) -> rejected; speckle:1 intensity slope +0.40 vs target +0.01 -> rejected; sb6 residual rgb_ratio 1.155 (<1.3). The run_full_analysis GAUSSIAN_YCrCb verdict (4/5 pairs) is the low-confidence gamma-suspect code path (cross_channel_corr>0.12 + residual_intensity_corr>0.15) polluted by blur/saturation structure, not a genuine YCrCb detection.",
+      "3) Noise severity = 4: target flat-patch amplitude is 1.18x R0's sev3 sim (sim/target 0.84-0.85 on R/G/B/Cr/Cb); sev4 sim matches 0.99/1.01/1.01/1.00/1.00 on pair0 and 0.94/0.98/0.99/0.99/0.98 on pair1. verify_signals: sev4 PARTIAL 5/6 (pairs 0/1/3), sev3 WEAK 2/6 (pair0), sev2 WEAK 1/6. The R0 variance_ratio mismatch (77%) resolves to 2.4% (0.9192 vs 0.9174) at sev4; mean_shift diff 0.0002.",
+      "4) Saturation = HSV2 (unchanged): run_full_analysis raw verdict proposed SATURATION_strengthen_sev5, but the deterministic 5-pair sweep clean->blur3->satN rejects it: HSV2 shift MAE 2.76, chroma|d| 0.09, dark-clip|d| 0.010, var|d| 0.097 vs HSV1 12.88/0.52/0.260/0.063, HSV3 6.30/0.32/0.226/0.146, HSV5 10.22/0.66/0.388/0.170. saturate_strengthen_YCrCb N=1..5 all 27.7-30.9 shift MAE -> subtype rejected. Brightness/gamma excluded (hue-dependent shifts match saturation clipping; equal-channel shift would be required).",
+      "5) Blur = gaussian3 (unchanged): under the corrected noise severity, spectral_slope diff 0.0005 (pair0) and Wiener kernel corr 0.9986-0.9987 (>0.85); glass_score 0.59/0.65 (pairs 1/3) remains the known glass-DT FP (R0: gaussian beats glass by 1.70 dB; flat-region mottling cannot come from pixel shuffle). Compression excluded (block_boundary 0.996-1.003, unique_G 236-247)."
+    ],
+    "candidates_tested": [
+      {
+        "round": 26,
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "R0 control",
+        "verdict": "WEAK 2/6",
+        "matched": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched": [
+          "noise:sigma 33%",
+          "residual FWHM 6px",
+          "mean_shift 0.0062",
+          "variance_ratio 77%"
+        ],
+        "flat_patch_sim_over_target": [
+          0.85,
+          0.84,
+          0.84,
+          0.83,
+          0.83
+        ]
+      },
+      {
+        "round": 27,
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "severity +1",
+        "verdict": "PARTIAL 5/6",
+        "matched": [
+          "blur:spectral_slope 0.0005",
+          "blur:wiener 0.9987",
+          "noise:sigma 0.0%",
+          "mean_shift 0.0002",
+          "variance_ratio 2.4%"
+        ],
+        "mismatched": [
+          "residual FWHM 6px (independent seed)"
+        ],
+        "flat_patch_sim_over_target": [
+          0.99,
+          1.01,
+          1.01,
+          1.0,
+          1.0
+        ],
+        "channel_ratios": {
+          "sim_R/G": 1.02,
+          "sim_G/B": 0.99,
+          "sim_Cr/Cb": 1.05,
+          "target_R/G": 1.04,
+          "target_G/B": 0.98,
+          "target_Cr/Cb": 1.05
+        },
+        "intensity_slope": {
+          "target": 0.01,
+          "sim": 0.01
+        }
+      },
+      {
+        "round": 28,
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "severity -1",
+        "verdict": "WEAK 1/6",
+        "mismatched": [
+          "spectral_slope 0.093",
+          "noise:sigma 33%",
+          "FWHM 8px",
+          "mean_shift 0.0139",
+          "variance_ratio 149%"
+        ],
+        "flat_patch_sim_over_target": [
+          0.72,
+          0.7,
+          0.66,
+          0.71,
+          0.71
+        ]
+      },
+      {
+        "round": 29,
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "subtype alternative",
+        "verdict": "WEAK 3/6",
+        "mismatched": [
+          "FWHM 10px",
+          "mean_shift 0.0209",
+          "variance_ratio 143%"
+        ],
+        "flat_patch_sim_over_target": [
+          1.34,
+          0.14,
+          1.44,
+          1.03,
+          1.1
+        ],
+        "channel_ratios": {
+          "sim_R/G": 9.7,
+          "sim_G/B": 0.1
+        }
+      },
+      {
+        "round": 30,
+        "pipeline": "noise_speckle:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "cross-family alternative (R0 best PSNR)",
+        "verdict": "WEAK 1/6",
+        "mismatched": [
+          "spectral_slope 0.097",
+          "noise:sigma 33%",
+          "FWHM 8px",
+          "mean_shift 0.0105",
+          "variance_ratio 83%"
+        ],
+        "flat_patch_sim_over_target": [
+          0.81,
+          0.82,
+          0.79,
+          0.8,
+          0.8
+        ],
+        "intensity_slope": {
+          "target": 0.01,
+          "sim": 0.4
+        }
+      }
+    ],
+    "cross_pair_validation": [
+      {
+        "round": 31,
+        "pair": 1,
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "verdict": "PARTIAL 5/6",
+        "matched": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched": [
+          "residual FWHM 6px"
+        ],
+        "flat_patch_sim_over_target": [
+          0.94,
+          0.98,
+          0.99,
+          0.99,
+          0.98
+        ],
+        "intensity_slope": {
+          "target": 0.3,
+          "sim": 0.3
+        }
+      },
+      {
+        "round": 32,
+        "pair": 3,
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "verdict": "PARTIAL 5/6",
+        "matched": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched": [
+          "residual FWHM 8px"
+        ],
+        "flat_patch_sim_over_target": [
+          0.83,
+          0.99,
+          1.03,
+          0.84,
+          0.94
+        ],
+        "flat_patch_note": "only 17 flat patches on pair3 - statistics high-variance",
+        "intensity_slope": {
+          "target": 0.19,
+          "sim": 0.21
+        }
+      }
+    ],
+    "decision": "CHANGE",
+    "decision_detail": "noise_gaussian_RGB severity 3 -> 4. blur_gaussian:3 and saturate_strengthen_HSV:2 unchanged. Severity scan closed: amplitudes increase monotonically with severity (sev2 0.71x, sev3 0.85x, sev4 1.00x); sev1/sev5 predicted to under/overshoot by construction (sigma 0.05/0.25 vs best 0.20) and were not spent from the candidate budget after a near-exact multi-channel match at sev4.",
+    "r1_pipeline": [
+      {
+        "step": 1,
+        "function": "noise_gaussian_RGB",
+        "severity": 4
+      },
+      {
+        "step": 2,
+        "function": "blur_gaussian",
+        "severity": 3
+      },
+      {
+        "step": 3,
+        "function": "saturate_strengthen_HSV",
+        "severity": 2
+      }
+    ],
+    "verification_method": "verify_signals.py signal mode (noise present; PSNR prohibited for noise-coupled steps) + seed-robust flat-patch second-order statistics (HP-MAD per channel, channel ratios, intensity slope, dark-clip, variance). Noise type/severity decided WITHOUT PSNR.",
+    "budget": "5 new candidates (R26-R30) + 2 cross-pair repeats (R31-R32); no PSNR enumeration; R0 iterations 1-25 preserved."
+  },
+  "reflection_R1": {
+    "decision": "CHANGE",
+    "pipeline": [
+      {
+        "function": "noise_gaussian_RGB",
+        "severity": 4
+      },
+      {
+        "function": "blur_gaussian",
+        "severity": 3
+      },
+      {
+        "function": "saturate_strengthen_HSV",
+        "severity": 2
+      }
+    ],
+    "signal_sources": [
+      "[statistical_check] flat-patch HP-MAD sim/target = 0.84-0.85 (sev3) vs 0.99-1.01 (sev4) on R/G/B/Cr/Cb -> raise noise severity to 4",
+      "[signal_reanalysis] noise_prior YCrCb verdict (4/5 pairs) is the gamma-suspect low-confidence branch (cc>0.12 + ric>0.15); flat channel fingerprint R/G 1.04 / G/B 0.98 / Cr/Cb 1.05 matches RGB, not YCrCb (9.70/0.10)",
+      "[statistical_check] additive intensity slope target +0.01 vs speckle +0.40 -> reject speckle:1 despite R0 best PSNR",
+      "[PSNR_test] not used for noise; R0's 1.48-vs-1.48 sigma match traced to a degenerate wavelet estimator returning 1.483 for all candidates",
+      "[signal_reanalysis] deterministic 5-pair blur3->satN sweep: HSV2 shift MAE 2.76 vs HSV1 12.88 / HSV3 6.30 / HSV5 10.22; YCrCb-saturation 27.7-30.9 -> keep saturate_strengthen_HSV:2 despite run_full_analysis raw sev5 suggestion",
+      "[signal_reanalysis] blur spectral_slope diff 0.0005 + Wiener corr 0.9987 under corrected noise -> keep blur_gaussian:3"
+    ],
+    "candidates_tested": "R26-R30 (see r1_summary.candidates_tested); cross-pair R31/R32 on pairs 1/3",
+    "validation": "PARTIAL 5/6 on pairs 0/1/3 with only the seed-dependent residual-structure check failing",
+    "report": "see r1_summary"
+  },
+  "final_decision_R1": {
+    "pipeline": [
+      {
+        "step": 1,
+        "function": "noise_gaussian_RGB",
+        "severity": 4,
+        "verdict": "UNCERTAIN",
+        "evidence": "flat-patch amplitude match 0.99-1.01 (pair0) / 0.94-0.99 (pair1); verify_signals sigma 0.0%, variance_ratio 2.4%, mean_shift 0.0002; noise type RGB by channel fingerprint and additive slope; noise never LIKELY per SKILL"
+      },
+      {
+        "step": 2,
+        "function": "blur_gaussian",
+        "severity": 3,
+        "verdict": "LIKELY",
+        "evidence": "spectral_slope diff 0.0005, Wiener kernel corr 0.9987; glass FP rejected; no motion"
+      },
+      {
+        "step": 3,
+        "function": "saturate_strengthen_HSV",
+        "severity": 2,
+        "verdict": "LIKELY",
+        "evidence": "5-pair deterministic blur3->satN calibration: shift MAE 2.76, chroma|d| 0.09, dark-clip|d| 0.010; saturate YCrCb variants rejected; brightness/gamma excluded"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "rationale": "R0 correctly identified the three degradation families and the blur/saturation parameters, but its noise severity was pinned to a degenerate wavelet estimator (1.483 for every candidate). Seed-robust flat-patch second-order statistics show the target noise is the same additive RGB field at severity 4 (sigma 0.20), not severity 3 (0.15). Saturation remains HSV:2 (the analyzer's raw sev5 suggestion is a calibration bias rejected by a 5-pair deterministic sweep), blur remains gaussian:3 (two independent noise-robust blur signals)."
+  }
+}
