@@ -9,6 +9,8 @@
 
 **blind_0005 / CLR 失败复盘**：`case_blind_0005/report.md`（impulse-noise 漏识别、brightness 假阳性、severity 3 vs 5、CI 饱和、R3/R4 未训练、规则控制器同 restorer 44.92 dB 对照；回答审稿人问题 2）。
 
+**blind_0020 / LLM vs 规则逐步决策**：`case_blind_0020/report.md`（规则 R0 NaN、R1 fallback 15.991；LLM R2 发现 near-threshold glass，18.084；同架构纯 DC 对比 +0.98 dB；回答 Reviewer 3 的 agent 独立贡献问题）。
+
 **无反思 one-shot 对照**：`E1_oneshot_no_reflection.md`（E1-oneshot / AutoIR-oneshot vs 各自 full：规则反思 +2.43 dB，LLM 反思 +1.28 dB；LLM 反思平均不优于规则反思，详见文档）。
 
 **LLM vs rule 逐场景选择对比**：`LLM_vs_rule_choices.md`（24 场景的 GT / LLM 选中 / rule 选中 / 差异类型 / GT match / support 与 test 指标；含初始 R0 表）。

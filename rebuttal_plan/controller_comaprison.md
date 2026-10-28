@@ -237,6 +237,35 @@ trigger_R2 = false
 
 这也是本案例最重要的结论：**rule controller 的胜利是“固定候选表 + 标量选择”的胜利，不是信号理解的胜利；LLM 的贡献是发现了候选表外的 glass，但它的选择规则没有允许采纳。**
 
+### 5b. blind_0020 反例：规则的高置信伪信号无法被自身证伪
+
+`rebuttal_runs/E1/decisions/blind_0020.json` + `rebuttal_plan/case_blind_0020/report.md`：
+
+```text
+规则聚合：blur_gaussian 5/5、saturation_weaken 5/5、contrast_weaken_scale 4/5
+R0 = gaussian:5 + scale:5 + sat:5，仿真 19.83；Swin+GCM → step 11319 起 loss NaN
+R1 fallback Swin+SG，候选只扰动最低票类别 contrast → stretch:5，仿真 25.69
+R1 support 15.736；fixed-LQ DIV2K 15.991 / LSDIR 15.227
+R2 = 预计算 second-best（scale:3），support 14.246，test 14.118 → 不选
+```
+
+规则的两处结构性限制：
+
+1. `dc_from_one` 的 blur 分支只按 anisotropy 输出 `blur_motion`/`blur_gaussian`，**没有 glass 分支**；
+   即使分析器在 pair4 报 `GLASS_BLUR`，规则仍输出 gaussian。
+2. `candidates_for` 只扰动**票数最低**的类别（本案例 contrast 4/5）；blur 和 saturation 都是 5/5，
+   因此 R1/R2 从不测试 glass、也不移除 saturation。R1/R2 是 plan 阶段一次性预计算的 best/second-best，
+   不是根据训练结果生成的新假设。
+
+LLM 的相反路径：R0 用反事实 PSNR 拒绝 noise/saturation/JPEG；R2 主动测试 `glass_score=0.246`
+（刚好低于 0.25 阈值）的 `blur_glass:4`，仿真从 37.73 升到 **39.56 dB（CI 10/10，+1.83）**。
+fixed-LQ：AutoIR R2 **18.084 / 17.409** vs 规则 R1 **15.991 / 15.227**。
+同架构（Swin+SG）纯 DC 对比：AutoIR R1 16.975 vs 规则 R1 15.991（**+0.984 / +1.194**），
+说明 DC 本身有贡献；最终 18.084 还叠加了 ColorPre（同架构控制进行中）。
+
+这不是“LLM 普遍更好”的证据（E1-oneshot 总体 CI 跨 0），而是回答 Reviewer 3 的机制证据：
+**agent 的贡献是证据驱动的假设生成/证伪和假阳性剔除，不是新架构。**
+
 ---
 
 ## 6. 整体 E1 结果：rule controller 不是更好的系统

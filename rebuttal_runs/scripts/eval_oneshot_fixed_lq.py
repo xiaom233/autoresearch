@@ -30,6 +30,7 @@ def main():
     ap.add_argument("--selection", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--scenarios", default=DEFAULT)
+    ap.add_argument("--datasets", default="DIV2K")
     ap.add_argument("--gpu-id", type=int, required=True)
     ap.add_argument("--num-gpus", type=int, required=True)
     args = ap.parse_args()
@@ -44,7 +45,8 @@ def main():
     for row in rows:
         sid = row["scenario_id"]
         index = json.load(open(FIX / sid / "index.json"))
-        pairs = [p for p in index["pairs"] if p["dataset"] == "DIV2K"]
+        wanted_ds = set(args.datasets.split(","))
+        pairs = [p for p in index["pairs"] if p["dataset"] in wanted_ds]
         model = load_model(row["exp_meta"], ROOT / row["checkpoint"])
         model.eval()
         for p in pairs:
