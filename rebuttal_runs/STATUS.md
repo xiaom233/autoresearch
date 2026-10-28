@@ -87,6 +87,7 @@
 7. **E2-RS 四格未执行**；RS 架构贡献未单独隔离。
 8. **API model ID/版本/费用 UNKNOWN**；文档中的 DeepSeek/Qwen 只是声明。
 9. **E1-oneshot 的 NaN 失败必须如实报告**：E1-oneshot（无反思规则）为 **23/24 有效、1/24 NaN**（`blind_0020` 的 GCM R0 训练 NaN）。主表是 23 个有效场景 macro，不做 0 dB 插补/静默删除；E1-full 通过 R1 fallback 恢复到 15.98，AutoIR-oneshot 15.78、AutoIR-full 18.09。Swin+SG 稳定重训只作可选 sensitivity（fixed-LQ 0020 = 14.05，仍低于 AutoIR-oneshot 15.78 / E1-full 15.98），不冒充原始 one-shot。
+10. **RS 规则来源与 24 场景独立性**：核心映射 contrast→GCM / motion→OCAB 来自 exp10/38/39 的 GT-known 合成实验，不使用 24 个盲场景；但盲场景门控/回退规则来自 exp37 的 24 挑战消融（与 exp40/41 的 24 个 `degraded.png`/GT **24/24 相同**）和 exp40 的 4 个案例，因此 **24 个场景全部参与过 RS 规则开发**，不是 RS 泛化的独立测试集。GT 校准侧：校准脚本早于 24 个 GT 生成，GT 由随机生成器产生，无按性能挑选记录；但 **3/24 GT 链是校准配置集成员**（0006/0011/0013）、10/100 DIV2K test 图为校准图、3840 manifest 缺失，不能声称严格独立。723+ 训练去重清单缺失（raw 日志 1,137 条；组数相加 724）。详见 `rebuttal_plan/RS_rule_provenance_audit.md`、`03` 2026-10-28 补充。
 
 ## GPU 效率结论
 
