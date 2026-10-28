@@ -1,0 +1,65 @@
+{
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 1},
+    {"function": "brightness_darken_gamma_RGB", "severity": 5},
+    {"function": "saturate_weaken_YCrCb", "severity": 2}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 1},
+        {"function": "brightness_darken_gamma_RGB", "severity": 5},
+        {"function": "saturate_weaken_YCrCb", "severity": 2}
+      ],
+      "psnr": 35.23,
+      "ci_pass": "10/10",
+      "function_family": "blur_selection: lens (gaussian↔lens MTF-indistinguishable; PSNR arbitrates for gaussian by 0.63 dB)",
+      "stats": {"gm_ratio": 0.28, "spectral_slope_ratio": 1.065, "mean_shift": -82.5, "clipped_fraction": 0.063}
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 1},
+        {"function": "brightness_darken_gamma_RGB", "severity": 5},
+        {"function": "saturate_weaken_HSV", "severity": 2}
+      ],
+      "psnr": 34.88,
+      "ci_pass": "10/10",
+      "function_family": "saturation_space: HSV (chroma_ratio 0.445 overshoots target 0.341, brightens mean to -77.9)",
+      "stats": {"chroma_ratio": 0.445, "mean_shift": -77.9, "variance_ratio": 0.353}
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 1},
+        {"function": "brightness_darken_gamma_HSV", "severity": 5},
+        {"function": "saturate_weaken_YCrCb", "severity": 2}
+      ],
+      "psnr": 34.24,
+      "ci_pass": "10/10",
+      "function_family": "darkening_space: V-gamma HSV (3.5) — darkens less than per-channel RGB gamma (3.2) on this content",
+      "stats": {"mean_shift": -71.0, "clipped_fraction": 0.055}
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "tier_note": "multi-step deterministic, no noise → PSNR-validatable",
+    "psnr": 35.86,
+    "ci_pass_rate": "10/10",
+    "psnr_gap": 0.63,
+    "mode": "PSNR (noise_prior sigma=1.48 < 2, peeled residual structured → NO_NOISE)",
+    "per_step_verdicts": {
+      "blur_gaussian:1": "UNCERTAIN",
+      "brightness_darken_gamma_RGB:5": "UNCERTAIN",
+      "saturate_weaken_YCrCb:2": "UNCERTAIN"
+    },
+    "verdict_rule": "exp37: deterministic steps, pipeline PSNR 30-40 dB → UNCERTAIN (severity ±1 band); >=40 dB required for LIKELY",
+    "evidence": {
+      "compression": "NONE — block_boundary 0.993 (<1.05, 0%-FP signal) and ~1.00 on all 5 support pairs; JPEG candidates over-block (bb 1.72-2.19) and over-quantize (dct_zero 0.75-0.81 vs target 0.51). dct_zero 0.51 and unique_G 187 are reproduced by darkening+clipping alone (sim 0.506/183).",
+      "blur": "gaussian sev1 (sigma=1). Without blur gm_ratio stays 0.775 vs target 0.290; sev2 oversmooths (gm 0.169, slope 1.159, dct 0.72). Final sim gm 0.2728 / slope 1.0673 vs target 0.2902 / 1.0653. FFT anisotropy 0 → no motion; lens tested 0.63 dB worse.",
+      "brightness": "per-channel gamma RGB sev5 (3.2). Additive shift families ruled out by clipping arithmetic: any shift ≥81 clips >12% of pair0 pixels vs target 6.3%. Final sim mean_shift -82.5 / clipped 0.0637 vs target -81.4 / 0.0634.",
+      "saturation": "YCrCb sev2 (scale 0.4). Target chroma_ratio 0.341; final sim 0.320 (HSV2→0.445, HSV3→0.326 but PSNR 31.19 due to mean brightening). YCrCb preserves luminance → keeps shift/clip exact.",
+      "noise": "NO_NOISE — sigma=1.48; peeled residual extreme_pct=50% is the documented false positive (sigma<5), spatial_corr 0.99 / cross_ch 0.95 structured.",
+      "order": "blur(priority1) → brightness/saturation(priority2). Empirically: brightness-first 32.50 dB, sat-before-brightness 34.82 dB, blur-first 35.86 dB."
+    }
+  }
+}

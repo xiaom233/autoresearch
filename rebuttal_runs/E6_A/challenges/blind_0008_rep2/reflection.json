@@ -1,0 +1,125 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9964, unique_G=256/256)",
+      "blur": "BLUR_UNLIKELY (gm_ratio=1.055, spectral_slope_ratio=1.0002, FFT anisotropy=0.0)",
+      "noise": "NO_NOISE (noise_prior sigma=0.12, residual spatial_corr=0.973 是全局变换产生的结构残差, 非随机噪声)",
+      "global": "SATURATION weaken 主导 (chroma_ratio=0.2055); mean_shift=+7.9 但 brightness_pure=false (variance_ratio=1.173)"
+    },
+    "support_pairs": {
+      "note": "5 组 support pairs 中 pair 0 与 target 完全相同 (md5 一致); pair 1-4 为不同 clean 图像, 同挑战",
+      "chroma_ratio": [
+        0.2055,
+        0.2063,
+        0.203,
+        0.2012,
+        0.1994
+      ],
+      "mean_shift_255": [
+        7.9,
+        10.5,
+        17.5,
+        21.3,
+        27.3
+      ],
+      "block_boundary": [
+        0.9964,
+        0.982,
+        0.979,
+        0.996,
+        1.001
+      ],
+      "gm_ratio": [
+        1.055,
+        1.033,
+        0.991,
+        0.939,
+        1.003
+      ],
+      "sigma": [
+        0.12,
+        0.0,
+        0.4,
+        0.2,
+        0.5
+      ],
+      "consistency": "五组一致: 无压缩/无模糊/无噪声; chroma_ratio 高度集中在 0.20 ± 0.004 → 共享同一条退化管线; mean_shift 随图像内容变化 → 疑似去饱和的副产物而非独立 brightness 步"
+    },
+    "mode": "PSNR (sigma=0.12 < 2, PSNR 可用)"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 0.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.75,
+    "spatial_corr": 0.9729,
+    "rgb_ratio": 1.0,
+    "cross_ch_corr": 0.4299,
+    "noise_prior_sigma": 0.12,
+    "diagnosis": "NO_NOISE: wavelet sigma=0.12 远低于阈值; spatial_corr=0.97 伴随 residual_intensity_corr=0.546, 属于全局色调变换的结构性残差, 不是随机噪声"
+  },
+  "hypotheses": {
+    "primary": "单步饱和削弱 (chroma scale≈0.20): 候选 saturate_weaken_HSV:4 (c=0.2) 或 saturate_weaken_YCrCb:3 (c=0.2)",
+    "alternative": "饱和削弱 + brightness (若 mean_shift 无法被去饱和解释)",
+    "ruled_out": [
+      "compression_jpeg (>1.1 才触发, 实际 0.996)",
+      "blur_* (gm_ratio≈1.05, slope ratio≈1.0)",
+      "noise_* (sigma≈0.1)"
+    ]
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "R1: chroma_ratio=0.2055 (五组 support 一致 0.199-0.206) 精确对应 saturate_weaken_HSV 内部 scale=0.2 (sev4); 无 blur/compression/noise 信号, 先测纯饱和削弱"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "cross_validation": {
+    "description": "同管线 saturate_weaken_HSV:4 在全部 5 组 support pairs 上测试 (pair 0 = target)",
+    "results": [
+      {"pair": 0, "psnr_rgb": Infinity, "ci_pass": "10/10"},
+      {"pair": 1, "psnr_rgb": Infinity, "ci_pass": "10/10"},
+      {"pair": 2, "psnr_rgb": Infinity, "ci_pass": "10/10"},
+      {"pair": 3, "psnr_rgb": Infinity, "ci_pass": "10/10"},
+      {"pair": 4, "psnr_rgb": Infinity, "ci_pass": "10/10"}
+    ],
+    "md5_check": "target md5 0812fbc675f0d53dbc4181e1ce884a57 == simulated md5 0812fbc675f0d53dbc4181e1ce884a57",
+    "conclusion": "5/5 逐像素完全一致, 管线与严重度被唯一确定"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "saturate_weaken_HSV",
+        "severity": 4,
+        "verdict": "LIKELY"
+      }
+    ],
+    "alternatives": [],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "psnr": Infinity,
+    "psnr_gap": Infinity,
+    "ci_pass_rate": "10/10",
+    "rationale": "信号驱动: chroma_ratio=0.2055 精确对应 saturate_weaken_HSV sev4 的 S scale=0.2; 无压缩 (block_boundary=0.996)、无模糊 (slope_ratio=1.000)、无噪声 (sigma=0.12); 单一真实退化类型 (saturation weaken), 无其他同类别步骤, 合法管线。PSNR=inf + MD5 完全一致 + 5 组 support 交叉验证 → 唯一确定。mean_shift 正偏是去饱和抬高 RGB 均值的副产物, 不构成独立 brightness 步 (纯 saturate 仿真已逐像素复现)。"
+  }
+}

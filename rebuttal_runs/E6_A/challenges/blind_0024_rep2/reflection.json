@@ -1,0 +1,507 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9935; unique_G_target=216/256 ratio=0.84 mild reduction, likely from clipping/nonlinearity not JPEG); still test 1 mild JPEG candidate",
+      "blur": "Blur present: gm_ratio=0.329, spectral_slope_ratio=1.113. Subtype GLASS_BLUR score=0.721 (medium confidence); alternative gaussian. FFT anisotropy=1.29 (not motion).",
+      "noise": "noise_prior sigma=1.48 (weak). Type guess GAUSSIAN_YCrCb low confidence. residual_intensity_corr=0.7375 + gamma_suspect=true -> residual dominated by global nonlinearity/saturation amplification, not necessarily additive noise. sigma<2 basis for skipping dedicated noise step unless tests refute.",
+      "global": "Mean shift -40.9, variance_ratio=1.316, saturation_chroma_ratio=2.583, clipped_fraction=0.2504. Saturation strengthen sev5 is the dominant visual effect (extreme vivid colors + speckle). Mean drop can be an artifact of HSV saturation clipping (min channel -> 0 lowers mean), so brightness darken may be a false positive (fp_checks.brightness_pure=false)."
+    },
+    "mode": "PSNR (sigma=1.48 < 2)",
+    "support_pairs": "degraded.png == degraded_0.png (md5 identical), five clean images share the same degradation. Same degradation across pairs used for cross-validation.",
+    "suspected": [
+      "saturate_strengthen_HSV:5 (extreme chroma scale 64x, heavy clipping)",
+      "blur (glass:5 or gaussian:5)",
+      "maybe weak noise or none",
+      "maybe mild JPEG (bb says no)"
+    ],
+    "ruled_out_initial": [
+      "motion blur (anisotropy 1.29)",
+      "strong compression (block_boundary 0.994)"
+    ]
+  },
+  "noise_6step_check": {
+    "method": "peeled_noise_check.py on residual after stripping blur_gaussian:3,saturate_strengthen_HSV:2",
+    "residual_std": 16.6,
+    "extreme_pct": 64.22,
+    "vm_slope": 2.4776,
+    "var_slope": -10.2858,
+    "spatial_corr": 0.983,
+    "rgb_ratio": 1.5446,
+    "cross_ch_corr": 0.1014,
+    "channel_stds": {"R": 13.5, "G": 20.8, "B": 14.5},
+    "noise_prior_sigma": 2.47,
+    "noise_prior_type": "noise_gaussian_YCrCb (channel sigma ratio 2.0 > 1.4)",
+    "diagnosis": " peeled residual still contains structural mismatch (spatial_corr=0.98, var_slope=-10 due to saturation clipping), so §B auto-labels (IMPULSE extreme_pct>50%) are known FP per SKILL reflection_triggers (extreme_pct>50% + sigma<5 -> ignore IMPULSE). Final noise type taken from noise_prior channel ratio (YCrCb) and validated by content-independent CI calibration: with noise_gaussian_YCrCb:3 the simulated unique-color counts match target 0-1% (R 216 vs 217, G 229 vs 226, B 239 vs 239), zero_crossing 0.1% and overshoot 0.0%."
+  },
+  "statistical_checks": {
+    "target_vs_final_sim_content_metrics_pct_error": {
+      "gradient_magnitude_mean": 1.58,
+      "laplacian_variance": 2.85,
+      "directional_h_v_ratio": 0.86,
+      "flat_region_variance": 10.2,
+      "saturation_mean": 0.71,
+      "Y_local_std_median": 0.01,
+      "Cr_local_std_median": 0.49,
+      "Cb_local_std_median": 3.52,
+      "gradient_radial_ratio": 2.8
+    },
+    "content_independent_ci": "10/10 (impulse 1%, pct_zero 1%, pct_255 0%, block_boundary 0%, unique_R 0%, unique_G 1%, unique_B 0%, overshoot 0%, zero_crossing 0%, hf_lf 0%)",
+    "verify_signals_final": "PARTIAL 4/6 - matched: blur:spectral_slope, blur:wiener_kernel, noise:sigma, global:mean_shift; mismatched: noise:structured_residual(FWHM 6px, seed/structure), global:variance_ratio(11%)",
+    "blur_subtype_evidence": {
+      "residual_anisotropy": 1.29,
+      "directional_h_v_ratio": "target 1.071 vs sim 1.081 (0.86%)",
+      "gradient_radial_ratio": "target 0.794 vs sim 0.772 (2.8%)"
+    }
+  },
+  "coupling_analysis": {
+    "saturation_vs_brightness": "mean_shift=-40.9 initially suggested brightness darken sev3, but saturate HSV clipping itself lowers RGB mean (min channel->0). Explicit brightness_darken_shfit_HSV:3 test dropped PSNR to 13.48/CI 2/10 -> brightness ruled out.",
+    "saturation_vs_contrast": "variance_ratio=1.316 explained by HSV S scaling with clipping; contrast functions not needed (saturation_mean match 0.71%).",
+    "blur_vs_noise": "Peel order noise->blur->saturation (protocol priority 0/1/2). Noise-after-blur ordering tested and rejected (14.70dB, CI 4/10). Pre-blur noise smoothed by gaussian:3 reproduces the target's fine chroma texture: Y/Cr/Cb local std match 0.01/0.49/3.52%.",
+    "compression": "block_boundary 0.994 (no JPEG); simulated block_boundary within 0% of target; compression absent."
+  },
+  "cross_validation_support_pairs": {
+    "note": "Five clean images share the same degradation; final pipeline applied to clean_1..4 vs degraded_1..4 (no reflection writes).",
+    "pair1": {"psnr": 30.46, "ci": "10/10"},
+    "pair2": {"psnr": 19.48, "ci": "10/10"},
+    "pair3": {"psnr": 20.01, "ci": "10/10"},
+    "pair4": {"psnr": 16.93, "ci": "10/10"},
+    "alternatives_on_pair1": {
+      "blur_gaussian:2": {"psnr": 28.56, "ci": "10/10"},
+      "blur_gaussian:4": {"psnr": 31.02, "ci": "9/10"},
+      "blur_glass:5": {"psnr": 29.47, "ci": "8/10"},
+      "noise YCrCb:1": {"psnr": 31.8, "ci": "10/10"},
+      "noise YCrCb:2": {"psnr": 31.63, "ci": "10/10"}
+    },
+    "interpretation": "PSNR with independent noise seeds is not a valid severity criterion (MSE adds both noise variances); CI metrics and 9 content metrics across 5 images consistently select gaussian:3 / sat:2 / noise YCrCb:3."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:5",
+        "thinking": "R1: full_analysis 报告 saturation_chroma_ratio=2.58 + clipped_fraction=0.25 + 视觉极端鲜艳; 先测 saturate_strengthen_HSV:5 单独解释 global 外观 (mean_shift 可能为 S 饱和 clipping 副作用)"
+      },
+      "test_result": {
+        "psnr_rgb": 18.25,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:5",
+        "thinking": "R2: gm_ratio=0.329 + glass_score=0.72 → 加 blur_glass:5 (DT 首选 glass), 顺序 blur(priority1)→saturation(priority2)"
+      },
+      "test_result": {
+        "psnr_rgb": 19.1,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:5,saturate_strengthen_HSV:5",
+        "thinking": "R3: R2 残差显示 target 比 sim 多 35% 暗部 0-clipping; full_analysis 建议 brightness_darken sev3 (mean_shift=-40.9). 按 priority0(brightness)->1(blur)->2(saturation) 顺序加入"
+      },
+      "test_result": {
+        "psnr_rgb": 13.48,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:5,saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,saturate_strengthen_HSV:5",
+        "thinking": "R4: R2 的 sim overshoot/hf_lf 高于 target (target更平滑); 对比 blur_gaussian:5 是否比 glass:5 更接近 (DT alternative)"
+      },
+      "test_result": {
+        "psnr_rgb": 19.51,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:5",
+        "thinking": "R5: 校准数据显示 target gm=27.3 高于 R4 sim 12.0 且 lap_var 37.8 远低于 sim 112.7 → blur:5 过强; severity 扫描 gaussian:5→3"
+      },
+      "test_result": {
+        "psnr_rgb": 19.78,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:5",
+        "thinking": "R6: severity 扫描继续 gaussian:3→2 (R5 PSNR 19.78 优于 sev5 的 19.51)"
+      },
+      "test_result": {
+        "psnr_rgb": 19.65,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:4",
+        "thinking": "R7: R5 显示 sim 仍过曝/过饱和 (impulse_pct_zero -8.75, overshoot 215%); 扫 sat HSV:5→4 (scale 20x), blur 固定 gaussian:3"
+      },
+      "test_result": {
+        "psnr_rgb": 20.85,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:3",
+        "thinking": "R8: sat:5→4 PSNR 19.78→20.85 + 暗部 clipping 误差 35%→26%; 继续扫 HSV:3 (scale 12x)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.03,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R9: sat:3 PSNR 22.03 CI 7/10 继续改善; 扫 HSV:2 (scale 6x) 确认峰值位置"
+      },
+      "test_result": {
+        "psnr_rgb": 23.72,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+        "thinking": "R10: R9 sim 的 gm/Y_local/Cr_local 均低于 target 50% → 过平滑; 在 sat:2 下重扫 blur gaussian:3→2"
+      },
+      "test_result": {
+        "psnr_rgb": 23.25,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:2",
+        "thinking": "R11: glass_score=0.72 是强信号; glass 的 pixel-shuffle 在通道内制造局部纹理, 可能解释 target 高 Cr/Cb local std; 测 glass:5 + sat:2"
+      },
+      "test_result": {
+        "psnr_rgb": 22.02,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R12: sim 的 Y/Cr/Cb local std 全部低 50% (缺局部纹理); noise_prior sigma=1.48 且 rgb_ratio=1.55 → 试 noise_gaussian_YCrCb:1 (priority0 在 blur 前, blur 会削弱噪声)"
+      },
+      "test_result": {
+        "psnr_rgb": 23.26,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R13: R12 CI 10/10 但 Y/Cr local std 仍低 30-40%; severity 扫描 noise YCrCb:1→2 (chroma sigma 1.45x)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.34,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R14: R13(noise2) 的 Y/Cr/Cb local std 仍低 15-22%, 且所有 CI 指标略优于 noise1; severity 扫描 noise:2→3"
+      },
+      "test_result": {
+        "psnr_rgb": 20.86,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:4,saturate_strengthen_HSV:2",
+        "thinking": "R15: 上界确认 — pair1 上 gaussian:4 PSNR 略高(31.02 vs 30.46) 但 unique_B CI 失败; 在 target 上验证 gaussian:4 是否破坏 R14 的近乎完美匹配"
+      },
+      "test_result": {
+        "psnr_rgb": 21.55,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:4,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,noise_gaussian_YCrCb:1,saturate_strengthen_HSV:2",
+        "thinking": "R16: 顺序对照 — verify_signals 的 noise:structured_residual FWHM=6px 不匹配, 测 noise 在 blur 之后 (不用 protocol 顺序) 是否更匹配未平滑噪声"
+      },
+      "test_result": {
+        "psnr_rgb": 14.7,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,noise_gaussian_YCrCb:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 23.72,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 23.26,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+      "psnr_rgb": 23.25,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 22.34,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:3",
+      "psnr_rgb": 22.03,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_glass:5,saturate_strengthen_HSV:2",
+      "psnr_rgb": 22.02,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:4,saturate_strengthen_HSV:2",
+      "psnr_rgb": 21.55,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.86,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:4",
+      "psnr_rgb": 20.85,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:5",
+      "psnr_rgb": 19.78,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:5",
+      "psnr_rgb": 19.65,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_gaussian:5,saturate_strengthen_HSV:5",
+      "psnr_rgb": 19.51,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_glass:5,saturate_strengthen_HSV:5",
+      "psnr_rgb": 19.1,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:5",
+      "psnr_rgb": 18.25,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:3,noise_gaussian_YCrCb:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 14.7,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:5,saturate_strengthen_HSV:5",
+      "psnr_rgb": 13.48,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {"function": "noise_gaussian_YCrCb", "severity": 3, "verdict": "UNCERTAIN"},
+      {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+      {"function": "saturate_strengthen_HSV", "severity": 2, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 20.86,
+    "psnr_gap": 0.69,
+    "ci_pass_rate": "10/10",
+    "verification_mode": "SIGNAL+CI (PSNR invalid for noise severity: independent seed adds both variances; PSNR decreases monotonically with sim noise sigma)",
+    "rationale": "Saturation strengthen dominates the appearance (chroma ratio 2.58, clipping 25%); mean drop is an HSV-clipping artifact, not brightness. Blur gaussian:3 (not glass/2/4/5) reproduces gradient/Laplacian/local-std statistics within 0.01-3.5% on target and wins PSNR differential on pair1. Weak YCrCb noise before blur is required for texture: without it Y/Cr/Cb local std are 43-56% low; YCrCb:3 matches unique-color counts 0-1% and texture 0.01-3.5%. Noise-after-blur ordering and glass blur rejected. No compression (block_boundary 0.994, CI 0%). Verified identically on 4 additional support pairs (CI 10/10 each).",
+    "alternatives": [
+      {
+        "pipeline": [
+          {"function": "noise_gaussian_YCrCb", "severity": 3},
+          {"function": "blur_gaussian", "severity": 4},
+          {"function": "saturate_strengthen_HSV", "severity": 2}
+        ],
+        "psnr": 21.55,
+        "stats": {"ci": "10/10", "note": "blur severity +1: target texture metrics 22-38% off (worse than primary's 0.01-3.5%)"},
+        "function_family": "blur severity alternative"
+      },
+      {
+        "pipeline": [
+          {"function": "blur_gaussian", "severity": 3},
+          {"function": "saturate_strengthen_HSV", "severity": 2}
+        ],
+        "psnr": 23.72,
+        "stats": {"ci": "7/10", "note": "no-noise hypothesis: higher PSNR but Y/Cr/Cb local std 30-56% low; kept in case noise judgment is wrong"},
+        "function_family": "cross-family (no noise)"
+      }
+    ],
+    "rejected": [
+      "brightness_darken_shfit_HSV:3 (13.48dB, CI 2/10)",
+      "blur_glass:5 variants (pair1 29.47dB CI 8/10; target texture worse than gaussian:3)",
+      "noise after blur ordering (14.70dB, CI 4/10)",
+      "compression_jpeg (block_boundary 0.994 = no JPEG; not tested further)",
+      "impulse/poisson/speckle (target has 0% pixels at 255 -> no salt; vm_slope/var_slope artifacts from clipping)"
+    ]
+  }
+}

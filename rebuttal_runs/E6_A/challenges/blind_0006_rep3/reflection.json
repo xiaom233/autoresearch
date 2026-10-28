@@ -1,0 +1,157 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=2.575 (0%FP signal), dct_zero_ratio=0.923, unique_G=252 (no color quantization)",
+      "blur": "BLUR_UNLIKELY: spectral_slope_ratio=0.9925 (target -1.4691 vs clean -1.4802), FFT anisotropy=0.0, but gm_ratio=0.615 low (possibly JPEG-smoothing induced)",
+      "noise": "GAUSSIAN_YCrCb sigma=0.62 (low confidence), spatial_corr=0.562, residual_intensity_corr=0.294, gamma_suspect=true",
+      "global": "NO_GLOBAL: variance_ratio=1.0026, mean_shift=0.0, saturation_ratio=0.993"
+    },
+    "support_pairs": "degraded.png == degraded_0.png (same MD5). Support pairs 1-4 are different clean scenes; same signal pattern: JPEG block_boundary 1.28-2.36, sigma prior 0.4-3.0, no global, no blur (spectral slope ratio ~0.99-1.04)",
+    "mode": "PSNR (sigma=0.62 < 2)",
+    "suspected": [
+      "compression_jpeg (strong)"
+    ],
+    "ruled_out": [
+      "global contrast/brightness/saturation (variance_ratio=1.003, mean_shift=0)",
+      "color quantization (unique_G=252)"
+    ]
+  },
+  "noise_6step_check": {
+    "note": "peeled_noise_check.py run on residual after stripping compression_jpeg:1. Residual std = 0.0 (pixel-exact), so all §B statistics are degenerate (0/0 division). extreme_pct=100% with zero_ratio=1.0 is the known zero-residual artifact, NOT impulse noise. no-noise conclusion supported by noise_prior sigma=0.62-0.99 < 2 and identical JPEG:1 match on all 5 scenes.",
+    "extreme_pct": 100.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "channel_stds": {"R": 0.0, "G": 0.0, "B": 0.0},
+    "noise_prior_sigma": 0.62,
+    "diagnosis": "NO_NOISE — peeled residual is exactly zero after compression_jpeg:1; §B outputs are undefined on zero residual"
+  },
+  "support_pair_verification": {
+    "target_equals_support_0": "degraded.png == degraded_0.png and clean.png == clean_0.png (identical MD5)",
+    "results": [
+      {"pair": 0, "pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10", "exact": true},
+      {"pair": 1, "pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10", "exact": true},
+      {"pair": 2, "pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10", "exact": true},
+      {"pair": 3, "pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10", "exact": true},
+      {"pair": 4, "pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10", "exact": true}
+    ],
+    "conclusion": "same single-step JPEG pipeline reproduces all 5 distinct scenes pixel-exactly (2040x1356, 2040x1476, 1284x2040, 1632x2040, 2040x1536)"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "R1: block_boundary=2.575 + dct_zero_ratio=0.923 strongly indicate JPEG; start at sev4 (quality=8) given high block discontinuity"
+      },
+      "test_result": {
+        "psnr_rgb": 31.29,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "R1 severity sweep: block_boundary signal may indicate lighter JPEG than sev4; test sev3 (quality=12)"
+      },
+      "test_result": {
+        "psnr_rgb": 32.69,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "R1 severity sweep (JPEG 1-5 per protocol): check lighter quality=18; block_boundary diff still 21% at sev3"
+      },
+      "test_result": {
+        "psnr_rgb": 35.42,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 severity sweep: PSNR monotonically increasing toward lighter JPEG (sev2=35.4dB); test lightest sev1 (quality=25) to complete 1-5 scan"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 35.42,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 32.69,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 31.29,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {"function": "compression_jpeg", "severity": 1, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "LIKELY",
+    "alternatives": [],
+    "rationale": "Single-step deterministic match: applying compression_jpeg:1 to clean.png reproduces degraded.png pixel-exactly (PSNR=inf, CI=10/10, block_boundary diff 0.000/0%) and reproduces all four other support scenes pixel-exactly as well. Severity sweep was monotonic (sev4=31.29, sev3=32.69, sev2=35.42, sev1=inf dB), confirming severity=1 (quality=25). All other signal detections were JPEG artifacts: gm_ratio=0.615 / noise sigma=0.62 came from JPEG smoothing and blockiness; peeled residual after JPEG:1 is exactly zero (no blur, no noise, no global change). PSNR gap to runner-up is unbounded, so no alternatives are warranted.",
+    "signal_to_decision_chain": [
+      "block_boundary=2.575 (>1.1, 0%FP) -> JPEG present",
+      "dct_zero_ratio=0.923 -> strong JPEG quantization",
+      "JPEG 1-5 sweep -> only sev1 gives PSNR=inf (pixel-exact)",
+      "peeled residual std=0.0 -> no blur/noise/global needed",
+      "5/5 support scenes pixel-exact with compression_jpeg:1 -> generalization confirmed"
+    ]
+  }
+}

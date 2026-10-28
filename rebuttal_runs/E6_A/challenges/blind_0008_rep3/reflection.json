@@ -1,0 +1,115 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=0.996, unique_G=256/256, dct_zero_ratio=0.166",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.055, spectral_slope_ratio=1.000, FFT_anisotropy=0.00",
+      "noise": "noise_prior sigma=0.12 -> NO_NOISE (sigma<<2)",
+      "global": "BRIGHTNESS_brighten_sev1; SATURATION_weaken_sev5: mean_shift=+7.9, variance_ratio=1.173, saturation_chroma_ratio=0.206"
+    },
+    "support_pairs": {
+      "note": "target == support pair 0 (md5 identical); pairs 1-4 consistent: block_boundary 0.98-1.00 (no JPEG), gm_ratio 0.94-1.06 (no blur), sigma 0.0-0.5 (no noise), saturation_chroma_ratio ~0.2 in all pairs",
+      "pair1": {
+        "block_boundary": 0.982,
+        "gm_ratio": 1.033,
+        "sigma": 0.0,
+        "mean_shift": 10.5,
+        "variance_ratio": 0.972
+      },
+      "pair2": {
+        "block_boundary": 0.979,
+        "gm_ratio": 0.991,
+        "sigma": 0.4,
+        "mean_shift": 17.5,
+        "variance_ratio": 0.856
+      },
+      "pair3": {
+        "block_boundary": 0.996,
+        "gm_ratio": 0.939,
+        "sigma": 0.2,
+        "mean_shift": 21.3,
+        "variance_ratio": 0.956
+      },
+      "pair4": {
+        "block_boundary": 1.001,
+        "gm_ratio": 1.003,
+        "sigma": 0.5,
+        "mean_shift": 27.3,
+        "variance_ratio": 0.882
+      }
+    },
+    "mode": "PSNR (sigma=0.12 < 2, PSNR valid for deterministic global degradation)",
+    "suspected": [
+      "saturate_weaken (HSV or YCrCb, strong)",
+      "possibly a second global step (brightness/contrast/gamma)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary<1.0, unique_G=256)",
+      "blur (gm_ratio>1.0, spectral_slope_ratio=1.000)",
+      "noise (sigma<0.5 in all pairs)"
+    ]
+  },
+  "noise_6step_check": {
+    "peeled_pipeline": "saturate_weaken_HSV:4",
+    "residual_std": 0.0,
+    "extreme_pct": 100.0,
+    "zero_ratio": 1.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "residual_intensity_corr": 0.5516,
+    "diagnosis": "NO_NOISE. Peeling saturate_weaken_HSV:4 leaves an exactly-zero residual (std=0.0, ch_stds R=0 G=0 B=0), so the §B IMPULSE verdict (extreme_pct=100%, zero_ratio=1.0) is the degenerate all-zero-residual artifact documented in the Skill's known-FP rule, not real impulse noise. noise_prior sigma=0.0-0.5 across all 5 pairs."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "Signal: saturation_chroma_ratio=0.206 (chroma reduced to ~20%), variance_ratio=1.173, mean_shift=+7.9; no compression/blur/noise in any of 5 pairs -> single global saturate_weaken. HSV sev4 scale=0.2 matches chroma ratio ~0.2."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {"function": "saturate_weaken_HSV", "severity": 4, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "psnr_rgb": "inf",
+    "ci": "10/10",
+    "alternatives": [],
+    "rationale": "Single global step confirmed by pixel-perfect reproduction: applying saturate_weaken_HSV:4 to clean.png yields PSNR=inf (bit-exact) with 10/10 CI metrics. The identical pipeline also reproduces all four independent support pairs bit-exactly (PSNR=inf each), so the parameters are not content-specific flukes. Skill signal summary: block_boundary=0.996 (no JPEG), gm_ratio=1.055 and spectral_slope_ratio=1.000 (no blur), noise_prior sigma=0.12 and peeled residual std=0.0 (no noise). The positive brightness mean_shift (+7.9) is a by-product of HSV desaturation (S scaled to 0.2 pulls chroma toward V), not an independent brightness step — adding any extra step would break the exact match. Alternatives intentionally empty: PSNR=inf leaves zero gap and any additional candidate would be provably wrong.",
+    "support_pair_validation": {
+      "pair1": {"degraded": "degraded_1.png", "psnr_rgb": "inf", "ci": "10/10"},
+      "pair2": {"degraded": "degraded_2.png", "psnr_rgb": "inf", "ci": "10/10"},
+      "pair3": {"degraded": "degraded_3.png", "psnr_rgb": "inf", "ci": "10/10"},
+      "pair4": {"degraded": "degraded_4.png", "psnr_rgb": "inf", "ci": "10/10"}
+    },
+    "ruled_out": {
+      "compression_jpeg": "block_boundary=0.996 (<1.05), unique_G=256/256, dct_zero_ratio=0.166; exact match with zero compression steps",
+      "blur": "gm_ratio=1.055, spectral_slope_ratio=1.000, FFT_anisotropy=0.00, PCA=0.0",
+      "noise": "noise_prior sigma=0.12; peeled residual std=0.0",
+      "brightness_contrast_gamma": "no residual left after saturate_weaken_HSV:4 (PSNR=inf), so no second global step exists"
+    }
+  }
+}

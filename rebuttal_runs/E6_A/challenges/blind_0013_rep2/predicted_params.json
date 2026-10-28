@@ -1,0 +1,89 @@
+{
+  "pipeline": [
+    {
+      "function": "noise_impulse",
+      "severity": 3
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "ci_pass_rate": "7/10",
+    "tier": 3,
+    "psnr_rgb": 21.42,
+    "psnr_gap": null,
+    "psnr_note": "PSNR not a selection criterion: random impulse seed mismatch keeps PSNR ~21 dB for any impulse candidate. Verification via verify_signals (MATCH 3/3 on target pair and on support pair 1).",
+    "verification": {
+      "mode": "SIGNAL",
+      "target_pair": "MATCH (sigma 1.5 vs 1.5, block_boundary diff 1.2%, dct zero 0.702 vs 0.722, residual autocorr FWHM 0)",
+      "support_pair1": "MATCH (3/3)",
+      "global_rmse": "16.70 (sim) vs 16.50 (target)"
+    },
+    "per_step_verdict": [
+      {
+        "function": "noise_impulse",
+        "severity": 3,
+        "verdict": "UNCERTAIN",
+        "reason": "random noise seed mismatch; signal MATCH but protocol forbids LIKELY for noise steps"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 2,
+        "verdict": "LIKELY",
+        "reason": "block_boundary 1.574 vs 1.555 (1.2%), dct_zero 0.702 vs 0.722"
+      }
+    ],
+    "order": "noise -> compression (camera pipeline; spike energy survives JPEG only if applied before it)",
+    "no_blur": "spectral_slope_ratio 0.972, FFT anisotropy 0, PCA 0",
+    "no_global": "variance_ratio 0.96, mean_shift -1.9/255, chroma_ratio 1.03; min legal contrast (0.75) or brightness (+10%) severities are far outside observed values"
+  },
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_impulse",
+          "severity": 4
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 2
+        }
+      ],
+      "function_family": "noise_impulse (severity +1)",
+      "psnr_rgb": null,
+      "verify": "PARTIAL 2/3",
+      "stats": {
+        "block_boundary": 1.495,
+        "bb_diff_pct": 3.9,
+        "dct_zero_ratio": 0.649,
+        "global_rmse": 19.76,
+        "flat_region_std": 21.2
+      },
+      "note": "closer to target flat-region noise magnitude (23.4) but overshoots global RMSE (target 16.50) and dct zero"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 1
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 2
+        }
+      ],
+      "function_family": "noise_gaussian_RGB (cross-family fallback)",
+      "psnr_rgb": null,
+      "verify": "PARTIAL 2/3 (sigma 6.0 vs 1.5, 75%)",
+      "stats": {
+        "block_boundary": 1.628,
+        "bb_diff_pct": 4.7,
+        "global_rmse": 10.01
+      },
+      "note": "kept because the skill lists extreme_pct>50 + sigma<5 as a known impulse FP trigger; however this candidate cannot reproduce residual magnitude (10.0 vs 16.5) or exact-255 excess (0.03% vs 0.44%)"
+    }
+  ]
+}

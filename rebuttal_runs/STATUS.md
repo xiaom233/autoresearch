@@ -45,15 +45,17 @@
 | 固定 LQ 重评 | ✅ 7 场景非确定 LQ 已物化并重评 E1/E2；E1 差异 ≤0.02 dB，结论不变；E2 DFPIR 结果写入 `E1E2_fixed_lq_summary.json` | `E1E2_fixed_lq/`、`scripts/prepare_fixed_lq.py`、`eval_fixed_lq.py` |
 | UHDM 全量 test | ✅ 495 对（500 排除 support 0–4）4 方法重评完成；M_blind 17.307 / 官方 15.529 / blinded 17.254 / 规则 17.373；不恢复 17.100 | `E4/uhdm/full_eval_summary.json` |
 | P0 状态 | ✅ E1/E2/E3/E4/E5a 主结果全部完成；T0–T10 与逐条回应已填主结果 | `02_结果与逐条回应_已填写.md` |
-| DFPIR-from-scratch | 🔄 24 场景随机初始化，同 T_s/DC*/support；20 个 OOM 重跑中 | `E2_scratch/` |
+| DFPIR-from-scratch | ✅ 24/24 训练完成；support best 23.893 / last 23.633。**Full test best 23.833/21.811（DIV2K/LSDIR）、last 23.638/21.667**；vs AutoIR −1.135/−1.145（best）、−1.330/−1.289（last）；vs ft-best −1.817/−1.804（best）、−2.012/−1.949（last）；vs original −0.161/−0.219（best）、−0.357/−0.363（last）。随机初始化 3× 预算仍低于 ft/AutoIR，接近 blinded zero-shot | `E2_scratch/scratch_full_summary.json`、`scratch_full_summary.md` |
 | E2 预算曲线 | ✅ T1/T2/T3 全 24 snapshot 完成：25.251 / 25.286 / 25.366 DIV2K；23.241 / 23.295 / 23.363 LSDIR；**T/3 已超 AutoIR** | `E2/budget_curve.json` |
 | T4 修正 | 旧 T1-best 子集 21.58 是选择偏差，已废弃；全 24 曲线为准 | `02_..._已填写.md` T4 |
 | E6-B support-set 稳定性 | ✅ 6 场景×3 组 support×R0–R2（规则控制器，33 次训练 / 64.93 GPU-h）：DIV2K 25.000/25.304/26.064；LSDIR 23.197/23.540/24.171；range 0.13–2.66 dB，场景相关 | `E6/e6_summary.json`、`E6/e6_summary.md` |
-| 未执行 | E5c 失败归因、E5b/E2-RS、E6-A agent/run-to-run、E3-G 留出、E4 rain | 明确标为未执行/限制 |
+| E5c blind_0005 4-cell | ✅ 完成：no-fix 21.915、DC-only 44.908、RS-only 21.976、both 41.620（DIV2K fixed-LQ 0005）；DC +22.99，RS-only +0.06，RS at correct DC −3.29 | `E5c/`、`rebuttal_plan/E5c_blind_0005_4cell.md` |
+| DFPIR-scratch test | ✅ full test 完成：best 23.833/21.811、last 23.638/21.667；见 `scratch_full_summary.md` | `E2_scratch/scratch_full_summary.*` |
+| 未执行 | E5b/E2-RS 完整四格 24 场景、E6-A agent/run-to-run、E3-G 留出、E4 rain | 明确标为未执行/限制；E5c 只能作为 blind_0005 的 targeted RS 诊断，不替代完整 E2-RS |
 | 旧无人值守链 | 已完成 E2 评估；E1 段因 `E1/logs` 目录缺失失败，已创建目录并另起 `run_e1_stage.sh` | `chain.log`、`E1/stage.log` |
 | E1 规则控制器决策 | ✅ 24/24 完成；R1 可用 19、R2 可用 10；候选测试 196 次；arch=20 Swin+SG / 4 GCM | `E1/decisions/` |
-| E1 R0/R1/R2 训练 | 已排入无人值守链，等 E2 完成后自动运行 | E2 后 ~10h |
-| 无人值守链 | PID 独立 session；等待 E2 → E2 评估 → E1 R0/R1/R2 → support 选择 → 测试评估 → 聚合 | `rebuttal_runs/chain.log`、`CHAIN_DONE` |
+| E1 R0/R1/R2 训练 | ✅ 24 R0 / 19 R1 / 9 R2 完成；support 选择与固定 LQ test 完成 | `E1/stage.log` |
+| 无人值守链 | 历史记录；E2/E1 已由后续单独阶段完成；无活动 chain | `rebuttal_runs/chain.log`、`CHAIN_DONE` |
 
 ### E1 规则决策摘要
 
@@ -78,10 +80,11 @@
 2. **Ours 31.25/27.08 是按位置微平均**，不是整链准确率；Ours 的 R0/R1 选择依据 UNKNOWN。
 3. **E4 的 SIDD/UHDM 已执行（官方 DFPIR 为主基线）**：SIDD 全量 1,120 块上 AutoIR 与 M_blind 持平（+0.030 dB，CI 跨 0）、规则 specialist 灾难（−8.878 dB）、DFPIR official release 5D 分布外失败（CLIP σ=25 仅 26.465，低于 M_blind 4.038）。SIDD support 取自 validation 场景 0–4（不是官方 train）；test 为 35/40 场景、1,120/1,280 块。UHDM support 取自 test 0–4（不是 train）；已改 full 495 对：50 子集 LQ 均值 17.752 vs 全量 17.100，M_blind 子集 17.917 vs 全量 17.307，子集高估约 0.61 dB。blinded DFPIR 31.218 仅为项目参考，不是官方权重。**E4 specialist 只训练了 R0，没有训练后 R1/R2 反思**：训练前 Skill 候选反思有 15（SIDD）/7（UHDM）次，但任务库只有 `*_R0`，无 R1 任务、日志、params、checkpoint 或停止决策记录；R0 均正常完成、无 NaN。不是 agent 判定不需要，也不是运行崩溃，而是 E4 按最小真实实验只排了单轮 R0，训练后反思流程未调度；SIDD UNCERTAIN、UHDM POOR 按协议本应触发 R1。E4 只能标为 **R0-only**，不能写成完整三轮系统。详见 `E4/EXECUTION_NOTE.md`。**E4 rain 未执行**；不能声称通用真实/库外泛化或真实数据显著提升。
 4. **E1/E2 support 与 DIV2K test 重叠**：24 场景共 120 次抽取、74 张唯一 DIV2K 图，每场景 5/100；support-excluded 敏感性显示影响 <0.01 dB（E1）/0.007 dB（E2 best），但不能声称严格独立 test。
-5. **LQ 协议**：7/24 场景的 `make_lq` 不可复现（impulse/glass）；固定 LQ 重评显示 AutoIR/规则/DFPIR-original 差异 ≤0.02 dB，结论不变。历史 baseline 的 LQ 也未跨方法固定（18/24 随机场景），AirNet 敏感度实测 mean +0.003/−0.009 dB；严格主表仍应统一重跑。
+5. **LQ 协议**：7/24 场景的 `make_lq` 不可复现（impulse/glass 私有 RNG）。2026-10-27 复核：A0/E1 主指标 8,400 个共同图像行中 **2,450 行 `lq_sha256` 不一致**，正好是 **7 场景 × 350 张**（0003/0005/0017/0018/0020/0022/0023）；其余 17/24 hash 一致。**GT 管线没有变，变的是同一 GT 的随机 realization**。已用 `E1E2_fixed_lq` 同一份固定 LQ 重评：24 场景 macro/paired 变化 <0.001 dB（逐场景最大约 0.01 dB）。`LLM_vs_rule_choices.md` 的 7 个场景已改用 fixed-LQ；one-shot 的 6 个共同 fixed 场景（不含 0020）用 `eval_oneshot_fixed_lq.py` 同一份固定 LQ 重评，23 场景结论不变（rule 反思 +2.426/18 胜，LLM +1.279/15 胜）。未修正前这 7 个场景的逐图 Δ 不能当严格配对。历史 baseline 的 LQ 也未跨方法固定（18/24 随机场景）；AirNet 敏感度实测 mean +0.003/−0.009 dB。严格主表仍应统一重跑。
 6. **E6-B support-set 稳定性已完成**（规则控制器，6 场景×3 组）：DIV2K macro 25.0–26.1 dB，support-set range 0.13–2.66 dB；稳定性场景相关，不能声称普遍稳定。**E6-A（同一 support/seed 的 agent 重复）与训练 seed 重复未执行**；不能声称 run-to-run/LLM 方差。
 7. **E2-RS 四格未执行**；RS 架构贡献未单独隔离。
 8. **API model ID/版本/费用 UNKNOWN**；文档中的 DeepSeek/Qwen 只是声明。
+9. **E1-oneshot 的 NaN 失败必须如实报告**：E1-oneshot（无反思规则）为 **23/24 有效、1/24 NaN**（`blind_0020` 的 GCM R0 训练 NaN）。主表是 23 个有效场景 macro，不做 0 dB 插补/静默删除；E1-full 通过 R1 fallback 恢复到 15.98，AutoIR-oneshot 15.78、AutoIR-full 18.09。Swin+SG 稳定重训只作可选 sensitivity（fixed-LQ 0020 = 14.05，仍低于 AutoIR-oneshot 15.78 / E1-full 15.98），不冒充原始 one-shot。
 
 ## GPU 效率结论
 

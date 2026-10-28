@@ -1,0 +1,59 @@
+{
+  "pipeline": [
+    {
+      "function": "blur_glass",
+      "severity": 3,
+      "category": "blur",
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "category": "compression",
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 25.58,
+      "stats": {"ci_pass_rate": "7/10", "note": "same-family glass severity +1; PSNR flat across glass severities (stochastic shuffle)"},
+      "function_family": "glass"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 26.31,
+      "stats": {"ci_pass_rate": "7/10", "note": "cross-family control; deterministic sim approximates glass average but texture is smoother/more vivid than target"},
+      "function_family": "gaussian"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 26.28,
+      "stats": {"ci_pass_rate": "7/10", "note": "cross-family control; MTF-equivalent to gaussian, visually too smooth"},
+      "function_family": "lens"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "psnr": 25.49,
+    "psnr_gap": 0.82,
+    "ci_pass_rate": "7/10",
+    "mode": "PSNR (sigma_prior=0.74 < 2)",
+    "order_rationale": "optical blur before storage: blur_glass -> compression_jpeg; intact 8x8 grid in flat regions confirms JPEG is the last step",
+    "noise": "NO_NOISE (raw noise_prior sigma=0.74; peeled residual sigma=1.48 lower bound; peeled residual structured spatial_corr=0.97, var_slope=-0.23; extreme_pct=46.9% is the documented JPEG/blur false positive)",
+    "global": "NO_GLOBAL (variance_ratio=0.790/mean_shift=+5.0/chroma=0.886 are mildly below unity beyond the sim, but every legal global severity overshoots: contrast_weaken_scale:1 -> std ratio 0.75, saturate_weaken:1 -> chroma 0.6-0.7, brightness shift/gamma:1 -> mean shift >=20; quantization ruled out by unique_G=211). Residual tone gap (~0.90x + 12.6 affine, gamma-like) is unexplained by the legal function set.",
+    "blur_evidence": "DT: anisotropy 1.445<1.7, glass_score 1.495>0.25, sigma 0.74<3 -> glass. Glass3+jpeg4 self-analysis reproduces target blur signals: gm 0.524 vs 0.510, spectral slope -1.230 vs -1.282, anisotropy 1.395 vs 1.445, glass_score 1.309 vs 1.495. 1:1 crops show the mottled pixel-shuffle texture in the target, absent in gaussian/lens sims.",
+    "compression_evidence": "block_boundary=7.345 (>>1.1, 0% FP), dct_zero_ratio=0.911, visible 8x8 grid. Sev4 chosen over sev5 (PSNR 25.49 vs 24.35, CI 7-10 vs 5-10, clipping 2.0% vs 4.9% vs target 0.39%).",
+    "deterministic_psnr_ceiling_note": "All deterministic candidates cap at ~26.3 dB, far below the >40 dB required for a deterministic exact match; the remaining structured residual is explained by the stochastic glass pixel-shuffle realization (skill: do not chase PSNR for non-deterministic blur) plus the residual tone gap."
+  }
+}

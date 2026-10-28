@@ -1,0 +1,764 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9935 <1.05, unique_G=216/256; JPEG masking test R12 hurt CI 7->4/10 -> compression absent)",
+      "blur": "GLASS_BLUR candidate from DT (glass_score=0.72>0.25, gm_ratio=0.329, spectral_slope_ratio=1.113, FFT_anisotropy=1.29); PSNR prefers gaussian2 (21.74) over lens2 (21.47) / glass4 (20.99) / glass5 (20.78) - gap <1dB and glass_score is inflated by noise -> primary gaussian2, glass4 kept as alternative",
+      "noise": "PRESENT. run_full_analysis noise_prior sigma=1.48 (GAUSSIAN_YCrCb low-confidence). Flat-sky high-pass sigma: target G=5.81 vs clean 0.49 vs no-noise sim 0.56 -> real noise step required",
+      "global": "SATURATION strengthen (chroma_ratio=2.583) + darkening (mean_shift=-0.1604, pct_zero=25.0%, pct_255=0.0000). Probe on clean: saturate_strengthen_HSV:3 gives mean_shift=-0.1712, chroma=2.735, var_ratio=1.529, pct255=0.023; YCrCb sat variants give pct255 9-12% (excluded). HSV:3 is the only single legal step matching both darkening and chroma"
+    },
+    "support_pairs_analysis": {
+      "support_0": "md5-identical to target (degraded_0.png == degraded.png, clean_0.png == clean.png)",
+      "support_1": "different pipeline: block_boundary=1.007 (mild compression possible), sigma=0.49, blur GLASS (gm=0.260, slope_ratio=1.143, glass_score=0.58), global BRIGHTNESS_darken sev1 only (mean_shift=-9.6, chroma_ratio=0.854, var_ratio=0.986) -> blur + slight darkening, no strong saturation",
+      "support_2": "NO_COMPRESSION (bb=0.998), sigma=0.86, BLUR_UNLIKELY (gm=0.767), global darken+saturate (mean=-49.4, chroma=3.34, var=1.28, pct_zero=22.5)",
+      "support_3": "NO_COMPRESSION (bb=0.995), sigma=0.86, BLUR_UNLIKELY (gm=0.996), global darken+saturate (mean=-30.3, chroma=1.79, var=1.03)",
+      "support_4": "NO_COMPRESSION (bb=0.997), sigma=0.74, BLUR_UNLIKELY (gm=1.90; saturation inflates gradients), global darken+saturate (mean=-47.5, chroma=3.77, var=1.03)",
+      "conclusion": "Supports are HETEROGENEOUS scenario samples, not replicates of the target pipeline (support 1 lacks saturation; 2-4 lack blur; sigma 0.49-0.86 vs target 1.48). They confirm the scenario family contains blur and strong HSV-type saturation with darkening, but severities must come from target signals. Note support-2 cross-check with the final candidate reproduced the target's pattern (ZCD 4%, hf_lf 6% pass; excess dark clipping/overshoot) -> systematic global 'slightly too strong', not a wrong family."
+    },
+    "mode": "SIGNAL (noise present; sigma_prior=1.48, peeled=1.98-2.47; PSNR unreliable due to noise seed mismatch)",
+    "prior_attempt_note": "iterations R1-R16 are from an earlier attempt in this same directory; R17-R25 were run by 'Blind ID D5' (this session). PSNR budget total = 25 (hard cap reached)."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,saturate_strengthen_HSV:5",
+        "thinking": "R1 global family: mean_shift=-40.9 (all-RGB same dir) + chroma_ratio=2.58 -> darken shift HSV + saturate strengthen HSV; severity from |mean_shift|/0.07 heuristic=3 and chroma formula caps at 5"
+      },
+      "test_result": {
+        "psnr_rgb": 13.43,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 global severity calibration: R1 impulse_pct_zero diff=-20.2 -> sim zero-flood 45% vs target 25%, so saturate_strengthen_HSV:5 (S*64) far too strong; drop to sev2 (S*6). Keep darken sev3 (target clipped_fraction=0.25 pre-blur consistent with V-0.3 clipping)."
+      },
+      "test_result": {
+        "psnr_rgb": 13.91,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:5,saturate_strengthen_HSV:2",
+        "thinking": "R3 add blur per decision tree: glass_score=0.72>0.25 + sigma<3 -> glass; severity 5 from gm_ratio=0.329. Physical order brightness->blur->saturation."
+      },
+      "test_result": {
+        "psnr_rgb": 13.98,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:5,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R4 blur control: glass at sev5 already matches hf_lf_ratio (diff 0.003) but PSNR flat at 14 -> test deterministic gaussian (no shuffle randomness) at severity 3 (sigma=3, gm_ratio~0.33 calibration) as cross-family control."
+      },
+      "test_result": {
+        "psnr_rgb": 14.13,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_gaussian:3,saturate_strengthen_YCrCb:2",
+        "thinking": "R5 saturation variant: target unique counts (216-239) are only ~15% below clean, but HSV-sat sims collapse to ~126 -> HSV S-scaling clips channels and destroys uniques. YCrCb sat (c=3, chroma_ratio~2.58 match) is a smooth linear chroma scaling that preserves unique values."
+      },
+      "test_result": {
+        "psnr_rgb": 16.23,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_gaussian:3,saturate_strengthen_YCrCb:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_darken_shfit_HSV:3,saturate_strengthen_YCrCb:2",
+        "thinking": "R6 order test: with darken before blur, exact-zero fraction collapses to ~7% (blur sigma3 erodes clipped regions) while target keeps 25%. Physical rules allow brightness at priority=2 (ISP, post-blur). Move darken after blur to preserve the hard clipping."
+      },
+      "test_result": {
+        "psnr_rgb": 15.71,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_darken_shfit_HSV:3,saturate_strengthen_YCrCb:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,brightness_darken_shfit_HSV:2,saturate_strengthen_YCrCb:3",
+        "thinking": "R7 calibration from sim profile: gauss3 gm=0.162 vs target 0.329 -> gauss2; darkenHSV3 mean=-61.8 vs target -40.9 -> sev2 (c=0.2); YCrCb sat2 chroma=1.60 vs target 2.58 -> sev3 (c=5)."
+      },
+      "test_result": {
+        "psnr_rgb": 17.93,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,brightness_darken_shfit_HSV:2,saturate_strengthen_YCrCb:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:2",
+        "thinking": "R8 saturation space: target has zero 255-clipped pixels but 25% zero-clipped -> chroma boost must preserve max channel (HSV S scaling) not symmetric YCrCb scaling (YCrCb3 sim made 9% white). Same blur/darken as T7 (gm 0.279 vs 0.329, slope -1.17 vs -1.14)."
+      },
+      "test_result": {
+        "psnr_rgb": 16.78,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3",
+        "thinking": "R9 single-global hypothesis: HSV S-scaling darkens RGB mean itself (T8: sat2 contributed ~-29 levels) while producing dark-side clipping only (no 255s, matching target). Test sat HSV sev3 alone to explain mean -40.9 + chroma 2.58 + var 1.32 without a brightness step."
+      },
+      "test_result": {
+        "psnr_rgb": 21.74,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:3",
+        "thinking": "R10 blur subtype: T9 (gauss2+sat3) fits all global signals (mean -44 vs -41, chroma 2.69 vs 2.58, spread 0.94 vs 0.94) but sim gm_ratio 0.27 vs 0.329 and zero_crossing_density low + overshoot low -> target retains more HF structure. Glass blur (shuffle) adds exactly such HF residual; test glass5 (sigma1.6+shuffle) as blur alternative per glass_score>0.25 rule."
+      },
+      "test_result": {
+        "psnr_rgb": 20.78,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_lens:2,saturate_strengthen_HSV:3",
+        "thinking": "R11 blur cross-family: with global fixed at satHSV3 (T9 fit), test lens disk blur radius=3 (sev2) as alternative to gaussian2 (gm 0.269 vs target 0.329 -> need slightly sharper blur); lens MTF has ripples that may explain target mtf_roughness=1.64 vs sim 1.37."
+      },
+      "test_result": {
+        "psnr_rgb": 21.47,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3,compression_jpeg:1",
+        "thinking": "R12 JPEG masking test (should_still_test): block_boundary target 0.9935 vs sim ~0.98 -> if target carried JPEG the block signal would rise toward 1.0; test the only available mild JPEG (q25) after the deterministic steps. Expect clear PSNR drop if absent."
+      },
+      "test_result": {
+        "psnr_rgb": 21.93,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,saturate_strengthen_HSV:3",
+        "thinking": "R13 blur severity scan: gm target 0.329; gauss2 0.269, lens2 0.306, glass5 0.211 -> glass4 (sigma1.4+shift3) should land near 0.33 while keeping glass shuffle HF residual (target glass_score 0.72, sims score >1.3 anyway)."
+      },
+      "test_result": {
+        "psnr_rgb": 20.99,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_YCrCb:3,brightness_darken_shfit_HSV:2",
+        "thinking": "R14 order fix: target overshoot_ratio=0.225 (low, smooth luma) vs HSV-sat sim 0.45 -> target saturation preserves Y (YCrCb chroma scaling). YCrCb3 alone caused 9% 255-clipping, but placing darken AFTER saturation removes those 255s and supplies the -41 mean shift + 25% dark clipping. Priority-2 steps (sat, ISP brightness) may be ordered either way."
+      },
+      "test_result": {
+        "psnr_rgb": 18.86,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_YCrCb:3,brightness_darken_shfit_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:3,blur_gaussian:2,brightness_darken_shfit_HSV:2",
+        "thinking": "R15 order: target Cr_local_std=9.08 vs clean 1.90 (x4.8 = YCrCb c=5), but sat-after-blur sims only reach 4.8-5.1 because blur first kills chroma detail. Saturate BEFORE blur restores x5 on full-detail chroma; early luma laplacian_var target 37.8 (T9 HSVsat=104, T14 YCCsat+darken=23) -> luma must be untouched by saturation. Darken last keeps the 25% hard zeros."
+      },
+      "test_result": {
+        "psnr_rgb": 19.01,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_YCrCb:3,blur_gaussian:2,brightness_darken_shfit_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_YCrCb:3,brightness_darken_shfit_HSV:3",
+        "thinking": "R16 darken severity: T14 same order with darkenHSV2 gave mean -34.6 (target -40.9), clip 0.181 (target 0.250), var 1.497 (target 1.316), spread 1.044 (target 0.943) -> all point to one notch stronger darken (c=0.3) while keeping sat->darken order that uniquely yields 0% white clipping like target."
+      },
+      "test_result": {
+        "psnr_rgb": 18.4,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_YCrCb:3,brightness_darken_shfit_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3",
+        "thinking": "R17: 复现当前最优确定性候选并获得完整 CI 指标明细。支持图像显示明显彩色颗粒 -> 需确认 3 个失败 CI 指标是否指向缺失噪声步骤。"
+      },
+      "test_result": {
+        "psnr_rgb": 21.74,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "thinking": "R18: R17 的 zero_crossing_density 差 +0.146 (28%) 且 overshoot 差 -0.225 -> 目标含更多细颗粒。支持图可见彩色颗粒; 物理顺序 noise->blur->saturation。噪声估计 sigma~1.5-2.0 = sev1(12.75) 经 blur sigma2 衰减(~1.8)。"
+      },
+      "test_result": {
+        "psnr_rgb": 20.69,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "thinking": "R19: 噪声存在 -> 切换信号验证。检查 sigma 误差、blur 谱斜率/Wiener 核、global mean/var/chroma 是否同时 MATCH。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:mean_shift (diff=0.0155)",
+          "global:variance_ratio (diff=39%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "thinking": "R21: 高斯噪声在暗部过强(impulse_pct_zero/block_boundary/overshoot 均显示 sim 偏噪; support2 同模式)。Speckle 噪声乘性、强度相关, 暗部更弱, 可能同时修复暗部 clipping 与过冲。"
+      },
+      "test_result": {
+        "psnr_rgb": 20.79,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_speckle:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:1,saturate_strengthen_HSV:3,blur_gaussian:2",
+        "thinking": "R21: 顺序假设: sat 在 blur 前。目标 overshoot 低于 sat-after-blur sim (0.225 vs 0.36), 且 sim 暗部 clipping 偏多/过暗 4 级。若先 sat 后 blur, 模糊会平滑 posterize 硬边并抬升暗部均值, 预期 overshoot 与 impulse_pct_zero 同时改善; chroma 全局 std 仍保留。"
+      },
+      "test_result": {
+        "psnr_rgb": 20.96,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_YCrCb:1,saturate_strengthen_HSV:3,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "thinking": "R22: 1:1 裁剪对比显示目标平滑天空仅有轻微斑驳, 而 gauss/speckle sim 在天空过噪; 目标纹理区呈块状色斑。稀疏 impulse(1%) 经 blur 后形成块状噪声(非逐像素白噪), §B 残差 spatial_corr=0.81 亦支持空间相关噪声结构。"
+      },
+      "test_result": {
+        "psnr_rgb": 21.19,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:1,saturate_strengthen_HSV:3,blur_gaussian:1",
+        "thinking": "R23: 目标处于 blur->sat (R18: 0.366 overshoot/30% zero, 偏多) 与 sat->blur2 (R21: 0.10/7%, 偏少) 之间。若顺序为 sat->blur, 则 blur 应为 sev1: 保留部分 posterize 纹理与 25% 暗部 clipping, 同时不过度锐化。物理上 noise(传感器)->ISP sat->轻微光学/后期模糊 为合法 3 步。"
+      },
+      "test_result": {
+        "psnr_rgb": 19.85,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_YCrCb:1,saturate_strengthen_HSV:3,blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:3",
+        "thinking": "R24: 目标天空颗粒自相关 FWHM=4px, 所有 sim=2px -> 目标颗粒更粗。更强 blur(sigma3) + 更强预模糊噪声(sev2) 可保持同等可见噪声幅度同时增大颗粒尺度, 并降低 std_lap (目标 6.15 vs sim 10.8) 与 overshoot。"
+      },
+      "test_result": {
+        "psnr_rgb": 20.56,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "thinking": "R25 最终信号验证: 平坦区噪声随亮度增长 (1.90->2.47->4.58) 与 speckle (2.04->2.96->4.92) 吻合, gauss-YCrCb (1.69->2.06->3.25) 偏低; 天空 G 通道 5.96 vs 目标 5.81。信号模式复核 sigma/blur/global。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:mean_shift (diff=0.0157)",
+          "global:variance_ratio (diff=36%)"
+        ],
+        "pipeline": "noise_speckle:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3,compression_jpeg:1",
+      "psnr_rgb": 21.93,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3",
+      "psnr_rgb": 21.74,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3",
+      "psnr_rgb": 21.74,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_lens:2,saturate_strengthen_HSV:3",
+      "psnr_rgb": 21.47,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "noise_impulse:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+      "psnr_rgb": 21.19,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_glass:4,saturate_strengthen_HSV:3",
+      "psnr_rgb": 20.99,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:1,saturate_strengthen_HSV:3,blur_gaussian:2",
+      "psnr_rgb": 20.96,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "noise_speckle:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+      "psnr_rgb": 20.79,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_glass:5,saturate_strengthen_HSV:3",
+      "psnr_rgb": 20.78,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+      "psnr_rgb": 20.69,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:3",
+      "psnr_rgb": 20.56,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:1,saturate_strengthen_HSV:3,blur_gaussian:1",
+      "psnr_rgb": 19.85,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "saturate_strengthen_YCrCb:3,blur_gaussian:2,brightness_darken_shfit_HSV:2",
+      "psnr_rgb": 19.01,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_YCrCb:3,brightness_darken_shfit_HSV:2",
+      "psnr_rgb": 18.86,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_YCrCb:3,brightness_darken_shfit_HSV:3",
+      "psnr_rgb": 18.4,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_gaussian:2,brightness_darken_shfit_HSV:2,saturate_strengthen_YCrCb:3",
+      "psnr_rgb": 17.93,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:2,brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:2",
+      "psnr_rgb": 16.78,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_gaussian:3,saturate_strengthen_YCrCb:2",
+      "psnr_rgb": 16.23,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_darken_shfit_HSV:3,saturate_strengthen_YCrCb:2",
+      "psnr_rgb": 15.71,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 14.13,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:5,saturate_strengthen_HSV:2",
+      "psnr_rgb": 13.98,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 13.91,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,saturate_strengthen_HSV:5",
+      "psnr_rgb": 13.43,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "noise_6step_check": {
+    "target_peel_pipeline": "blur_gaussian:2,saturate_strengthen_HSV:3",
+    "target_peel": {
+      "extreme_pct": 61.38,
+      "vm_slope": 1.7475,
+      "var_slope": 1.8086,
+      "spatial_corr": 0.9749,
+      "rgb_ratio": 1.23,
+      "cross_ch_corr": 0.2277
+    },
+    "support2_peel_pipeline": "saturate_strengthen_HSV:3",
+    "support2_peel": {
+      "extreme_pct": 60.08,
+      "vm_slope": 1.1301,
+      "var_slope": 1.1831,
+      "spatial_corr": 0.9547,
+      "rgb_ratio": 1.3806,
+      "cross_ch_corr": 0.3964
+    },
+    "flat_region_hp_noise_by_clean_luma_bins": {
+      "bins": [
+        "0-60",
+        "60-100",
+        "100-140",
+        "140-180",
+        "180-220",
+        "220-256"
+      ],
+      "target": [
+        3.95,
+        4.0,
+        4.38,
+        1.9,
+        2.47,
+        4.58
+      ],
+      "noise_free_sim_blur2_sat3": [
+        4.43,
+        2.84,
+        3.42,
+        0.81,
+        1.03,
+        1.61
+      ],
+      "gaussian_YCrCb1_sim": [
+        4.29,
+        4.16,
+        4.85,
+        1.69,
+        2.06,
+        3.25
+      ],
+      "speckle1_sim": [
+        4.38,
+        3.66,
+        4.68,
+        2.04,
+        2.96,
+        4.92
+      ]
+    },
+    "flat_sky_highpass_sigma": {
+      "target": [
+        0.0,
+        5.81,
+        1.71
+      ],
+      "clean": [
+        0.56,
+        0.49,
+        0.53
+      ],
+      "noise_free_sim": [
+        0.0,
+        0.56,
+        0.27
+      ],
+      "speckle1_sim": [
+        0.0,
+        5.96,
+        2.4
+      ],
+      "gaussYCrCb1_sim": [
+        0.0,
+        4.77,
+        2.16
+      ]
+    },
+    "diagnosis": "§B absolute thresholds are invalid here: 25% of channel values are clipped to 0, so the peeled residual is dominated by clipping mismatch (extreme_pct 60-61% = known IMPULSE false positive when extreme>50% and sigma<5; variance/vm slopes inflated). Noise PRESENCE is proven independently: flat-sky high-pass sigma target G=5.81 vs no-noise sim 0.56 (10x). Type from intensity dependence of flat-region noise: target rises 1.90->2.47->4.58 across bright bins, matching speckle (2.04->2.96->4.92) while gaussian-YCrCb is too flat/weak in highlights (1.69->2.06->3.25). => noise_speckle:1 (sev1 is the only level whose post-blur amplitude matches)."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_speckle",
+        "severity": 1,
+        "verdict": "UNCERTAIN",
+        "evidence": "flat-sky sigma match (5.96 vs 5.81), intensity-dependent flat noise profile match; noise steps never LIKELY (seed mismatch)"
+      },
+      {
+        "function": "blur_gaussian",
+        "severity": 2,
+        "verdict": "UNCERTAIN",
+        "evidence": "verify_signals MATCH on spectral_slope + Wiener kernel; hf_lf_ratio 6-7%; PSNR best among blur subtypes (gap <1dB); DT glass_score=0.72 is noise-inflated -> glass4 retained as alternative"
+      },
+      {
+        "function": "saturate_strengthen_HSV",
+        "severity": 3,
+        "verdict": "UNCERTAIN",
+        "evidence": "chroma_ratio 2.70 vs 2.58 (4.6%), mean_shift -0.176 vs -0.160 (4 levels), var_ratio 1.43 vs 1.32; only legal single step reproducing both darkening and chroma; YCrCb variants excluded by 9-12% white clipping vs target 0%"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "key_metrics": {
+      "psnr_rgb": 20.79,
+      "ci_pass": "7/10",
+      "ci_verdict": "GOOD",
+      "signal_verdict": "WEAK (3 matched: blur spectral_slope, blur Wiener kernel, noise sigma; 3 mismatched: residual FWHM 8px, mean_shift diff 0.0157, variance_ratio diff 36-39% relative-to-deviation)"
+    },
+    "rationale": "3-step pipeline locked by (a) compression absent (bb=0.9935; JPEG hurts CI), (b) blur present (gm 0.329, slope ratio 1.113), (c) noise present (flat-sky sigma 10x clean; no-noise sim fails ZCD by 28%), (d) single global step must explain mean -0.160 AND chroma 2.58 AND zero-clipping 25% -> only saturate_strengthen_HSV:3. Order noise->blur->saturation verified against alternatives: sat-before-blur removes the 25% dark clipping (7% vs 25%) and kills ZCD (41% low), while blur-before-sat matches both. Remaining systematic offsets (sim ~4 levels darker, var +0.12, zero-clipping +5pp) are consistent with a slightly stronger effective saturation than the GT; no legal discrete severity improves all three simultaneously.",
+    "alternatives": [
+      {
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:2,saturate_strengthen_HSV:3",
+        "psnr": 20.69,
+        "ci": "6/10",
+        "reason": "noise_prior type prediction (YCrCb); verify_signals noise:sigma MATCH; but highlights under-noised (3.25 vs 4.58)"
+      },
+      {
+        "pipeline": "noise_speckle:1,blur_glass:4,saturate_strengthen_HSV:3",
+        "psnr": null,
+        "ci": null,
+        "reason": "blur decision-tree (glass_score=0.72>0.25) cross-family backup; PSNR family gap gauss-vs-glass <1dB"
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:3",
+        "psnr": 20.56,
+        "ci": "7/10",
+        "reason": "best structural match (ZCD 0.538 vs 0.524, std_lap 8.62 vs 6.15) but sky noise too weak (3.73 vs 5.81)"
+      }
+    ]
+  }
+}

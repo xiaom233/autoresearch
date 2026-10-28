@@ -80,11 +80,11 @@ This file provides guidance to Claude Code when working with this repository.
 变相获得 GT 泄露。exp41 审计确认了此风险。
 
 ❌ 无隔离:
-   Agent(description="R2 反思", subagent_type="general-purpose", prompt="...")
+   Agent(description="下一轮反思", subagent_type="general-purpose", prompt="...")
    → Agent 共享主会话上下文，能读到所有历史讨论
 
 ✅ Worktree 隔离:
-   Agent(description="R2 反思", subagent_type="general-purpose",
+   Agent(description="下一轮反思", subagent_type="general-purpose",
          isolation="worktree", prompt="...")
    → Agent 在独立 git worktree 中运行，无法访问主会话上下文
    → 只能看到项目文件和 prompt 中给出的指令
@@ -92,7 +92,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 **适用场景**:
 - 主会话讨论过盲识别准确率、退化类型、或任何 per-challenge GT 数据后
-- 多轮反思实验（R2, R3, ...）必须在隔离环境中执行
+- 多轮反思实验（各轮 R_N）必须在隔离环境中执行
 - 盲识别实验如果主会话有 GT 相关讨论也应用隔离
 
 **不适用场景**:

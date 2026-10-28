@@ -1,0 +1,268 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=0.993 (<1.05, 0%FP JPEG signal absent); unique_G=187 slightly low; dct_zero_ratio=0.51 -> mild compression possible, must test",
+      "blur": "gm_ratio=0.290 but fully explainable by global darkening (gradient scales with contrast); spectral_slope_ratio=1.065 (<1.08); FFT anisotropy=0.00, PCA=0.0 -> gaussian if any",
+      "noise": "noise_prior sigma=1.48 (<2); spatial_corr=0.82, cross_channel_corr=0.63, residual_intensity_corr=0.80 -> residual is structured (global transform), noise type verdict unreliable",
+      "global": "mean_shift=-81.4, variance_ratio=0.330, saturation_chroma_ratio=0.341, clipped_fraction=0.063 -> dominant darkening + saturation weakening"
+    },
+    "support_pairs_consistency": {
+      "pair_1": "mean_shift=-55.4 sigma=1.61 sat_ratio=0.545 bb=1.006 gm=0.341",
+      "pair_2": "mean_shift=-55.3 sigma=0.74 sat_ratio=0.664 bb=0.997 gm=0.363",
+      "pair_3": "mean_shift=-43.7 sigma=0.74 sat_ratio=0.432 bb=1.010 gm=0.360",
+      "pair_4": "mean_shift=-56.2 sigma=1.11 sat_ratio=0.619 bb=0.994 gm=0.499",
+      "note": "All 5 pairs: darkening + saturation reduction, no block_boundary signal, sigma<2 -> same global pipeline on all pairs"
+    },
+    "mode": "PSNR (sigma=1.48 < 2)"
+  },
+  "noise_6step_check": {
+    "source": "peeled residual after blur_gaussian:1 + brightness_darken_gamma_HSV:5 (peeled_noise.json)",
+    "residual_std": 0.0,
+    "extreme_pct": 1.0,
+    "extreme_pct_note": "artifact: residual is exactly zero everywhere (zero_ratio=1.0), so all pixels count as extreme; not impulse noise",
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "raw_pair_signals_before_peeling": {
+      "noise_prior_sigma": 1.48,
+      "residual_intensity_corr": 0.8045,
+      "spatial_corr": 0.8174,
+      "cross_channel_corr": 0.6342,
+      "interpretation": "highly structured residual from the V-gamma tone mapping, not random noise"
+    },
+    "diagnosis": "NO_NOISE — peeled residual is exactly zero on all channels; deterministic pipeline fully explains the target"
+  },
+  "final_decision": {
+    "pipeline": [
+      {"function": "blur_gaussian", "severity": 1, "verdict": "LIKELY"},
+      {"function": "brightness_darken_gamma_HSV", "severity": 5, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "LIKELY",
+    "ci_pass_rate": "10/10",
+    "psnr": "inf (pixel-perfect)",
+    "rationale": "(1) Tone curve V->V2 measured empirically is smooth gamma-shaped with HSV H/S preserved (S corr=0.967, hue diff 2.9 deg) and identical out/in ratio across R/G/B at fixed V -> V-channel gamma darkening, not shift/contrast/saturation. (2) gamma_HSV:5 alone matched mid-tones exactly but left a V-growing residual (hf deficit at sparse highlights) -> mild blur added. (3) Order test: blur_gaussian:1 THEN brightness_darken_gamma_HSV:5 reproduces the target pixel-exactly (PSNR=inf); the reverse order gives 38.83 dB. (4) Same pipeline is pixel-exact on all four support pairs. (5) Peeled residual std=0.0 -> no noise; block_boundary=0.993 -> no JPEG.",
+    "alternatives": []
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:5,saturate_weaken_HSV:5",
+        "thinking": "信号来源: step4 mean_shift=-81.4, variance_ratio=0.330, saturation_chroma_ratio=0.341, clipped_fraction=0.063 -> 全局变暗+饱和度削弱; step1 block_boundary=0.993 无JPEG; sigma=1.48<2 无噪声. 测试分析器首选全局候选"
+      },
+      "test_result": {
+        "psnr_rgb": 24.39,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:5,saturate_weaken_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:5",
+        "thinking": "信号来源: 经验tone曲线 V->V2 平滑非线性(V=120->19, V=168->55, V=200->97), S/H 保持(S corr=0.97, hue diff 2.9deg), 各通道 out/in 在同V下相等 -> V通道 gamma 型变换, 非 shift(shift d=128 过高且 max 不变), 非 saturation(HSV-S 保持)"
+      },
+      "test_result": {
+        "psnr_rgb": 28.04,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:1",
+        "thinking": "信号来源: gammaHSV5 中低端曲线精确匹配(V128-159:36 vs 36, V160-191:60 vs 62) 但 V224-255 目标133 vs 模拟175, 且残差std随V升高(5->36), 高亮孤立像素被拉低 -> 提示轻度空间模糊; gm_ratio=0.290 也可能部分来自blur. 测试 gamma+blur_gaussian:1"
+      },
+      "test_result": {
+        "psnr_rgb": 38.83,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:2",
+        "thinking": "信号来源: gammaHSV5+blur_gaussian:1 达 PSNR=38.83 CI=10/10; 按severity扫描协议测试 blur sev+1 是否更优(高亮残余仍略低)"
+      },
+      "test_result": {
+        "psnr_rgb": 34.39,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "thinking": "信号来源: 顺序物理约束测试. brightness 可为 priority0(blur前) 或 priority2(blur后); 已测 gamma->blur=38.83. 测试 blur->gamma 顺序是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "thinking": "support pair 1 验证: 目标图已获得 PSNR=inf 精确匹配, 用同一管线在 support pair 1 上做跨图一致性验证"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "thinking": "support pair 2 验证: 目标图已获得 PSNR=inf 精确匹配, 用同一管线在 support pair 2 上做跨图一致性验证"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "thinking": "support pair 3 验证: 目标图已获得 PSNR=inf 精确匹配, 用同一管线在 support pair 3 上做跨图一致性验证"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "thinking": "support pair 4 验证: 目标图已获得 PSNR=inf 精确匹配, 用同一管线在 support pair 4 上做跨图一致性验证"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:1",
+      "psnr_rgb": 38.83,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:2",
+      "psnr_rgb": 34.39,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:5",
+      "psnr_rgb": 28.04,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:5,saturate_weaken_HSV:5",
+      "psnr_rgb": 24.39,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ]
+}

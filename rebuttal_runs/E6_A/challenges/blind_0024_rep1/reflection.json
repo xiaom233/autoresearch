@@ -1,0 +1,472 @@
+{
+  "challenge": "blind_0024_rep1",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=0.9935 (<1.05), unique_G target=216 vs clean=256 (ratio 0.844), dct_zero_ratio=0.376. should_still_test=true (mild JPEG can evade)",
+      "blur": "GLASS_BLUR candidate: gm_ratio=0.329 (strong gradient loss), spectral_slope_ratio=1.113, residual_anisotropy=1.29 (<1.7, not motion), blur_pca_ratio=1.07, glass_score=0.72 (>0.25), mtf_roughness=1.64",
+      "noise": "noise_prior sigma=1.48 (<2), spatial_corr=0.81, cross_channel_corr=0.378, residual_intensity_corr=0.737, gamma_suspect=true",
+      "global": "RAW verdict says brightness_darken_sev3 + saturation_strengthen_sev5, BUT cross-pair stats contradict brightness: HSV V mean unchanged (139.7->137.7), RGB mean drops -40.9 with clip_lo 0.25 rising from 0.011, HSV S mean 85->228. Classic saturate_strengthen clipping signature, NOT brightness. Pipeline allows only ONE global function."
+    },
+    "support_pair_stats": {
+      "pair0": "HSV S 85.1->227.8, V 139.7->137.7, clip_lo 0.011->0.250",
+      "pair1": "HSV S 233.8->253.6, V 182.1->177.3, clip_lo 0.199->0.329",
+      "pair2": "HSV S 62.2->218.0, V 152.4->150.0, clip_lo 0.0004->0.225",
+      "pair3": "HSV S 75.8->207.6, V 126.5->126.1, clip_lo 0.000->0.204",
+      "pair4": "HSV S 43.5->186.6, V 166.5->160.0, clip_lo 0.0036->0.111",
+      "conclusion": "All 5 pairs: V almost constant, S strongly amplified, low-channel clipping increases. Global = saturation strengthen (single step)."
+    },
+    "mode": "PSNR (sigma=1.48 < 2)",
+    "suspected": [
+      "saturate_strengthen (global, single step)",
+      "blur (glass-vs-gaussian subtype open; gm_ratio=0.329)",
+      "possible mild jpeg (unique_G_ratio 0.844)",
+      "noise borderline (sigma 1.48, visible chroma speckle amplified by saturation)"
+    ],
+    "ruled_out": [
+      "brightness (HSV V unchanged across all 5 pairs)",
+      "motion blur (FFT anisotropy 1.29 < 1.7)"
+    ]
+  },
+  "noise_6step_check": {
+    "residual": "peeled residual of target minus simulate(blur_gaussian:3,saturate_strengthen_HSV:2)",
+    "extreme_pct": 64.22,
+    "vm_slope": 2.4776,
+    "var_slope": -10.2858,
+    "spatial_corr": 0.983,
+    "rgb_ratio": 1.5446,
+    "cross_ch_corr": 0.1014,
+    "ch_stds_RGB": [
+      13.5,
+      20.8,
+      14.5
+    ],
+    "noise_prior_sigma": 2.47,
+    "noise_prior_channel_sigma_ratio": 2.0,
+    "diagnosis": "§B numbers are heavily contaminated by saturate clipping: 25.7% of pixels are exactly 0 (zero_ratio=0.2567), so extreme_pct=64.2% is the known JPEG/blur/clipping false positive (SKILL failure mode: extreme_pct>50% + sigma<5 -> ignore IMPULSE) and vm_slope/var_slope/spatial_corr reflect clipping edges plus noise that was blurred by the preceding gaussian blur. Reliable signals: rgb_ratio=1.54>1.4 and noise_prior per-channel sigma ratio 2.0>1.4 -> gaussian_YCrCb; G-channel residual std (20.8) highest because R/B are clipped in the blue sky. Direct sky-texture calibration: target hf[R,G,B]=[2.17,4.55,3.06]; YCrCb:3 sim [2.08,4.52,2.96] (match); RGB:2 [2.00,3.38,2.75], speckle:1 [2.04,3.17,2.78], noise-free blur3+sat2 [1.98,2.36,2.74] (all miss G). Noise is real and YCrCb, severity 3."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "Global step from cross-pair stats: HSV V unchanged (139.7->137.7) while HSV S mean 85->228, clip_lo 0.011->0.250, RGB mean -40.9. Simulating saturate_strengthen_HSV on 5 clean supports: sev2 reproduces S=226.9/clip=0.266/mean=78.1 vs target 227.8/0.250/77.6 (exact on target, pair2 S218.0 vs 220.3, pair3 207.6 vs 206.2). YCrCb variant ruled out (V would rise to 160+). Baseline test to see if any blur/jpeg/noise step remains."
+      },
+      "test_result": {
+        "psnr_rgb": 20.01,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Blur presence: gm_ratio=0.329 (well below 0.85) with spectral_slope_ratio=1.113. FFT anisotropy 1.29<1.7 rules out motion; pca_ratio 1.07 (isotropic). Boundary between gaussian/lens; SKILL C says default gaussian, glass only when glass_score>0.25+sigma<3 (glass_score=0.72 is suspicious but glass_scores have known FP). Test gaussian sev3 (sigma=3px) first as the safe default; blur must precede global (priority 1 < 2)."
+      },
+      "test_result": {
+        "psnr_rgb": 23.72,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:2",
+        "thinking": "Blur subtype cross-check per SKILL failure table (gaussian-predicted vs glass alternative): glass_score=0.72>0.25 triggers glass candidate. Glass blur (sigma1.6, shift4, iter2) is a strong non-deterministic blur; test at max severity to see if it beats gaussian:3 (23.72dB). If PSNR much lower, gaussian family stands."
+      },
+      "test_result": {
+        "psnr_rgb": 22.04,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,saturate_strengthen_HSV:2",
+        "thinking": "Severity scan ±1 around gaussian:3 (23.72dB per skill mandatory severity-scan rule). gm_ratio=0.329 indicates strong gradient loss, so heavier sigma=4 may explain residual softness. Same family/order (blur before global)."
+      },
+      "test_result": {
+        "psnr_rgb": 23.57,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+        "thinking": "Severity scan other side: gaussian sigma=2. gaussian:3=23.72, gaussian:4=23.57 → peak near sev3; check sev2 to bracket the optimum before moving to noise/jpeg residuals."
+      },
+      "test_result": {
+        "psnr_rgb": 23.25,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Peeled residual (blur:3+sat:2) has chroma-structured noise: channel sigma ratio 2.0>1.4 (YCrCb), G residual std 20.8 > R 13.5/B 14.5, residual hf in smooth sky G=4.55 vs 2.36 for noise-free sim. no noise_prior YCrCb type. Generator order noise(priority0) before blur(priority1) before global(priority2). YCrCb sev1 sigma=0.05 (~12.8 level) before blur would leave ~2 level after sigma3 attenuation, then S x6 amplification -> visible fine chroma speckle. PSNR invalid with noise seed mismatch -> signal mode."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:variance_ratio (diff=13%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Mandatory severity scan for noise (YCrCb sev1 was 50% low in wavelet sigma and 45% low in G-channel hf in the saturated sky: target G=4.55 vs YCC1 sim 3.13). YCrCb sev2 chroma sigma 0.087 = 1.74x sev1, predicted sky G hf ~5.4 (slight overshoot, between sev1 and sev2). Compare signal verdict + textured-region noise level; noise seed mismatch keeps PSNR invalid."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=6.0px)",
+          "global:variance_ratio (diff=12%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "Continue mandatory severity scan: YCC2 sky G-hf 3.61 vs target 4.55 (still 26% low), YCC1 3.13. YCC3 chroma sigma 0.133 (1.53x of sev2) predicted sky G-hf ~4.8. Determine whether sigma signal still matches and which severity best explains the amplified chroma grain in clipped-blue sky (G channel carries chroma noise after R/B clipping)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=6.0px)",
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2",
+      "psnr_rgb": 23.72,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_gaussian:4,saturate_strengthen_HSV:2",
+      "psnr_rgb": 23.57,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+      "psnr_rgb": 23.25,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_glass:5,saturate_strengthen_HSV:2",
+      "psnr_rgb": 22.04,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 20.01,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "support_pair_validation": {
+    "method": "apply final pipeline (noise YCrCb:3 -> blur_gaussian:3 -> saturate_HSV:2, fresh noise seed) to clean_i and compare distributional stats with degraded_i",
+    "pairs": {
+      "pair0": {
+        "S": [
+          227.8,
+          229.6
+        ],
+        "V": [
+          137.7,
+          136.9
+        ],
+        "clip_lo": [
+          0.25,
+          0.255
+        ],
+        "mean": [
+          76.8,
+          76.4
+        ],
+        "smooth_patch_hf_RGB": {
+          "target": [
+            0.0,
+            3.67,
+            1.0
+          ],
+          "sim": [
+            0.0,
+            3.58,
+            1.16
+          ]
+        }
+      },
+      "pair1": {
+        "S": [
+          253.6,
+          254.1
+        ],
+        "V": [
+          177.3,
+          177.4
+        ],
+        "clip_lo": [
+          0.329,
+          0.33
+        ],
+        "mean": [
+          107.8,
+          107.7
+        ],
+        "smooth_patch_hf_RGB": {
+          "target": [
+            0.91,
+            2.34,
+            0.0
+          ],
+          "sim": [
+            0.92,
+            2.21,
+            0.0
+          ]
+        }
+      },
+      "pair2": {
+        "S": [
+          218.0,
+          218.3
+        ],
+        "V": [
+          150.0,
+          148.8
+        ],
+        "clip_lo": [
+          0.225,
+          0.225
+        ],
+        "mean": [
+          84.9,
+          86.7
+        ],
+        "smooth_patch_hf_RGB": {
+          "target": [
+            7.52,
+            7.83,
+            1.35
+          ],
+          "sim": [
+            8.12,
+            7.25,
+            3.53
+          ],
+          "note": "patch is textured, low weight"
+        }
+      },
+      "pair3": {
+        "S": [
+          207.6,
+          215.3
+        ],
+        "V": [
+          126.1,
+          126.4
+        ],
+        "clip_lo": [
+          0.204,
+          0.232
+        ],
+        "mean": [
+          75.4,
+          75.1
+        ],
+        "smooth_patch_hf_RGB": {
+          "target": [
+            2.56,
+            3.41,
+            2.49
+          ],
+          "sim": [
+            2.55,
+            3.51,
+            2.49
+          ]
+        }
+      },
+      "pair4": {
+        "S": [
+          186.6,
+          174.2
+        ],
+        "V": [
+          160.0,
+          158.7
+        ],
+        "clip_lo": [
+          0.111,
+          0.098
+        ],
+        "mean": [
+          106.3,
+          114.0
+        ],
+        "smooth_patch_hf_RGB": {
+          "target": [
+            7.43,
+            7.02,
+            1.12
+          ],
+          "sim": [
+            7.65,
+            5.5,
+            4.79
+          ],
+          "note": "patch is textured, low weight"
+        }
+      }
+    },
+    "conclusion": "Saturation sev2 and the noise/blur components are consistent across all 5 images (pairs 0-3 near-exact on S/V/clip; pair4 S 12 lower). No other global step (brightness/contrast/YCrCb-saturation) reproduces the V-invariance across pairs."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "step": 1,
+        "function": "noise_gaussian_YCrCb",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "step": 2,
+        "function": "blur_gaussian",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "step": 3,
+        "function": "saturate_strengthen_HSV",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Three legal steps, one per category. GLOBAL: 5-pair stats show HSV V invariant while S explodes (85->228 etc.) and low-channel clipping jumps to 25% - saturate_strengthen_HSV is the only function reproducing V-invariance + S gain (YCrCb variant raises V, brightness shifts V); sev2 matches target S=226.9 vs 227.8, clip=0.266 vs 0.250, mean=78.1 vs 77.6 and holds on 4/5 supports. BLUR: gm_ratio=0.329, FFT anisotropy=1.29 (not motion), gaussian/lens MTF indistinguishable -> gaussian default; PSNR peak at sev3 (23.72 vs 23.25/23.57 for sev2/4), spectral_slope diff 0.0797<0.08 and Wiener kernel corr 0.998. NOISE: sigma prior 1.48 was misleading (luma wavelet); peeled residual channel sigma ratio 2.0 and residual rgb_ratio 1.54 indicate YCrCb; smooth-sky hf matches YCrCb:3 across R/G/B [2.08,4.52,2.96] vs [2.17,4.55,3.06], while RGB/speckle/noise-free variants miss G. All steps UNCERTAIN because noise seed mismatch makes PSNR unusable (best deterministic-only PSNR 23.72<40) and structured-residual FWHM=6px is intrinsic to the noise-before-blur order.",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "noise_gaussian_YCrCb",
+            "severity": 3
+          },
+          {
+            "function": "blur_lens",
+            "severity": 3
+          },
+          {
+            "function": "saturate_strengthen_HSV",
+            "severity": 2
+          }
+        ],
+        "function_family": "blur_lens",
+        "reason": "gaussian<->lens MTF indistinguishable (SKILL C.3); lens keeps identical global/noise evidence"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "noise_gaussian_YCrCb",
+            "severity": 3
+          },
+          {
+            "function": "blur_glass",
+            "severity": 5
+          },
+          {
+            "function": "saturate_strengthen_HSV",
+            "severity": 2
+          }
+        ],
+        "function_family": "blur_glass",
+        "reason": "initial glass_score=0.72 signal; PSNR 22.04 vs 23.72 is worse and texture match is weaker"
+      }
+    ],
+    "mode_note": "PSNR used only for deterministic ranking (sigma_prior 1.48<2); noise step judged by signal + smooth-region texture calibration across 5 pairs.",
+    "ruled_out": {
+      "compression_jpeg": "block_boundary target 0.9935 vs no-JPEG sim 0.9931 (0.0% diff), dct_zero_ratio 0.3764 vs 0.3756; unique_G loss explained by saturation clipping",
+      "brightness": "HSV V unchanged across all 5 pairs; brightness_darken_shfit_HSV would shift V",
+      "contrast": "contrast_spread_ratio 0.943, no contrast; variance_ratio 1.32 fully explained by saturation",
+      "saturate_strengthen_YCrCb": "would raise V (sim V 210-230 vs target 137.7)",
+      "motion_blur": "residual_anisotropy 1.29 < 1.7",
+      "impulse_noise": "extreme_pct is the documented clipping false positive (zero_ratio 0.257)"
+    }
+  }
+}

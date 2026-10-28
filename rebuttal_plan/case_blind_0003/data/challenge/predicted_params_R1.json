@@ -1,0 +1,29 @@
+{
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {"pipeline": [{"function": "blur_glass", "severity": 2}], "note": "R1发现: glass:2 PSNR=36.65 CI=10/10, 信号MATCH(2✓). 优于gaussian:2(34.83,CI=8/10). 但REFLECTION_MECHANISM.md警告: PSNR改善≠GT正确(仅2%准确率). 保留gaussian为主预测, glass为强替代."},
+    {"pipeline": [{"function": "blur_lens", "severity": 2}], "note": "PSNR=34.61 dB (CI=8/10), 与gaussian:2接近."}
+  ],
+  "analysis": {
+    "overall_verdict": "UNCERTAIN",
+    "tier": 1,
+    "r1_reflection_note": "R1信号重释发现blur_glass:2在仿真PSNR(36.65 vs 34.83)和CI(10/10 vs 8/10)上均优于gaussian:2。信号验证两者均为MATCH(2✓)。但REFLECTION_MECHANISM.md §二 明确警告: PSNR改善≠blur类型GT正确(63-case: 34次PSNR改善仅1次GT匹配=2%)。gaussian↔glass互换代价2-7dB(场景依赖)。gm_ratio=0.532为strong blur信号(<0.85)但无法区分子类型。dct_zero_ratio=0.624经R0 PSNR测试确认为blur FP(添加JPEG均降低PSNR)。sigma=1.11<2→NO_NOISE确认。推荐保持gaussian:2为主预测, glass:2为强替代。",
+    "r1_signal_sources": {
+      "blur_glass_discovery": "R1测试R0未测试的glass blur → glass:2 PSNR=36.65 CI=10/10 signal=MATCH。信号来源: [PSNR_test] + [signal_verification]",
+      "blur_type_decision": "保持gaussian:2因REFLECTION_MECHANISM.md §二 Blur反思规则: PSNR改善≠GT正确(2%准确率)。gm_ratio=0.532兼容gaussian和glass。信号来源: [protocol_constraint]",
+      "dct_zero_ratio_fp": "dct_zero_ratio=0.624经R0 PSNR测试确认非真实JPEG(添加JPEG均降低PSNR: 29.76-32.04)。信号来源: [PSNR_test]",
+      "noise_absence": "sigma=1.11<2→NO_NOISE。peeled_noise extreme_pct=61.83为blur残差FP(sigma<5规则)。信号来源: [SKILL.md §B FP规则]"
+    },
+    "per_step_note": "blur UNCERTAIN因PSNR在30-40范围且glass:2为强替代。gm_ratio=0.532 STRONG blur信号<0.85。R1确认R0最优severity(sev=2:34.83, sev=1:32.91, sev=3:32.89)。",
+    "signal_evidence": {
+      "blur_existence": "gm_ratio=0.532 (<0.85 STRONG), spectral_slope_ratio=1.069 (接近1.08). Combined → blur confirmed.",
+      "blur_type": "gaussian:2 (PSNR=34.83, CI=8/10, MATCH) vs glass:2 (PSNR=36.65, CI=10/10, MATCH) vs lens:2 (34.61, CI=8/10)",
+      "blur_severity": "sev=1:32.91, sev=2:34.83, sev=3:32.89, sev=4:30.55 → sev=2 optimal",
+      "noise": "sigma=1.98 < 2 after blur stripping → NO_NOISE",
+      "compression": "dct_zero_ratio=0.624 FP from blur"
+    },
+    "test_count": 14
+  }
+}

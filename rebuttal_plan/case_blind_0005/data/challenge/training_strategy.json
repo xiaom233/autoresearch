@@ -1,0 +1,29 @@
+{
+  "strategy": "Direct",
+  "architecture": "Swin",
+  "components": ["SimpleGate"],
+  "lr": 5e-4,
+  "epoch_budget": 2,
+  "signal_basis": {
+    "checked": {
+      "block_boundary": {"value": 1.0074, "triggered": false, "tier": "S", "threshold": ">1.1"},
+      "unique_G": {"value": 244, "triggered": false, "tier": "S", "threshold": "<200"},
+      "variance_ratio": {"value": 1.4787, "triggered": true, "tier": "A", "note": "数学上 ≠ 1.0，但 full_analysis false_positive_check: contrast_from_saturation=true。方差变化归因于 saturation 而非 contrast。Tier C 规则: saturation 信号不加组件(ColorPre 有害 -0.34)"},
+      "anisotropy_ratio": {"triggered": false, "note": "not present in full_analysis data"},
+      "brightness_mean_shift": {"value": 8.0, "note": "brightness_detected_raw=true, clipped_fraction=0.35, heavy_clipping=true"},
+      "saturation_chroma_ratio": {"value": 2.5503, "note": "saturation_detected_raw=true, 方差变化归因于此"}
+    },
+    "conclusion": "block_boundary 未触发(1.007<1.1)。variance_ratio≠1.0 但归因于 saturation (contrast_from_saturation=true)，不触发 ColorPre/FiLM-GCM。两步骤均为 UNCERTAIN，盲目加组件风险高。"
+  },
+  "decision_rationale": {
+    "pipeline": "brightness_HSV:1 (UNCERTAIN) + noise_impulse:3 (UNCERTAIN)",
+    "why_direct": "含 brightness_HSV(全局退化)，但 finetune_strategy.md Section 二: brightness_shift RandomCurric +0.41 安全，Direct 也安全。两步骤均 UNCERTAIN → Direct 最保守安全。",
+    "why_swin": "无 Tier S/A 信号可靠触发额外组件。brightness_HSV + noise_impulse 均为 Tier B/C 信号域。exp37 验证: 盲识别场景纯 Swin 23/24 胜。",
+    "why_simplegate": "默认常开(-32K, exp39 8/9 安全)",
+    "why_no_colorpre": "variance_ratio 变化归因于 saturation (Tier C)，非 contrast。ColorPre 对 saturation 有害(-0.34, Section 七)。",
+    "why_no_film_gcm": "无 contrast+结构化信号组合。brightness_HSV + lr=5e-4 历史安全但此处 brightness 不确定，加 FiLM 无收益预期。",
+    "why_no_colormlp": "brightness_HSV verdict=UNCERTAIN，不确定是否真为 brightness_HSV。ColorMLP 仅在高置信 brightness_HSV 时推荐(+0.28, Section 七)。",
+    "why_no_dual_branch": "exp37 盲识别 0/24 胜，不推荐(Section 七)"
+  },
+  "finetune_strategy_ref": "Section 七 信号门控: block_boundary<1.1 + variance_ratio FP(saturation) + 无 anisotropy → 纯 Swin + SimpleGate + Direct。Section 二: brightness_shift Direct 安全。Section 六 Step 2: UNCERTAIN 步骤不加组件。exp37 Section 八: 盲识别纯 Swin 23/24 胜。"
+}

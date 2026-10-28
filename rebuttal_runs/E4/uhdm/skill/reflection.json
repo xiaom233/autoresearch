@@ -1,0 +1,268 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "pair0": {
+        "compression": "COMPRESSION_DETECTED (block_boundary=1.119, unique_G=254 vs clean 240, dct_zero_ratio=0.505)",
+        "blur": "BLUR_UNLIKELY (gm_ratio=1.582, spectral_slope_ratio=1.014, FFT anisotropy=0.0)",
+        "noise": "noise_prior sigma=1.11; spatial_corr=0.966, cross_ch_corr=0.667 (structured residual suspicion)",
+        "global": "NO_GLOBAL (variance_ratio=1.122, mean_shift=2.6)"
+      },
+      "pair1": {
+        "compression": "COMPRESSION_DETECTED (block_boundary=1.073)",
+        "noise": "sigma=1.5",
+        "global": "CONTRAST_strengthen_sev3 (variance_ratio=1.357, mean_shift=4.2, confidence=low)"
+      },
+      "pair3": {
+        "compression": "NO_COMPRESSION (block_boundary=1.015)",
+        "noise": "sigma=2.2",
+        "global": "BRIGHTNESS_darken_sev1 (mean_shift=-13.7, variance_ratio=0.960)"
+      },
+      "pair4": {
+        "compression": "NO_COMPRESSION (block_boundary=1.019)",
+        "noise": "sigma=1.5",
+        "global": "BRIGHTNESS_brighten_sev1 + SATURATION_strengthen_sev5 (mean_shift=8.7, variance_ratio=1.516)"
+      },
+      "pair2": "visual inspection only (same wavy chromatic interference as the other four pairs); full_analysis not run to save time",
+      "consistency_note": "Global verdicts flip direction across the 5 support pairs (brighten vs darken vs contrast-strengthen vs none). block_boundary is marginal and inconsistent (1.073-1.119 on 2/5, ~1.015 on 2/5). This inconsistency is expected if a spatially varying structured artifact, not a global operator, is present.",
+      "visual_evidence": "All 5 residual maps show a coherent quasi-periodic wavy/curved interference or moire-like pattern with strong chroma modulation across the whole frame (period tens-to-hundreds of px, warped). Residual std in smooth sky/flat patches is 10-17/255, far above the wavelet sigma estimate (1.1-2.2). The pattern is spatially structured, therefore not representable by any x_distortion noise/blur/global/JPEG operator."
+    },
+    "structured_field_evidence": {
+      "residual_lag1_autocorr": {
+        "pair0": {"horiz": 0.918, "vert": 0.921},
+        "pair1": {"horiz": 0.934, "vert": 0.682},
+        "pair2": {"horiz": 0.791, "vert": 0.188},
+        "pair3": {"horiz": 0.710, "vert": 0.671},
+        "pair4": {"horiz": 0.745, "vert": 0.529}
+      },
+      "cross_pair_residual_correlation_center_crop": "range -0.103 to +0.098 (all pairs) -> pattern is not a fixed overlay; it is scene/content-dependent quasi-periodic interference",
+      "interpretation": "White random noise would give lag-1 autocorr ~0 and a flat spectrum; here the residual is a smooth structured field (lag-1 0.71-0.93) that differs per image. Library 'noise_spatially_correlated' is disabled, and even that operator is content-independent. The dominant degradation is out-of-library (moire/interference/screen-capture-like structured artifact)."
+    },
+    "mode": "PSNR (pair0 sigma=1.1; PSNR usable per SKILL sigma<2 rule)",
+    "baselines_clean_vs_degraded_psnr": {"pair0": 21.52, "pair1": 18.19, "pair2": 18.20, "pair3": 17.46, "pair4": 18.79}
+  },
+  "noise_6step_check": {
+    "peeled_pair0_after_compression_jpeg1": {
+      "extreme_pct": 47.26,
+      "zero_ratio": 0.0275,
+      "vm_slope": 0.218,
+      "var_slope": 1.7116,
+      "spatial_corr": 0.9868,
+      "rgb_ratio": 1.289,
+      "cross_ch_corr": 0.8924,
+      "residual_std": 21.2,
+      "noise_prior_sigma": 1.98
+    },
+    "raw_pair3_unguided": {
+      "extreme_pct": 74.66,
+      "zero_ratio": 0.0142,
+      "vm_slope": -0.4911,
+      "var_slope": -0.039,
+      "spatial_corr": 0.9048,
+      "rgb_ratio": 1.062,
+      "cross_ch_corr": 0.9278,
+      "residual_std": 31.3,
+      "noise_prior_sigma": 6.67
+    },
+    "diagnosis": "No reliable random-noise signature. Pair0: noise_prior sigma=1.98 < 2 and SKILL rule says NO_NOISE; extreme_pct=47.26% is just below the documented JPEG/blur-residual FP band (extreme_pct>50% + sigma<5 -> ignore IMPULSE), and spatial_corr=0.987 proves the residual is a coherent field, not impulse/speckle/poisson. Pair3: var_slope<0 and vm_slope<0 exclude poisson/speckle; spatial_corr=0.905 and cross_ch_corr=0.928 indicate structured deterministic residual; extreme_pct=74.66% is inflated by the mean bias of an un-peeled residual (target-clean mean=-13.7). The library Gaussian floor (sev1 sigma=12.75) gave verify_signals WEAK with sigma mismatch 253%. Conclusion: NO library random noise; residual is the out-of-library structured interference."
+  },
+  "final_decision": {
+    "pipeline": [],
+    "per_step_verdicts": {
+      "compression": "POOR - block_boundary marginal/inconsistent (1.015-1.119 across pairs); unique_G=254 rules out quantization/strong JPEG; best JPEG q25 = 21.54 dB vs 21.52 dB no-op baseline (delta +0.02 dB, not meaningful)",
+      "blur": "POOR - BLUR_UNLIKELY (gm_ratio>=1.099, spectral_slope_ratio 0.96-1.01, FFT anisotropy 0.0); blur_gaussian:1 = 21.55 dB vs 21.52 baseline",
+      "noise": "POOR/NO_NOISE - sigma_prior 1.1-2.2 (<2 rule); peeled residual spatial_corr=0.987; no library random-noise type fits; library sigma floor much larger than estimate",
+      "global": "POOR - signals contradict across pairs (brighten/darken/contrast/none); contrast sev1/3 and brightness darken all at or below per-pair baseline"
+    },
+    "overall_verdict": "POOR",
+    "out_of_library": true,
+    "alternatives": [],
+    "rationale": "The five support pairs share a dominant degradation that none of the x_distortion operators can reproduce: a coherent quasi-periodic chromatic interference/moire-like field, warped and content-dependent, present over the entire frame. Every library candidate (JPEG 1/3, gaussian blur 1, contrast 1/3, brightness darken 1, gaussian noise 1) stays at or below the clean-vs-target no-op PSNR, because the structured pattern dominates the MSE. Per SKILL, all candidates <30 dB -> POOR and alternatives left empty. The honest library answer is 'no library pipeline'; the closest single fit (compression_jpeg:1, 21.54 dB) is statistically indistinguishable from doing nothing and is not believed to be the true degradation."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "Full analysis pair0: block_boundary=1.119 (>1.1 JPEG 0%FP). Test mildest JPEG (q25) first; expect PSNR limited by visible structured artifact."
+      },
+      "test_result": {
+        "psnr_rgb": 21.54,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "Severity scan for compression signal: block_boundary=1.119 marginal; test stronger JPEG q12 to see if block structure explains target; visible moire pattern cannot be JPEG."
+      },
+      "test_result": {
+        "psnr_rgb": 21.44,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "BLUR_UNLIKELY but SKILL mandates testing one blur candidate. gm_ratio=1.582 (>1) and spectral_slope_ratio=1.014 indicate no blur; expect PSNR near clean-vs-target baseline 21.52dB."
+      },
+      "test_result": {
+        "psnr_rgb": 21.55,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:3",
+        "thinking": "Pair1 full analysis reported CONTRAST_strengthen_sev3 (variance_ratio=1.357, mean_shift=4.2). Cross-pair consistency check: pair0 said NO_GLOBAL and pair3 said BRIGHTNESS_darken, so this is suspected artifact of structured pattern. Test on pair1 where it was detected."
+      },
+      "test_result": {
+        "psnr_rgb": 14.95,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:1",
+        "thinking": "Severity scan for the pair1 global signal: scale=1.4 (minimum). If contrast is real, PSNR should beat pair1 clean-vs-target baseline 18.19dB; otherwise signal is an artifact of the structured pattern."
+      },
+      "test_result": {
+        "psnr_rgb": 17.24,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:1",
+        "thinking": "Pair3 full analysis reported BRIGHTNESS_darken_sev1 (mean_shift=-13.7) while pair4 reported brighten (+8.7). Cross-pair check: if real, PSNR should beat pair3 baseline 17.46dB; if artifact, it will not."
+      },
+      "test_result": {
+        "psnr_rgb": 17.78,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1",
+        "thinking": "Pair3 noise check: noise_prior sigma_est=6.7 suggests Gaussian RGB, but §B raw residual shows spatial_corr=0.905 and cross_ch_corr=0.928 (structured, not white noise). Mildest library Gaussian (sev1, sigma=12.75) tested in signal mode; white noise cannot reproduce coherent pattern."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=253%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:1",
+      "psnr_rgb": 21.55,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": 21.54,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 21.44,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:1",
+      "psnr_rgb": 17.78,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:1",
+      "psnr_rgb": 17.24,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:3",
+      "psnr_rgb": 14.95,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    }
+  ],
+  "verification_budget": {
+    "test_candidate_calls": 7,
+    "max_allowed": 25,
+    "within_budget": true
+  },
+  "protocol_notes": {
+    "qwen_noise_gate": "Not executed: no Qwen/API tool is available in this environment. Only pair3 (sigma=2.2) fell in the 2<sigma<10 boundary band; noise screening there was done with peeled_noise_check (§B) plus a library Gaussian signal test (WEAK, sigma mismatch 253%), which is stronger evidence than a YES/NO gate.",
+    "pair3_signal_mode": "Pair3 sigma=2.2 would use SIGNAL mode by SKILL; its global/noise tests were interpreted accordingly (library noise test run explicitly with --mode signal).",
+    "cropping": "No crops were used for tool-based signal analysis; all Skill tools ran on full 3840x2160 images. Full-resolution crops were used only for visual inspection of the artifact structure.",
+    "save_self_check": {
+      "quantization_predicted": false,
+      "quantization_residual_var_slope_check": "not applicable (unique_G=254, no quantization predicted)",
+      "noise_subtype_predicted": false,
+      "noise_6step_recorded": true,
+      "blur_subtype_predicted": false,
+      "deterministic_psnr_gt_40_or_indicator_evidence": "no deterministic degradation accepted; all candidates at or below no-op baseline; indicator evidence (structured residual) documented",
+      "final_verdict_rule_followed": "all candidates <30 dB -> POOR, alternatives empty"
+    }
+  }
+}

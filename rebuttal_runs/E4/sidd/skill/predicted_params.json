@@ -1,0 +1,74 @@
+{
+  "case": "e4_case_A (held-out real case, 5 SIDD support pairs)",
+  "pipeline": [
+    {
+      "function": "noise_gaussian_YCrCb",
+      "severity": 1
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 2
+        }
+      ],
+      "psnr": null,
+      "function_family": "noise_gaussian_RGB",
+      "stats": {
+        "pair1_verify_signals": "MATCH (sigma diff <20%, residual autocorr FWHM <4px)",
+        "contradiction": "channel-flat in RGB; target per-channel ratio ~1.5 and cross_channel_corr 0.445 vs 0.005 for this simulation"
+      },
+      "why": "Cross-family backup: same scalar noise magnitude as pair1 but does not reproduce the chroma/cross-channel fingerprint."
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_poisson",
+          "severity": 1
+        }
+      ],
+      "psnr": null,
+      "function_family": "noise_poisson",
+      "stats": {
+        "pair1_verify_signals": "MATCH on scalar sigma + residual autocorr only",
+        "contradiction": "var_slope negative; region-wise sigma not monotonic in intensity (86/93/108/167 intensity -> ~20/27/17/11-25 sigma)"
+      },
+      "why": "Low-quality alternative; included only because it passed the two scalar noise checks on pair1."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "overall_verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL",
+    "psnr": null,
+    "psnr_gap": null,
+    "psnr_note": "Noise is the only supported degradation; PSNR is not a valid criterion for a random-seed noise step. The only PSNR-mode test was the blur control on pair4: 31.75 dB, below the clean-vs-target no-degradation baseline of 32.1 dB, CI 1/10.",
+    "signal_evidence": {
+      "noise_presence": "All 5 pairs: direct residual std 6.3-40.9, residual high-pass sigma 3-28 vs clean 0.5-2.7; wavelet sigma 1.5-14.8 per channel (true additive sigma ~2x reported: ~3.7-23). Visually obvious chromatic grain on all flat patches.",
+      "noise_type": "Channel-correlated / chroma-heavy: rgb_ratio 1.46-1.82 and cross_channel_corr 0.43-0.56 in 4/5 pairs (pair2 channel-flat, ratio 1.33/1.05). Target pair1 high-pass sigma R22.9/G19.0/B28.0 matches the YCrCb:1 simulation pattern R19.2/G14.2/B22.6 (G lowest, B highest) and cross-channel coupling (0.445 vs 0.148 sim vs 0.005 RGB sim).",
+      "noise_severity": "Pair1 exact match at YCrCb:1 (sigma 10.75 vs 11.61, 7.4%). Pair2 near-miss 23%. Pair0 129%; pair3 278%; pair4 far below range (weaker RGB:1 already 240% too strong). True per-pair noise spans ~3.7-23 levels while the library minimum is ~12.8 (RGB) / ~21.5 (YCrCb RGB-equivalent); 3/5 pairs are below the library floor.",
+      "compression": "Excluded. Pairs 0-3 block_boundary 0.999-1.027 (no JPEG). Pair4 block_boundary 1.1185 and dct_zero 0.1125, but library JPEG q=25 gives bb=6.58 (489% mismatch) and q=18 gives ~33 (2858%); any real block structure would have to be a much milder in-camera JPEG, unverifiable.",
+      "blur": "Excluded. FFT anisotropy 0.00, spectral_slope_ratio 0.24-0.41 (<1.08); target spectrum is flatter than clean (excess HF = noise, not blur). blur_gaussian:1 on pair4: PSNR 31.75 < 32.1 baseline, CI 1/10.",
+      "global": "Excluded. run_full_analysis global flags are inconsistent across pairs and are reproduced by pure synthetic noise (both RGB:1 and YCrCb:1 sims trigger CONTRAST_strengthen + SATURATION). contrast_strengthen_scale:2 test: variance_ratio diff 507%, mean_shift diff 0.0151."
+    },
+    "per_pair_fit": {
+      "pair0": {"noise_sigma_wavelet_rgb": [2.59, 5.19, 6.3], "best_candidate": "noise_gaussian_RGB:1 (sigma diff 37%, still WEAK)", "YCrCb1_sigma_diff_pct": 129},
+      "pair1": {"noise_sigma_wavelet_rgb": [10.38, 9.64, 14.83], "best_candidate": "noise_gaussian_YCrCb:1 (MATCH, 7.4%)", "notes": "also RGB:2 and Poisson:1 scalar-MATCH"},
+      "pair2": {"noise_sigma_wavelet_rgb": [8.52, 8.9, 8.9], "best_candidate": "noise_gaussian_YCrCb:1 (WEAK, 23%) or RGB:1 (WEAK, 27%)", "notes": "true sigma between library severity grid points"},
+      "pair3": {"noise_sigma_wavelet_rgb": [1.48, 2.97, 4.08], "best_candidate": "below library floor (YCrCb:1 278% too strong)"},
+      "pair4": {"noise_sigma_wavelet_rgb": [1.48, 1.85, 2.22], "best_candidate": "below library floor (RGB:1 240% too strong)", "notes": "mild 8x8 blockiness (bb 1.1185) not reproducible by library JPEG"}
+    },
+    "coupling_notes": [
+      "Direct proof of global false positives: pure synthetic noise simulations rerun through run_full_analysis return the same CONTRAST_strengthen + SATURATION verdicts as targets 0/2/3.",
+      "§B extreme_pct ~47-53% is a formal artifact (pure i.i.d. Gaussian simulation also scores 53.2%); spatial_corr ~0.34 is likewise the i.i.d. bias of the 3x3 box metric (synthetic i.i.d. scores 0.342). Neither indicates impulse or spatially-correlated noise.",
+      "Noise attenuates block_boundary, so pairs 0-3 could hide a mild JPEG; however, even the mildest library JPEG is 6-30x too blocky for pair4, so compression cannot be parameterized in-library.",
+      "The 5 pairs do not share a single noise magnitude (true sigma ~3.7 to ~23, a 6x spread); this is consistent with real SIDD sensor noise varying with exposure/content, not with one synthetic severity applied to five clean images."
+    ],
+    "out_of_library": true,
+    "out_of_library_reason": "The residual noise is i.i.d.-like at pixel scale, channel-correlated and chroma-heavy, with per-image magnitude spanning below the x_distortion noise floor (3/5 pairs) up to the middle of the YCrCb range. This matches real SIDD smartphone sensor noise better than any single x_distortion pipeline. Library JPEG is also far too strong to explain pair4's mild 8x8 structure.",
+    "recommended_action": "For evaluation, use the reported YCrCb:1 as the strongest-pair (pair1) pipeline and treat it as an upper bound for the other pairs; for training, prefer per-pair noise severity (pair0 ~RGB1-equivalent, pair1 YCrCb1, pair2 between YCrCb1 and RGB1, pairs 3-4 below sev1). Do not add blur, global or JPEG steps."
+  }
+}

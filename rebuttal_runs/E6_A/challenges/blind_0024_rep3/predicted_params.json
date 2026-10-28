@@ -1,0 +1,99 @@
+{
+  "pipeline": [
+    {
+      "step": 1,
+      "function": "noise_speckle",
+      "severity": 1
+    },
+    {
+      "step": 2,
+      "function": "blur_gaussian",
+      "severity": 2
+    },
+    {
+      "step": 3,
+      "function": "saturate_strengthen_HSV",
+      "severity": 3
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_YCrCb",
+          "severity": 1
+        },
+        {
+          "function": "blur_gaussian",
+          "severity": 2
+        },
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 3
+        }
+      ],
+      "psnr": 20.69,
+      "ci": "6/10",
+      "function_family": "gaussian-YCrCb noise / gaussian blur / HSV saturation",
+      "reason": "noise_prior type recommendation + verify_signals noise:sigma MATCH; under-represents highlight noise"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_speckle",
+          "severity": 1
+        },
+        {
+          "function": "blur_glass",
+          "severity": 4
+        },
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 3
+        }
+      ],
+      "psnr": null,
+      "ci": null,
+      "function_family": "speckle noise / glass blur / HSV saturation",
+      "reason": "blur DT glass_score=0.72>0.25 cross-family backup (DT medium confidence; score noise-inflated)"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_YCrCb",
+          "severity": 2
+        },
+        {
+          "function": "blur_gaussian",
+          "severity": 3
+        },
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 3
+        }
+      ],
+      "psnr": 20.56,
+      "ci": "7/10",
+      "function_family": "gaussian-YCrCb(2) / gaussian(3) / HSV saturation",
+      "reason": "best structural statistics (ZCD/std_lap) but highlight noise too weak"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 20.79,
+    "psnr_gap": 0.1,
+    "psnr_gap_to_global_best": 1.14,
+    "ci_pass_rate": "7/10",
+    "ci_verdict": "GOOD",
+    "mode": "SIGNAL",
+    "noise_sigma_prior": 1.48,
+    "per_step_verdict": {
+      "noise_speckle:1": "UNCERTAIN",
+      "blur_gaussian:2": "UNCERTAIN",
+      "saturate_strengthen_HSV:3": "UNCERTAIN"
+    },
+    "evidence_consistency": "run_full_analysis -> 支持对 (heterogeneous family: blur + saturation + darkening) -> R17/R20 CI breakdown -> intensity-binned flat noise -> signal verification. Noise presence and speckle-vs-gaussian distinction are independently supported; PSNR not used for arbitration because the pipeline contains noise (seed mismatch).",
+    "notes": "compression absent (block_boundary=0.9935, JPEG test hurt CI). blur type: DT=glass (medium) vs PSNR/signal=gaussian (gap<1dB); glass kept as alternative. global: saturate_strengthen_HSV:3 is the only single legal step reproducing mean_shift=-0.16 AND chroma_ratio=2.58 AND 25% zero-clipping with 0% white-clipping."
+  }
+}

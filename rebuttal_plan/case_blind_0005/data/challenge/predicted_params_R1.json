@@ -1,0 +1,29 @@
+{
+  "pipeline": [
+    {"function": "brightness_brighten_shfit_HSV", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "noise_impulse", "severity": 3, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {"pipeline": [{"function": "noise_impulse", "severity": 3}, {"function": "brightness_brighten_shfit_HSV", "severity": 1}], "note": "reverse order also 10/10 CI, marginally different impulse metrics"}
+  ],
+  "analysis": {
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 12.13,
+    "ci": "10/10",
+    "psnr_gap": 0,
+    "r1_reflection_note": "R1信号重释确认R0预测。测试2个替代方向均被拒绝: (1) gamma brightness WEAK(sigma diff 33%, mean_shift diff 0.0623, variance_ratio diff 8%); (2) saturation-only WEAK(sigma diff 67%, variance_ratio diff 86%). contrast_spread_ratio=1.273归因于saturation FP(contrast_from_saturation=true)。variance_ratio=1.479由saturation+impulse噪声共同导致。clipped_fraction=35%来自brightness shift + saturation组合。signal模式verify_signals显示WEAK因impulse噪声污染mean_shift/variance_ratio测量,这是含噪声管线的预期行为。CI=10/10为最强可用证据。R1=R0,无修正。",
+    "r1_signal_sources": {
+      "gamma_test": "residual_intensity_corr检查 → gamma可能替代YCrCb → 测试brightness_gamma+impulse → WEAK(mean_shift mismatch, variance_ratio mismatch 8%) → gamma不是正确方向。信号来源: [PSNR_test + signal_verification]",
+      "saturation_only_test": "chroma_ratio=2.55高, contrast_from_saturation=true → 测试saturation+impulse → WEAK(sigma diff 67%, variance_ratio diff 86%) → brightness shift是必需的。信号来源: [PSNR_test + signal_verification]",
+      "contrast_fp": "contrast_spread_ratio=1.273 → 归因于saturation FP(step4: contrast_from_saturation=true)。信号来源: [signal_reanalysis]",
+      "impulse_confirmation": "impulse_zero_ratio=0.914, peeled extreme_pct=95.99% → IMPULSE high confidence。信号来源: [SKILL.md §B]"
+    },
+    "per_step_note": "Noise(impulse sev=3)+Brightness(shift sev=1). 两者顺序均10/10 CI. Brightness severity 1 optimal(sev=2 drops CI to 9/10). 信号模式WEAK因impulse噪声污染mean_shift/variance_ratio测量,属含噪声管线正常现象. PSNR~12dB因噪声seed mismatch. Overall UNCERTAIN per protocol.",
+    "signal_evidence": {
+      "noise": "IMPULSE high confidence (impulse_zero_ratio=0.914, peeled extreme_pct=95.99%)",
+      "brightness": "mean_shift=8.0, brightness_detected_raw=true, sev=1 optimal",
+      "saturation": "chroma_ratio=2.55, but contrast_from_saturation=true — saturation可能是brightness+impulse的副作用而非独立退化"
+    }
+  }
+}

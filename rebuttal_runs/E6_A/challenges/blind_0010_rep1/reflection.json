@@ -1,0 +1,367 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "MILD_COMPRESSION_POSSIBLE (low conf): block_boundary=0.993 (<1.05, JPEG unlikely by 0%FP signal); unique_G=187 (<200) but heavy darkening+clipping alone reduces unique levels; dct_zero_ratio=0.51",
+      "blur": "BLUR_UNLIKELY (low conf): gm_ratio=0.290 but tone-mapping scales gradients; spectral_slope_ratio=1.065 vs threshold 1.08 (borderline); FFT anisotropy=0.00, pca=0.0",
+      "noise": "GAUSSIAN_YCrCb (low conf) sigma=1.48; spatial_corr=0.817 and residual_intensity_corr=0.805 indicate structured, intensity-dependent residual consistent with deterministic tone mapping, not random noise -> provisional NO_NOISE",
+      "global": "BRIGHTNESS_darken + likely SATURATION weaken: mean_shift=-81.4, variance_ratio=0.330, clipped_fraction=6.3%, saturation_chroma_ratio=0.341; FP checks contrast_from_clipping/saturation all true so pure contrast unlikely"
+    },
+    "mode": "PSNR (sigma=1.48 < 2)",
+    "suspected": [
+      "brightness_darken (HSV V-shift or gamma)",
+      "saturation_weaken (verify separate from darkening)"
+    ],
+    "ruled_out_pending_test": [
+      "noise (sigma<2, structured residual)",
+      "contrast_weaken (mean shift too large)",
+      "gamma (checks flagged as clipping-explained)"
+    ]
+  },
+  "noise_6step_check": {
+    "measured_on": "peeled residual (target - simulate(clean, blur_gaussian:1,brightness_darken_gamma_HSV:5))",
+    "extreme_pct": 100.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": "nan (constant residual)",
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": "nan (constant residual)",
+    "residual_std": 0.0,
+    "diagnosis": "NO_NOISE. Peeled residual is exactly zero (residual_std=0.0, zero_ratio=1.0) -> deterministic pipeline fully explains the target. extreme_pct=100% is the degenerate-metric false positive of an all-zero residual (every value <=1), NOT impulse noise. Initial noise_prior sigma=1.48 (<2) and residual_intensity_corr=0.805 also indicated no random noise."
+  },
+  "support_pairs_analysis": {
+    "note": "degraded.png/clean.png are byte-identical to pair 0 (md5 match), so five distinct pairs exist. Run_full_analysis was executed on all pairs; pairs 1-4 have global signatures incompatible with the target's pipeline (variance_ratio 0.75-1.21 vs 0.330; clipped_fraction 20-53% vs 6.3%; unique_G 238-254 vs 187; mean_shift -43.7..-56.2 vs -81.4). They appear to be different degradations (e.g. additive RGB darkening variants), not replicates of the target pipeline, and were used as negative controls only.",
+    "pair0_target": {"mean_shift": -81.4, "variance_ratio": 0.330, "clipped_fraction": 0.0634, "chroma_ratio": 0.341, "unique_G": 187, "gm_ratio": 0.290, "slope_ratio": 1.065},
+    "pair1": {"mean_shift": -55.4, "variance_ratio": 0.964, "clipped_fraction": 0.322, "chroma_ratio": 0.545, "unique_G": 249, "gm_ratio": 0.341, "slope_ratio": 1.077},
+    "pair2": {"mean_shift": -55.3, "variance_ratio": 1.210, "clipped_fraction": 0.203, "chroma_ratio": 0.664, "unique_G": 238, "gm_ratio": 0.363, "slope_ratio": 1.043},
+    "pair3": {"mean_shift": -43.7, "variance_ratio": 0.761, "clipped_fraction": 0.526, "chroma_ratio": 0.432, "unique_G": 254, "gm_ratio": 0.360, "slope_ratio": 1.115},
+    "pair4": {"mean_shift": -56.2, "variance_ratio": 0.750, "clipped_fraction": 0.299, "chroma_ratio": 0.619, "unique_G": 252, "gm_ratio": 0.499, "slope_ratio": 1.028}
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:5",
+        "thinking": "Step4 global: mean_shift=-81.4 + clipped_fraction=6.3% dominant signal; variance_ratio=0.33 explained by V-scale+clipping; test strongest darken HSV V-shift alone first"
+      },
+      "test_result": {
+        "psnr_rgb": 23.81,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:5",
+        "thinking": "R1 HSV V-shift:5 overshot darkening (sim zeros 30% vs target 6.3%; sim unique_R 126 vs target ~194). RGB mean-shift sev5 = -0.35*255=-89 matches observed mean_shift -81.4 after clipping better"
+      },
+      "test_result": {
+        "psnr_rgb": 23.93,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:4",
+        "thinking": "Shift variants (HSV5/RGB5) over-clip: sim zero-pixels ~30% vs target 6.3%. residual_intensity_corr=0.805 and gamma_suspect flag -> test gamma RGB sev4 (gamma=2.6): intensity-dependent darkening with chroma compression explains desaturation too"
+      },
+      "test_result": {
+        "psnr_rgb": 22.64,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:5",
+        "thinking": "Gamma RGB4 profile (run_full_analysis on sim): variance_ratio=0.604, mean_shift=-72.7 vs target 0.330/-81.4 -> need stronger gamma; gamma5=3.2 predicted var~0.34, mean~-85; zero-fraction matched at sev4 (6.8% vs 6.34%)"
+      },
+      "test_result": {
+        "psnr_rgb": 25.18,
+        "ci_pass": "0/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:4,saturate_weaken_HSV:3",
+        "thinking": "Gamma RGB4 sim profile: chroma_ratio=0.934 vs target 0.341 -> missing saturation step. saturate_weaken_HSV:3 (S*0.4) should bring 0.934*0.4~0.37 close to target; clipping untouched by S-scaling (6.8% vs 6.34%)"
+      },
+      "test_result": {
+        "psnr_rgb": 19.95,
+        "ci_pass": "0/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:4",
+        "thinking": "Target profile mean-81.4/var0.330/chroma0.341/clip6.3%; HSV5 sim (mean-94.4/var0.214/chroma0.248) overshoots all but chroma direction is right; HSV4 (V-0.4) should land between and tests whether V-shift family fits without a separate saturation step"
+      },
+      "test_result": {
+        "psnr_rgb": 27.87,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2",
+        "thinking": "HSV4 sim: mean -78/var0.370/chroma0.394 close to target (-81.4/0.330/0.341) but clip 15.9% vs 6.3%, gm 0.71 vs 0.29, slope 0.999 vs 1.065, uniqG 152 vs 187 -> missing smoothing after darkening; blur_gaussian:2 spreads clipped blacks and matches gradient/slope"
+      },
+      "test_result": {
+        "psnr_rgb": 30.71,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:1",
+        "thinking": "Severity scan blur: HSV4+blur2 profile gm=0.162 vs target 0.290, slope=1.133 vs 1.065, uniqG=119 vs 187 -> blur2 oversmooths; scan down to blur_gaussian:1 (sigma=1)"
+      },
+      "test_result": {
+        "psnr_rgb": 32.13,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:4,blur_gaussian:1",
+        "thinking": "Blur-scan winner profile HSV4+blur1: gm 0.2915=target 0.290, var 0.313~0.330, but clip 10.9% vs 6.3% and chroma 0.374 vs 0.341. Gamma on V (sev4, gamma=2.7) darkens midtones with less hard clipping than V-shift; test same blur"
+      },
+      "test_result": {
+        "psnr_rgb": 23.21,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:4,blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_lens:1",
+        "thinking": "HSV4+blur_gaussian:1 best PSNR 32.13 but sim clips more (10.9% vs 6.3%) and smoother-textured than target; lens disk kernel radius2 is a different blur family per DT (lens alternative, MTF indistinguishable) -> test it at same slot"
+      },
+      "test_result": {
+        "psnr_rgb": 31.89,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_lens:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:1",
+        "thinking": "Severity scan on gamma HSV family: sev4 profile (mean -65.3/var 0.485/clip 2.7%/chroma 0.466/uniqG 200/gm 0.358/slope 1.050) is uniformly short of target (-81.4/0.330/6.3%/0.341/187/0.290/1.065); sev5 gamma=3.5 predicted to land near all targets"
+      },
+      "test_result": {
+        "psnr_rgb": 38.83,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_lens:1",
+        "thinking": "gHSV5+gaussian1 hits PSNR 38.83 CI 10/10; signals: gm 0.304 vs 0.290, dctz 0.571 vs 0.510 suggest slight kernel mismatch; test lens disk radius2 alternative (DT notes gaussian/lens MTF-indistinguishable)"
+      },
+      "test_result": {
+        "psnr_rgb": 37.74,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_lens:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "thinking": "Order test: gHSV5 then gaussian1 = 38.83dB; brightness may sit at priority0 (before blur) per blind_challenge ordering, but gamma-after-blur is allowed when brightness is ISP-stage; compare same functions swapped to test which order the target used"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:1",
+      "psnr_rgb": 38.83,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:5,blur_lens:1",
+      "psnr_rgb": 37.74,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:1",
+      "psnr_rgb": 32.13,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:4,blur_lens:1",
+      "psnr_rgb": 31.89,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2",
+      "psnr_rgb": 30.71,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:4",
+      "psnr_rgb": 27.87,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:5",
+      "psnr_rgb": 25.18,
+      "ci_pass": "0/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:5",
+      "psnr_rgb": 23.93,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:5",
+      "psnr_rgb": 23.81,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:4,blur_gaussian:1",
+      "psnr_rgb": 23.21,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:4",
+      "psnr_rgb": 22.64,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 19.95,
+      "ci_pass": "0/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {"function": "blur_gaussian", "severity": 1, "verdict": "LIKELY"},
+      {"function": "brightness_darken_gamma_HSV", "severity": 5, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "psnr_rgb": Infinity,
+    "ci_pass_rate": "10/10",
+    "alternatives": [],
+    "rationale": "Applying blur_gaussian:1 (sigma=1) followed by brightness_darken_gamma_HSV:5 (gamma=3.5) to clean.png reproduces degraded.png pixel-exactly: PSNR=Infinity dB and all 10 content-independent CI metrics are 0.000. Signal chain: initial full_analysis flagged brightness (mean_shift=-81.4, variance_ratio=0.330, clipped_fraction=6.34%, chroma_ratio=0.341) and a non-JPEG smoothing (gm_ratio=0.290, slope_ratio=1.065, block_boundary=0.993). Darkening-family scan rejected V-shift/RGB-shift (hard clipping 16-31% vs target 6.3%) and gamma-RGB (variance 0.44-0.60 vs 0.330); gamma on HSV-V at sev5 matched mean(-80.2)/var(0.341)/clip(6.2%)/chroma(0.346)/uniqG(188). Blur severity scan picked gaussian sigma=1 (gm 0.2915 vs 0.290). Order test: gamma-then-blur gave 38.83 dB, blur-then-gamma gave Infinity -> target order is blur first (ISP-stage brightness semantics, legal per skill order rules). Runner-up alternative brightness_darken_gamma_HSV:5,blur_gaussian:1 (38.83 dB, CI 10/10) not retained as alternative since winner is pixel-exact (gap infinite)."
+  }
+}

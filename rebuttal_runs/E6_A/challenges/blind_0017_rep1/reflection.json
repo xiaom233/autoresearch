@@ -1,0 +1,481 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED high: block_boundary=7.345 (>>1.05, 0%FP signal), dct_zero_ratio=0.9105, unique_G=211 vs clean 215. Strong JPEG suspected, likely severity 3-5.",
+      "blur": "Blur present: gm_ratio=0.510 (sev~3 by gm_ratio table), spectral_slope target=-1.2815 vs clean=-1.0967 (ratio 1.168). Subtype: run_full_analysis says GLASS_BLUR (glass_score=1.495>0.25) but glass_score far exceeds calibrated glass range 0.19-0.41 -> suspected JPEG-blockiness false positive (failure_risks: FP_blur_risk). Kernel PCA pca_ratio=1.035 (isotropic), anisotropy=1.4446 (<1.7), density=0.714, flatness=0.423 -> gaussian/lens more plausible by kernel. Test both.",
+      "noise": "noise_prior_sigma=0.74. Any x_distortion noise sev1 gives >=12.75 gray-level sigma (gaussian 0.05*255), so sigma=0.74 rules out noise. spatial_corr=0.88 / cross_ch_corr=0.386 / ric=0.165 attributed to JPEG block artifacts. Verdict: NO_NOISE.",
+      "global": "NO_GLOBAL: variance_ratio=0.790 (explainable by JPEG variance reduction), contrast_spread_ratio=0.896 (below detect threshold), mean_shift=5/255=0.02, clipped_fraction=0.0039. No contrast/brightness/saturation."
+    },
+    "pipeline_structure_hypothesis": "2 steps: blur -> compression_jpeg (challenge generator orders blur priority 1 before JPEG priority 2; physical camera pipeline). Noise and global ruled out at current evidence level.",
+    "mode": "PSNR (sigma=0.74 < 2)",
+    "round_summary": {
+      "compression": "JPEG sev 4 confirmed by PSNR (25.12/7-10 single) + CI block_boundary 4-8% pass; j3/j5 rejected (24.80/5, 24.22/6; g3+j5=24.76/5).",
+      "blur": "Isotropic blur confirmed. gaussian sev 3-4 and lens sev 4 tied (26.29/26.31/26.28, CI 7/10). glass_score=1.495 proven FP (g4j4 sim scores 1.505). motion excluded (anisotropy 1.44 < 1.7; motion:5 profile cannot reduce global variance below 0.95).",
+      "noise": "NO_NOISE. Any noise sev1 implies sigma>=12.75 gray; peeled sigma 1.48; residual is structured (spatial_corr 0.97, intensity_var_corr 0.76).",
+      "global": "Unmodeled affine compression: target_gray = P + 0.84*(clean_gray-P), P~118-128 fixed, all 5 pairs; var_ratio=f^2; S_ratio~f; clipping lifted. Closest legal approximation contrast_weaken_scale:1 (f=0.75) tested: 25.28 dB, CI 7/10 (kept as alternative).",
+      "order": "blur->JPEG confirmed: JPEG->blur gives 26.52 dB but CI 3/10 (block_boundary 77% off, overshoot 80% off).",
+      "support_validation": "Support pair 1 with primary pipeline: 26.43 dB, CI 7/10, same failure pattern (dark clipping only) -> systematic residual, not content error."
+    }
+  },
+  "noise_6step_check": {
+    "extreme_pct": 49.08,
+    "zero_ratio": 0.3071,
+    "vm_slope": -0.0879,
+    "var_slope": -0.728,
+    "spatial_corr": 0.9717,
+    "rgb_ratio": 1.2344,
+    "cross_ch_corr": 0.4467,
+    "residual_intensity_corr": 0.7566,
+    "ch_stds": [
+      11.9,
+      9.6,
+      11.3
+    ],
+    "residual_std": 11.2,
+    "noise_prior_sigma_raw": 0.74,
+    "noise_prior_sigma_peeled": 1.48,
+    "diagnosis": "NO_NOISE. extreme_pct=49% flagged IMPULSE by the script but matches the documented FP rule (extreme_pct>50%-ish AND sigma<5 -> JPEG/blur residual artifact; here extreme pixels are residual<=0/>=255 saturation, not salt&pepper). Peeled sigma 1.48<2 and any x_distortion noise sev1 implies sigma>=12.75 -> noise excluded. High spatial_corr=0.97 + intensity_var_corr=0.76 indicate a structured deterministic residual (tone-curve mismatch), not random noise."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:4",
+        "thinking": "R1: 结构假设 blur->JPEG。blur 证据: gm_ratio=0.510(sev~3), spectral_slope_ratio=1.168, kernel PCA=1.035 各向同性(非motion), glass_score=1.495 远超玻璃校准区间0.19-0.41 疑为JPEG块效应FP -> 优先测 gaussian。JPEG 证据: block_boundary=7.345(0%FP), dct_zero_ratio=0.9105 -> 强压缩 sev4 起点。"
+      },
+      "test_result": {
+        "psnr_rgb": 26.29,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "R2 control: 单独 JPEG:4, 验证 blur 是否真实存在。若单 JPEG PSNR 与 blur+jpeg 接近, 说明 gm_ratio=0.51 全部来自 JPEG 高频衰减; 若明显更低, 说明 blur 独立存在。"
+      },
+      "test_result": {
+        "psnr_rgb": 25.12,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "R3: JPEG severity 扫描 4->3 (quality 12 vs 8)。target extreme_pct=0.39% 低于 jpeg:4 模拟的 ~1.96%, 提示压缩可能更轻; block_boundary(analyze版)12%误差在阈值内。"
+      },
+      "test_result": {
+        "psnr_rgb": 24.8,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "R4: JPEG severity 扫描 4->5 (quality 5)。jpeg:4 CI 7/10 优于 jpeg:3 5/10, 检查更强压缩是否进一步匹配。"
+      },
+      "test_result": {
+        "psnr_rgb": 24.22,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,compression_jpeg:4",
+        "thinking": "R5: blur severity 扫描 (指定 jpeg:4 已是最佳 JPEG 单步)。gaussian sev1(sigma=1) 测试轻度模糊假设, gm_ratio=0.51 可能主要来自 JPEG 高频衰减。"
+      },
+      "test_result": {
+        "psnr_rgb": 25.37,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,compression_jpeg:4",
+        "thinking": "R6: blur severity 扫描。g1+j4 PSNR 25.37 < g3+j4 26.29, 说明目标比 sev1 更模糊; 测 sev2 找最优点。"
+      },
+      "test_result": {
+        "psnr_rgb": 25.9,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "thinking": "R7: 视觉 1:1 对比显示 target 比 g3+j4 更模糊(鸟头羽毛细节更软) -> blur severity 上探 sev4。"
+      },
+      "test_result": {
+        "psnr_rgb": 26.31,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,contrast_weaken_stretch:1,compression_jpeg:4",
+        "thinking": "R8: 3步假设。证据: target saturation_mean 135.7 vs clean 159.8(-15%), impulse_total_pct 0.386% vs clean 2.0%(-80%), variance_ratio=0.79, mean_shift 仅5/255 -> 全局对比度/色度压缩而非亮度。brightness 各档 shift>=25 可排除。contrast_weaken_stretch 最温和档(sev1,c=1.0)优先, JPEG:4 与 blur:3 沿用已建立的最佳单步。"
+      },
+      "test_result": {
+        "psnr_rgb": 15.01,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,contrast_weaken_stretch:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,saturate_weaken_YCrCb:1,compression_jpeg:4",
+        "thinking": "R9: 全局步骤假设。单函数 profile: saturate_weaken_YCrCb:1 在 clean 上 shift=+4.86 (target +5.05), var_ratio=0.850 (target 0.790, 叠加JPEG/模糊~0.97 后~0.82), S=0.665 (target 0.849/跨对均值0.773), pct<=1 降至 0.017% (JPEG 再引入暗块); 5 对支持图像一致显示色度-23%/方差-28%/削顶消除。contrast_weaken_scale:1 var=0.563 过强, stretch shift=+35 排除。"
+      },
+      "test_result": {
+        "psnr_rgb": 23.65,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,saturate_weaken_YCrCb:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "R10: 对比度削弱假设(scale=0.75)。残差-强度拟合斜率约-0.11 -> 目标疑似仿射压缩(f~0.89); 虽0.75略强, 但模糊/JPEG 干扰斜率估计, 需 PSNR 仲裁。S_ratio 0.729 接近跨对均值0.77。"
+      },
+      "test_result": {
+        "psnr_rgb": 25.47,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "R11: 无 blur 假设! 定量: lap_var target/clean=37.5/85.0=0.441; contrast0.75(jpeg后系数0.785)预测 0.75^2*0.785=0.442 完美; grad target/clean=14.89/21.68=0.687; 预测 0.75*0.924=0.693 完美。gm_ratio=0.51 可由 contrast+JPEG 解释, 不需要 blur。方差比 0.79 vs 预测0.56 仍有差距待验证。"
+      },
+      "test_result": {
+        "psnr_rgb": 25.28,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4,blur_gaussian:3",
+        "thinking": "R12: 顺序假设反转 JPEG->blur。证据: (1) 残差-强度曲线暗部+12.6/亮部-10 = JPEG振铃(亮侧过冲/暗侧下冲)被后续模糊平滑的典型特征; (2) target pct<=1 0.386% 远低于 jpeg-only 2.24%, 但模糊前置时仍1.8-2.0%; (3) block_boundary target(analyze版)0.61 低于 jpeg-only 0.68; (4) 全局方差0.79。梯度能量 gradvar=21.8 与 g3+jpeg 相同 -> blur 量级 sev3 不变。"
+      },
+      "test_result": {
+        "psnr_rgb": 26.52,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4,blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:4",
+        "thinking": "R13: lens 子类型对照。lens:4(disk r=6) 的 gm=0.353 与 gaussian:3(0.356) 等价; SKILL 指出 gaussian<->lens MTF 不可区分, 必须 PSNR 仲裁。"
+      },
+      "test_result": {
+        "psnr_rgb": 26.28,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:4",
+        "thinking": "R14: 工具推荐 glass:3 验证。glass_score=1.495>0.25 但已证伪: g4+j4 模拟图 glass_score=1.505 与 target 相同, 该指标在此图上受模糊量主导而非 shuffle 结构。glass 的随机 shuffle 保直方图, 理论上无法解释 target 的色调压缩/方差0.79; 且跨 seed 不可复现。用 PSNR 仲裁: 若 >=26 则 glass 仍可能, <24 则排除。"
+      },
+      "test_result": {
+        "psnr_rgb": 25.49,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:5",
+        "thinking": "R15: JPEG severity 上探。block_boundary(compare版) target 0.6095 与 jpeg:5 完全一致(0% diff), jpeg:4 偏高12%; dct_zero target 0.9105, g3+j4 0.9209 略高。测 g3+j5 验证是否更优。"
+      },
+      "test_result": {
+        "psnr_rgb": 24.76,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:4",
+        "thinking": "R16 SUPPORT_1 交叉验证: 支持对应与 target 共享同一退化管线。若 PSNR 与 CI 模式与 target 一致(~26dB/7-10), 说明类型判断稳定, 残差为系统性参数偏差。"
+      },
+      "test_result": {
+        "psnr_rgb": 26.43,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "compression_jpeg:4,blur_gaussian:3",
+      "psnr_rgb": 26.52,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:4",
+      "psnr_rgb": 26.43,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 26.31,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:4",
+      "psnr_rgb": 26.29,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 26.28,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_gaussian:2,compression_jpeg:4",
+      "psnr_rgb": 25.9,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:4",
+      "psnr_rgb": 25.49,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_gaussian:3,contrast_weaken_scale:1,compression_jpeg:4",
+      "psnr_rgb": 25.47,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:1,compression_jpeg:4",
+      "psnr_rgb": 25.37,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "contrast_weaken_scale:1,compression_jpeg:4",
+      "psnr_rgb": 25.28,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 25.12,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 24.8,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:5",
+      "psnr_rgb": 24.76,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 24.22,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:3,saturate_weaken_YCrCb:1,compression_jpeg:4",
+      "psnr_rgb": 23.65,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_gaussian:3,contrast_weaken_stretch:1,compression_jpeg:4",
+      "psnr_rgb": 15.01,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_gaussian",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 26.29,
+    "ci_pass_rate": "7/10",
+    "psnr_gap": 0.03,
+    "rationale": "JPEG presence is 0%-FP (block_boundary=7.3446) and blur presence is well supported (gm_ratio=0.510, spectral slope 1.168, isotropic kernel PCA=1.035, anisotropy 1.44). Gaussian and lens are MTF-indistinguishable (26.29 vs 26.28 dB), glass is a glass_score false positive, motion is excluded. Noise is absent. Order blur->JPEG confirmed by CI (reverse order breaks block_boundary/overshoot). Residual analysis on all 5 support pairs reveals a real affine global compression (f~0.84, fixed pivot ~118-128, variance ratio=f^2, saturation ratio~f, clipping lifted) that no legal single global function reproduces exactly (contrast_weaken_scale:1 = 0.75 with mean pivot); the closest legal representations are kept as alternatives for training-PSNR arbitration. PSNR 26.29 < 30 -> severity and the global component unverified -> UNCERTAIN, not LIKELY.",
+    "alternatives": [
+      {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "psnr": 26.31,
+        "note": "severity near-tie"
+      },
+      {
+        "pipeline": "blur_lens:4,compression_jpeg:4",
+        "psnr": 26.28,
+        "note": "MTF-ambiguous subtype"
+      },
+      {
+        "pipeline": "blur_glass:3,compression_jpeg:4",
+        "psnr": 25.49,
+        "note": "tool DT recommendation, glass_score FP"
+      },
+      {
+        "pipeline": "contrast_weaken_scale:1,compression_jpeg:4",
+        "psnr": 25.28,
+        "note": "global-compression model, no-blur variant"
+      },
+      {
+        "pipeline": "blur_gaussian:3,contrast_weaken_scale:1,compression_jpeg:4",
+        "psnr": 25.47,
+        "note": "3-step representation of statistical model"
+      }
+    ],
+    "skip_reasons": {
+      "brightness": "all shift severities >=17.8 gray (target mean shift only +5.05/255, small and direction-inconsistent across pairs)",
+      "saturation_functions": "saturate_weaken_YCrCb:1 overshoots S ratio (0.665 vs 0.773 avg) and does not create the luma tone compression; tested 23.65 dB",
+      "contrast_weaken_stretch": "measured mean shift +35.5 (target +5.05) -> rejected, 15.01 dB",
+      "quantization": "unique counts 211-256 only slightly below clean 215-256 -> ruled out",
+      "jpeg2000": "block_boundary 0%-FP signal is 8x8 grid based -> JPEG not JPEG2000"
+    }
+  }
+}

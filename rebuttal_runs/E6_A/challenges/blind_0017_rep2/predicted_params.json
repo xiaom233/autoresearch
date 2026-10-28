@@ -1,0 +1,56 @@
+{
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 3},
+    {"function": "compression_jpeg", "severity": 4}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 26.31,
+      "stats": {"ci_pass": "7/10", "block_boundary_err": 0.04, "zero_crossing_err": 0.14},
+      "function_family": "blur_gaussian (severity variant, PSNR tie with sev3; zero-crossing slightly worse)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 25.97,
+      "stats": {"ci_pass": "7/10", "block_boundary_err": 0.17, "zero_crossing_err": 0.12},
+      "function_family": "compression_jpeg (severity variant; block match worse than sev4)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 25.92,
+      "stats": {"ci_pass": "7/10", "block_boundary_err": 0.12},
+      "function_family": "blur_lens (cross-family backup; MTF-known indistinguishable from gaussian, PSNR 0.4 dB lower)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 26.29,
+    "psnr_gap": 0.0,
+    "ci_pass_rate": "7/10",
+    "verification_mode": "PSNR (sigma=0.74<2, no noise)",
+    "per_step_verdicts": {
+      "compression_jpeg": {
+        "verdict": "LIKELY",
+        "evidence": "block_boundary=7.3446 >> 1.1 (0% FP signal); JPEG sev4 gives best block_boundary CI match (8%); sev5 rejected (zero_crossing +43%, PSNR 24.76)"
+      },
+      "blur_gaussian": {
+        "verdict": "UNCERTAIN",
+        "evidence": "blur presence confident (gm_ratio=0.5097<0.85; spectral_slope_ratio=1.168>1.08). Subtype: gaussian wins PSNR vs lens(25.92)/glass(25.50)/motion(24.28). glass_score=1.495 is outside glass calibration (0.19-0.41) -> suspected JPEG-block FP. Severity 3 vs 4 statistically tied (26.29 vs 26.31 dB); gm_ratio estimate=3; zero-crossing favors 3 across 3 images."
+      }
+    },
+    "order": "blur -> JPEG (physical: storage last). Reversed order scored 26.52 dB but CI collapsed to 3/10 (block_boundary err 77%), proving JPEG is last.",
+    "unmodeled_component": "Target = 0.892*simulation + 13.4 (same affine for all channels, residual flat across intensity bins; consistent std ratio ~0.88 across all 5 support pairs). No x_distortion global severity matches: contrast_weaken_scale:1 overshoots (slope 0.75 vs needed 0.89) and tested pipeline lost PSNR (25.96, CI 4/10). brightness shifts/gamma also overshoot. Documented as residual global tone difference; not included in main pipeline.",
+    "noise": "NO_NOISE (sigma 0.74 raw / 1.48 peeled < 2). Peeled extreme_pct=49% is the documented JPEG/blur artifact false positive (var_slope=-0.728, spatial_corr=0.97 structured residual)."
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9964 <1.05, unique_G=256 in all channels both images, dct_zero_ratio=0.1661)",
+      "blur": "BLUR_UNLIKELY (gm_ratio=1.0554, spectral_slope_ratio=1.0002, no anisotropy)",
+      "noise": "sigma=0.12 -> NO_NOISE; residual_intensity_corr=0.5487 + gamma_suspect=true explained by deterministic tone/colour transform, not random noise",
+      "global": "brightness_mean_shift=+7.9, variance_ratio=1.1728, spread_ratio=1.0833, saturation_chroma_ratio=0.2055 (severe chroma loss)"
+    },
+    "mode": "PSNR (sigma=0.12)"
+  },
+  "observations": "Target is nearly grayscale vs colorful clean. clean.png==clean_0.png and degraded.png==degraded_0.png (md5 identical). The apparent brightness/variance shifts are a side effect of severe desaturation: HSV saturation scaling pulls R,G,B toward V=max channel, raising RGB mean and variance while luma is preserved. Confirmed by exact pixel match with saturation alone (no brightness/contrast/gamma step needed).",
+  "noise_6step_check": {
+    "note": "Not applicable: sigma=0.12 < 2 (NO_NOISE per protocol); exact-match simulation (PSNR=inf) leaves zero residual, proving no stochastic step exists.",
+    "extreme_pct": "n/a (no noise residual)",
+    "vm_slope": "n/a",
+    "var_slope": "n/a",
+    "spatial_corr": 0.9729,
+    "rgb_ratio": 1.0,
+    "cross_ch_corr": 0.4299,
+    "diagnosis": "NO_NOISE"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "Round 1: chroma_ratio=0.2055 is by far the strongest signal (severe global desaturation); test strongest saturation weaken alone as baseline to peel the dominant step"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "support_pair_validation": {
+    "pipeline": "saturate_weaken_HSV:4",
+    "results": [
+      {"pair": "degraded_1/clean_1", "psnr_rgb": Infinity, "ci_pass": "10/10"},
+      {"pair": "degraded_2/clean_2", "psnr_rgb": Infinity, "ci_pass": "10/10"},
+      {"pair": "degraded_3/clean_3", "psnr_rgb": Infinity, "ci_pass": "10/10"},
+      {"pair": "degraded_4/clean_4", "psnr_rgb": Infinity, "ci_pass": "10/10"}
+    ],
+    "conclusion": "All four independent support pairs are reproduced pixel-perfectly by the same single-step pipeline; parameters consistent across pairs."
+  },
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {"function": "saturate_weaken_HSV", "severity": 4, "verdict": "LIKELY"}
+    ],
+    "alternatives": [],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "psnr": Infinity,
+    "psnr_gap": Infinity,
+    "rationale": "Single deterministic global step reproduces the target exactly (PSNR=inf, CI=10/10) and also reproduces all four independent support pairs exactly. No compression (block_boundary=0.996), no blur (spectral_slope_ratio=1.0002), no noise (sigma=0.12). The brightness/variance signals are a known by-product of desaturation in HSV (RGB channels collapse toward V), so no extra global step is warranted."
+  }
+}

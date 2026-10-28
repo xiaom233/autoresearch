@@ -1,0 +1,64 @@
+{
+  "pipeline": [
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"},
+    {"function": "noise_speckle", "severity": 1, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "noise_gaussian_RGB", "severity": 1}
+      ],
+      "psnr": 20.94,
+      "function_family": "noise_gaussian_RGB",
+      "stats": {
+        "flat_per_channel_var": 162,
+        "target_flat_per_channel_var": 161,
+        "block_boundary": 1.585,
+        "flat_var_vs_intensity_slope": 0.03,
+        "note": "幅度精确匹配但信号依赖错: target 斜率 2.86; 暗图 support2 (I≈24) 实测 std=3.9 vs gaussian 预测 12.75"
+      }
+    },
+    {
+      "pipeline": [
+        {"function": "compression_jpeg", "severity": 5},
+        {"function": "noise_speckle", "severity": 1}
+      ],
+      "psnr": 19.88,
+      "function_family": "compression_jpeg (severity 备选)",
+      "stats": {
+        "block_boundary": 1.838,
+        "target_block_boundary": 1.555,
+        "flat_8x8_DCstd": 6.43,
+        "target_flat_8x8_DCstd": 4.06,
+        "note": "全局线性拟合 b=0.938 与 target 0.940 最匹配, 但块效应过强"
+      }
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "psnr": 20.49,
+    "psnr_gap": 0.0,
+    "psnr_gap_note": "本挑战含噪声 (σ≈13), PSNR 被噪声 seed 失配封顶 (~20.5 dB), 排名不可用于选型; 候选间判据为信号统计 (bb, 平坦区方差, var~I 斜率, std/I 比例)",
+    "ci_pass_rate": "6/10",
+    "mode": "SIGNAL (noise σ≥2 → PSNR 不可靠)",
+    "order": "compression_jpeg → noise_speckle (经验顺序, 与 SKILL 物理约束相反; 证据: noise→jpeg 平坦区噪声被量化抹平 var 4-23 vs target 161; bb noise→jpeg=2.73 vs target 1.555)",
+    "key_signals": {
+      "block_boundary": {"target": 1.5553, "clean": 1.0085, "support_range": [1.445, 1.761], "jpeg4_then_noise_sim": 1.567},
+      "flat_8x8_DCstd": {"target": 4.06, "jpeg4_sim": 4.35, "jpeg5_sim": 6.43},
+      "flat_within_block_per_channel_var": {"target": 161, "jpeg4_then_noise": 182, "noise_then_jpeg4": 4},
+      "noise_std_over_local_intensity_5_pairs": [0.145, 0.124, 0.163, 0.122, 0.119],
+      "flat_var_vs_intensity_slope": {"target": 2.86, "speckle1": 3.6, "gaussian1": 0.03, "jpeg_only": 0.0},
+      "spectral_slope_ratio_5_pairs": [0.972, 0.967, 0.983, 0.984, 0.951],
+      "variance_ratio_5_pairs": [0.962, 0.950, 1.010, 0.960, 1.119],
+      "mean_shift_5_pairs": [-1.9, -1.9, -0.6, -1.6, -0.8]
+    },
+    "support_validation": "compression_jpeg:4,noise_speckle:1 在 support pair 1/4: bb diff 2%/2%, hf/lf diff 0%/1%, unique RGB 0%, CI 6/10",
+    "known_mismatches": [
+      "生成器噪声场近消色差 (残差跨通道 corr 0.85-0.96, 逐通道等幅), 库内 noise_speckle 为逐通道独立",
+      "观测噪声 lag1 自相关 0.46-0.60 (空间相关), 库内噪声为白噪声",
+      "噪声 seed 失配 → 所有含噪声候选 PSNR 19.4-21.5 dB, 不反映正确性"
+    ]
+  }
+}

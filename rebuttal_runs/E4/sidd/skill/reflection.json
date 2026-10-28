@@ -1,0 +1,193 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "Pairs 0-3: NO_COMPRESSION (block_boundary 0.999-1.027, dct_zero 0.015-0.069). Pair 4: COMPRESSION_DETECTED (block_boundary=1.1185 >1.1, dct_zero=0.1125 highest). Since noise attenuates block_boundary, pairs 0-3 could hide a very mild JPEG.",
+      "blur": "BLUR_UNLIKELY all 5 pairs. FFT anisotropy=0.00 (no motion), glass_score not triggered, spectral_slope_ratio 0.24-0.41 (<1.08). Target spectrum is FLATTER than clean (-0.26..-0.46 vs -0.72..-1.31), i.e. excess high frequency consistent with white noise, not blur (blur steepens the spectrum). gm_ratio 5.2-13.9 is noise-inflated.",
+      "noise": "Noise present in all 5 pairs. Wavelet (HH-MAD) sigma per channel: pair0 R2.6/G5.2/B6.3, pair1 R10.4/G9.6/B14.8, pair2 R8.5/G8.9/B8.9, pair3 R1.5/G3.0/B4.1, pair4 R1.5/G1.9/B2.2. Channel ratios 1.05-2.8. cross_channel_corr 0.27-0.45, residual_intensity_corr -0.12..+0.03.",
+      "global": "Inconsistent across pairs: pair0 CONTRAST_strengthen, pair1 BRIGHTNESS_darken, pair2 CONTRAST+SATURATION, pair3 CONTRAST+SATURATION (variance_ratio=1.075 => essentially none), pair4 NO_GLOBAL. variance_ratio scales with noise magnitude (1.31/1.92/4.40/1.08/1.05); simulator runs with PURE synthetic noise reproduce the same contrast/saturation flags => global flags are noise-inflated false positives. Mean shifts are small and inconsistent (-2.3/-8.2/-5.5/-0.7/+0.7) => no common brightness step."
+    },
+    "mode": "SIGNAL (wavelet sigma avg 4.9; pairs 0-3 sigma>2; pair4 sigma=1.8)",
+    "pair_level_statistics": {
+      "note": "wavelet HH-MAD sigma is a MAD high-pass scale, empirically ~0.5x the true additive sigma (calibrated on synthetic noise, see statistical_checks); direct residual std includes a small structured component",
+      "pair0": {"wavelet_sigma_rgb": [2.59, 5.19, 6.3], "residual_std": 16.5, "true_sigma_est": 9.4, "spatial_corr": 0.294, "block_boundary": 1.027},
+      "pair1": {"wavelet_sigma_rgb": [10.38, 9.64, 14.83], "residual_std": 40.9, "true_sigma_est": 23.2, "spatial_corr": 0.333, "block_boundary": 1.001},
+      "pair2": {"wavelet_sigma_rgb": [8.52, 8.9, 8.9], "residual_std": 31.4, "true_sigma_est": 17.5, "spatial_corr": 0.319, "block_boundary": 1.0},
+      "pair3": {"wavelet_sigma_rgb": [1.48, 2.97, 4.08], "residual_std": 9.2, "true_sigma_est": 5.7, "spatial_corr": 0.243, "block_boundary": 0.999},
+      "pair4": {"wavelet_sigma_rgb": [1.48, 1.85, 2.22], "residual_std": 6.3, "true_sigma_est": 3.7, "spatial_corr": 0.296, "block_boundary": 1.119}
+    }
+  },
+  "noise_6step_check": {
+    "note": "peeled_noise_check.py values on the un-stripped residual. The automated IMPULSE verdict is rejected (known FP). Calibration on a pure synthetic gaussian_RGB:1 residual (see statistical_checks) gives extreme_pct=53.2%, vm_slope=0.077, var_slope=-0.07, spatial_corr=0.34 even though the noise is i.i.d. Gaussian — so extreme_pct, vm_slope, var_slope and spatial_corr are non-discriminative under this metric implementation. rgb_ratio and cross_channel_corr remain usable.",
+    "pair0": {"extreme_pct": 52.30, "vm_slope": 3.1944, "var_slope": -1.8823, "spatial_corr": 0.6449, "rgb_ratio": 1.8198, "cross_channel_corr": 0.5161, "ch_stds": [11.9, 14.3, 21.7]},
+    "pair1": {"extreme_pct": 52.60, "vm_slope": 1.8751, "var_slope": -3.5839, "spatial_corr": 0.6684, "rgb_ratio": 1.6699, "cross_channel_corr": 0.5226, "ch_stds": [43.6, 28.6, 47.8]},
+    "pair2": {"extreme_pct": 51.95, "vm_slope": 3.6806, "var_slope": -6.4731, "spatial_corr": 0.6619, "rgb_ratio": 1.3348, "cross_channel_corr": 0.5072, "ch_stds": [34.5, 25.9, 33.1]},
+    "pair3": {"extreme_pct": 53.28, "vm_slope": 3.5981, "var_slope": -1.0507, "spatial_corr": 0.6208, "rgb_ratio": 1.6286, "cross_channel_corr": 0.5565, "ch_stds": [7.3, 7.9, 11.9]},
+    "pair4": {"extreme_pct": 47.30, "vm_slope": -1.4370, "var_slope": -0.4663, "spatial_corr": 0.6517, "rgb_ratio": 1.4629, "cross_channel_corr": 0.4259, "ch_stds": [6.1, 5.0, 7.4]},
+    "diagnosis": "Impulse excluded (run_full_analysis impulse_zero_ratio 0.04-0.21, far below the 0.85 impulse fingerprint; no salt-and-pepper pixels visible). Speckle/Poisson excluded: region-wise noise sigma is not monotonic in intensity (pair1 regions at mean 86/93/108/167 have sigma 20/27/17/11-25; pairs 2 and 4 similar), and var_slope is negative. YCrCb-style channel-correlated noise is favored: rgb_ratio >1.4 and cross_channel_corr >0.35 in 4/5 pairs, with per-channel sigma ordering varying by content (R<G<B in pair0/pair3, B high in pair1, flat in pair2). The residual is essentially i.i.d.-like at pixel scale (autocorr FWHM <1 px; spatial_corr ~= the 0.34 i.i.d. bias measured on a synthetic pure-noise residual)."
+  },
+  "statistical_checks": {
+    "estimator_calibration": {
+      "note": "Same estimator (run_full_analysis estimate_noise_sigma / verify_signals) applied to synthetic x_distortion noise on pair0/pair1 clean images; establishes scale and §B false-positive levels.",
+      "noise_gaussian_RGB:1_on_pair0": {"direct_residual_std": 12.8, "wavelet_sigma_mean": 6.30, "wavelet_per_channel": [6.3, 6.3, 6.67], "hp_DOG_sigma_per_channel": [6.3, 6.3, 6.67], "cross_channel_corr": 0.0053, "rgb_ratio": 1.004, "sb6_extreme_pct": 53.17, "sb6_vm_slope": 0.0765, "sb6_var_slope": -0.0722, "sb6_spatial_corr": 0.3418, "run_full_analysis_global_verdict": "CONTRAST_strengthen+SATURATION (noise FP reproduced)"},
+      "noise_gaussian_YCrCb:1_on_pair0": {"direct_residual_std": 21.5, "wavelet_sigma_mean": 10.75, "ch_stds": [21.9, 16.2, 25.5], "hp_DOG_sigma_per_channel": [19.2, 14.2, 22.6], "cross_channel_corr": 0.28, "rgb_ratio": 1.57, "run_full_analysis_global_verdict": "CONTRAST_strengthen+SATURATION (noise FP reproduced)"},
+      "noise_gaussian_YCrCb:1_on_pair1": {"wavelet_sigma_mean": 10.75, "hp_DOG_sigma_per_channel": [19.2, 14.2, 22.6], "cross_channel_corr_run_full_analysis": 0.148},
+      "scale_factor": "wavelet/Haar HH-MAD and DoG MAD both report ~0.5x the true additive sigma; the factor is identical for target and simulated, so verify_signals sigma-diff percentages remain valid. True target sigma ~= 2x reported wavelet sigma.",
+      "takeaway": "§B extreme_pct ~50% and spatial_corr ~0.34 are formal artifacts of the metric, not evidence of impulse/spatially-correlated noise. Only rgb_ratio + cross_channel_corr discriminate noise type in this case."
+    },
+    "per_pair_fit_of_main_candidate": {
+      "note": "verify_signals noise checks: sigma within 20% and residual autocorr FWHM <4 px. diff is |target-sim|/target in the tool's estimator units.",
+      "pair0_noise_gaussian_YCrCb:1": "WEAK, sigma diff 129% (candidate too strong)",
+      "pair1_noise_gaussian_YCrCb:1": "MATCH, sigma diff 7.4%; channel ordering and cross-channel fingerprint agree (target HP R22.9/G19.0/B28.0 vs sim R19.2/G14.2/B22.6; target cross_ch 0.445 vs sim 0.148 vs RGB-sim 0.005)",
+      "pair2_noise_gaussian_YCrCb:1": "WEAK, sigma diff 23% (candidate slightly too strong)",
+      "pair3_noise_gaussian_YCrCb:1": "WEAK, sigma diff 278% (target far below library floor)",
+      "pair4_noise_gaussian_YCrCb:1": "not run; weaker RGB:1 already 240% too strong, so YCrCb:1 is farther out of range"
+    },
+    "cross_family_checks": {
+      "noise_gaussian_RGB:2_on_pair1": "MATCH (sigma + clean residual) but channel-flat prediction contradicts target channel ratio 1.5 and cross_ch 0.445",
+      "noise_poisson:1_on_pair1": "MATCH on the two scalar noise checks only; contradicting var_slope/region-intensity evidence => weak alternative",
+      "noise_speckle:1_on_pair1": "WEAK (sigma diff 26%) + no intensity-variance scaling => rejected",
+      "blur_gaussian:1_on_pair4": "PSNR 31.75 dB < clean-vs-target baseline 32.1 dB, CI 1/10 => rejected",
+      "compression_jpeg:1_on_pair4": "signal MISMATCH, simulated block_boundary 6.58 vs target 1.12 (489%) => rejected",
+      "compression_jpeg:2_on_pair4": "signal MISMATCH 2858% (simulated bb ~33) => monotonic confirmation that the library JPEG range is far too strong",
+      "contrast_strengthen_scale:2_on_pair0": "global MISMATCH, variance_ratio diff 507%, mean_shift diff 0.0151 => rejected"
+    }
+  },
+  "coupling_analysis": {
+    "noise_fakes_global": "run_full_analysis on pure synthetic noise (RGB:1 and YCrCb:1) returns CONTRAST_strengthen + SATURATION flags identical to target pairs 0/2/3. This is direct proof that the target's global verdicts are noise artifacts on these flat patches; variance_ratio scales with noise level, not with a deterministic contrast step.",
+    "noise_masks_blur": "gm_ratio is inflated 5-14x by noise and cannot indicate blur. The spectral slope direction is decisive: target spectrum is flatter than clean (ratio 0.24-0.41), whereas blur steepens it. Blur simulation on the lowest-noise pair lowers PSNR below the no-degradation baseline and CI=1/10.",
+    "noise_masks_compression": "Noise attenuates block_boundary. Pair4 (lowest noise) shows block_boundary=1.1185 and the highest dct_zero_ratio 0.1125; pairs 0-3 show ~1.0. However, the mildest library JPEG (q=25) produces bb=6.58 and q=18 produces ~33, i.e. 6-30x the target's excess blockiness. A mild in-camera/high-quality JPEG (out-of-library quality) or SIDD GT processing is the only viable explanation; it is unverifiable and therefore excluded from the main pipeline.",
+    "clean_vs_target_offset": "Target means are slightly darker than clean in pairs 0-2 (-1.0/-2.2/-3.7 to -9.1/-4.6/-10.9 per channel) with 2.9-6.9% of pixels clipped at 0. The offset is inconsistent across pairs and small relative to the noise sigma; it is consistent with clipping/ISP tone mapping in the real capture, not with a shared brightness step.",
+    "pipeline_order": "Single stochastic step only. No deterministic steps supported, so order constraints do not apply.",
+    "real_data_signature": "The residual's pixel-scale autocorrelation is white (FWHM <1 px) but its direct std is 1.6-1.8x the white-noise MAD scale, matching the same ratio measured on synthetic i.i.d. noise (2.0x with sampling variance). The residual is therefore dominated by pixel-scale random noise rather than low-frequency clean-GT structure. The magnitude varies 6x across pairs (true sigma ~3.7 to ~23), which is characteristic of real, signal/exposure-dependent sensor noise across SIDD crops, not a single synthetic additive severity applied to all five clean images."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {"pipeline": "compression_jpeg:1", "thinking": "Pair4 block_boundary=1.1185>1.1 (0%FP signal) + dct_zero_ratio=0.1125 (highest of 5 pairs). Signal mode chosen because target still has sigma~1.9 noise; block_boundary/dct are the physically valid discriminators on flat patches."},
+      "test_result": {"method": "verify_signals", "verdict": "MISMATCH", "matched_signals": [], "mismatched_signals": ["compression:block_boundary (diff=489%)"], "pipeline": "compression_jpeg:1", "mode": "signal"},
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {"pipeline": "compression_jpeg:2", "thinking": "Severity scan rule: sev1 (mildest library JPEG, q=25) already produced block_boundary ~6x target (diff 489%). Test sev2 to confirm monotonic impossibility; if stronger is worse, x_distortion JPEG range cannot explain the mild 8x8 structure in pair4."},
+      "test_result": {"method": "verify_signals", "verdict": "MISMATCH", "matched_signals": [], "mismatched_signals": ["compression:block_boundary (diff=2858%)"], "pipeline": "compression_jpeg:2", "mode": "signal"},
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {"pipeline": "blur_gaussian:1", "thinking": "Blur control (decision-tree default gaussian). Pair4 has the lowest noise (sigma 1.8), so residual blur would be maximally visible; spectral_slope_ratio=0.35 (<1.08) and FFT anisotropy=0 argue against blur. Baseline clean-vs-target PSNR = 32.1 dB; a correct blur step should not lower PSNR below this."},
+      "test_result": {"psnr_rgb": 31.75, "ci_pass": "1/10", "ci_verdict": "POOR", "method": "PSNR", "pipeline": "blur_gaussian:1", "mode": "psnr"},
+      "decision": "REJECT",
+      "agent_note": "Tool auto-labelled ADJUST_SEVERITY because 31.75 dB falls in the 30-40 band, but the correct interpretation is REJECT: PSNR is below the no-degradation baseline (32.1 dB) and CI=1/10; blur adds error rather than explaining the target."
+    },
+    {
+      "round": 4,
+      "hypothesis": {"pipeline": "contrast_strengthen_scale:2", "thinking": "Global control: run_full_analysis flagged CONTRAST_strengthen on pair0, but its own FP flags fired and variance_ratio tracks noise magnitude across pairs. A true global step should reproduce mean_shift and variance_ratio."},
+      "test_result": {"method": "verify_signals", "verdict": "MISMATCH", "matched_signals": [], "mismatched_signals": ["global:mean_shift (diff=0.0151)", "global:variance_ratio (diff=507%)"], "pipeline": "contrast_strengthen_scale:2", "mode": "signal"},
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {"pipeline": "noise_gaussian_YCrCb:1", "thinking": "Noise candidate per noise_prior: per-channel wavelet sigma R2.6/G5.2/B6.3 (ratio 2.4), cross_ch_corr=0.33, residual_intensity_corr=-0.12. YCrCb sev1 is the mildest YCrCb setting. Signal mode because sigma>2."},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=129%)"], "pipeline": "noise_gaussian_YCrCb:1", "mode": "signal"},
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {"pipeline": "noise_gaussian_RGB:1", "thinking": "Cross-family control for pair0: rgb_ratio=1.82 favors YCrCb, but the target magnitude might be closer to the RGB grid. Test gaussian_RGB sev1."},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=37%)"], "pipeline": "noise_gaussian_RGB:1", "mode": "signal"},
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {"pipeline": "noise_gaussian_RGB:2", "thinking": "Pair1 target wavelet sigma=11.6 (strongest of 5). Estimator calibration from pair0 sims: RGB sev1 measures 6.3 => RGB sev2 should measure ~12.6, within 20% of target."},
+      "test_result": {"method": "verify_signals", "verdict": "MATCH", "matched_signals": ["noise:sigma", "noise:clean_residual"], "mismatched_signals": [], "pipeline": "noise_gaussian_RGB:2", "mode": "signal"},
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {"pipeline": "noise_poisson:1", "thinking": "Noise-family coverage. var_slope is negative on the residual and region-wise sigma is not monotonic in intensity, so Poisson is not signal-supported; control test."},
+      "test_result": {"method": "verify_signals", "verdict": "MATCH", "matched_signals": ["noise:sigma", "noise:clean_residual"], "mismatched_signals": [], "pipeline": "noise_poisson:1", "mode": "signal"},
+      "decision": "ACCEPT",
+      "agent_note": "Scalar checks cannot distinguish Poisson from Gaussian at this magnitude; fingerprint evidence (var_slope, region-intensity relation) contradicts Poisson, so this remains a weak alternative only."
+    },
+    {
+      "round": 9,
+      "hypothesis": {"pipeline": "noise_speckle:1", "thinking": "Noise-family coverage: speckle (multiplicative). Region-wise sigma does not scale with intensity, arguing against multiplicative noise; control test."},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=26%)"], "pipeline": "noise_speckle:1", "mode": "signal"},
+      "decision": "REJECT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {"pipeline": "noise_gaussian_RGB:1", "thinking": "Pair2 is the channel-flat case (wavelet R8.5/G8.9/B8.9, ratio 1.05; peeled noise_prior predicted gaussian_RGB). Target sigma=8.77 lies between calibrated RGB sev1 (~6.3) and sev2 (~12.6)."},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=27%)"], "pipeline": "noise_gaussian_RGB:1", "mode": "signal"},
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {"pipeline": "noise_gaussian_YCrCb:1", "thinking": "Pair2 cross-family test after RGB1 WEAK. YCrCb1 is the only YCrCb step whose measured sigma can approach 8.8; channel-flat ratio argues against YCrCb, so this is a controlled falsification."},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=23%)"], "pipeline": "noise_gaussian_YCrCb:1", "mode": "signal"},
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {"pipeline": "noise_gaussian_RGB:2", "thinking": "Mandatory severity scan after RGB1 WEAK on pair0 (target sigma 4.69 below calibrated RGB sev1=6.3). Upward scan expected to increase mismatch, documenting a below-library-floor target."},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=171%)"], "pipeline": "noise_gaussian_RGB:2", "mode": "signal"},
+      "decision": "REJECT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {"pipeline": "noise_gaussian_RGB:1", "thinking": "Pair4 target wavelet sigma=1.85 (lowest). Calibrated minimum library step RGB sev1 measures ~6.3, so this tests whether the case is below the x_distortion noise floor."},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=240%)"], "pipeline": "noise_gaussian_RGB:1", "mode": "signal"},
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {"pipeline": "noise_gaussian_YCrCb:1", "thinking": "Type discrimination on pair1: target high-pass sigma R22.9/G19.0/B28.0 (G lowest, B highest, cross_ch=0.445). Calibrated sims: YCrCb sev1 yields R19.2-21.9/G14.2-16.2/B22.6-25.5 (same G-low/B-high pattern, cross_ch=0.148-0.28) vs RGB sev2 uniform 25.5 (cross_ch=0.005). Same scalar magnitude (target wavelet 11.6 vs sim 10.75) but YCrCb matches the channel/cross-channel fingerprint."},
+      "test_result": {"method": "verify_signals", "verdict": "MATCH", "matched_signals": ["noise:sigma", "noise:clean_residual"], "mismatched_signals": [], "pipeline": "noise_gaussian_YCrCb:1", "mode": "signal"},
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {"pipeline": "noise_gaussian_YCrCb:1", "thinking": "Complete the per-pair table for the leading pipeline. Pair3 wavelet sigma=2.84 (R1.5/G3.0/B4.1, ratio 2.8 chroma-heavy) is below the calibrated library floor; expected sigma mismatch documents out-of-range severity while the channel pattern still supports the YCrCb family."},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=278%)"], "pipeline": "noise_gaussian_YCrCb:1", "mode": "signal"},
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {"pipeline": "blur_gaussian:1", "psnr_rgb": 31.75, "ci_pass": "1/10", "verdict": "?", "mode": "psnr", "round": 3}
+  ],
+  "psnr_ranking_note": "Only the blur control was run in PSNR mode by design. All noise candidates were verified with verify_signals per SKILL (noise seed mismatch makes PSNR meaningless). Clean-vs-target PSNR on pair4 is 32.1 dB and is the no-degradation baseline against which blur's 31.75 dB is below baseline.",
+  "final_decision": {
+    "pipeline": [
+      {"function": "noise_gaussian_YCrCb", "severity": 1, "verdict": "UNCERTAIN"}
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "alternatives": [
+      {"pipeline": [{"function": "noise_gaussian_RGB", "severity": 2}], "verdict": "UNCERTAIN", "evidence": "verify_signals MATCH on pair1 (sigma + residual autocorr); contradicts the target's channel ratio (~1.5) and cross_channel_corr (0.445) because RGB is channel-flat. Keep as cross-family backup."},
+      {"pipeline": [{"function": "noise_poisson", "severity": 1}], "verdict": "POOR", "evidence": "MATCH on the two scalar noise checks for pair1 only; var_slope is negative and region-wise sigma is not monotonic in intensity, so the Poisson fingerprint is contradicted. Low-quality alternative."}
+    ],
+    "rationale": "Noise is present in all five pairs and is the only supported degradation. Blur, global contrast/brightness/saturation and library JPEG are excluded by direct simulation (blur below-baseline PSNR + CI 1/10; contrast 507% variance mismatch; JPEG 489-2858% blockiness overshoot). The noise is channel-correlated and chroma-heavy in 4/5 pairs (rgb_ratio 1.46-1.82, cross_ch 0.43-0.56) with a white pixel-scale residual; gaussian_YCrCb:1 reproduces pair1 exactly (sigma 7.4% off, same per-channel ordering) and pair2 approximately (23%), but it is 1.3-3.8x too strong for pairs 0/3 and ~5x too strong for pair4. The per-pair true noise sigma spans ~3.7-23 levels, below the x_distortion noise floor (minimum library step ~12.8 uniform / ~21.5 YCrCb RGB-equivalent) for 3/5 pairs. This pattern is characteristic of real, image-dependent SIDD sensor noise rather than one synthetic severity applied to all five clean images, so exact in-library reproduction is not possible; the pipeline above is the closest in-library proxy, exact for the strongest pair and an upper bound for the rest.",
+    "per_pair_fit": {
+      "pair0": "closest RGB:1 (37%) / YCrCb:1 too strong (129%)",
+      "pair1": "YCrCb:1 MATCH; RGB:2 and Poisson:1 also scalar-MATCH",
+      "pair2": "YCrCb:1 closest (23%); RGB:1 27%; true sigma on-grid gap (between sev1 and sev2)",
+      "pair3": "YCrCb:1 278% too strong; true sigma below library floor",
+      "pair4": "YCrCb:1 far out of range (RGB:1 already 240% too strong); mild 8x8 blockiness present but library JPEG is 6-30x too strong"
+    },
+    "limitations": [
+      "Real SIDD-style sensor noise is signal/exposure dependent and not exactly representable by i.i.d. additive x_distortion noise; the single library severity cannot cover the 6x magnitude spread across support pairs.",
+      "Noise subtype (YCrCb vs RGB) is supported by channel-ratio/cross-channel fingerprints, but verify_signals' noise checks only test scalar sigma and residual autocorrelation, which cannot confirm subtype.",
+      "Pair4's block_boundary=1.1185 may indicate a mild in-camera JPEG (quality far above q=25), but the library JPEG range is an order of magnitude too strong and the structure is absent in the other pairs; compression is therefore not predicted.",
+      "Global flags in run_full_analysis are reproduced by pure synthetic noise and are not real global degradations."
+    ]
+  },
+  "verification_stats": {
+    "test_candidate_calls": 15,
+    "psnr_mode": 1,
+    "signal_mode": 14,
+    "budget": 25,
+    "scripts_used": ["run_full_analysis.py", "peeled_noise_check.py", "test_candidate.py"],
+    "pairs_covered": 5
+  }
+}

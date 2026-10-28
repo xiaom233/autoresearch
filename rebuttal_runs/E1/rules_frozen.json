@@ -1,0 +1,78 @@
+{
+  "version": "exp41-rebuttal-rule-v1",
+  "frozen_at": "2026-10-24",
+  "controller": "deterministic signal-to-pipeline state machine; no LLM",
+  "support": {
+    "pairs_per_scenario": 5,
+    "aggregation": "majority function vote (>=3/5); median severity among agreeing votes; numeric signals reported as median",
+    "max_pipeline_steps": 3
+  },
+  "thresholds": {
+    "compression": {
+      "block_boundary_min": 1.05,
+      "unique_G_max": 200,
+      "note": "block_boundary is Tier S (0% FP); unique_G alone is not sufficient"
+    },
+    "noise": {
+      "sigma_min": 2.0,
+      "impulse_verdicts": ["IMPULSE"],
+      "note": "accept IMPULSE even when sigma_prior is 0"
+    },
+    "blur": {
+      "gm_ratio_max": 0.85,
+      "anisotropy_motion": 1.7,
+      "note": "gaussian is the default subtype; motion only with anisotropy > 1.7"
+    },
+    "global": {
+      "variance_ratio_low": 0.85,
+      "variance_ratio_high": 1.15,
+      "mean_shift_min": 15.0,
+      "saturation_ratio_low": 0.75,
+      "saturation_ratio_high": 1.4,
+      "skip_global_when_impulse": true
+    }
+  },
+  "severity_maps": {
+    "compression_block_boundary": {"cuts": [1.05, 1.15, 1.3, 1.5], "higher_is_stronger": true},
+    "blur_gm_ratio": {"cuts": [0.1, 0.2, 0.35, 0.5], "higher_is_stronger": false},
+    "global_deviation": {"cuts": [1.15, 1.3, 1.6, 2.0]},
+    "mean_shift_abs": {"cuts": [15, 25, 40, 60]},
+    "saturation_deviation": {"cuts": [1.1, 1.25, 1.5, 2.0]}
+  },
+  "rs_rules": [
+    {
+      "id": "motion_ocab",
+      "condition": "blur_motion present and FFT_anisotropy > 1.7",
+      "arch": {"attention_type": "ocab", "embed_dim": 30, "window_size": 16, "use_simple_gate": 1}
+    },
+    {
+      "id": "contrast_structured_gcm",
+      "condition": "contrast present and (blur or compression present) and variance_ratio outside [0.85,1.15]",
+      "arch": {"attention_type": "swin", "embed_dim": 64, "window_size": 8, "use_gcm": 1, "use_simple_gate": 1}
+    },
+    {
+      "id": "default_swin_sg",
+      "condition": "default",
+      "arch": {"attention_type": "swin", "embed_dim": 64, "window_size": 8, "use_simple_gate": 1}
+    }
+  ],
+  "training": {
+    "strategy": "Direct",
+    "epoch_budget": 2,
+    "learning_rate": 0.0005,
+    "batch_size": 16,
+    "loss_fn": "l1",
+    "seed": 42,
+    "train_shards": "datasets/DIV2K/DIV2K_train_HR_wds/train-*.tar"
+  },
+  "reflection": {
+    "deterministic_score_good_db": 40.0,
+    "noise_signal_match_score": 0.99,
+    "max_rounds": 3,
+    "max_candidate_tests_per_round": 15,
+    "min_deterministic_improvement_db": 0.5,
+    "min_noise_signal_improvement": 0.15,
+    "train_trigger_support_psnr_below": 25.0,
+    "continue_if_support_improvement_db": 0.5
+  }
+}

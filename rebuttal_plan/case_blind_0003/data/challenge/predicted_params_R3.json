@@ -1,0 +1,21 @@
+{
+  "pipeline": [
+    {"function": "blur_glass", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {"pipeline": [{"function": "blur_gaussian", "severity": 2}], "note": "R0/R1 original prediction. PSNR=34.83dB CI=8/10 MATCH(2✓). 劣于glass:2."},
+    {"pipeline": [{"function": "blur_lens", "severity": 2}], "note": "R0 alternative. PSNR=34.61dB CI=8/10. MTF与gaussian不可区分."}
+  ],
+  "analysis": {
+    "overall_verdict": "UNCERTAIN",
+    "tier": 1,
+    "r3_reflection_note": "R3切换主预测为blur_glass:2。R1已发现glass:2仿真PSNR=36.65dB CI=10/10优于gaussian:2=34.83dB CI=8/10。R2因REFLECTION_MECHANISM.md §二(PSNR改善≠blur子类型正确,2%准确率)保持gaussian:2为主预测。但GT训练PSNR=19.33直接证明gaussian:2错误——若gaussian:2正确,训练后PSNR应≥35dB。R3将glass:2从R1 alternative提升为主预测。verify_signals确认MATCH(2✓/0✗)。gm_ratio=0.532 STRONG blur(<0.85)。dct_zero_ratio=0.624经R0/R2 PSNR测试确认为blur FP(添加JPEG均降低PSNR)。sigma=1.11<2→NO_NOISE。",
+    "r3_signal_sources": {
+      "blur_glass_switch": "GT PSNR=19.33证明gaussian:2错误→glass:2(PSNR=36.65 CI=10/10 MATCH)为最佳替代。信号来源: [R1 PSNR test + R1 CI test + R1 verify_signals + GT training PSNR]",
+      "gm_ratio_confirmation": "gm_ratio=0.532(<0.85 STRONG) + spectral_slope_ratio=1.069(~1.08)→blur CONFIRMED。PSNR验证sev=2最优。信号来源: [full_analysis_R3 step3_blur]",
+      "dct_zero_ratio_FP": "dct_zero_ratio=0.624经R0/R2 PSNR测试(JPEG均降低PSNR至28-32dB)+R2 JPEG-only测试(28.12dB CI=4/10)确认为blur FP。信号来源: [PSNR tests R0/R2]",
+      "noise_exclusion": "sigma=1.11<2→NO_NOISE。添加noise均恶化PSNR(21.40dB)。信号来源: [full_analysis_R3 step2_noise]"
+    },
+    "per_step_note": "blur UNCERTAIN(PSNR在30-40范围,仅1步退化)。gm_ratio=0.532 STRONG blur信号。glass:2为R3新主预测替代gaussian:2。NO_NOISE, NO_JPEG, NO_GLOBAL。"
+  }
+}
