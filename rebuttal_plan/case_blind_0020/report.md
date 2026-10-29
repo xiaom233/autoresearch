@@ -24,8 +24,9 @@
 - 在**同架构（Swin+SG）**下，LLM 的 R1 DC 已经比规则 R1 高 **+0.984 dB DIV2K / +1.194 dB LSDIR**
   （16.975 vs 15.991；16.421 vs 15.227）。这是纯 DC 对比，不含 glass 和 ColorPre。
 - 仍有限制：两边都漏掉 `noise_poisson:3`；LLM 最终也是 2/3 步；这是单场景，不代表普遍优势。
-- 同架构控制（LLM final DC `glass:4+stretch:4` + Swin+SG，替换 ColorPre）正在训练，用于分离 glass 与 ColorPre 的贡献；
-  结果出来后追加。现有同架构 R1 对比已能证明 **DC 本身有贡献**。
+- 同架构控制（LLM final DC `glass:4+stretch:4` + Swin+SG，替换 ColorPre）训练已完成（support PSNR 17.49 @ step 3773），
+  但固定 LQ 评估已按用户要求**停止**，control 结果**不纳入**本案例；现有同架构 R1 对比已能证明 **DC 本身有贡献**，
+  glass 与 ColorPre 的拆分仍为 UNKNOWN。
 
 ## 1. 数据与 GT（事后）
 
@@ -217,8 +218,8 @@ fixed-LQ test **18.084 / 17.409**（A0 选中 R2）。
   这时 LLM 还没有 glass，也没有 ColorPre；差异只来自 DC（gaussian:4 vs gaussian:5；无 saturation；stretch:4 vs stretch:5）。
 - **AutoIR R0→R1**（同 DC，加 SimpleGate）→ +1.196 / +1.398；**AutoIR R1→R2**（glass + ColorPre）→ +1.109 / +0.988。
 - **仿真层面**：规则 R1 DC 25.69 vs LLM R2 DC 39.56 → **+13.87 dB**，与架构无关。
-- 同架构控制（LLM final DC `glass:4+stretch:4` + Swin+SG，替换 ColorPre）正在训练；
-  完成后可把 R1→R2 的 +1.109 拆成 glass-DC 与 ColorPre 两部分。
+- 同架构控制（LLM final DC `glass:4+stretch:4` + Swin+SG，替换 ColorPre）训练完成（support 17.49），
+  但固定 LQ 评估已停止；**不报告 control 数值**，glass-DC 与 ColorPre 的拆分仍是 UNKNOWN。
 
 ### 6.2 混杂与限制
 
@@ -266,5 +267,5 @@ rebuttal_runs/E1/selection.jsonl                            # 规则选中 R1
 rebuttal_runs/A0/support_selection.jsonl                    # LLM per-round support
 rebuttal_runs/E1E2_fixed_lq_summary.json                    # fixed-LQ 15.991/18.084
 rebuttal_runs/E1/blind_0020_ablation_metrics.jsonl          # R0/R1/R2 fixed-LQ ablation
-rebuttal_runs/E1/blind_0020_ctrl_llmDC_swinsg/              # 同架构控制（进行中）
+rebuttal_runs/E1/blind_0020_ctrl_llmDC_swinsg/              # 同架构控制（训练完成；评估停止，不作结果）
 ```

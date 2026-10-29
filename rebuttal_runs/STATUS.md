@@ -52,9 +52,11 @@
 | T4 修正 | 旧 T1-best 子集 21.58 是选择偏差，已废弃；全 24 曲线为准 | `02_..._已填写.md` T4 |
 | E6-B support-set 稳定性 | ✅ 6 场景×3 组 support×R0–R2（规则控制器，33 次训练 / 64.93 GPU-h）：DIV2K 25.000/25.304/26.064；LSDIR 23.197/23.540/24.171；range 0.13–2.66 dB，场景相关 | `E6/e6_summary.json`、`E6/e6_summary.md` |
 | E6-B（LLM）support-set variation | ✅ 6 场景×3 组，完整 LLM 流程（Skill 盲识别→策略→R0→R1/R2→support 选择）：DIV2K macro **30.194** vs rule 25.456（**+4.737**，6 场景 CI [+0.341,+9.789]，4/6 胜）；LSDIR 27.662 vs 23.636（+4.026，CI [+0.183,+8.725]）；23 次训练 / 32.82 GPU-h；R1 4 次 CHANGE、R2 1 次训练 | `E6_LLM/e6llm_summary.json`、`E6-B_LLM_support_variation.md` |
+| E7 exp41 两次重复 | ⏹ 已停止（用户要求停止所有实验）；Rep A 只有部分中间文件、无最终预测；计划/计时规范已写，不作结果 | `rebuttal_plan/12_exp41_repeat_randomness.md`、`13_end_to_end_cost_and_timing.md`、`E7/` |
+| E7 计时/成本审计 | ✅ 现有 log 覆盖审计：训练 4.248 GPU-h/场景、support eval ~9.4 min；反思仅日期、候选/Token/API UNKNOWN；5 GPU-h 非端到端 | `E7/existing_timing_coverage.json`、`13_end_to_end_cost_and_timing.md` |
 | E5c blind_0005 4-cell | ✅ 完成：no-fix 21.915、DC-only 44.908、RS-only 21.976、both 41.620（DIV2K fixed-LQ 0005）；DC +22.99，RS-only +0.06，RS at correct DC −3.29 | `E5c/`、`rebuttal_plan/E5c_blind_0005_4cell.md` |
 | DFPIR-scratch test | ✅ full test 完成：best 23.833/21.811、last 23.638/21.667；见 `scratch_full_summary.md` | `E2_scratch/scratch_full_summary.*` |
-| 进行中/未执行 | **E6-A 已停止（用户要求优先 E6-B LLM support variation；只完成 7+ 个 R0，不能报告）**；未执行：E5b/E2-RS 完整四格 24 场景、E3-G 留出 | E5c 只能作为 blind_0005 的 targeted RS 诊断，不替代完整 E2-RS；E4 rain 与 E6-B（LLM）已完成 |
+| 进行中/未执行 | **所有实验已停止**；E6-A 只完成 7+ 个 R0、E7 只有部分 Rep A 中间文件，均不作结果；未执行：E5b/E2-RS 完整四格 24 场景、E3-G 留出 | E5c 只能作为 blind_0005 的 targeted RS 诊断，不替代完整 E2-RS；E4 rain、E6-B（LLM）已完成；E7 重启前按 timing 规范记录 |
 | 旧无人值守链 | 已完成 E2 评估；E1 段因 `E1/logs` 目录缺失失败，已创建目录并另起 `run_e1_stage.sh` | `chain.log`、`E1/stage.log` |
 | E1 规则控制器决策 | ✅ 24/24 完成；R1 可用 19、R2 可用 10；候选测试 196 次；arch=20 Swin+SG / 4 GCM | `E1/decisions/` |
 | E1 R0/R1/R2 训练 | ✅ 24 R0 / 19 R1 / 9 R2 完成；support 选择与固定 LQ test 完成 | `E1/stage.log` |
@@ -89,6 +91,8 @@
 8. **API model ID/版本/费用 UNKNOWN**；文档中的 DeepSeek/Qwen 只是声明。
 9. **E1-oneshot 的 NaN 失败必须如实报告**：E1-oneshot（无反思规则）为 **23/24 有效、1/24 NaN**（`blind_0020` 的 GCM R0 训练 NaN）。主表是 23 个有效场景 macro，不做 0 dB 插补/静默删除；E1-full 通过 R1 fallback 恢复到 15.98，AutoIR-oneshot 15.78、AutoIR-full 18.09。Swin+SG 稳定重训只作可选 sensitivity（fixed-LQ 0020 = 14.05，仍低于 AutoIR-oneshot 15.78 / E1-full 15.98），不冒充原始 one-shot。
 10. **RS 规则来源与 24 场景独立性**：核心映射 contrast→GCM / motion→OCAB 来自 exp10/38/39 的 GT-known 合成实验，不使用 24 个盲场景；但盲场景门控/回退规则来自 exp37 的 24 挑战消融（与 exp40/41 的 24 个 `degraded.png`/GT **24/24 相同**）和 exp40 的 4 个案例，因此 **24 个场景全部参与过 RS 规则开发**，不是 RS 泛化的独立测试集。GT 校准侧：校准脚本早于 24 个 GT 生成，GT 由随机生成器产生，无按性能挑选记录；但 **3/24 GT 链是校准配置集成员**（0006/0011/0013）、10/100 DIV2K test 图为校准图、3840 manifest 缺失，不能声称严格独立。723+ 训练去重清单缺失（raw 日志 1,137 条；组数相加 724）。详见 `rebuttal_plan/RS_rule_provenance_audit.md`、`03` 2026-10-28 补充。
+
+11. **端到端成本与 timing（Weakness 4）**：5 GPU-h/场景只是 R0–R2 训练预算的近似；实测训练 4.248 GPU-h/场景（71 次/101.95 GPU-h），support eval ~9.4 min。现有 exp41 日志缺 R1/R2 反思时刻、DC 候选评估计时、策略选择时间、API token/费用、最终 test start/end；只能恢复训练与部分评测，其余标 UNKNOWN，不回溯编造。离线开发（723+ 规则/校准/DFPIR 预训练）必须单列，不能摊入 5h。E7 起强制 `timing.json`（DC/RS/CLR 每轮），模板 `E7/timing_schema.json`、wrapper `scripts/timing_wrapper.sh`；规范见 `13_end_to_end_cost_and_timing.md`。
 
 ## GPU 效率结论
 

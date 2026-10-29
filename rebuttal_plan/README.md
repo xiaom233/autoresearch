@@ -15,6 +15,10 @@
 
 **E6-B（LLM）support-set variation**：`E6-B_LLM_support_variation.md`（完整 LLM 流程 6 场景×3 support；DIV2K 30.194 vs rule 25.456，+4.737，6 场景 CI [+0.341,+9.789]，4/6 胜；支持稳定性场景相关）。
 
+**E7 exp41 两次重复（已停止）**：`12_exp41_repeat_randomness.md`（计划/预注册；用户要求停止所有实验，partial 不作结果）。
+
+**端到端成本与 DC/RS/CLR 计时（Weakness 4）**：`13_end_to_end_cost_and_timing.md`（5 GPU-h 只是训练预算；现有 log 缺反思/候选/API；E7 起强制 `timing.json`；模板 `E7/timing_schema.json`）。
+
 **无反思 one-shot 对照**：`E1_oneshot_no_reflection.md`（E1-oneshot / AutoIR-oneshot vs 各自 full：规则反思 +2.43 dB，LLM 反思 +1.28 dB；LLM 反思平均不优于规则反思，详见文档）。
 
 **LLM vs rule 逐场景选择对比**：`LLM_vs_rule_choices.md`（24 场景的 GT / LLM 选中 / rule 选中 / 差异类型 / GT match / support 与 test 指标；含初始 R0 表）。

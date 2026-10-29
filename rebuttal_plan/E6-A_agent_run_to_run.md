@@ -1,5 +1,8 @@
 # E6-A：同一 support / 训练 seed 下的 Agent 重复运行
 
+> **状态（2026-10-29）**：已按用户要求**停止所有实验**。E6-A 只完成 7 个 R0 + 部分第二批训练，
+> **没有完成 18 个 run，没有 E6-A 结果**；本文保留设计、预测表与 partial 观察，不作为结果引用。
+
 > 目的：补 E6-A（agent run-to-run）。六个预注册场景，每个场景用**同一组 5 对 support**（逐文件 sha256 相同），
 > 由 agent 独立做 3 次盲识别，再用**完全相同的训练配置与 seed** 各训练一次 R0 specialist，
 > 在**同一份 GT-LQ test**（DIV2K 100 / LSDIR 250）上评估，从而分离盲识别本身的 run-to-run 方差。
@@ -49,8 +52,9 @@ GT 仅用于事后对比：
 
 ## 4. 解释与限制
 
-- 固定 support + 固定训练 seed 后，E6-A 的分数差异**只来自 agent 盲识别预测**；训练本身在给定 pipeline 下是确定的。
+- 固定 support + 固定训练 seed **不能保证完全确定**：CUDA/cuDNN 与 5 对 support 的 val 会让 support PSNR 曲线略有差异，selected step 可能不同。`blind_0008` 三次预测完全相同（`saturate_weaken_HSV:4`），但 selected steps 为 15092/7546/15092，DIV2K test 为 **43.251/41.334/42.709（range 1.92 dB）**——这是训练/选点抖动，不是 agent 方差。因此 E6-A 的 spread 是 **agent 预测差异 + 训练/选点抖动** 的混合；要单独度量 agent 方差，需要固定 selected step（last-step sensitivity）。
 - E6-A 不是完整系统：没有训练后 R1/R2 反思；不能把它当作 AutoIR 全流程的 run-to-run 方差。
+- 训练/选点抖动与 agent 预测差异混在一起：0008（三次相同 pipeline）给出约 1.92 dB 的 DIV2K 抖动参考；补充的 last-step（step 15092，所有 run 固定同一 checkpoint 步）评估用于分离该抖动。
 - API model ID/版本/温度等未记录（`UNKNOWN`），因此 E6-A 的方差是“该 agent 配置下”的方差，不能外推到其他 LLM。
 - E6-B 的 support-set 变化（0.13–2.66 dB range）与 E6-A 的盲识别方差不属于同一来源，应分开报告。
 - 不能据此声称“LLM 方差大于/小于规则控制器”；E6-B 没有做 agent 重复。
