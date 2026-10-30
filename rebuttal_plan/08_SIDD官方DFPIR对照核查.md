@@ -4,9 +4,9 @@
 
 ## 已有数值
 
-- AutoIR R0：30.532761 dB；1120测试块、35个support之外的场景。
+- AutoIR R0：full 1,280 上 30.588 dB（旧 1,120 为 30.533）；40 场景×32 = 官方 validation 全量，含 5 个 support 块（0.39%）。
 - 官方5D checkpoint在当前评估器下：23.291126 dB；记录说明text_code为随机向量，seed42。seed43/44为23.064/23.461。
-- 项目DFPIR-blinded：31.218091 dB。该模型非官方发布权重，不能替代official release对照。
+- 项目DFPIR-blinded：31.395 dB（旧 1,120 为 31.218）。该模型非官方发布权重，不能替代official release对照。
 - 当前23.291不能表述为已按官方推荐接口评测，也不能据此写“AutoIR比DFPIR official高7.242dB，证明泛化更好”。
 
 ## 官方代码核对
@@ -15,7 +15,7 @@
 
 ## 重评设置
 
-1. 保持原官方5D checkpoint、SIDD同一1120测试块与指标口径。
+1. 保持原官方5D checkpoint、SIDD full 1,280 测试块与指标口径（旧 1,120 为 sensitivity）。
 2. 使用官方CLIP ViT-B/32 text encoder。原官方脚本没有给出SIDD协议，需明确这是将官方模型用于SIDD的新增评测。
 3. 从官方三种denoising prompt（sigma15/25/50）中仅根据五张support的PSNR选一个，固定后评估test；不按test选prompt、不更新权重。明确披露该support选择步骤。也可预先固定一个prompt，但不能以测试结果挑选。
 4. 记录prompt、CLIP版本、checkpoint哈希、预处理与输出指标。报告PSNR/SSIM/LPIPS；保留项目blinded为另列参考，不混同官方模型。
