@@ -1,0 +1,262 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=1.0087 (<1.05), unique_G=256/256, dct_zero_ratio=0.2889",
+      "blur": "BLUR_UNLIKELY: gm_ratio=0.994, spectral_slope_ratio=0.9875, FFT anisotropy=0.00 (no motion), pca=0.0",
+      "noise": "noise_prior_sigma=0.0 -> NO_NOISE; step2 GAUSSIAN_YCrCb verdict is low-confidence fallthrough (sigma=0). residual_intensity_corr=-0.4253 + gamma_suspect=true likely caused by global tonal change, not noise",
+      "global": "BRIGHTNESS_brighten_sev1 (mean_shift=10.1, clipped_fraction=0.0002) + SATURATION_weaken_sev5 (saturation_chroma_ratio=0.2032); variance_ratio=0.844 but contrast_spread_ratio=0.9589 -> contrast NOT detected"
+    },
+    "mode": "PSNR (sigma=0.0)",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "sigma=0.0 outside boundary 2<sigma<10; Qwen/API unavailable in this environment"
+    },
+    "visual_note": "degraded_0 appears near-grayscale and slightly brighter than clean_0; no visible noise, blur or JPEG blocks"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:1,saturate_weaken_HSV:5",
+        "thinking": "R1: full_analysis 推荐 global 组合 (mean_shift=10.1 -> brightness brighten sev1; saturation_chroma_ratio=0.2032 -> saturate weaken sev5). sigma=0 -> PSNR 模式"
+      },
+      "test_result": {
+        "psnr_rgb": 19.35,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:1,saturate_weaken_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_YCrCb:5",
+        "thinking": "R2: 纯去饱和假设. mean_shift=+10.1 可由去饱和解释(HSV/YCrCb 去色抬升暗通道均值). 目标视觉为自然黑白(YCrCb=luma) 而非 HSV(V=max) 灰度; 先测 YCrCb sev5(S scale=0)"
+      },
+      "test_result": {
+        "psnr_rgb": 29.39,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_YCrCb:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:5",
+        "thinking": "R2b: 同族对比 HSV 版去饱和 (S scale=0), 检验 HSV vs YCrCb 子类型"
+      },
+      "test_result": {
+        "psnr_rgb": 33.51,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "R3: 同口径信号对比发现 target saturation_chroma_ratio=0.2032 而 HSV:5 sim=0.0 -> 目标保留 20% 色度 => HSV sev4 (S scale=0.2). variance_ratio/mean_shift 也更接近"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "SUPPORT pair1: 确定性管线 PSNR 复现验证 (pair0 PSNR=inf)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "SUPPORT pair2: 确定性管线 PSNR 复现验证 (pair0 PSNR=inf)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "SUPPORT pair3: 确定性管线 PSNR 复现验证 (pair0 PSNR=inf)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "SUPPORT pair4: 确定性管线 PSNR 复现验证 (pair0 PSNR=inf)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:5",
+      "psnr_rgb": 33.51,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "saturate_weaken_YCrCb:5",
+      "psnr_rgb": 29.39,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:1,saturate_weaken_HSV:5",
+      "psnr_rgb": 19.35,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py on pair0 after stripping saturate_weaken_HSV:4 (residual std = 0.0, pixel-perfect)",
+    "residual_std": 0.0,
+    "extreme_pct": 100.0,
+    "extreme_pct_note": "degenerate artifact: residual is exactly 0 everywhere (zero_ratio=1.0); threshold divides by std=0",
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "spatial_corr_note": "nan (zero residual, undefined)",
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "cross_ch_corr_note": "nan (zero residual, undefined)",
+    "noise_prior_sigma_peeled": 1.24,
+    "noise_prior_sigma_full_analysis": 0.0,
+    "diagnosis": "NO_NOISE — peeled residual after saturate_weaken_HSV:4 is exactly zero on pair0; deterministic pipeline fully explains target. noise_prior sigma=0.0 in run_full_analysis; peeled 1.24 is numerical artifact on an all-zero residual"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "saturate_weaken_HSV",
+        "severity": 4,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "rationale": "Deterministic single step. saturate_weaken_HSV:4 (S scale=0.2) reproduces pair0 pixel-perfectly (PSNR=inf, CI 10/10) and all four support pairs (PSNR=inf, CI 10/10 each). Key discriminating signal: target saturation_chroma_ratio=0.2032 (20% chroma retained) vs 0.0 for sev5 sim; sev5 variants scored only 33.51 dB (HSV) / 29.39 dB (YCrCb). Residual after stripping is exactly zero -> NO_NOISE, no blur (gm_ratio=0.994), no JPEG (block_boundary=1.0087). Initial brightness hypothesis (mean_shift=10.1) was a side effect of HSV desaturation raising RGB mean; adding brightness shift caused 20% highlight clipping and dropped PSNR to 19.35 dB.",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "saturate_weaken_HSV",
+            "severity": 5
+          }
+        ],
+        "psnr": 33.51,
+        "function_family": "saturate_weaken",
+        "note": "severity-adjacent backup; chroma_ratio=0.0 vs target 0.2032, superseded"
+      }
+    ],
+    "support_verification": {
+      "pair0": "PSNR=inf, CI=10/10",
+      "pair1": "PSNR=inf, CI=10/10",
+      "pair2": "PSNR=inf, CI=10/10",
+      "pair3": "PSNR=inf, CI=10/10",
+      "pair4": "PSNR=inf, CI=10/10"
+    },
+    "candidate_tests_used": 8,
+    "rounds_used": 3
+  }
+}

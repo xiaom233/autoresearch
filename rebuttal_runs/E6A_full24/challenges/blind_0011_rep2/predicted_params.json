@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0011_rep2",
+  "pipeline": [
+    {"function": "noise_speckle", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "blur_gaussian", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 1},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "psnr": 36.95,
+      "ci": "8/10",
+      "function_family": "noise-gaussian",
+      "note": "白端 clipping 闭合但黑端过冲 +2.114pp, 次优噪声族备选"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "psnr": 35.61,
+      "ci": "8/10",
+      "function_family": "no-noise",
+      "note": "无噪声对照 (若实际无噪声, 可解释白端少 1.195pp 的差异)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4}
+      ],
+      "psnr": 34.32,
+      "ci": "7/10",
+      "function_family": "blur-lens",
+      "note": "gaussian↔lens MTF 不可区分, 跨族替代"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR + SIGNAL (sigma_prior=1.85; 剥离后噪声→blur 结构残差用信号验证)",
+    "rationale": "逐层剥离: compression 排除 (block_boundary=1.0017<1.1, unique_G=244/256; 库内 JPEG 最小 q25 必然 >1.1); 全局排除 (contrast_weaken_stretch:2 → PSNR 崩至 17.02; saturation sev1=0.7/0.6 ≠ 观测 0.957; brightness 最小步进 ±25.5 ≫ mean_shift -2.3; quantization 最小 20 色 ≠ unique_G 244); 模糊 = gaussian sev4 (DT: anisotropy 1.214<1.7, glass_score 0.058<0.25; severity 扫描 5→34.91, 4→35.61, 3→33.93 峰值 sev4; lens:4=34.32 低 1.3dB; verify_signals 5/5 对 support 上 spectral_slope + wiener_kernel MATCH); 噪声 = speckle sev1 (blur-only 模拟比 target 少 1.195pp 纯255像素 → 预模糊噪声亮区 clipping; gaussian_RGB:1 白端闭合但黑端过冲 +2.114pp, speckle:1 白端 diff=0.000/黑端 -0.056(3%)、PSNR 39.93、CI 10/10; speckle:2=37.93 确认峰值; 剥离后 vm_slope=0.0115>0.005 符合 speckle 映射)。噪声步骤按规则永不 LIKELY (seed 失配) → UNCERTAIN; blur LIKELY; overall=UNCERTAIN。共 17 次 test_candidate。support: pair1 PSNR 42.19/CI 8/10, pair2 PSNR 41.16/CI 10/10, pair1-4 信号均 PARTIAL (blur 双信号 + noise:sigma 匹配; structured_residual 为 noise→blur 顺序固有现象)。"
+  }
+}

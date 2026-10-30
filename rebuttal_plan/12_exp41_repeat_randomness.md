@@ -5,6 +5,8 @@
 > 再用**固定训练配置**各训练 R0 并在固定 LQ test 上评估，测量端到端随机性。
 >
 > 日期：2026-10-29。状态：**已按用户要求停止所有实验**。Phase 1 曾启动 Rep A 前 8 个 agent，但只有部分中间文件（如 `blind_0008_repA/reflection.json`），**没有最终 `predicted_params.json`，不作为结果**。重启前先按 §9 的 DC/RS/CLR 计时规范执行；Phase 2（训练/评估）未执行。
+>
+> **2026-10-29 更新**：E6-A full24（`E6-A_full24_repeat2.md`、`rebuttal_runs/E6A_full24/`）已完成 exp41 全 24 场景 × 2 次独立 agent + 固定训练配置/seed + 固定 GT-LQ test + R0→R1→R2，覆盖本计划的 Phase 1（两次独立盲识别）与 Phase 2（固定配置训练/评估）；**E7 不再重启**，其 §9 计时规范仅作后续参考。
 
 ## 1. 问题与预注册
 

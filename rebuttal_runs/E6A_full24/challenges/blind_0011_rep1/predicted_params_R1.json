@@ -1,0 +1,48 @@
+{
+  "challenge_id": "blind_0011_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_gaussian", 4]],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "noise_gaussian_RGB", "severity": 1}, {"function": "blur_gaussian", "severity": 4}],
+      "support_psnr_pair0": 36.98,
+      "r1_signal_verdict": "PARTIAL",
+      "reason": "R0's highest pair0 PSNR (+1.37 dB) but R1 signal test on pair0 returns PARTIAL with structural-residual mismatch (FWHM=106px), identical failure pattern to R0's noise sev3/4/5; plus extreme-pixel contradiction on all 5 pairs (every pre-blur noise sim collapses both <=1 and >=254 fractions to ~0%, while target preserves dark extremes exactly equal to blur-only sim: 2.11 vs 2.09%, 18.00 vs 17.97%). Kept only as training-PSNR arbitration backup, NOT recommended."
+    },
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 5}],
+      "psnr_rgb": 34.91,
+      "reason": "severity backup from R0 scan (R1 control 5/5 support reproduction confirms sev4; R0 scan {3:33.93, 4:35.61, 5:34.91})"
+    },
+    {
+      "pipeline": [{"function": "blur_lens", "severity": 4}],
+      "psnr_rgb": 34.32,
+      "reason": "cross-family backup from R0 (gaussian<->lens MTF indistinguishable; 1.3 dB below control)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "mode": "PSNR",
+    "support_validation": "blur_gaussian:4 reproduced on 5/5 support pairs by R1 re-run: 35.61 / 39.83 / 37.86 / 43.52 / 41.53 dB (pair0-4), identical to R0 support_verification. No R1 candidate improved pair0: noise_gaussian_RGB:1+blur4 = 36.98 dB (R0, +1.37, signal PARTIAL -> fails noise criterion), brightness_darken_gamma_RGB:1 after blur = 20.34 dB (-15.3), contrast_weaken_scale:1 after blur = 25.06 dB (-10.6).",
+    "rationale": "R1 re-analysis reproduces R0 signals on all 5 pairs (block_boundary 0.9990-1.0017 << 1.1; unique_G ratios 0.83-0.95 with pair3 clean itself only 233; gm_ratio/anisotropy/glass all Gaussian-sev4-like; noise_prior sigma 0.74-1.85 at estimator floor). Two R0 statements are corrected: (1) the '2.11% clipped whites' is actually DARK clipping (<=1) - decomposed per pair target highlight (>=254) = 0.0% everywhere, dark extremes match blur-only sim almost exactly (2.11/18.00% vs 2.09/17.97%); noise is still rejected because all pre-blur noise sims erase BOTH extreme fractions to ~0%. (2) The intensity-dependent residual flagged by ric=0.20-0.38 on 3/5 pairs (gamma_suspect) is a systematic HIGHLIGHT-SHOULDER tone curve present on all pairs: residual (target - blur4 sim) is ~-0.5 below 128, -1..-4 at 160, -3..-5 at 192, -8..-11 at >=224 levels; a pure linear tone fit would gain +0.5..+2.4 dB (pair0 35.61->38.00). But no x_distortion global function has a mild enough minimum severity (brightness shift +/-25.5 or gamma 0.8/1.4; contrast 0.75/1.4; stretch identity/0.9; saturation 0.7/0.6; quantization 20-24 colors would collapse unique_G 244-><=24), and numeric tests confirm (brightness-gamma 20.34 dB, contrast-scale 25.06 dB). Non-x_distortion blur re-implementations (PIL/cv2/linear-light/JPEG-intermediate q90-98) were also checked and none exceeds 35.5 dB, so the shoulder is a generator-side OOD tone difference that no representable pipeline can remove. Best representable pipeline therefore remains blur_gaussian:4 (UNCERTAIN because pair0 simulation PSNR 35.61 is in the 30-40 band)."
+  },
+  "signal_sources": [
+    "R1 rerun full_analysis pair0 (full_analysis_R1.json) identical to R0; pairs1-4 new (full_analysis_R1_p1..p4.json): block_boundary 1.0017/1.0007/0.9990/1.0005/0.9995 -> NO JPEG on any pair (0% FP signal)",
+    "unique_G target/clean ratios 0.953/0.945/0.926/0.833/0.898: pair3 194 because its clean already has 233 unique G values -> no quantization (dct_zero_ratio tracks blur-only sim 0.8271)",
+    "blur DT: gm_ratio 0.1811/0.3347/0.2216/0.3805/0.2025 (pair0 matches blur4 sim 0.1810 exactly), FFT anisotropy 1.15-1.58 (<1.7 excludes motion), glass_score 0.039-0.058 (<0.25 excludes glass), pca_ratio 1.33; PSNR scan 3/4/5 = 33.93/35.61/34.91 peaks at sev4",
+    "noise: whole-image noise_prior sigma 1.85/1.11/0.74/0.74/0.99 (pair0 identical to blur-only sim 1.85); step2 GAUSSIAN_YCrCb branch fires on cross_ch_corr>0.12 (blur-contaminated) and its sev5 for sigma<10 is a script fallthrough, not evidence",
+    "peeled residual (blur_gaussian:4 peel, R0 values + R1 check): spatial_corr 0.998 structural, cross_ch 0.72, extreme_pct 77.7% is the documented negative-residual artifact",
+    "clipped_fraction decomposition (R1, per-channel): target <=1 = 2.11/0.01/0.03/0.27/18.00%, target >=254 = 0.0% all pairs; blur-only sim <=1 = 2.09/0.01/0.03/0.02/17.97%, >=254 = 1.37/0.15/0.06/0.0/0.0%; all pre-blur noise sims (gaussRGB1/3/4/5, YCrCb2) clip = 0.0% (noise erases dark extremes) -> noise contradicted on 5/5 pairs",
+    "residual_intensity_corr 0.112/0.291/-0.020/0.203/0.378: script itself flags gamma_suspect_from_noise=True on pairs1/3/4 (pair0 just below the 0.15 threshold) -> residual is deterministic intensity-dependent, not random noise",
+    "tone-shoulder quantification (R1): bin-mean residual target-blur4sim by sim intensity, all pairs monotone negative; linear tone fit gains +2.38/+1.37/+2.15/+0.54/+1.39 dB; identical shoulder on 5/5 pairs -> systematic generator-side tone difference",
+    "numeric closure of global families: blur4+brightness_darken_gamma_RGB:1 = 20.34 dB, blur4+contrast_weaken_scale:1 = 25.06 dB (both far below control 35.61)"
+  ],
+  "qwen_gate": {
+    "available": false
+  }
+}

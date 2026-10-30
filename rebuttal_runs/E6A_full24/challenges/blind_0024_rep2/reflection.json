@@ -1,0 +1,1040 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=1.0022, unique_G=232 (clean 234), dct_zero_ratio=0.239",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.859 (gradients stronger than clean), spectral_slope_ratio=0.9265, FFT anisotropy=0.0, pca=0.0",
+      "noise": "sigma_prior=1.11 (<2 → NO_NOISE per SKILL); residual_intensity_corr=0.137, cross_ch_corr=0.172, spatial_corr=0.927 (被全局退化污染, 不可靠)",
+      "global": "BRIGHTNESS_darken (mean_shift=-34.7) + SATURATION_strengthen (chroma_ratio=3.74); variance_ratio=1.2305, clipped_fraction=0.0404"
+    },
+    "mode": "PSNR (sigma=1.1 < 2, PSNR可用)",
+    "suspected": [
+      "brightness_darken_shfit_HSV (mean_shift=-34.7 ≈ V shift -0.2 → sev2)",
+      "saturate_strengthen_HSV (chroma_ratio=3.74, HSV S scaling; sev 待扫)",
+      "brightness 子类型: shfit_HSV vs shfit_RGB vs gamma_HSV/RGB 待辨别"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary=1.002, unique_G≈clean)",
+      "blur (gm_ratio>0.85 且 spectral_slope_ratio<1.08, 无 blur 迹象)",
+      "noise (sigma=1.11 < 2 → NO_NOISE; 需在剥离全局后退化残差复核)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false
+  },
+  "noise_6step_check": {
+    "measured_on": "peeled residual (target - saturate_strengthen_HSV:2 simulated), pair 0",
+    "extreme_pct": 63.91,
+    "zero_ratio": 0.0417,
+    "vm_slope": 1.3936,
+    "var_slope": 0.4898,
+    "spatial_corr": 0.9628,
+    "rgb_ratio": 1.9172,
+    "cross_ch_corr": 0.3063,
+    "ch_stds": {
+      "R": 15.2,
+      "G": 28.0,
+      "B": 29.1
+    },
+    "residual_std": 25.5,
+    "noise_prior_sigma_on_peeled_residual": 1.73,
+    "diagnosis": "NO_NOISE (主预测不含 noise 步骤)。extreme_pct=63.9% 对带符号残差为假阳性(SKILL 已知失败模式, sigma<5 时忽略)；spatial_corr=0.96 表明白噪声假设不成立(白噪声应≈0.11)，残差由平滑的 saturation 映射误差主导。仅保留微量高频证据: target dct_zero_ratio=0.239 vs clean 0.720 (σ_HH≈1.1, 见 noise_prior)，提示存在低于库最小粒度的加性噪声(库最小 noise_gaussian_RGB:1 σ=12.75, ≈11×实测)，无法用 x_distortion 表示，故不写入主管线。"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:5",
+        "thinking": "信号: mean_shift=-34.7 → V通道减0.2(sev2)产生约-35 RGB均值; saturation_chroma_ratio=3.74 → HSV S放大(sev5=×64); 无 blur/compression, sigma=1.1<2 无噪声。全分析直接映射的全局组合。顺序按 brightness→saturation (ISP后期)"
+      },
+      "test_result": {
+        "psnr_rgb": 6.6,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:2",
+        "thinking": "隔离测试: 单独 brightness_darken_shfit_HSV sev2 (V-0.2), 检验 mean_shift=-34.7 是否仅由 brightness 解释; saturation 部分单独评估。R1 组合 PSNR=6.6 且 sim 零像素过多(impulse_pct_zero +32.5%), 说明全局强度过高, 需拆解归因"
+      },
+      "test_result": {
+        "psnr_rgb": 17.0,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:5",
+        "thinking": "隔离测试 saturation: 两张样本的平坦天空均出现彩色颗粒(saturation 放大近灰像素 S 所致), 色度比 3.74; 但纯 saturation 不改变 V, 无法解释雕像变暗, 先量化 saturation 单独的贡献 (sev5 = S×64 上限假设)"
+      },
+      "test_result": {
+        "psnr_rgb": 7.23,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:3",
+        "thinking": "R3 显示 sat sev5(×64) 产生过多通道归零(比 target 多 29pp), 饱和度过强; R2 显示 brightness sev2 的暗部归零比例接近 target(diff -0.84pp), 且 target pct_255≈0 支持 HSV-S 缩放(不抬高 V)。保留 brightness sev2, saturation 降到 sev3(×12)"
+      },
+      "test_result": {
+        "psnr_rgb": 10.44,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:2",
+        "thinking": "换亮度子类型: target unique_G≈237 很高(几乎不量化), 而 shift_HSV 减常数会压缩暗部造成大量重复值(sim 仅~173); gamma(V^1.8) 单调无裁剪, 保持唯一值数, 且 gamma_HSV sev2 理论 mean shift≈-30~-39 接近 -34.7。先单独测试隔离亮度子类型"
+      },
+      "test_result": {
+        "psnr_rgb": 16.88,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:1",
+        "thinking": "标定测试: 单独 sat sev1(×3, 最弱) 的 PSNR 近似恒等基线, 用于衡量各亮度候选相对无退化的增益。同时验证 target 色度比 3.74 的最弱解释 (×3 放大近灰 S 产生粉彩色斑)"
+      },
+      "test_result": {
+        "psnr_rgb": 17.35,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "重新归因: pair3(星空)中暗蓝天空 S 高 V 低, S×c 会同时解释 'mean_shift=-34.7'(全饱和像素 min 通道→0, RGB 均值下降) 和色斑, 无需额外 brightness; 亮度候选单独 PSNR(17.0/16.9) 未超过 sat1(17.35) 支持此假设。逐个扫描 sat 严重度: 先 sev2(×6)"
+      },
+      "test_result": {
+        "psnr_rgb": 19.91,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2,brightness_darken_gamma_HSV:2",
+        "thinking": "视觉对比: target 天空保持高亮(V不变, 仅粉彩色斑), 雕像/暗部被强烈压暗 → 选择性压暗中低 V = gamma 型 (V^1.8); sat2 单独 sim 天空粉色均匀但雕像不够暗, gamma2 单独 sim 保持灰度。假设 sat2(×6, 色度/零像素统计匹配 2%) + gamma_HSV:2 (单调无裁剪, unique_G 匹配, mean shift≈-35)"
+      },
+      "test_result": {
+        "psnr_rgb": 18.74,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2,brightness_darken_gamma_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:3",
+        "thinking": "sat2 单独 PSNR=19.9 CI=6/10 为当前最佳, 零像素/唯一值统计接近 target, 但 sim 天空缺斑驳 → 可能 S 放大不够; 单独扫描 sat3(×12), 检验 target 暗部是否由更强 S 饱和(min通道→0)解释, 而非额外 brightness"
+      },
+      "test_result": {
+        "psnr_rgb": 14.12,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2,brightness_darken_gamma_HSV:1",
+        "thinking": "sat2 统计匹配(2-4%)但 sim 雕像仍偏亮; target 是 '天空亮/雕像暗' 的选择性压暗, 对应 gamma 型 V^γ; gamma2 整体太强(18.7<19.9), 降到 gamma1(γ=1.5): 天空 0.92^1.5≈0.88 几乎不变, 雕像 0.5^1.5≈0.35 明显压暗"
+      },
+      "test_result": {
+        "psnr_rgb": 19.54,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2,brightness_darken_gamma_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2,compression_jpeg:1",
+        "thinking": "所有候选的 CI 均残留三项同向偏差: block_boundary 比 target 低 61-72%, overshoot 低 ~380%, zero_crossing 密度高 51% → target 更'块状+振铃+平滑', 符合 JPEG 特征; 且 target 彩色斑块呈 8×8 块状(饱和度放大 JPEG 色度量化噪声)。物理允许 saturation 与 JPEG 同 priority=2 随机序; 先测 sat2→jpeg1(q25)"
+      },
+      "test_result": {
+        "psnr_rgb": 19.99,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:2",
+        "thinking": "关键差异: target chroma_ratio=3.74 是 sat2 HSV(1.94) 的 ~2 倍, 但 mean/clip/var 与 sat2 几乎一致 → 需要'只放大色度、不动亮度/方差'的机制 = YCrCb 色度缩放(绕 128 缩放 Cr/Cb, Y 不变); sev2=×3 与 target 3.74 量级匹配, 且不会像 HSV×6 那样压低 min 通道造成更多暗部归零"
+      },
+      "test_result": {
+        "psnr_rgb": 15.44,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_YCrCb:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1,saturate_strengthen_HSV:2",
+        "thinking": "若 JPEG 在 saturation 之前(同 priority=2 随机序), 则 JPEG 的色度量化噪声被 S×6 放大 → 产生 8×8 块状彩色斑块(与 target 天空块状色斑一致), 且全局统计仍由 saturation 主导(mean/var/clip 与 sat2 相同)。CI 三项残留(block_boundary/overshoot/zero_crossing)普遍指向 target 含 JPEG 样结构"
+      },
+      "test_result": {
+        "psnr_rgb": 19.61,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:1,saturate_strengthen_HSV:2",
+        "thinking": "关键约束: target chroma_ratio=3.74 是 HSV sat2(1.94) 的 2 倍, 但 mean/clip/var 与 sat2 一致 → 需要的第二步'提升色度但几乎不增加均值下降'。gamma_RGB 逐通道压缩(γ>1)会按指数抬高 S(=1-(min/max)^γ), 再经 HSV S×6 放大 → 色度叠加, 且 gamma 单调无裁剪; 顺序符合 brightness(priority 0)→saturation(priority 2)"
+      },
+      "test_result": {
+        "psnr_rgb": 17.42,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,saturate_strengthen_HSV:2",
+        "thinking": "新证据: target dct_zero_ratio=0.239 远低于 sat2 sim(0.72) → target 含细颗粒噪声(DCT 系数处处非零); 剥离 sat2 后残差 std=25.5 恰好等于 noise_gaussian_RGB:2 的 σ(0.1×255)。物理序 noise(priority0)→saturation(priority2)。噪声随机 seed 使 PSNR 不可用, 改看信号: mean/var/clip/chroma/dct_zero 是否同时匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=5550%)",
+          "global:mean_shift (diff=0.1410)",
+          "global:variance_ratio (diff=894%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_spatially_correlated:2,saturate_strengthen_HSV:2",
+        "thinking": "剥离 sat2 残差 spatial_corr=0.96(白噪声应为0.11) → 残差是'平滑噪声'(≈3px 相关); 且 sigma_prior=1.11 远低于残差 std(25.5), 符合平滑噪声(3×3 blur 后 HH/MAD 大幅衰减)。noise_spatially_correlated = 白噪声+3×3 blur, 饱和退化的 S×6 会放大其色度分量 → 2-4px 彩色斑块(与 target 天空/草地斑驳一致), 同时 dct_zero 0.72→0.24，且不产生 255 裁剪。物理序 noise→saturation"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=917%)",
+          "global:mean_shift (diff=0.0415)",
+          "global:variance_ratio (diff=291%)"
+        ],
+        "pipeline": "noise_spatially_correlated:2,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:3,brightness_brighten_gamma_HSV:1",
+        "thinking": "sat3(×12) chroma=2.62 更接近 target 3.74, 但 mean=-63 过暗; 若管线含 brightness_brighten(方向随机) gamma_HSV(γ=0.7) 可选择性提亮中低 V(天空 0.92^0.7=0.94 几乎不动且不裁剪, 雕像 0.5^0.7=0.62 大幅提亮) → 补偿均值, 同时提升 chroma 到 target 水平; HSV 通道独立, 顺序无关"
+      },
+      "test_result": {
+        "psnr_rgb": 14.25,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:3,brightness_brighten_gamma_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "Support 复核 pair1: 检验 sat2 在另一内容(Karnak 神庙)上的 PSNR/CI 一致性; 若 pair0 的最佳候选在多内容上同为最优量级, 则管线一致"
+      },
+      "test_result": {
+        "psnr_rgb": 22.26,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "Support 复核 pair2 (鹦鹉): 验证 sat2 跨内容 PSNR/CI 一致性"
+      },
+      "test_result": {
+        "psnr_rgb": 21.93,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "Support 复核 pair3 (星空/摩天轮): 验证 sat2 跨内容一致性"
+      },
+      "test_result": {
+        "psnr_rgb": 14.84,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "Support 复核 pair4 (狮子): 验证 sat2 跨内容一致性"
+      },
+      "test_result": {
+        "psnr_rgb": 22.98,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 22.98,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 22.26,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 21.93,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2,compression_jpeg:1",
+      "psnr_rgb": 19.99,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 19.91,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "compression_jpeg:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 19.61,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2,brightness_darken_gamma_HSV:1",
+      "psnr_rgb": 19.54,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2,brightness_darken_gamma_HSV:2",
+      "psnr_rgb": 18.74,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 17.42,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:1",
+      "psnr_rgb": 17.35,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:2",
+      "psnr_rgb": 17.0,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:2",
+      "psnr_rgb": 16.88,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "saturate_strengthen_YCrCb:2",
+      "psnr_rgb": 15.44,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 14.84,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:3,brightness_brighten_gamma_HSV:1",
+      "psnr_rgb": 14.25,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:3",
+      "psnr_rgb": 14.12,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:3",
+      "psnr_rgb": 10.44,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:5",
+      "psnr_rgb": 7.23,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:5",
+      "psnr_rgb": 6.6,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "saturate_strengthen_HSV",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "mode": "PSNR (sigma=1.1 < 2)",
+    "rationale": "压缩/模糊/噪声均被排除: block_boundary=1.0022±0.005 (全 5 对, 0%FP 判据), spectral_slope_ratio=0.9265 + FFT anisotropy=0.0 + pca=0.0, noise_prior sigma=1.11 (pair2=1.1). 全局退化为 saturation_strengthen_HSV:2: 其模拟在 pair0 复现 mean_shift(-31.0 vs -34.7), variance_ratio(1.2311 vs 1.2305), clipped_fraction(0.0398 vs 0.0404), 且 HSV-S 缩放不抬高 max 通道 → 解释 target pct_255≈0 + pct_zero≈4% (min 通道归零导致整体变暗, 而非 brightness 步骤; 单独 brightness 候选 PSNR 16.9-17.0 均低于 sat2). 5 对 support 复核: pair0 19.91dB/6-10, pair1 22.26/7-10, pair2 21.93/7-10, pair4 22.98/7-10 一致; pair3(极暗星空) 14.84/2-10 偏弱(暗部 chroma 相对误差放大). 残余不匹配: target chroma_ratio=3.74 为 sat2(1.94) 的 ~2×, dct_zero 0.239 远低于 clean 0.720 → 存在微量高频加性噪声(σ_HH≈1.1, dct 填充), 但 x_distortion 最小噪声 σ=12.75 远超实测, 纳入会严重过噪 (noise_gaussian_RGB:2+sat2 实测 chroma=14.2/var=3.29, verify WEAK), 故不纳入; 该未建模成分为 verdict=UNCERTAIN 的主因 (确定性步骤的 PSNR 未达 40dB 门槛).",
+    "support_validation": {
+      "pair0": {
+        "psnr_rgb": 19.91,
+        "ci_pass": "6/10"
+      },
+      "pair1": {
+        "psnr_rgb": 22.26,
+        "ci_pass": "7/10"
+      },
+      "pair2": {
+        "psnr_rgb": 21.93,
+        "ci_pass": "7/10"
+      },
+      "pair3": {
+        "psnr_rgb": 14.84,
+        "ci_pass": "2/10",
+        "note": "极暗内容, 相对误差放大"
+      },
+      "pair4": {
+        "psnr_rgb": 22.98,
+        "ci_pass": "7/10"
+      }
+    },
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "saturate_strengthen_HSV",
+            "severity": 3
+          }
+        ],
+        "function_family": "saturation_HSV",
+        "psnr_pair0": 14.12,
+        "chroma_ratio_sim": 2.6236,
+        "note": "chroma 更接近 target(3.74) 但 mean_shift(-63.2)/var(1.59) 过强, PSNR 显著低于 sev2"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "saturate_strengthen_YCrCb",
+            "severity": 2
+          }
+        ],
+        "function_family": "saturation_YCrCb",
+        "psnr_pair0": 15.44,
+        "chroma_ratio_sim": 2.0428,
+        "note": "跨颜色空间替代; 但 YCrCb 缩放产生 pct_255(0.26pp) 与 target(≈0) 不符, 且 mean 几乎不变(-1.7)"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "saturate_strengthen_HSV",
+            "severity": 2
+          },
+          {
+            "function": "brightness_darken_gamma_HSV",
+            "severity": 1
+          }
+        ],
+        "function_family": "saturation+brightness",
+        "psnr_pair0": 19.54,
+        "note": "第二佳 PSNR; gamma 压暗补充 mean(-42.5), 但 chroma 未改善(1.76)"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "noise_gaussian_RGB",
+            "severity": 1
+          },
+          {
+            "function": "saturate_strengthen_HSV",
+            "severity": 2
+          }
+        ],
+        "function_family": "noise+saturation",
+        "psnr_pair0": null,
+        "note": "针对未建模微量噪声(σ_HH≈1.1)的最接近库表示; 但库最小 σ=12.75 约为实测 11×, 信号验证 WEAK(sigma diff 5550% at sev2), 未纳入主管线, 仅作训练期仲裁备选"
+      }
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "reanalysis": {
+      "full_analysis_rerun": [
+        "full_analysis_R1.json (pair0)",
+        "full_analysis_R1_p1.json",
+        "full_analysis_R1_p2.json",
+        "full_analysis_R1_p3.json",
+        "full_analysis_R1_p4.json"
+      ],
+      "key_signals_5pairs": {
+        "block_boundary": [
+          1.002,
+          1.001,
+          0.997,
+          1.001,
+          0.997
+        ],
+        "unique_G_ratio": [
+          0.99,
+          0.95,
+          0.94,
+          0.59,
+          0.93
+        ],
+        "dct_zero_target": [
+          0.239,
+          0.409,
+          0.393,
+          0.514,
+          0.418
+        ],
+        "noise_prior_sigma": [
+          1.11,
+          1.24,
+          1.11,
+          0.74,
+          1.11
+        ],
+        "gm_ratio": [
+          1.859,
+          0.432,
+          0.878,
+          0.182,
+          0.538
+        ],
+        "spectral_slope_ratio": [
+          0.926,
+          1.049,
+          0.979,
+          1.335,
+          1.026
+        ],
+        "mean_shift": [
+          -34.7,
+          -53.1,
+          -35.5,
+          -11.6,
+          -40.9
+        ],
+        "clipped_fraction": [
+          0.04,
+          0.268,
+          0.254,
+          0.303,
+          0.261
+        ],
+        "variance_ratio": [
+          1.23,
+          2.124,
+          1.169,
+          0.362,
+          1.434
+        ],
+        "spread_ratio": [
+          0.986,
+          1.009,
+          0.938,
+          0.49,
+          0.903
+        ],
+        "chroma_ratio": [
+          3.736,
+          3.444,
+          1.88,
+          1.274,
+          2.519
+        ],
+        "pct255_all_pairs": 0.0
+      },
+      "extra_measurements": {
+        "pair0_sky_flat_region": {
+          "region": "rows 60:260, cols 100:400 (clean local std=0.51, 完全平坦天空)",
+          "target_sky_rgb_mean": [
+            215.5,
+            179.5,
+            165.6
+          ],
+          "clean_sky_rgb_mean": [
+            228.5,
+            220.5,
+            217.5
+          ],
+          "residual_std_rgb": {
+            "R": 9.37,
+            "G": 26.21,
+            "B": 29.42
+          },
+          "residual_std_ycrcb": {
+            "Y": 15.31,
+            "Cr": 14.71,
+            "Cb": 15.42
+          },
+          "residual_cr_autocorr_lag0_8": [
+            1.0,
+            0.97,
+            0.89,
+            0.77,
+            0.63,
+            0.48,
+            0.35,
+            0.23,
+            0.15
+          ],
+          "sat2_sim_sky_rgb_mean": [
+            228.1,
+            180.1,
+            163.1
+          ],
+          "interpretation": "G/B 与 sat2 精确匹配 → HSV 饱和 sev2 核心正确; R(max 通道) 低 12.6 → 轻度 V 压暗; 残差为 4-6px 相关长度的空间相关加性噪声, 经 S×6 放大 (R 通道安静, G/B 大)"
+        },
+        "luma_highpass_5x5_ratio_target_over_clean": [
+          0.41,
+          0.27,
+          0.59,
+          0.11,
+          0.35
+        ],
+        "target_S_stats_pair0": {
+          "Smean": 0.38,
+          "clamp_pct": 11.88,
+          "sat2_sim": {
+            "Smean": 0.387,
+            "clamp_pct": 11.91
+          }
+        },
+        "noise_gate_note": "noise_prior σ=1.11 是亮度小波估计, 对 YCrCb 色度噪声不敏感; 目标平坦区色度噪声 std≈15 被其漏检"
+      },
+      "verdict_vs_signal_contradictions": [
+        "R0 用 pair0 单对信号排除 blur (gm_ratio=1.859, spectral_slope_ratio=0.9265, BLUR_UNLIKELY), 但 gm_ratio 被饱和色梯度污染; 跨 5 对 3/5 gm_ratio<0.85, luma 5x5 高频全部降至 clean 的 0.11-0.59 → 存在 blur 类 luma 平滑, R0 漏检",
+        "R0 'noise_prior sigma=1.11<2 → NO_NOISE' 是色度噪声假阴性: 平坦天空残差 Y/Cr/Cb std 15.7/14.7/14.6 且 Cr lag1=0.96 (空间相关), 非白噪声; dct_zero target 0.239 vs clean 0.720 也指向额外高频成分",
+        "chroma_ratio target 3.74 vs sat2 sim 1.94: 其中色度方差缺口 (Cr var 比 19.7 vs 2.5) 无法由任何饱和函数确定性解释 → 噪声贡献, 而非更强饱和 (sat3 的 mean -63.2 与 target -34.7 不符)",
+        "pair3 的 unique_G 144/243 (0.59) 与 variance_ratio 0.362 由极暗内容 (clean mean 48) 的 min 通道归零压缩解释, 非量化; pct255 全 5 对为 0 支持 HSV 型饱和而非 YCrCb"
+      ],
+      "threshold_boundary_checks": [
+        "block_boundary 0.997-1.002 远低于 1.1 → JPEG 排除 (0%FP 判据)",
+        "spectral_slope_ratio 0.926/1.049/0.979/1.335/1.026: 仅 pair3 超 1.08 (blur 指示), 其余接近阈值 1.0 → 全局斜率对轻度 blur 不敏感, 但 5x5 luma 高频比 0.11-0.59 是更直接证据",
+        "noise_prior sigma 0.74-1.24 均 <2 → 若只看该信号会漏掉色度噪声 (亮度小波对 YCrCb 色度噪声不敏感)"
+      ],
+      "second_order_statistics": [
+        "variance_ratio 1.230 与 sat2 sim 1.231 精确匹配 (pair0) → 全局方差由饱和解释",
+        "clipped_fraction target 0.0404 vs sat2 sim 0.0398, pct255=0 → min 通道归零匹配",
+        "R0 peeled residual spatial_corr 0.9628 (平滑残差) 与残差 std 25.5 → 确定性映射误差 + 结构噪声混合, 不能用于噪声类型判定",
+        "target dct_zero 0.239 vs clean 0.720 vs sat2 0.722 → 高频成分由噪声而非 JPEG 引入"
+      ]
+    },
+    "hypotheses": [
+      {
+        "id": "H0-control",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "signal_source": "S 统计匹配 (Smean 0.380 vs 0.387, clamp 11.88% vs 11.91%), 天空 G/B 均值匹配, pct255=0",
+        "result": "pair0 PSNR=19.91 dB (与 R0 完全一致), CI 6/10 — 确定性核心成立"
+      },
+      {
+        "id": "H1-blur1",
+        "pipeline": "blur_gaussian:1,saturate_strengthen_HSV:2",
+        "signal_source": "5 对 luma 5x5 高频降至 0.11-0.59; 3/5 对 gm_ratio<0.85",
+        "result": "pair0 20.41 dB (+0.50), Yhf 3.63≈target 3.21 — blur 方向正确但增益不足"
+      },
+      {
+        "id": "H2-blur2",
+        "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+        "signal_source": "同上, 扫描 blur 强度",
+        "result": "pair0 20.77 dB (+0.86), Yhf 1.71 (过平滑) — R1 最佳确定性候选, 未达 +2 dB"
+      },
+      {
+        "id": "H3-noise-core",
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:2,saturate_strengthen_HSV:2",
+        "signal_source": "平坦天空残差 RGB std 9.4/26.2/29.4, Y/Cr/Cb std≈15, Cr lag1 0.96; 噪声在饱和前注入并被 S×6 放大 (物理序 noise<blur<saturation)",
+        "result": "天空噪声统计接近 (Yres 14.4 vs 15.3, Cr 12.8 vs 14.7, ac1 0.93 vs 0.96), 但 verify_signals WEAK (2匹配/4不匹配), PSNR 18.58"
+      },
+      {
+        "id": "H4-V-darken",
+        "pipeline": "blur_gaussian:1,saturate_strengthen_HSV:2,brightness_darken_shfit_HSV:1",
+        "signal_source": "天空 R(max) 比 sat2 低 12.6 → 轻度 V 压暗",
+        "result": "brightness_darken_shfit_HSV:1 实测每通道 -25.5 (非 V-12.75), ms -52.4 过暗, PSNR 18.68 — 拒绝"
+      }
+    ],
+    "validation": {
+      "criteria": {
+        "deterministic": "候选在 5 对 support 复现且相对 R0 改善: pair0 >2 dB 或 >35 dB, 其余 pair 不明显变差",
+        "noise": "verify_signals 改善 (WEAK→PARTIAL→MATCH) 在 ≥4/5 对, 或 §B 统计显著改善"
+      },
+      "candidate_tests": [
+        {
+          "round": 1,
+          "pipeline": "saturate_strengthen_HSV:2",
+          "thinking": "R1-Control: 复现 R0 主候选 (sat_HSV:2), 校准指标 (pair0 R0=19.91dB)",
+          "result": {
+            "mode": "psnr",
+            "psnr_rgb": 19.91,
+            "ci_pass": "6/10"
+          },
+          "tool_decision": "REJECT"
+        },
+        {
+          "round": 2,
+          "pipeline": "noise_gaussian_YCrCb:1,saturate_strengthen_HSV:2",
+          "thinking": "R1: target chroma std 膨胀 (Cr 19.7x/Cb 10.9x var) 且 corr(Cr,Cb) -0.08 vs sat2sim -0.21 → 独立色度噪声 sigma~14; noise_prior 1.11 只测亮度, 漏检色度噪声; 库最小 noise_gaussian_YCrCb:1 预期待验证",
+          "result": {
+            "mode": "signal",
+            "verdict": "WEAK",
+            "matched_signals": [
+              "noise:clean_residual"
+            ],
+            "mismatched_signals": [
+              "noise:sigma (diff=4950%)",
+              "global:mean_shift (diff=0.1193)",
+              "global:variance_ratio (diff=740%)"
+            ]
+          },
+          "tool_decision": "TRY_ALTERNATIVE"
+        },
+        {
+          "round": 3,
+          "pipeline": "saturate_strengthen_HSV:2,noise_gaussian_YCrCb:1",
+          "thinking": "R1: 检验库 noise_gaussian_YCrCb:1 在 saturation 之后施加时的有效幅度 (不放大); target 需要 Cr/Cb sigma~14 的色度噪声; 若此顺序幅度合适则统计更接近",
+          "result": {
+            "mode": "signal",
+            "verdict": "WEAK",
+            "matched_signals": [
+              "noise:clean_residual"
+            ],
+            "mismatched_signals": [
+              "noise:sigma (diff=1267%)",
+              "global:mean_shift (diff=0.0131)",
+              "global:variance_ratio (diff=36%)"
+            ]
+          },
+          "tool_decision": "TRY_ALTERNATIVE"
+        },
+        {
+          "round": 4,
+          "pipeline": "blur_gaussian:1,saturate_strengthen_HSV:2",
+          "thinking": "R1: 二阶信号重释 - luma 5x5 高频 5 对一致降至 clean 的 0.11-0.59 (sat2 保持 0.9), gm_ratio 3/5 对<0.85; 重新评估 blur (R0 因 pair0 gm_ratio 被饱和污染而漏判). 测 gaussian blur sev1",
+          "result": {
+            "mode": "psnr",
+            "psnr_rgb": 20.41,
+            "ci_pass": "6/10"
+          },
+          "tool_decision": "TRY_ALTERNATIVE"
+        },
+        {
+          "round": 5,
+          "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+          "thinking": "R1: 二阶信号重释 - luma 5x5 高频 5 对一致降至 clean 的 0.11-0.59 (sat2 保持 0.9), gm_ratio 3/5 对<0.85; 重新评估 blur (R0 因 pair0 gm_ratio 被饱和污染而漏判). 测 gaussian blur sev2",
+          "result": {
+            "mode": "psnr",
+            "psnr_rgb": 20.77,
+            "ci_pass": "6/10"
+          },
+          "tool_decision": "TRY_ALTERNATIVE"
+        },
+        {
+          "round": 7,
+          "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:1,saturate_strengthen_HSV:2",
+          "thinking": "R1: 组合验证 - 物理合法顺序 noise(p0)<blur(p1)<saturation(p2); blur_g1 单独将 luma HF 7.23→3.63 (target 3.21), 色度方差缺口由 YCrCb 噪声补足; 目标 Cr/Cb std 15.2/18.6 vs blur+sat 5.2/12.0",
+          "result": {
+            "mode": "signal",
+            "verdict": "WEAK",
+            "matched_signals": [
+              "blur:spectral_slope",
+              "noise:clean_residual",
+              "global:mean_shift"
+            ],
+            "mismatched_signals": [
+              "blur:wiener_kernel (corr=0.703)",
+              "noise:sigma (diff=300%)",
+              "global:variance_ratio (diff=107%)"
+            ]
+          },
+          "tool_decision": "TRY_ALTERNATIVE"
+        },
+        {
+          "round": 8,
+          "pipeline": "noise_spatially_correlated:1,saturate_strengthen_HSV:2",
+          "thinking": "R1: 平坦天空区残差 Y/Cr/Cb std 15.3/14.7/15.4 且 lag1 autocorr 0.95-0.97 (lag8 0.12-0.19) → 空间相关噪声 (相关长度~4-5px), 被饱和 Sx6 放大成色斑; R0 仅测过 sev2, 测 sev1",
+          "result": {
+            "mode": "signal",
+            "verdict": "WEAK",
+            "matched_signals": [
+              "noise:clean_residual"
+            ],
+            "mismatched_signals": [
+              "noise:sigma (diff=650%)",
+              "global:mean_shift (diff=0.0153)",
+              "global:variance_ratio (diff=173%)"
+            ]
+          },
+          "tool_decision": "TRY_ALTERNATIVE"
+        },
+        {
+          "round": 9,
+          "pipeline": "noise_spatially_correlated:1,blur_gaussian:1,saturate_strengthen_HSV:2",
+          "thinking": "R1: no-blur 版 scn1+sat2 天空残差 sigma 25-27 (target 15) 且 lag1 0.66 (target 0.96); 在 noise 与 saturation 之间加 blur_g1: 降低噪声幅度、拉长相关长度、并解释 luma HF 下降 (7.23→3.63)",
+          "result": {
+            "mode": "signal",
+            "verdict": "WEAK",
+            "matched_signals": [
+              "blur:spectral_slope",
+              "global:mean_shift"
+            ],
+            "mismatched_signals": [
+              "blur:wiener_kernel (corr=0.799)",
+              "noise:sigma (diff=117%)",
+              "noise:structured_residual (FWHM=4.0px)",
+              "global:variance_ratio (diff=84%)"
+            ]
+          },
+          "tool_decision": "TRY_ALTERNATIVE"
+        },
+        {
+          "round": 10,
+          "pipeline": "blur_gaussian:1,saturate_strengthen_HSV:2,brightness_darken_shfit_HSV:1",
+          "thinking": "R1: 天空 V(max=R) 比 sat2 低 13/255, 对应 brightness_darken_shfit_HSV:1 (V-0.05=12.75); sat2 已精确匹配天空 G/B 均值; blur_g1 匹配 luma HF; 组合应同时修正 R 通道与 ms",
+          "result": {
+            "mode": "psnr",
+            "psnr_rgb": 18.68,
+            "ci_pass": "6/10"
+          },
+          "tool_decision": "REJECT"
+        },
+        {
+          "round": 11,
+          "pipeline": "noise_gaussian_RGB:1,blur_gaussian:1,saturate_strengthen_HSV:2",
+          "thinking": "R1: 天空平坦区: 饱和前噪声经 Sx6 放大 → R(max通道)静(9.4) 而 G/B 26-29; 噪声需空间平滑(ac1 0.96) → 白色高斯噪声(库最小 sev1 σ12.75) 经 blur_g1 衰减+平滑后由 sat2 放大; 物理序 noise(p0)<blur(p1)<sat(p2)",
+          "result": {
+            "mode": "signal",
+            "verdict": "WEAK",
+            "matched_signals": [
+              "blur:spectral_slope"
+            ],
+            "mismatched_signals": [
+              "blur:wiener_kernel (corr=0.704)",
+              "noise:sigma (diff=183%)",
+              "noise:structured_residual (FWHM=4.0px)",
+              "global:mean_shift (diff=0.0055)",
+              "global:variance_ratio (diff=60%)"
+            ]
+          },
+          "tool_decision": "TRY_ALTERNATIVE"
+        },
+        {
+          "round": 12,
+          "pipeline": "noise_gaussian_RGB:2,blur_gaussian:2,saturate_strengthen_HSV:2",
+          "thinking": "R1: ng1+bg1+sat2 天空噪声幅度匹配 (G/B 27/27.5 vs 26/29) 但相关长度不足 (ac1 0.78 vs 0.96) 且 HF 偏高; 用更强噪声 sev2 + 更强 blur sev2 换取更长相关长度, 保持幅度",
+          "result": {
+            "mode": "signal",
+            "verdict": "WEAK",
+            "matched_signals": [
+              "blur:spectral_slope",
+              "blur:wiener_kernel"
+            ],
+            "mismatched_signals": [
+              "noise:sigma (diff=50%)",
+              "noise:structured_residual (FWHM=6.0px)",
+              "global:mean_shift (diff=0.0114)",
+              "global:variance_ratio (diff=39%)"
+            ]
+          },
+          "tool_decision": "TRY_ALTERNATIVE"
+        }
+      ],
+      "outcomes": {
+        "deterministic_gate": "FAIL — 最佳 pair0 PSNR 20.77 dB (+0.86 dB, blur_gaussian:2+sat2), < 21.91 (+2 dB); 该候选逐通道仿射校正上界 21.19 dB 仍低于门槛; 平坦天空 target 噪声决定 pair0 PSNR 天花板约 20.6-21.2 dB",
+        "noise_gate": "FAIL — 所有含 noise 候选 verify_signals 均为 WEAK (最佳 2/6 匹配); target 噪声为 4-6px 空间相关 (lag1 0.96), 库噪声 (白噪声 σ_min=12.75, noise_spatially_correlated 相关长度 1-2px) 无法匹配; structured_residual FWHM 4.0-6.0px 始终不匹配",
+        "psnr_note": "含噪声候选的 PSNR (17.3-18.6) 低于 R0 (19.91) 属于独立噪声 seed 的必然结果 (E[(t-s)²] = 映射误差² + σ_t² + σ_s²), 不作为拒绝依据, 拒绝依据为 verify_signals WEAK"
+      }
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {
+          "function": "saturate_strengthen_HSV",
+          "severity": 2
+        }
+      ],
+      "rationale": "确定性核心 sat_HSV:2 被 S 分布、天空 G/B 均值、pct255=0、variance_ratio、clipped_fraction 多重信号确认; 残余不匹配由库无法表示的空间相关色度噪声 (σ≈15, 相关长度 4-6px) 主导, 任何库候选无法通过 PSNR 或 verify_signals 门槛; 确定性候选理论上界 < 门槛, 故保持 R0 pipeline。若后续训练 PSNR 支持, 可将 blur_gaussian:1/2 + sat_HSV:2 作为训练期仲裁备选 (配对证据: luma 5x5 高频 5/5 对下降 41-89%)。",
+      "qwen_gate": {
+        "available": false
+      }
+    }
+  }
+}

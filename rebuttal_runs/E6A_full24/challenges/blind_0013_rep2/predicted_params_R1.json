@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0013_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_speckle", 3], ["compression_jpeg", 2]],
+  "pipeline": [
+    {"function": "noise_speckle", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "noise_speckle", "severity": 2}, {"function": "compression_jpeg", "severity": 1}],
+      "psnr": null,
+      "stats": {"pair0_verdict": "PARTIAL (R23: compression:block_boundary diff=8.3% > 8% threshold; sigma MATCH)", "pair1_verdict": "MATCH (R0 R15)", "function_family": "multiplicative noise + JPEG (lower severity)"},
+      "function_family": "noise+compression",
+      "r1_note": "Rejected by R1 quantitative fingerprint on pair0: mean_shift -4.91 vs target -6.93, variance_ratio 0.8830 vs 0.8426, highlight shoulder -18.4 vs -25.1 at clean=248. Kept only to document severity boundary."
+    },
+    {
+      "pipeline": [{"function": "noise_gaussian_RGB", "severity": 3}, {"function": "compression_jpeg", "severity": 2}],
+      "psnr": null,
+      "stats": {"pair0_verdict": "signal MATCH but global fingerprint MISMATCH (R25)", "function_family": "additive noise + JPEG"},
+      "function_family": "noise+compression",
+      "r1_note": "Cross-family alternative. Passes the 3 coarse verify_signals checks (sigma 0%, bb 2.0%, FWHM 0) but fails the content-independent global fingerprint: mean_shift -2.26 vs -6.93, variance_ratio 0.8989 vs 0.8426, flat-region highlight shoulder [-0.6,-0.8,-1.0,-4.5,-12.7] vs target [-0.6,-1.1,-3.8,-12.3,-25.1]. Additive noise cannot produce the stronger clipping shoulder."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=2.59; qwen gate unavailable)",
+    "support_validation": "R0 control noise_speckle:3 -> compression_jpeg:2 re-validated with fresh noise seeds on all 5 support pairs: 5/5 MATCH (noise:sigma, noise:clean_residual, compression:block_boundary). Quantitative fingerprint pair0: sigma 1.9/1.9 (0.0%), block_boundary 1.3257/1.3160 (0.7%), dct_zero_ratio 0.5587/0.5588 (0.0001), residual FWHM 0.0px; mean_shift -6.93/-6.95, variance_ratio 0.8426/0.8431, clip255 0.0152/0.0153. Per-pair mean_shift sim-vs-target deltas <=0.03 levels and variance_ratio deltas <=0.0012 (p0 -6.93/-6.95 & 0.8426/0.8431; p1 -3.50/-3.50 & 0.9387/0.9388; p2 -3.27/-3.24 & 0.9111/0.9123; p3 -0.85/-0.85 & 0.9872/0.9876; p4 -9.07/-9.06 & 0.8106/0.8108). Block boundary per pair within 0.1-0.9%; dct_zero_ratio within 0.0005-0.0035.",
+    "rationale": "R1 re-analysis confirms R0 and finds no candidate that matches better. New evidence: (1) the apparent 'global tone step' (mean_shift<0, variance_ratio<1, asymmetric highlight roll-off measured in flat regions: identity below clean~150 then -3.8 @192, -12.3 @222, -25.1 @248, -28.6 @254) is fully reproduced by speckle:3 -> JPEG:2 through multiplicative-noise clipping at 255 plus JPEG smoothing, with a flat-region curve match within 0.4 levels at every bin; no x_distortion global function (brightness shift/gamma, contrast scale/stretch, saturation, quantization) can produce an asymmetric highlight-only shoulder, so no global step is warranted. (2) dct_zero_ratio is a strong overlooked discriminator: target 0.5587 vs JPEG-only-on-clean 0.7278 (diff 0.169) vs speckle:3+JPEG:2 0.5588 (diff 0.0001), proving noise precedes JPEG and fixing the JPEG severity. (3) step2's GAUSSIAN_YCrCb verdict is a JPEG/gamma-suspect false positive (cross_ch 0.79-0.94 from JPEG YCbCr operations + shared clipping; residual_intensity_corr 0.25-0.57 from the |residual|-vs-intensity relation of the clip shoulder). (4) peeled extreme_pct 62.8-65% is a 'res<=0' convention FP (residual=target-sim, mean shift -7 makes about half of all pixels count as extreme; zero_ratio only 0.072). (5) pair4 chroma ratio 1.2423 is content-dependent (pairs range 0.89-1.24), no consistent saturation step. (6) blur ruled out again (spectral_slope_ratio 0.969-0.995, anisotropy 0). All 5 pairwise candidates that alter the noise type/severity or JPEG severity either fail a signal check or break the continuous global fingerprint (speckle2+jpeg1 bb 8.3%; speckle4+jpeg2 sigma 40% + ms -9.12/vr 0.812; gaussian_RGB3+jpeg2 ms -2.26/vr 0.899; YCrCb3+jpeg2 sigma 40%; speckle3+jpeg3 bb 16.1%/dct 0.6445). Decision NO_CHANGE; verdict kept UNCERTAIN per SKILL (noise step can never be LIKELY; PSNR>=40dB unreachable under noise).",
+    "qwen_gate": {"available": false}
+  },
+  "signal_sources": [
+    "full_analysis_R1 (5 pairs): block_boundary 1.326-1.744 (JPEG 0%FP); spectral_slope_ratio 0.969-0.995, FFT anisotropy 0 (blur ruled out)",
+    "step2 cross_channel_corr 0.79-0.94 + residual_intensity_corr 0.25-0.57 -> JPEG/gamma-suspect FP, not YCrCb noise",
+    "variance_ratio 0.811-0.987 and mean_shift -9.07..-0.85 across pairs -> content-scaled multiplicative effect, not a fixed global step",
+    "flat-region (3x3 sd<2) tone curve of target: identity <=150, -3.8@192, -12.3@222, -25.1@248, -28.6@254 -> asymmetric highlight shoulder",
+    "speckle:3+jpeg:2 simulation reproduces the shoulder ([-0.4,-1.2,-3.7,-12.2,-25.1] vs [-0.6,-1.1,-3.8,-12.3,-25.1]) and global stats (ms -6.95 vs -6.93; vr 0.8431 vs 0.8426; clip255 0.0153 vs 0.0152)",
+    "dct_zero_ratio target 0.5587 vs jpeg-only 0.7278 vs speckle3+jpeg2 0.5588 -> noise must precede JPEG",
+    "peeled_noise_check (jpeg:2 peel): vm_slope=0.4935 (multiplicative), var_slope=-0.0093 (not Poisson), rgb_ratio=1.0547 (not YCrCb), extreme_pct=64.8%/zero_ratio 0.072 (clipping FP, not impulse)",
+    "verify_signals 5/5 support pairs MATCH with sigma 0.0% and bb 0.1-0.9%"
+  ]
+}

@@ -1,0 +1,621 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED (block_boundary=2.9022, dct_zero_ratio=0.8989, unique_G=256 无量化) -> JPEG 强证据",
+      "blur": "MOTION_BLUR (residual_anisotropy=1.7022>1.7, blur_pca_ratio=4.625, gm_ratio=0.2579, spectral_slope_ratio=1.2667) -> 强模糊, 子类型需 PSNR/信号二元对比 (motion vs gaussian/lens)",
+      "noise": "GAUSSIAN_YCrCb (noise_prior_sigma=2.22, spatial_corr=0.8462, cross_channel_corr=0.8285) 但 failure_risk=FP_YCrCb_BLUR_JPEG: 高空间相关可能来自 blur/JPEG 而非真噪声; 需剥离确定性退化后重检",
+      "global": "NO_GLOBAL (mean_shift=-0.6/255≈-0.002, variance_ratio=0.8825 由 blur 解释, saturation/chroma ratio 0.956)"
+    },
+    "mode": "SIGNAL (sigma=2.22)",
+    "qwen_gate": {
+      "available": false,
+      "reason": "Qwen/API 环境不可用, sigma=2.22 边界门跳过"
+    },
+    "plan": "逐层剥离: (1) JPEG severity 由 block_boundary+dct_zero 信号定标; (2) blur 子类型二元对比 (motion vs gaussian vs lens) 用 spectral_slope+wiener 核信号; (3) peeled_noise_check 在剥离确定性后退化的残差上做 §B, 判断 noise 是否真实存在; (4) 最终管线 signal 验证 + 4 对 support 复核"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 69.16,
+    "vm_slope": 0.6802,
+    "var_slope": 0.1217,
+    "spatial_corr": 0.9842,
+    "rgb_ratio": 1.0467,
+    "cross_ch_corr": 0.8481,
+    "zero_ratio": 0.3629,
+    "residual_std": 18.6,
+    "peeled_sigma_prior": 4.45,
+    "input_residual_sigma_prior": 2.22,
+    "input_spatial_corr": 0.8462,
+    "input_cross_ch_corr": 0.8285,
+    "input_residual_intensity_corr": 0.0916,
+    "diagnosis": "剥离 blur_motion:5+compression_jpeg:3 后的 §B 全部被确定性残差(随机 motion 角度失配)主导: residual_std=18.6, spatial_corr=0.9842. extreme_pct=69.16%>50% 且 peeled noise_prior sigma=4.45<5 → 命中 SKILL 已知 IMPULSE 假阳性规则 (JPEG/blur 伪影), 忽略. rgb_ratio=1.0467<1.4 → 排除 YCrCb. 决定性对照: 不含任何噪声的 motion:5+jpeg:4 模拟图自身 run_full_analysis 得 noise_prior_sigma=2.22, spatial_corr=0.8383, cross_channel_corr=0.8127, 与 target (2.22/0.8462/0.8285) 完全一致 → target 的噪声信号(含 GAUSSIAN_YCrCb verdict)完全是 blur+JPEG 伪影, 判定 NO injected noise. 若噪声真实存在只可能是 noise_gaussian_RGB:1 在 blur 前 (σ=12.75 经 motion:5 核衰减≈1.95≈2.22), 已保留为 alternative."
+  },
+  "support_verification": {
+    "pipeline_tested": "blur_motion:5,compression_jpeg:3",
+    "pairs": {
+      "p0": {
+        "verdict": "PARTIAL",
+        "spectral_slope": "match",
+        "block_boundary": "match",
+        "wiener_kernel": 0.306,
+        "note": "pair0 主分析; PSNR 21.27/21.92 dB (motion 角度随机), CI 10/10 x2"
+      },
+      "p1": {
+        "verdict": "PARTIAL",
+        "spectral_slope": "match",
+        "block_boundary": "match",
+        "wiener_kernel": 0.215
+      },
+      "p2": {
+        "verdict": "PARTIAL",
+        "spectral_slope": "match",
+        "block_boundary": "match",
+        "wiener_kernel": 0.801
+      },
+      "p3": {
+        "verdict": "WEAK",
+        "spectral_slope": "diff=0.087 边缘超标",
+        "block_boundary": "match",
+        "wiener_kernel": 0.171
+      },
+      "p4": {
+        "verdict": "WEAK",
+        "spectral_slope": "match",
+        "block_boundary": "diff=9% 边缘超标",
+        "wiener_kernel": 0.155
+      }
+    },
+    "summary": "5 对中 3 PARTIAL + 2 边缘 WEAK; spectral_slope 5/5 通过(4 严格+1 差0.087), block_boundary 4/5 严格+1 差9%. wiener kernel 全低 (0.155-0.801) 为 motion 随机角度 + JPEG 污染的必然结果, 不作为否定依据. 跨图一致性支持 blur_motion:5 + compression_jpeg:3."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_motion",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 3,
+        "verdict": "LIKELY"
+      }
+    ],
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "blur_motion",
+            "severity": 4
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 3
+          }
+        ],
+        "reason": "severity ±1 边界; 单次 PSNR 28.28 (复测仅 20.92, 属角度运气); slope diff=0.100 边缘; CI 一次 10/10"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_motion",
+            "severity": 5
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 4
+          }
+        ],
+        "reason": "JPEG sev+1; block_boundary 差 35% (motion5+jpeg4 实测 bb=3.9202 vs target 2.9022), 过重"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "noise_gaussian_RGB",
+            "severity": 1
+          },
+          {
+            "function": "blur_motion",
+            "severity": 5
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 3
+          }
+        ],
+        "reason": "若目标确有噪声的唯一自洽解; 但无噪声对照复现全部噪声信号, 且加噪 CI 降至 7/10 → 不采信"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "compression_jpeg:3 — block_boundary=2.9022 (0%FP) + dct_zero=0.8989; 联合 severity 扫描 jpeg3 匹配 (<8%), jpeg4 35%/jpeg5 18%/jpeg3-only 27% 偏差; support 5 对 4 严格匹配+1 差 9%; CI block_boundary_ratio 差 4% → LIKELY. blur_motion:5 — PCA=4.625>2.5 (0%FP) + anisotropy=1.7022; gaussian:5 全信号失配; lens/gaussian 剥离残差 (21.8/21.1) 大于 motion (18.6); gm_ratio=0.2579→sev5; 无噪声 motion5+jpeg4 模拟图与 target 信号几乎完全一致 (gm/slope/PCA/sigma/variance); 但 motion 角度随机使 wiener kernel (<0.85) 与 PSNR(~21dB) 无法确认 severity, 且 sev4 在单次 PSNR 可到 28.28 → 保守标 UNCERTAIN. noise 排除 (见 noise_6step_check)."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "Step1 JPEG: block_boundary=2.9022(0%FP) + dct_zero_ratio=0.8989 均为强 JPEG 证据; 目标 PNG 1.27MB vs clean 6.08MB, 先测最重 sev5(q=5)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=18%)"
+        ],
+        "pipeline": "compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "Step1 JPEG severity 扫描: sev5 block_boundary 差 18%% (dct_zero 匹配) -> 按 §C 强制 severity 扫描先降一档 sev4(q=8); 目标 bb=2.90 或介于 sev4/5 之间"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=10%)"
+        ],
+        "pipeline": "compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "Step1 JPEG severity 扫描: sev5 diff=18%% -> sev4 diff=10%% (单调改善) -> 继续 sev3(q=12), 目标 bb 可能被后续 blur 衰减"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=27%)"
+        ],
+        "pipeline": "compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "thinking": "Step2 blur 子类型: DT residual_anisotropy=1.7022>1.7 + PCA=4.625>2.5 -> MOTION 主候选; 物理顺序 blur(priority1)->JPEG(priority2) 存储最后; JPEG 用 sev4(bb 差最小10%%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.176)",
+          "compression:block_boundary (diff=35%)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "thinking": "Step2 blur 二元对照: motion:5 kernel corr 仅 0.176 + bb diff 35%% -> 测 gaussian:5 (SKILL DT 默认族/已知 motion FP ~18%%); 仍 JPEG sev4 在后"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.178)",
+          "blur:wiener_kernel (corr=0.458)",
+          "compression:block_boundary (diff=50%)"
+        ],
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "thinking": "Step2 motion severity 扫描: motion:5 slope 匹配但 bb diff=35%% (预模糊过强) -> gaussian:5 全 MISMATCH (slope 0.178) -> motion 族保持, sev-1 测 motion:4(radius15,sigma9)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.111)",
+          "blur:wiener_kernel (corr=0.317)",
+          "compression:block_boundary (diff=28%)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_lens:5,compression_jpeg:4",
+        "thinking": "Round1 blur 全覆盖(第三族 lens): radial_ratio 内容依赖不可靠, 但 SKILL 要求 gaussian+lens+motion 至少3种; lens:5(radius8 disk) 验证是否比 motion 更好 (motion:5 slope✓/bb35%%, gaussian:5 全差)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.397)",
+          "compression:block_boundary (diff=37%)"
+        ],
+        "pipeline": "blur_lens:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "JPEG severity 联合扫描: 强模糊下 bb 被抬高 (motion5+jpeg4=35%%, gaussian5+jpeg4=50%%, motion4+jpeg4=28%%) -> 若 jpeg4-only bb 低于 target 2.90, 则需更弱 JPEG 平衡; 测 motion:5+jpeg:3(q=12) 看 bb 是否回落"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.306)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "PARTIAL 后强制 severity 扫描: motion:5+jpeg:3 已匹配 slope+bb, 仅 wiener(0.306) 未过 (motion 角度随机+JPEG 污染); 测 motion:4 看 kernel corr 是否改善且 slope/bb 保持"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.100)",
+          "blur:wiener_kernel (corr=0.670)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+        "thinking": "Step3 噪声验证: §B IMPULSE 为已知FP(extreme 69%%>50%%且 peeled sigma 4.45<5, 触发 reflection trigger 忽略); peeled rgb_ratio=1.04 排除 YCrCb; noise_prior 预测 gaussian_RGB 且 sigma 低于 sev1 下限 -> 若噪声真实应为 sev1(σ12.75) 被 motion sev5 核衰减 ~0.15 -> 可见σ≈1.9≈目标2.22; 测 1 次验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.157)",
+          "noise:structured_residual (FWHM=22.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "最终管线 PSNR/CI 记录: 记录随机角度下的 PSNR 与 content-independent CI 指标 (block_boundary/unique/overshoot/hf_lf) 供 psnr_ranking 字段"
+      },
+      "test_result": {
+        "psnr_rgb": 21.27,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "替代候选 A: motion severity 4 (跨族同族备选), PSNR/CI 记录与最终候选对比"
+      },
+      "test_result": {
+        "psnr_rgb": 28.28,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+        "thinking": "替代候选 B: 若存在噪声则为 sev1 gaussian_RGB (σ12.75 经 motion:5 核衰减≈1.95≈观测2.22), PSNR/CI 对比确认加噪是否改善"
+      },
+      "test_result": {
+        "psnr_rgb": 20.24,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "motion:5 复测: motion 角度每次随机, 评估 PSNR 方差 (首次 21.27dB); 若复测显著更高则 28.28dB 的 motion:4 也属角度运气, 严重度以 slope/gm_ratio 信号为准"
+      },
+      "test_result": {
+        "psnr_rgb": 21.92,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "motion:4 复测: 首次 28.28dB 显著高于 motion:5 的 21-22dB, 需判断是否稳定 (若稳定则 motion:4 核更匹配且 slope 0.100 为边缘误差)"
+      },
+      "test_result": {
+        "psnr_rgb": 20.92,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 28.28,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 21.92,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 21.27,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 20.92,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 20.24,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    }
+  ],
+  "reflection_R1": {
+    "trigger": "R0 verdict=UNCERTAIN (motion 角度每次随机, wiener kernel/PSNR 无法确认 blur severity) -> 触发 R1 信号重释",
+    "qwen_gate": {
+      "available": false,
+      "reason": "Qwen/API 环境不可用; sigma 边界 (p0 2.22/p3 2.10) 与 p2 3.71 本应触发 Step 0.5, 已跳过并记录"
+    },
+    "reanalysis": {
+      "mode": "5 对 support 全部重跑 run_full_analysis; noise 已由跨图自洽排除 -> 确定性部分用 PSNR + 幅度信号双重验证",
+      "cross_pair_signals": {
+        "block_boundary": [
+          2.9022,
+          2.5177,
+          2.659,
+          2.2123,
+          2.6538
+        ],
+        "dct_zero_ratio": [
+          0.8989,
+          0.9703,
+          0.8713,
+          0.9325,
+          0.9114
+        ],
+        "blur_pca_ratio": [
+          4.625,
+          3.871,
+          4.801,
+          5.505,
+          5.162
+        ],
+        "residual_anisotropy": [
+          1.7022,
+          1.6023,
+          1.7126,
+          2.2774,
+          2.8029
+        ],
+        "spectral_slope_ratio": [
+          1.2667,
+          1.3223,
+          1.4095,
+          1.3258,
+          1.2912
+        ],
+        "gm_ratio": [
+          0.2579,
+          0.3206,
+          0.2285,
+          0.2874,
+          0.3852
+        ],
+        "noise_prior_sigma": [
+          2.22,
+          0.74,
+          3.71,
+          2.1,
+          0.74
+        ],
+        "variance_ratio": [
+          0.8825,
+          0.9338,
+          0.6843,
+          0.8961,
+          0.856
+        ],
+        "saturation_chroma_ratio": [
+          0.9563,
+          1.1601,
+          0.8655,
+          0.9185,
+          0.9346
+        ]
+      },
+      "signal_reinterpretation": [
+        "噪声: p1/p4 noise_prior_sigma=0.74 < 2 (SKILL NO_NOISE), 而 5 对共享同一管线 -> 不可能只在 3 对存在噪声; 无噪声模拟图 (motion5+jpeg3) 逐对复现 sigma 0.74/3.71/2.10/0.74/2.22 (与 target 完全一致) -> GAUSSIAN_YCrCb verdict 是 FP_YCrCb_BLUR_JPEG 伪影 (5/5 模拟图同样误报). 维持 R0 NO_NOISE.",
+        "blur 子类型: PCA=3.87-5.51 (5/5 >2.5, motion 0%FP) + slope_ratio 5/5 >1.26 -> motion 跨图一致; p1 residual_anisotropy=1.6023 是阈值边界 (motion 阈值 1.7, 差 0.098), 若只看 DT 会翻到 glass (glass_score=0.70>0.25, sigma=0.74<3), 由 PCA=3.871 兜底; 无噪声模拟图同样在 p1 给 MOTION_BLUR.",
+        "severity 边界: p4 gm_ratio=0.3852 > 0.35 (run_full_analysis 会映射 sev4), 但 p4 模拟图 (m5) slope_ratio=1.3457 vs target 1.2912 (差 0.055), PCA=5.663 vs 5.162 -> sev5 仍最匹配; p0/p1/p2 模拟 gm 0.2548/0.3239/0.2009 vs target 0.2579/0.3206/0.2285 (p2/p3 内容依赖偏低).",
+        "global 假阳性: p1 saturation_chroma_ratio=1.1601 (SATURATION_strengthen_sev3) -> 无任何 global 步的 motion5+jpeg3 模拟图同样 1.1615; p2 variance_ratio=0.6843/cspr=0.8065 -> 模拟 0.6456/0.7866 (模拟图甚至被判 CONTRAST_weaken_sev3) -> 两者均为 blur+JPEG 内容依赖伪影, 非独立 global 步.",
+        "JPEG severity: m5j3 模拟 bb=3.0703 (target 2.9022, 差 5.8%), dct0=0.8925 (差 0.006); m5j2 模拟 bb=2.3244 (低 20%), dct0=0.8811; m5j4 模拟 bb=3.9202 (高 35%), dct0=0.913 -> jpeg:3 是唯一同时匹配 bb 与 dct_zero 的 severity.",
+        "被忽略的二阶信号: dct_zero_ratio (jpeg severity 的稳定判据, 受 motion 角度影响小于 bb) 支持 jpeg3; variance_ratio/contrast_spread_ratio/saturation_chroma_ratio 的跨图离群值全部被无噪声模拟复现, 证明无需追加 global 步."
+      ]
+    },
+    "hypotheses": [
+      {
+        "id": "C0",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "signal_source": "control: 5/5 对 bb/dct0 -> JPEG; PCA/slope -> motion sev5; 无噪声模拟自洽",
+        "validation": "p0 PSNR 22.63/19.80/23.51 (mean 21.98, CI 10/10x3, bb 2-5%); p1 27.35/p2 21.63/p3 19.78/p4 21.44 (bb 2%/3%/13%/2%)",
+        "decision": "KEEP"
+      },
+      {
+        "id": "C1",
+        "pipeline": "blur_motion:5,compression_jpeg:2",
+        "signal_source": "dct_zero target 0.8989 低于 m5j4 模拟 0.913 -> 真实 JPEG 可能弱于 4, 需排除 2",
+        "validation": "p0 PSNR 24.36/19.90/19.55 (mean 21.27); bb CI 15%/18%/17% 一致偏低; 模拟 bb=2.3244 (-20%), dct0=0.8811",
+        "decision": "REJECT"
+      },
+      {
+        "id": "C2",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "signal_source": "R0 alternative: 单次 PSNR 28.28, wiener corr 0.670 (m5 仅 0.306) -> 疑似 sev4 更匹配",
+        "validation": "p0 PSNR 26.38/29.47/23.83 (mean 26.56, +4.58 dB) 但模拟 slope=1.1836 vs 1.2667, PCA=3.802 vs 4.625, gm=0.2795 vs 0.2579, var_r=0.9062 vs 0.8825; p2 verify_signals WEAK (bb 匹配, slope diff=0.105, wiener 0.362) -> 欠模糊; PSNR 增益为角度失配下弱模糊偏置",
+        "decision": "REJECT"
+      },
+      {
+        "id": "C3",
+        "pipeline": "blur_gaussian:5,compression_jpeg:3",
+        "signal_source": "SKILL Round1 跨族必测 (DT motion FP ~18%)",
+        "validation": "p0 verify_signals MISMATCH (0/3): slope diff=0.214, wiener 0.458, bb 12%",
+        "decision": "REJECT"
+      },
+      {
+        "id": "C4",
+        "pipeline": "blur_lens:5,compression_jpeg:3",
+        "signal_source": "SKILL Round1 跨族覆盖; lens vs motion MTF 形状近似",
+        "validation": "R1 未重测 (预算 15 次已满); R0 lens:5+jpeg4 WEAK (slope 匹配, wiener 0.397, bb 37%), 且 PCA=4.6-5.5 (0%FP motion) 与各向同性 lens 矛盾",
+        "decision": "REJECT"
+      }
+    ],
+    "validation": {
+      "pair0_control_repeats": {
+        "psnr": [
+          22.63,
+          19.8,
+          23.51
+        ],
+        "mean": 21.98,
+        "ci": [
+          "10/10",
+          "10/10",
+          "10/10"
+        ],
+        "block_boundary_diff_pct": [
+          2,
+          5,
+          3
+        ]
+      },
+      "five_pair_control_psnr": {
+        "p1": 27.35,
+        "p2": 21.63,
+        "p3": 19.78,
+        "p4": 21.44,
+        "mean_with_p0": 22.44
+      },
+      "sim_self_consistency_5pair": "m5j3 无噪声模拟 vs target: dct_zero 差<=0.006 5/5; slope_ratio 差<=0.05 4/5 (p2 +0.116); bb 差<=8.7% 5/5; var_r 差<=0.039; sigma 完全一致; p1 saturation 1.1615 vs 1.1601",
+      "change_criterion": "候选需 pair0 PSNR > control +2 dB (或 >35 dB) 且其余 pair 不明显变差; C2 名义 +4.58 dB 但被幅度信号否定 (角度随机下 PSNR 偏向弱模糊), C1/C3/C4 直接不达标 -> 无候选通过"
+    },
+    "decision": {
+      "result": "NO_CHANGE",
+      "pipeline": [
+        {
+          "function": "blur_motion",
+          "severity": 5,
+          "verdict": "UNCERTAIN"
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 3,
+          "verdict": "LIKELY"
+        }
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "rationale": "R1 五对 support 重分析与无噪声模拟自洽验证均支持 R0 管线; 所有可替代候选 (jpeg2/motion4/gaussian/lens) 被 bb/dct0/slope/PCA 信号拒绝; 三类被忽略信号 (p1 saturation, p2 variance, p1 aniso 边界) 均被无噪声模拟复现为伪影."
+    }
+  }
+}

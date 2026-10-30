@@ -1,0 +1,60 @@
+{
+  "challenge_id": "blind_0024_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["saturate_strengthen_HSV", 2]],
+  "pipeline": [
+    {"function": "saturate_strengthen_HSV", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}, {"function": "saturate_strengthen_HSV", "severity": 2}],
+      "function_family": "blur+saturation",
+      "pair0_psnr": 20.77,
+      "note": "R1 最佳确定性候选 (+0.86 dB vs R0 19.91), 但未达 +2 dB 门槛; 仿射颜色校正上界仅 21.19 dB; luma 5x5 高频 1.71 vs target 3.21 (过平滑)"
+    },
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 1}, {"function": "saturate_strengthen_HSV", "severity": 2}],
+      "function_family": "blur+saturation",
+      "pair0_psnr": 20.41,
+      "note": "+0.50 dB; luma 高频 3.63 ≈ target 3.21 最匹配; 但色度方差缺口无法确定性表示, 未达门槛"
+    },
+    {
+      "pipeline": [{"function": "noise_gaussian_RGB", "severity": 2}, {"function": "blur_gaussian", "severity": 2}, {"function": "saturate_strengthen_HSV", "severity": 2}],
+      "function_family": "noise+blur+saturation (物理合法序)",
+      "pair0_psnr": 18.58,
+      "note": "天空平坦区噪声统计最接近 target (Yres 14.4 vs 15.3, Cr 12.8 vs 14.7, ac1 0.93 vs 0.96), 但 verify_signals WEAK (2✗ sigma diff 50%, structured FWHM 6px); 噪声 seed 失配使 PSNR 低于 R0"
+    },
+    {
+      "pipeline": [{"function": "noise_gaussian_YCrCb", "severity": 1}, {"function": "saturate_strengthen_HSV", "severity": 2}],
+      "function_family": "noise+saturation",
+      "pair0_psnr": 9.11,
+      "note": "库 YCrCb 噪声经 S×6 放大后色度 std 58/57 (target 15/19), 幅度严重过强"
+    },
+    {
+      "pipeline": [{"function": "saturate_strengthen_HSV", "severity": 2}, {"function": "brightness_darken_shfit_HSV", "severity": 1}],
+      "function_family": "saturation+brightness",
+      "pair0_psnr": 18.68,
+      "note": "brightness_darken_shfit_HSV:1 实测每通道 -25.5 (非 V-12.75), 全局 ms 过暗 (-52.4 vs target -34.7)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR (pair0 noise_prior sigma=1.11 < 2) + SIGNAL (noise 候选)",
+    "support_validation": "R0 control saturate_strengthen_HSV:2 在 pair0 精确复现 PSNR=19.91 dB (CI 6/10, 与 R0 一致); R0 记录的 5 对 support 仿真 PSNR: pair0 19.91 / pair1 22.26 / pair2 21.93 / pair3 14.84 / pair4 22.98 (训练模型 r0_result support_psnr=21.55)。R1 的最佳确定性候选 blur_gaussian:2 + sat_HSV:2 在 pair0 为 20.77 dB (+0.86 dB), 未达 pair0 >2 dB 门槛; 对该候选做逐通道仿射校正上界为 21.19 dB, 仍低于 21.91, 说明确定性路线受 target 噪声限制不可达。含 noise 候选全部 verify_signals WEAK (最佳 noise_gaussian_RGB:2+blur_gaussian:2+sat_HSV:2: 2 项匹配 / 4 项不匹配: sigma diff 50%, structured_residual FWHM=6.0px, mean_shift diff 0.0114, variance_ratio 39%), 未达 WEAK→PARTIAL 改善门槛。",
+    "rationale": "R1 重跑 5 对 support 的 run_full_analysis 并做跨对信号重释, 确认 R0 的确定性核心 sat_HSV:2 (pair0: Smean 0.380/clamp 11.88% vs sat2 sim 0.387/11.91%; 天空 G/B 均值 179.5/165.6 vs sim 180.1/163.1 精确匹配; pct255=0 于全部 5 对, 排除 YCrCb 饱和)。同时发现 R0 两处漏检: (a) luma 5x5 高频在 5 对全部降至 clean 的 0.41/0.27/0.59/0.11/0.35, 且 3/5 对 gm_ratio<0.85 (0.432/0.182/0.538), 而 pair0 的 gm_ratio=1.859 被饱和色梯度污染; blur_gaussian:1 使 pair0 的 Yhf 3.63≈target 3.21 并 +0.50 dB, 但增益不足 +2 dB。(b) R0 的 'noise_prior sigma=1.11<2 → NO_NOISE' 对色度噪声是假阴性: 平坦天空区 (clean std 0.51) target 残差 Y/Cr/Cb std 15.7/14.7/14.6, Cr lag1 自相关 0.96、lag8 0.15 (相关长度约 4-6px), RGB 残差 R/G/B std 9.4/26.2/29.4 (R=max 通道安静)→ 饱和前存在空间相关噪声并被 S×6 放大; 该噪声结构库内无对应函数 (最小 noise_gaussian_RGB:1 白噪声过强过细; noise_spatially_correlated 相关长度仅 1-2px), 任何噪声候选都只能达到 WEAK。另外 target 天空 V (max=R) 比 sat2 低 12.6, 提示存在低于库粒度的轻度 V 压暗, 但 brightness_darken_shfit_HSV:1 为每通道 -25.5, 加入后 PSNR 降至 18.68。结论: 确定性部分 sat_HSV:2 已接近库可表示上限 (pair0 理论噪声底约 20.6 dB), 无法通过 +2 dB 确定性门槛; 噪声部分不可表示, verify_signals 无改善。故 R1 保持 R0 pipeline 不变 (NO_CHANGE)。"
+  },
+  "signal_sources": [
+    "S 统计: pair0 target Smean 0.380 / S>0.99 占比 11.88% vs sat_HSV:2 模拟 0.387 / 11.91% → HSV S 缩放 sev2 确定性核心确认",
+    "天空 (pair0 平坦区 100:400,60:260, clean std=0.51) 残差: Y/Cr/Cb std 15.7/14.7/14.6, Cr lag1 自相关 0.96 → 空间相关加性噪声 (相关长度 4-6px), noise_prior 只测亮度故 σ=1.11 漏检",
+    "天空 RGB 残差 std R 9.4 / G 26.2 / B 29.4 → 噪声在饱和前注入并被 S×6 放大 (max 通道 R 安静)",
+    "5 对 luma 5x5 高频比 target/clean = 0.41/0.27/0.59/0.11/0.35 → 模糊类 luma 平滑 (R0 以 pair0 gm_ratio=1.859 排除 blur, 该信号被饱和色梯度污染; 3/5 对 gm_ratio<0.85)",
+    "色度方差比: pair0 target Cr/Cb var 比 19.69/10.94 vs sat_HSV:2 2.47/4.67 → 饱和无法解释的色度方差缺口 (噪声)",
+    "dct_zero_ratio: target 0.239 vs clean 0.720 vs sat2 sim 0.722 → 目标含额外高频成分 (噪声), R0 未建模",
+    "天空均值: target (215.5,179.5,165.6) vs blur_g1+sat2 模拟 (228.1,180.1,163.1) → G/B 精确匹配, R(max) 高 12.6 → 存在低于库粒度的轻度 V 压暗",
+    "clipped_fraction 5 对 0.04/0.27/0.25/0.30/0.26 且 pct255=0 → min 通道归零型暗化 (HSV 饱和特征, 非 YCrCb)",
+    "block_boundary 5 对 0.997-1.002, unique_G 比 0.59-0.99 → JPEG 排除 (pair3 的 144/243 由暗化压缩色阶解释)",
+    "PSNR 上界: blur_g2+sat2 仿射颜色校正上界 21.19 dB < 21.91 (R0+2 dB 门槛) → 确定性路线结构性不可达"
+  ]
+}

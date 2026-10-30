@@ -1,0 +1,43 @@
+{
+  "challenge_id": "blind_0007_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_speckle", 1]],
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (sigma=3.3-8.0 per pair; PSNR unusable for noise)",
+    "support_validation": "5/5 pairs: speckle:1 §B fingerprint (sim-clean vs target-clean) reproduces target within numerical precision: residual_std error 0.0% on all 5 pairs, zero_ratio error 0.00-0.31%, vm_slope error 0.3-4.8%, intensity_var_corr absdiff <=0.0006, spatial_corr absdiff <=0.0011, chroma_ratio error 0.01-0.05%, variance_ratio error 0.00-0.03%. verify_signals MATCH (2/2 signals) on 5/5 pairs. Severity sweep speckle:2 -> WEAK on 5/5 (sigma diff 40-50%, residual_std +45-48%). poisson:1 -> pair3 verify MATCH but §B zero_ratio off 36%, vm_slope off 59%; pair0 WEAK (sigma diff 41%). speckle:1+jpeg:1 -> WEAK, block_boundary diff 105% (no compression).",
+    "rationale": "R0 pipeline re-confirmed and strengthened by quantitative per-pair evidence. (1) Type: per-pair multiplicative coefficient c_hat = sqrt(mean(res^2)/mean(I^2)) over 10<I<245 = 0.1368/0.1315/0.1379/0.1245/0.1363 (mean 0.1334, sd 0.0049), equal across R/G/B (diffs <=0.003) -> multiplicative, channel-independent noise with c=0.14 = noise_speckle sev1. Additive gaussian would give c_hat proportional to 1/RMS(I) (cross-pair spread ~2x); observed spread is 1.1x. (2) Severity: sev2 (c=0.21) excluded by 5/5 WEAK and residual_std 45-48% too high. (3) Missed-signal audit: pair3 run_full_analysis flagged POISSON (ivcs=-0.013) and SATURATION_strengthen_sev3 (chroma 1.2261); both are content-driven false positives: speckle:1 simulation reproduces pair3 chroma_ratio 1.226->1.226 and variance_ratio 1.0224->1.0223 exactly, and also pairs 1/4 chroma 1.733/1.617->1.734/1.617, so no global step; POISSON label stems from noise_prior intensity-scaled variance on bright content where clipping flattens the var-intensity relation. (4) Compression excluded: block_boundary 0.999-1.018 (0% FP), unique_G 244-256, JPEG-combo block_boundary diff 105%. (5) Blur excluded: spectral_slope_ratio 0.994-1.006, FFT anisotropy 0.00; gm_ratio 2.1-4.6 is noise-gradient driven. Verdict remains UNCERTAIN per SKILL (noise seed mismatch, no LIKELY for noise steps).",
+    "qwen_gate": {
+      "available": false,
+      "triggered": true
+    },
+    "evidence_files": [
+      "full_analysis_R1.json",
+      "full_analysis_R1_p1.json",
+      "full_analysis_R1_p2.json",
+      "full_analysis_R1_p3.json",
+      "full_analysis_R1_p4.json",
+      "reflection.json",
+      "r1_decision.json"
+    ]
+  },
+  "signal_sources": [
+    "per-pair c_hat from support residuals: 0.125-0.138, per-channel equal (multiplicative, c=0.14 = speckle sev1)",
+    "§B fingerprint on target-clean vs sim-clean (compute_sb6): residual_std 0.0% error, zero_ratio <=0.31% error, vm_slope <=4.8% error on 5/5 pairs",
+    "run_full_analysis_R1 step2: intensity_var_corr 0.795-0.943, cross_channel_corr 0.001-0.022 (RGB independent, not YCrCb)",
+    "run_full_analysis_R1 step1: block_boundary 0.999-1.018, unique_G 244-256, dct_zero 0.036-0.083 (no compression/quantization)",
+    "run_full_analysis_R1 step3: spectral_slope_ratio 0.994-1.006, FFT anisotropy 0.00 (no blur)",
+    "pair3 chroma_ratio 1.2261 + variance_ratio 1.0224 exactly reproduced by speckle:1 sim (1.226 / 1.0223) -> SATURATION_strengthen_sev3 is a noise-induced false positive",
+    "verify_signals: speckle:1 5/5 MATCH; speckle:2 0/5 MATCH (sigma diff 40-50%); jpeg combo block_boundary diff 105%"
+  ]
+}

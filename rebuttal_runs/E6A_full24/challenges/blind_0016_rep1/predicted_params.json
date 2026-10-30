@@ -1,0 +1,37 @@
+{
+  "challenge_id": "blind_0016_rep1",
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "9/10 (pair0 best: gaussian:5+jpeg:2); final candidate gaussian:4+jpeg:2: 8/10 pair0, 7/10 on pairs 1-4",
+    "mode": "PSNR (noise_prior sigma=0.74 pair0 / 1.24 pair1, both < 2 → no noise; peeled residual is structured, not random)",
+    "psnr_pair0": 25.83,
+    "support_psnr": {"pair1": 23.72, "pair2": 22.74, "pair3": 24.98, "pair4": 19.23},
+    "support_ci": {"pair1": "7/10", "pair2": "7/10", "pair3": "7/10", "pair4": "7/10"},
+    "rationale": "JPEG 由 block_boundary=2.136 (pair0) / 1.948 (pair1) 确认 (0%FP, 禁止 PSNR 覆盖); 信号模式验证 jpeg:2 时 block_boundary 匹配, 且内容无关 CI 指标在 jpeg:2 达峰 (8-9/10, jpeg:4 仅 4/10) → compression_jpeg:2 LIKELY。blur 存在明确 (gm_ratio=0.36/0.47, 估计 severity 4), 但子类型不确定: 确定性候选 gaussian 1-5 与 lens:4 在 jpeg:2 下 PSNR 平坦 (24.5-25.8, 无 >40dB 尖峰), 说明目标 blur 不是可精确复现的 gaussian/lens 任一级别 (sigma 同族应产生 >40dB); 信号侧 PCA=2.55/3.38>2.5 (motion, 0%FP/41%recall) 支持 motion, 但 residual_anisotropy=1.66/1.61<1.7, 且 motion:4+jpeg:2 PSNR=22.05 (低 3.8dB, 因 motion 角度随机不可复现)。按 SKILL 'DT-PSNR 矛盾且 gap<5dB 不替换' 与 gaussian 安全默认原则, 取 gaussian:4 为近似 (跨 5 对 support CI 7/10 稳定, PSNR 19.2-25.8 无尖峰 → 从不精确命中, 进一步支持非确定性/非本库 gaussian 模糊)。severity: gm_ratio 双 pair 均落 sev4 档 (0.35-0.50), PSNR sev4≥sev3/5, 取 4 并保留 5 为 severity 备选 (PSNR 差 0.12dB, 记录于 reflection)。alternatives 按 SKILL 质量规则留空 (全部候选 PSNR<30, 低 PSNR 备选无训练价值)。",
+    "blur_subtype_evidence": {
+      "pca_ratio": [2.553, 3.38],
+      "residual_anisotropy": [1.6587, 1.6114],
+      "glass_score": [0.4821, 1.041],
+      "spectral_slope_diff_gaussian4": 0.295,
+      "spectral_slope_diff_gaussian5": 0.538,
+      "wiener_corr_gaussian4": 0.549,
+      "decision": "gaussian (PSNR/CI 最优, 安全默认); motion 为信号侧备选 (PCA>2.5), glass 基本排除 (glass_score 超出 0.19-0.41 校准带, 被 JPEG 块效应抬高; glass:4+jpeg:4 PSNR 仅 22.39)"
+    },
+    "global_check": "两 pair 均 NO_GLOBAL: variance_ratio 0.9645/0.8106 (pair1 略低但 contrast_detected_raw=false, 与 pair0 不一致 → 内容依赖, 不作 contrast 判定), mean_shift -0.3/-0.5, saturation 1.027/0.924",
+    "order": "blur→jpeg (物理约束; 顺序对照 jpeg:2→gaussian:4 仅 25.89 且 CI 4/10, 劣于 blur→jpeg 的 CI 8/10)"
+  }
+}

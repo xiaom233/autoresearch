@@ -1,0 +1,53 @@
+{
+  "challenge_id": "blind_0024_rep1",
+  "pipeline": [
+    {
+      "function": "brightness_darken_gamma_RGB",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "saturate_strengthen_YCrCb",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "brightness_darken_gamma_RGB", "severity": 3},
+        {"function": "noise_gaussian_YCrCb", "severity": 1},
+        {"function": "saturate_strengthen_YCrCb", "severity": 1}
+      ],
+      "function_family": "gamma_darken + YCrCb gaussian noise + weak YCrCb saturation",
+      "evidence": "directly validated on all 5 pairs (verify_signals signal mode). pair0 mean -34.1 vs -34.7, var 1.254 vs 1.231, clip 3.83% vs 4.04%, chroma 2.89 vs 3.74; pair1 mean -56.6 vs -53.1, var 2.07 vs 2.12; pair2 mean -46.2 vs -35.5, clip 28.5% vs 25.4%; pair3 ccc 0.26 vs 0.79; pair4 mean -54.3 vs -40.9. Residual wavelet sigma 9.9-15.6 vs target 0.74-1.24 on EVERY pair -> dense gaussian noise component contradicted by measurement (kept as backup)",
+      "psnr_rgb": 16.07,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_darken_gamma_RGB", "severity": 3},
+        {"function": "noise_gaussian_YCrCb", "severity": 2}
+      ],
+      "function_family": "gamma_darken + stronger YCrCb gaussian noise (no saturation)",
+      "evidence": "pair0: mean -34.2 vs -34.7, var 1.416 vs 1.231, chroma 4.70 vs 3.74, clip 7.17% vs 4.04%, ccc 0.126 vs 0.172; pair1: mean -56.0 vs -53.1, chroma 3.57 vs 3.44, clip 12.7% vs 26.8%; sigma 14.6-15.6 vs 1.1-1.2",
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 2},
+        {"function": "brightness_darken_shfit_RGB", "severity": 2}
+      ],
+      "function_family": "noise-first order + subtractive darken",
+      "evidence": "best clipping/channel-correlation profile on pair0: clip 4.21% vs 4.04%, ccc 0.155 vs 0.172; mean -40.9 vs -34.7; var 1.118 vs 1.231; chroma 4.24 vs 3.74; sigma 13.96 vs 1.11",
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "4/10 (best PSNR-mode CI on pair0: brightness_darken_shfit_HSV:2 + saturate_strengthen_YCrCb:2); signal-mode best 2/4 checks (pair0: noise:clean_residual + global:mean_shift); 0/4 support pairs reached MATCH/PARTIAL in verify_signals",
+    "mode": "SIGNAL (dense-noise coupling + seed mismatch makes PSNR unusable for validation; PSNR only used to compare deterministic hypotheses)",
+    "rationale": "Compression ruled out (block_boundary 1.0013-1.0022 on all pairs, unique_G 232~clean 234, dct_zero_ratio 0.239); blur ruled out (spectral_slope_ratio 0.927, FFT anisotropy 0, hf_lf_ratio within 11-28%). Global structure is content-dependent darkening consistent with gamma darkening (gamma_RGB sev3): pair0 mean_shift -34.1 vs target -34.7; pair1 -56.6 vs -53.1 (shadows crushed, 27% zero clipping, highlights preserved in degraded_1); pair3 (dark star-trail image) target var 0.36, clip 30%, mean -11.6 - all reproduced in direction by gamma. Chroma amplification (saturation_chroma_ratio 1.27-3.74, vivid neon colors in degraded_2, red-crushed statues in degraded_1) requires a chroma-space gain; 5/5 pairs show residual wavelet MAD sigma 0.74-1.24 while every simulated gaussian-YCrCb noise gives 9.9-15.6 and every impulse simulation produces 255-saturation values that the target does not have (pair0 target pct_255 ~0, 4.04% clipped values are all at 0) -> the chroma texture is amplified from the clean image's own chroma micro-texture by a deterministic saturate_strengthen, not added random noise. Saturation severity is the main open knob: YCrCb x3 measured chroma 1.58-1.90 (under target), unscaled noise is ruled out, hence primary uses YCrCb sev4 (x8, severity +/-1 uncertain), with the fully 5-pair-validated 3-step candidate kept as alternative #1. Local pattern: HSV S x64 (sev5) collapses the background to uniform saturated colour (PSNR 6.6) so HSV sev5 is excluded; YCrCb-space amplification is preferred because it preserves near-neutral pixels and the target keeps white pixels."
+  }
+}

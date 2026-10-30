@@ -1,0 +1,60 @@
+{
+  "challenge_id": "blind_0005_rep1",
+  "pipeline": [
+    {
+      "function": "noise_impulse",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "ci_pass_rate": "10/10",
+    "mode": "SIGNAL (sigma≈17.5 by noise_prior on raw residual; run_full_analysis sigma=0.0 是稀疏残差 MAD 失真)",
+    "rationale": "pair0 残差 91% 元素精确不变 (zero_ratio=0.9089, |diff|<1.1 占 91.4%), 仅 ~9% 像素发生 0/255 大跳变且三通道独立 (cross_ch_corr=0.0142, rgb_ratio=1.198<1.4) → 脉冲(salt&pepper)指纹。任何全局变换/对比度/饱和度/模糊/JPEG 都会改变几乎全部像素, 与 91% 精确不变矛盾; block_boundary=1.0074 (0%FP 阈值 1.05) + unique_G 244≈243 + dct_zero=0.0124 排除 JPEG/quantization; spectral_slope_ratio=0.990 (<1.08) 排除 blur。run_full_analysis 报的 BRIGHTNESS/SATURATION/CONTRAST 为盐噪声的统计假阳性 (盐像素抬高均值 +8、色度方差 2.55×), 且该标签在 5 个 support pair 间不一致翻转 (pair1/4=contrast+saturation, pair2=saturation, pair3=brightness+saturation), 而真实管线各 pair 相同 → 内容依赖 FP。severity: 用 CI 边际统计解方程, sev5(amount=0.10) 模拟的 impulse_pct_zero/255 原始 diff=-0.003pp/+0.002pp, sev4(0.07) 模拟为 +0.726pp/+1.442pp; 解得 target amount=0.0999, 干净图 z_c=0.257, w_c=0.0177, 与 target clipped_fraction 0.35=0.10+0.9*(0.257+0.018) 自洽 → severity=5。verify_signals 在 pair0 与全部 4 个 support pair 均 MATCH (noise:sigma + noise:clean_residual)。噪声随机 seed 不可像素级复现, 按 SKILL 噪声步骤最高 UNCERTAIN。"
+  },
+  "support_validation": {
+    "pair_0": {
+      "verify_signals": "MATCH (2/2)",
+      "ci_pass": "10/10 (impulse marginals diff≈0)",
+      "zero_ratio": 0.9138,
+      "block_boundary": 1.0074
+    },
+    "pair_1": {
+      "verify_signals": "MATCH (2/2)",
+      "zero_ratio": 0.9,
+      "block_boundary": 1.0031
+    },
+    "pair_2": {
+      "verify_signals": "MATCH (2/2)",
+      "zero_ratio": 0.9002,
+      "block_boundary": 0.9973
+    },
+    "pair_3": {
+      "verify_signals": "MATCH (2/2)",
+      "zero_ratio": 0.9011,
+      "block_boundary": 1.0014
+    },
+    "pair_4": {
+      "verify_signals": "MATCH (2/2)",
+      "zero_ratio": 0.8999,
+      "block_boundary": 0.9981
+    }
+  },
+  "rejected_alternatives": [
+    {
+      "pipeline": "noise_impulse:4",
+      "reason": "amount=0.07 偏低: CI 边际统计 diff impulse_pct_zero=+0.726pp / pct_255=+1.442pp (58%/22% 相对偏差), 与 target amount=0.10 不符"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:5",
+      "reason": "残差稀疏性矛盾 (gaussian 会改变全部像素); impulse_pct_255 diff=+3.766pp (58%); 9/10 CI"
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:1,saturate_strengthen_HSV:5",
+      "reason": "全局候选: CI 7/10 (impulse_pct_zero 34%、pct_255 48%、block 31% 偏差); 且残差 91% 精确不变排除任何全局变换"
+    }
+  ]
+}

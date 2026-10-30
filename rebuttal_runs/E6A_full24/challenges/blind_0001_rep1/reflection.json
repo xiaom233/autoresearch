@@ -1,0 +1,837 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=0.9984 (<1.05, 无JPEG块效应); unique_G_target=16/通道 (clean=256), unique_G_ratio=0.0625 -> 存在强量化; dct_zero_ratio=0.0198 低 -> 非JPEG存储",
+      "blur": "gm_ratio=12.125 (被量化/伪噪声破坏, 不可用); spectral_slope_ratio=0.9758 (阈值1.08) -> BLUR_UNLIKELY",
+      "noise": "noise_prior_sigma=16.93; intensity_var_corr=0.885 (Poisson-like); spatial_corr=0.0075 (无空间相关); cross_channel_corr=0.0071 (通道独立)",
+      "global": "mean_shift=-1.1/255 (≈0); variance_ratio=1.369; clipped_fraction=0.1205 (hist-equalize 拉伸导致); saturation_chroma_ratio=1.71 但标记 from_noise"
+    },
+    "mode": "SIGNAL (sigma=16.9, 但疑为量化阶梯伪噪声; 确定性量化复现可用 PSNR 直接仲裁)",
+    "suspected": [
+      "quantization_hist:2 (c=16 与 unique_G=16 精确吻合; hist-equalize 拉伸解释 clipped_fraction=0.12 与 variance_ratio=1.37)",
+      "quantization_median:2 (c=15 近似)",
+      "quantization_hist:2 之前的噪声步 (被量化掩蔽, 需剥离后 §B 检查)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary=0.998, 无8x8块)",
+      "blur (spectral_slope_ratio=0.976, 无模糊)",
+      "brightness (mean_shift=-1.1/255≈0)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false,
+    "note": "Qwen/API 在本环境不可用; sigma=16.9>10 且信号无矛盾, 本不需触发边界门"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2",
+        "thinking": "Round1: unique_G=16/通道 与 quantization_hist sev=2 (c=16) 精确吻合; block_boundary=0.998 排除JPEG; 确定性候选, 用PSNR仲裁 (若精确复现则PSNR极高)"
+      },
+      "test_result": {
+        "psnr_rgb": 12.94,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4,quantization_hist:2",
+        "thinking": "Round1: sigma=16.9 + intensity_var_corr=0.885 指向Poisson; 量化前噪声改变直方图导致cdf映射偏移 (hist:2单独PSNR=12.94). 量化在末端抹平大多数噪声, 只留边界抖动"
+      },
+      "test_result": {
+        "psnr_rgb": 12.12,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:4,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "contrast_weaken_scale:1,quantization_hist:2",
+        "thinking": "R1: 量化器=hist:2固定; 检验对比度减弱是否改变量化前直方图. 对比度线性压缩是单调变换但固定16箱结构对质量分布敏感"
+      },
+      "test_result": {
+        "psnr_rgb": 12.28,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_weaken_scale:1,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:1,quantization_hist:2",
+        "thinking": "R1: 量化器=hist:2固定; 检验对比度增强 (1.4x) 对量化前直方图质量分布的影响 (拉伸会增加两端质量)"
+      },
+      "test_result": {
+        "psnr_rgb": 13.71,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:1,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:1,quantization_hist:2",
+        "thinking": "R1: saturation_chroma_ratio=1.71 显著高于clean; 饱和度增强是非单调通道耦合变换, 会重塑逐通道直方图, 从而大幅改变cdf量化映射"
+      },
+      "test_result": {
+        "psnr_rgb": 12.47,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:1,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,quantization_hist:2",
+        "thinking": "R1: 固定量化器; 亮度平移(+0.1)会移出低端箱质量并增加255端clipping, 改变cdf在各箱的累积比例 (目标比hist:2独立模拟多~5pp极端质量)"
+      },
+      "test_result": {
+        "psnr_rgb": 12.82,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "R1 severity扫描: Poisson信号(intensity_var_corr=0.885)在量化前; sev4的CI=7/10最佳但极端质量仍偏; 试sev3 (c=40, 更弱扩散)"
+      },
+      "test_result": {
+        "psnr_rgb": 12.35,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2,contrast_strengthen_scale:1",
+        "thinking": "R2: 假设对比度增强在量化之后(同priority=2可乱序): 单调拉伸保留16级但改变层级值+两端clipping增加, 可解释PSNR~12的层级偏移与+3pp极端质量"
+      },
+      "test_result": {
+        "psnr_rgb": 11.41,
+        "ci_pass": "1/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "quantization_hist:2,contrast_strengthen_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2",
+        "thinking": "R2 signal模式: 获取global mean_shift/variance_ratio target-vs-sim 定量对比, 约束量化前直方图形状"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.1331)",
+          "global:variance_ratio (diff=108%)"
+        ],
+        "pipeline": "quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "R2 signal模式: Poisson:3+hist 的全局 mean_shift/variance_ratio 及噪声sigma对比, 判断是否需要补亮度/对比度步"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=26%)",
+          "global:mean_shift (diff=0.1274)",
+          "global:variance_ratio (diff=104%)"
+        ],
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2,brightness_brighten_shfit_HSV:1",
+        "thinking": "R2: 目标比hist:2模拟亮~33级(mean_shift差0.13), 255s多; brightness与quantization同priority=2可乱序; HSV V-shift保零值、提亮、增色度方差(目标sat_ratio=1.71)、增255 clipping"
+      },
+      "test_result": {
+        "psnr_rgb": 10.97,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "quantization_hist:2,brightness_brighten_shfit_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "R2: 保存Poisson:3+hist模拟图用于完整指纹对比 (variance_ratio/saturation_chroma/clipped_fraction)"
+      },
+      "test_result": {
+        "psnr_rgb": 12.35,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "thinking": "R2: hist-equalize输出均值恒≈127.5, 目标均值≈95 → 量化后有压暗步; gamma=1.7保0/255端点+保16级+压暗~32级; 若确定性部分匹配PSNR应大幅跳升"
+      },
+      "test_result": {
+        "psnr_rgb": 14.61,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "thinking": "R2: 3步候选=强白噪声(解释目标白残差/sigma16.9/极端质量)+hist量化(16级)+gamma压暗(解释均值-32级); 完整指纹对比"
+      },
+      "test_result": {
+        "psnr_rgb": 13.51,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:3,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:2,quantization_hist:2",
+        "thinking": "R3: 前置压暗(gamma1.7)使量化前直方图移向低箱 → equalize后层级值降低(均值<127.5)且分布集中(方差比降); 与后置gamma方向相反, 可同时解释目标mean=95与vr=1.37"
+      },
+      "test_result": {
+        "psnr_rgb": 13.48,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:2,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "thinking": "R3: 目标残差白(spcorr0.007)/通道独立/高sigma/高gm/高clip → 更强白噪声压制共享cdf量化误差; 保留post-gamma修均值; 检查vr是否下降"
+      },
+      "test_result": {
+        "psnr_rgb": 12.31,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "thinking": "R3 severity对比: Poisson:4 (c=25) + hist:2 + gamma1.7; sev5的sigma/gm略高, 检查sev4是否更贴合sigma=16.9/gm=12.1"
+      },
+      "test_result": {
+        "psnr_rgb": 12.97,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:4,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "thinking": "Support pair1复核: 最终候选噪声管线, verify_signals 检查 sigma/mean_shift/variance_ratio 是否在同图对间复现"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=28%)",
+          "global:mean_shift (diff=0.0587)",
+          "global:variance_ratio (diff=187%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "thinking": "Support pair2复核: 同一最终候选, verify_signals 对比"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=30%)",
+          "global:mean_shift (diff=0.1147)",
+          "global:variance_ratio (diff=102%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "thinking": "Support pair3复核: 同一最终候选, verify_signals 对比"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0112)",
+          "global:variance_ratio (diff=136%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "thinking": "Support pair4复核: 同一最终候选, verify_signals 对比"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0420)",
+          "global:variance_ratio (diff=303%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "quantization_hist:2,brightness_darken_gamma_RGB:2",
+      "psnr_rgb": 14.61,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:1,quantization_hist:2",
+      "psnr_rgb": 13.71,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "noise_poisson:3,quantization_hist:2,brightness_darken_gamma_RGB:2",
+      "psnr_rgb": 13.51,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:2,quantization_hist:2",
+      "psnr_rgb": 13.48,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "noise_poisson:4,quantization_hist:2,brightness_darken_gamma_RGB:2",
+      "psnr_rgb": 12.97,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "quantization_hist:2",
+      "psnr_rgb": 12.94,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,quantization_hist:2",
+      "psnr_rgb": 12.82,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:1,quantization_hist:2",
+      "psnr_rgb": 12.47,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "noise_poisson:3,quantization_hist:2",
+      "psnr_rgb": 12.35,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "noise_poisson:3,quantization_hist:2",
+      "psnr_rgb": 12.35,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2",
+      "psnr_rgb": 12.31,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "contrast_weaken_scale:1,quantization_hist:2",
+      "psnr_rgb": 12.28,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "noise_poisson:4,quantization_hist:2",
+      "psnr_rgb": 12.12,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "quantization_hist:2,contrast_strengthen_scale:1",
+      "psnr_rgb": 11.41,
+      "ci_pass": "1/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "quantization_hist:2,brightness_brighten_shfit_HSV:1",
+      "psnr_rgb": 10.97,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    }
+  ],
+  "noise_6step_check": {
+    "extreme_pct": 0.5054,
+    "vm_slope": 0.2649,
+    "var_slope": 0.9515,
+    "spatial_corr": 0.7637,
+    "rgb_ratio": 1.1204,
+    "cross_ch_corr": 0.2482,
+    "source": "peeled_noise_check.py, 剥离 pipeline=quantization_hist:2,brightness_darken_gamma_RGB:2",
+    "diagnosis": "剥离后残差被量化映射误差污染 (spatial_corr=0.7637 结构化; extreme_pct=50.5% 属 SKILL 已知假阳性模式, 此处为量化轮廓误差), §B 数值不可直接用于噪声类型判定。原始残差(target-clean)信号更可靠: sigma=16.93, spatial_corr=0.0075 (白), cross_channel_corr=0.0071 (通道独立), intensity_var_corr=0.885 (方差随强度增强) → 强白噪声, Poisson 优先; peeled 残差 noise_prior 斜率平坦(-0.0217)→Gaussian RGB 列为 alternative。噪声类型在量化掩蔽下判 UNCERTAIN"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_poisson",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "quantization_hist",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "brightness_darken_gamma_RGB",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "量化器=quantization_hist:2 由 unique_per_channel=[16,16,16] 精确吻合 (CI unique diff=0.000) + block_boundary=0.998 排除 JPEG 锁定。hist-equalize 输出均值恒≈127.5 (纯hist模拟 mean_shift=+31.4 vs 目标 -1.1), 故量化后存在压暗步; gamma1.7(darken_gamma_RGB:2) 是唯一保 0→0/255→255 且保 16 级的逐通道单调映射, 命中均值(-3.3 vs -1.1)与 clipped_fraction(0.1206 vs 0.1205)。目标残差白/通道独立/sigma16.9/gm12.1 → 量化前强白噪声; Poisson:5 与 noise_prior POISSON 判定一致, CI=10/10 全项通过。残余不符: variance_ratio 1.37 vs 1.91、sigma 19.3 vs 16.9、gm 14.4 vs 12.1、chroma 2.03 vs 1.71; PSNR 因噪声 seed 失配封顶 ~12-15dB 不可用于仲裁。Support 4 对 verify_signals 均 WEAK (clean_residual 全匹配, sigma 2/4 MATCH, mean_shift 2/4 接近, variance_ratio 系统性偏差)。",
+    "alternatives": [
+      {
+        "pipeline": "noise_poisson:4,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "psnr": 12.97,
+        "ci_pass": "7/10",
+        "note": "sigma 15.3/gm 12.0 更贴目标, clip 偏低"
+      },
+      {
+        "pipeline": "noise_poisson:3,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "psnr": 13.51,
+        "ci_pass": "8/10",
+        "note": "更弱噪声版本"
+      },
+      {
+        "pipeline": "noise_gaussian_RGB:4,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "psnr": null,
+        "ci_pass": null,
+        "note": "跨族替代, 未测; peeled 残差噪声斜率平坦支持 Gaussian"
+      }
+    ]
+  },
+  "reflection_R1": {
+    "qwen_gate": {
+      "available": false,
+      "note": "Qwen/API 在本环境不可用; R0 已记录 available=false, R1 未调用 API"
+    },
+    "mode": "SIGNAL (noise seed 失配; PSNR 仅作确定性核心参考)",
+    "reanalysis": {
+      "outputs": {
+        "pair0": "full_analysis_R1.json",
+        "pair1": "full_analysis_R1_p1.json",
+        "pair2": "full_analysis_R1_p2.json",
+        "pair3": "full_analysis_R1_p3.json",
+        "pair4": "full_analysis_R1_p4.json"
+      },
+      "per_pair_signals": {
+        "pair0": {
+          "block_boundary": 0.9984,
+          "unique_per_channel": [
+            16,
+            16,
+            16
+          ],
+          "sigma_residual": 16.93,
+          "intensity_var_corr": 0.8851,
+          "intensity_scaled_var_corr": -0.5775,
+          "spatial_corr": 0.0075,
+          "cross_channel_corr": 0.0071,
+          "mean_shift": -1.1,
+          "variance_ratio": 1.3692,
+          "clipped_fraction": 0.1205,
+          "chroma_ratio": 1.7109,
+          "gm_ratio": 12.13,
+          "spectral_slope_ratio": 0.9758
+        },
+        "pair1": {
+          "block_boundary": 0.9979,
+          "unique_per_channel": [
+            16,
+            16,
+            16
+          ],
+          "sigma_residual": 17.91,
+          "intensity_var_corr": 0.8728,
+          "intensity_scaled_var_corr": -0.4869,
+          "spatial_corr": -0.0009,
+          "cross_channel_corr": 0.0006,
+          "mean_shift": -0.6,
+          "variance_ratio": 1.5544,
+          "clipped_fraction": 0.0501,
+          "chroma_ratio": 2.1701,
+          "gm_ratio": 3.05,
+          "spectral_slope_ratio": 0.9852
+        },
+        "pair2": {
+          "block_boundary": 1.0099,
+          "unique_per_channel": [
+            16,
+            16,
+            16
+          ],
+          "sigma_residual": 20.51,
+          "intensity_var_corr": 0.7282,
+          "intensity_scaled_var_corr": -0.8334,
+          "spatial_corr": 0.0031,
+          "cross_channel_corr": 0.0019,
+          "mean_shift": -1.6,
+          "variance_ratio": 1.6093,
+          "clipped_fraction": 0.0865,
+          "chroma_ratio": 2.4434,
+          "gm_ratio": 5.26,
+          "spectral_slope_ratio": 0.9652
+        },
+        "pair3": {
+          "block_boundary": 1.001,
+          "unique_per_channel": [
+            16,
+            16,
+            16
+          ],
+          "sigma_residual": 11.49,
+          "intensity_var_corr": 0.86,
+          "intensity_scaled_var_corr": -0.5625,
+          "spatial_corr": 0.0039,
+          "cross_channel_corr": 0.0065,
+          "mean_shift": -1.1,
+          "variance_ratio": 1.1671,
+          "clipped_fraction": 0.3022,
+          "chroma_ratio": 1.2012,
+          "gm_ratio": 5.87,
+          "spectral_slope_ratio": 1.0178
+        },
+        "pair4": {
+          "block_boundary": 1.0073,
+          "unique_per_channel": [
+            16,
+            16,
+            16
+          ],
+          "sigma_residual": 8.4,
+          "intensity_var_corr": 0.7961,
+          "intensity_scaled_var_corr": -0.5513,
+          "spatial_corr": 0.0176,
+          "cross_channel_corr": 0.0114,
+          "mean_shift": -1.2,
+          "variance_ratio": 1.0758,
+          "clipped_fraction": 0.4334,
+          "chroma_ratio": 1.3333,
+          "gm_ratio": 3.59,
+          "spectral_slope_ratio": 0.9927
+        }
+      },
+      "verdict_vs_signal_audit": [
+        "step1: unique_per_channel=[16,16,16] 在全部 5 对精确复现, block_boundary=0.998-1.010 → quantization_hist:2 (c=16) 锁定; R0 的 COMPRESSION_DETECTED(medium) 与信号一致, 但亚型应为 hist 量化而非 JPEG (dct_zero_ratio=0.0198 低)",
+        "step2: POISSON 判定全 5 对, 但该信号 (intensity_var_corr 0.73-0.89) 建立在 target-clean 原始残差上, 该残差含 gamma+hist 确定性映射 (gamma 使残差幅度随强度变化), 属可解释混淆; intensity_scaled_var_corr 全为负 (-0.49..-0.83) → 不支持 speckle (speckle 应为正); impulse_zero_ratio=0.046 → 排除 impulse; spatial_corr≤0.0176, cross_channel_corr≤0.0114 → 白噪声且通道独立 → 排除 YCrCb 与 spatially_correlated",
+        "step3: spectral_slope_ratio=0.965-1.018 全 5 对 < 1.08 → BLUR_UNLIKELY 一致; gm_ratio 3.05-12.13 为内容/量化破坏, 不可用",
+        "step4: mean_shift=-0.6~-1.6 全 5 对高度一致 → 内容无关压暗; hist-equalize 输出均值≈127.5 (R0 实测纯 hist mean_shift=+31.4), 需要约 -32 灰阶; gamma 1.7 对均匀 16 级的期望输出 E[x^1.7]*255=0.3704*255=94.4, 与目标均值≈95.5 吻合 → brightness_darken_gamma_RGB:2 锁定; gamma 1.4 期望 106.3 (+10), gamma 2.1 期望 82.3 (-14), 均不符",
+        "阈值边界: variance_ratio 目标 1.08-1.61 与 hist+gamma 核心内在值 1.8-1.9 (pair0 确定性核心实测 1.84) 系统性偏差, verify_signals 的 8% 阈值在任何 3 步管线内不可达; mean_shift 阈值 0.005 (1.3 灰阶) 与 sigma 20% 阈值在 x_distortion 离散噪声档位间不可同时满足 (见 validation 权衡分析)",
+        "遗漏的统计量检查: clipped_fraction 跨对 5.0%-43.3%、variance_ratio 1.08-1.61 均随图像内容大幅变化, 说明 R0 以 pair0 单点 clip 匹配选定 Poisson:5 属内容相关, 不具跨对泛化性; 但这不改变任何候选均未过验证的事实"
+      ]
+    },
+    "hypotheses": [
+      {
+        "id": "H0",
+        "pipeline": "quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "signal_source": "unique=16 全对 + mean_shift 全对 + spectral_slope 无模糊; 无噪声对照组",
+        "test_result": "pair0 verify_signals MISMATCH (mean_shift diff=0.0066✗, variance_ratio 128%✗); R0 已测 PSNR=14.61 → 目标含真实随机步, 确定性核心不完整",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H1",
+        "pipeline": "noise_poisson:3,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "signal_source": "mean_shift 修复方向: Poisson:3 使 sim mean 覆盖到 -0.9 (target -1.1)",
+        "test_result": "5/5 WEAK: pair0 mean✓/sigma 25%✗; pair1/2 sigma✓/mean 0.098/0.114✗; pair3 1✓/3✗; pair4 2✓/2✗",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H2",
+        "pipeline": "noise_poisson:4,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "signal_source": "sigma (需 ≥sev4) 与 mean (需 ≤sev3) 的折中",
+        "test_result": "5/5 WEAK 2✓/2✗: sigma✓+clean_residual✓ 全对; mean pair0 0.0064 (0.36灰阶, 最近), pair3 0.0081, pair4 0.0330, pair1 0.0791, pair2 0.1184",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H3",
+        "pipeline": "noise_poisson:5,quantization_hist:2,brightness_darken_gamma_RGB:2 (R0 control)",
+        "signal_source": "R0 最终管线",
+        "test_result": "pair0 2✓/2✗ (sigma✓, mean 0.0082✗); R0 记录 pairs1-4: 1✓,1✓,2✓,2✓ 全 WEAK",
+        "decision": "KEEP (control)"
+      },
+      {
+        "id": "H4",
+        "pipeline": "noise_gaussian_RGB:2,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "signal_source": "peeled 残差 noise_prior 斜率平坦 (-0.0217) 支持 Gaussian; 跨族替代",
+        "test_result": "pair0 WEAK 2✓/2✗ (mean✓, sigma 24%✗, vr 126%✗)",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H5",
+        "pipeline": "noise_gaussian_RGB:3,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "signal_source": "image-domain sigma 向目标靠拢",
+        "test_result": "pair0 WEAK 2✓/2✗ (sigma✓, mean 0.0153✗, vr 131%✗)",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H6",
+        "pipeline": "noise_gaussian_RGB:1,quantization_hist:2,brightness_darken_gamma_RGB:2",
+        "signal_source": "弱噪声对照",
+        "test_result": "pair0 WEAK 1✓/3✗ (sigma 54%✗, mean 0.0065✗)",
+        "decision": "REJECT"
+      }
+    ],
+    "validation": {
+      "protocol": "test_candidate.py --mode signal (test_candidate 内部 verify_signals 计数项: noise:sigma(<20%), noise:clean_residual(FWHM<4px), global:mean_shift(<0.005), global:variance_ratio(<8%)); 共 15 次, 7 个不同管线",
+      "per_pair_control": {
+        "pair0": {
+          "verdict": "WEAK 2✓/2✗",
+          "matched": [
+            "noise:sigma",
+            "noise:clean_residual"
+          ],
+          "mismatched": [
+            "global:mean_shift 0.0082",
+            "global:variance_ratio 146%"
+          ]
+        },
+        "pair1": {
+          "verdict": "WEAK 1✓/3✗",
+          "source": "R0 reflection round18",
+          "matched": [
+            "noise:clean_residual"
+          ],
+          "mismatched": [
+            "noise:sigma 28%",
+            "global:mean_shift 0.0587",
+            "global:variance_ratio 187%"
+          ]
+        },
+        "pair2": {
+          "verdict": "WEAK 1✓/3✗",
+          "source": "R0 reflection round19",
+          "matched": [
+            "noise:clean_residual"
+          ],
+          "mismatched": [
+            "noise:sigma 30%",
+            "global:mean_shift 0.1147",
+            "global:variance_ratio 102%"
+          ]
+        },
+        "pair3": {
+          "verdict": "WEAK 2✓/2✗",
+          "source": "R0 reflection round20",
+          "matched": [
+            "noise:sigma",
+            "noise:clean_residual"
+          ],
+          "mismatched": [
+            "global:mean_shift 0.0112",
+            "global:variance_ratio 136%"
+          ]
+        },
+        "pair4": {
+          "verdict": "WEAK 2✓/2✗",
+          "source": "R0 reflection round21",
+          "matched": [
+            "noise:sigma",
+            "noise:clean_residual"
+          ],
+          "mismatched": [
+            "global:mean_shift 0.0420",
+            "global:variance_ratio 303%"
+          ]
+        }
+      },
+      "best_candidates": {
+        "pair0": "Poisson:4 mean 差 0.0064 (0.36 灰阶) 最近但未过阈; Poisson:3/Gaussian:2 mean✓ 但 sigma 25%/24%✗; Gaussian:1 sigma 54%✗",
+        "pairs1_4_poisson4": "全部 2✓/2✗ WEAK (sigma✓ 4/4, mean 全✗: 0.0791/0.1184/0.0081/0.0330)",
+        "pairs1_4_poisson3": "WEAK; sigma✓ 3/4, mean 全✗ (0.0977/0.1141/0.0126/0.0269)"
+      },
+      "improvement_check": "没有任何候选在任何一对达到 WEAK→PARTIAL/MATCH; ≥4/5 对改善条件不满足 → 不允许 CHANGE",
+      "sigma_mean_tradeoff": "sigma 判据达标需 Poisson≥4 或 Gaussian3, 但这些强度使量化后 mean 额外压暗 1.6-3.9 灰阶 (smooth 图像 pair1/2 达 20-30 灰阶); mean 判据达标需 Poisson3/Gaussian2, 但 sigma 低 24-25%。x_distortion 离散档位 [G1,G2,G3; P1..P5] 中不存在同时满足两判据的选项",
+      "variance_ratio_note": "确定性核心 pair0 实测 vr=1.84, 与加噪候选 1.75-1.91 同量级, 而目标 1.37 → vr 不匹配来自 hist+gamma 核心本身, 与噪声类型无关, 且 8% 阈值不可达",
+      "peeled_sb": "peeled_noise_check (剥离 hist2+gamma2) 5 对: extreme_pct 29.14-75.42%, spatial_corr 0.5612-0.7637, residual_std 29.8-56.0 → 已知量化映射误差假阳性指纹 (SKILL 记录的 extreme_pct>50% FP 模式), §B 不能作为噪声类型或显著改善的判据",
+      "support_psnr_r0": 26.86
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {
+          "function": "noise_poisson",
+          "severity": 5,
+          "verdict": "UNCERTAIN"
+        },
+        {
+          "function": "quantization_hist",
+          "severity": 2,
+          "verdict": "UNCERTAIN"
+        },
+        {
+          "function": "brightness_darken_gamma_RGB",
+          "severity": 2,
+          "verdict": "UNCERTAIN"
+        }
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "rationale": "R1 重跑 5 对 support 全量分析 + 15 次候选验证: 确定性核心 (quantization_hist:2 + brightness_darken_gamma_RGB:2) 的信号来源比 R0 更明确 (unique=16 全对、mean_shift 全对、gamma1.7 均匀直方图期望均值 94.4 与目标 95.5 吻合), 但噪声步类型/严重度在现有工具与离散档位下不可判: 所有 7 个候选在 5 对 support 上均 WEAK, 无一对达到 PARTIAL; sigma 与 mean_shift 判据在可用噪声档位间存在系统性权衡; variance_ratio 不匹配源于 hist+gamma 核心而不可修复; peeled §B 被量化映射误差污染。按 R1 判定规则, 维持 R0 pipeline (Poisson:5 + hist:2 + gamma:2), 并将 Poisson:4 (sigma✓/mean 最近) 与 Gaussian:2/Poisson:3 (mean✓/sigma 接近) 保留为 alternatives 供训练后 PSNR 仲裁。"
+    }
+  }
+}

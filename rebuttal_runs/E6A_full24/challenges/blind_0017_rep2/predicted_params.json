@@ -1,0 +1,54 @@
+{
+  "challenge_id": "blind_0017_rep2",
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 28.35,
+      "stats": {"ci_pass": "8/10"},
+      "function_family": "blur_gaussian",
+      "note": "PSNR tie with primary on pair 0; better block_boundary/unique_G/anisotropy but spectral_slope too smooth (-1.503 vs target -1.285)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 28.28,
+      "stats": {"ci_pass": "8/10"},
+      "function_family": "blur_lens",
+      "note": "within 0.07 dB of primary; lens vs gaussian MTF indistinguishable (SKILL known limitation)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 27.21,
+      "stats": {"ci_pass": "8/10"},
+      "function_family": "blur_glass",
+      "note": "DT voted glass (glass_score=1.569>0.25) but PSNR consistently ~1.1 dB below gaussian at sev4/5; glass is non-deterministic (random pixel shuffle), kept as DT-prior alternative"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "8/10",
+    "mode": "PSNR (sigma=0.74 < 2, deterministic multi-step; no noise)",
+    "rationale": "JPEG confirmed by 0% FP signal block_boundary=6.4605>1.1 (unique_G=195<200, dct_zero_ratio=0.9333); joint severity bracket jpeg3/4/5 = 27.86/28.35/24.70 dB -> sev4. Blur confirmed by gm_ratio=0.157; residual_anisotropy=1.591<1.7 excludes motion (PSNR 24.41 also worst); glass_score=1.569 triggered DT glass but glass sims stay ~1.1 dB below gaussian, and lens is MTF-indistinguishable (28.28 vs 28.35). Selected gaussian:3 because PSNR ties gaussian:4 (28.35) while spectral_slope (-1.335 vs target -1.285) and gm_ratio (0.146 vs 0.157) are closer; gaussian:2 scores 27.36. sigma=0.74<2 -> no noise; variance_ratio gap (0.677 vs 0.834) could not be fitted by any available global function (contrast_weaken_scale:1 27.66/28.13, contrast_weaken_stretch:2 21.71) -> no global step. Best PSNR 28.35 < 30 and blur subtype ambiguity -> steps and overall UNCERTAIN. Support pairs 1-4 reproduce 27.89/26.62/27.73/26.75 dB (deterministic reproduction PASS). Budget: 25/25 test_candidate, hard stop."
+  },
+  "support_validation": {
+    "pipeline": "blur_gaussian:3,compression_jpeg:4",
+    "psnr_per_pair": {"0": 28.35, "1": 27.89, "2": 26.62, "3": 27.73, "4": 26.75},
+    "ci_per_pair": {"0": "8/10", "1": "7/10", "2": "7/10", "3": "7/10", "4": "8/10"},
+    "result": "PASS (deterministic PSNR reproduced on all 4 support pairs, spread 1.73 dB)"
+  },
+  "qwen_gate": {"available": false, "triggered": false, "reason": "API unavailable; sigma=0.74<2 so noise gate not triggered"},
+  "evidence_files": ["full_analysis.json", "full_analysis_sim_g3j4.json", "full_analysis_sim_g4j4.json", "full_analysis_sim_l4j4.json", "reflection.json"]
+}

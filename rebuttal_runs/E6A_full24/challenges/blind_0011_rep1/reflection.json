@@ -1,0 +1,420 @@
+{
+  "challenge_id": "blind_0011_rep1",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=1.0017 (<1.05, no 8x8 grid evidence); unique_G=244 (ratio 0.953, not <200); dct_zero_ratio=0.827; verdict=MILD_COMPRESSION_POSSIBLE (low confidence)",
+      "blur": "gm_ratio=0.181 (strong gradient loss), spectral_slope -1.644 vs clean -1.2407 (ratio 1.325), FFT anisotropy=1.21 (<1.7 -> not motion), glass_score=0.058 (<0.25 -> not glass), pca_ratio=1.327; verdict=GAUSSIAN_BLUR, est sev=5",
+      "noise": "noise_prior sigma=1.85 (borderline <2); spatial_corr=0.758 (likely contaminated by unpeeled blur), cross_channel_corr=0.960, residual_intensity_corr=0.115, impulse_zero_ratio=0.126; verdict=GAUSSIAN_YCrCb sev~5 but must re-check after blur peel",
+      "global": "NO_GLOBAL (mean_shift=-2.3/255, variance_ratio=0.857 but contrast_detected_raw=false, clipped_fraction=2.1% not heavy)"
+    },
+    "mode": "PSNR (sigma=1.85 < 2, but blur present -> noise estimate may be underestimated; will re-run peeled_noise_check after blur peel)",
+    "qwen_gate": {
+      "available": false,
+      "reason": "Qwen/API not available in this environment; sigma=1.85 below 2/10 boundary anyway"
+    },
+    "suspected": [
+      "blur_gaussian strong (sev 4-5)",
+      "mild contrast/variance change possibly from noise+blur coupling",
+      "noise presence uncertain (sigma~1.9 borderline)"
+    ],
+    "ruled_out": [
+      "motion blur (anisotropy 1.21 << 1.7)",
+      "glass blur (glass_score 0.058 << 0.25)",
+      "strong JPEG (block_boundary 1.002 << 1.1, unique_G 244 > 200)"
+    ]
+  },
+  "noise_6step_check": {
+    "extreme_pct": 77.69,
+    "vm_slope": 0.0115,
+    "var_slope": 0.0958,
+    "spatial_corr": 0.9979,
+    "rgb_ratio": 1.028,
+    "cross_ch_corr": 0.7245,
+    "residual_std": 3.8,
+    "noise_prior_peeled_sigma": 3.71,
+    "source": "peeled_noise_check.py pair0, deterministic peel = blur_gaussian:4 (SKILL v12 peel-first protocol)",
+    "diagnosis": "Not noise. (1) extreme_pct 77.69% is the known script artifact (counts all negative residuals; SKILL rule extreme_pct>50% AND sigma<5 -> ignore IMPULSE). (2) spatial_corr=0.998 and cross_ch=0.72 mean the peel residual is structural, not white. (3) Whole-image noise_prior sigma: target 1.85 == blur-only sim 1.85 (no fine-scale noise added). (4) Support-pair peels: std 2.5/3.0/1.6/2.0, spatial_corr 0.992/0.996/0.976/0.989, rgb_ratio 1.43/1.67/2.02/1.74 (chroma-heavy only on colorful images -> content-proportional systematic difference, whereas additive YCrCb noise would be content-independent). (5) Clipped-whites discriminator: target clipped_fraction 2.11% vs 0.0% for every x_distortion noise candidate tested pre-blur (gaussian_RGB 1/3/4/5, gaussian_YCrCb:2, speckle:4), because noise+clip whitens 255-plateaus then blur pulls them to ~250. FINAL: NO_NOISE.",
+    "support_pair_peel_rgb_ratio": {
+      "pair0": 1.028,
+      "pair1": 1.4312,
+      "pair2": 1.6748,
+      "pair3": 2.0196,
+      "pair4": 1.7366
+    }
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "R1: gm_ratio=0.181 (strong gradient loss), spectral_slope_ratio=1.325, FFT anisotropy=1.21 (<1.7 not motion), glass_score=0.058 (<0.25 not glass) -> Gaussian blur; severity source=gm_ratio gives est sev 5. Test blur-only baseline PSNR to (a) pin blur severity, (b) observe PSNR ceiling indicating whether noise is present (noise sigma~1.85 would cap PSNR ~42dB)."
+      },
+      "test_result": {
+        "psnr_rgb": 34.91,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "R1 b: blur_gaussian:5 gave 34.91dB (30-40 band -> severity may be off by 1). Severity scan downward: test sev 4. Same Gaussian family per DT (gm_ratio=0.181, anisotropy=1.21<1.7, glass=0.058)."
+      },
+      "test_result": {
+        "psnr_rgb": 35.61,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "R1 c: blur sev4=35.61dB > sev5=34.91dB, trend favors lower severity. Continue downward scan: sev 3 (SKILL severity scan mandate, est-2)."
+      },
+      "test_result": {
+        "psnr_rgb": 33.93,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:2",
+        "thinking": "R2: blur-only best=35.61dB at sev4, residual (peel blur4) std=3.8, spatial_corr=0.998, smooth edge-ghost structure (no grain), variance_ratio=0.857 (std ratio 0.926). Deterministic alternative hypothesis: mild contrast weaken after blur. contrast_weaken_stretch:2 scale=0.9 approximates std ratio 0.9. If contrast is real, PSNR should jump >40; if not, drops. (Per physical order: blur -> contrast/ISP -> JPEG)."
+      },
+      "test_result": {
+        "psnr_rgb": 17.02,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:4",
+        "thinking": "R3: blur-only cap 35.61dB (not inf -> extra step exists). JPEG/quant ruled out by block_boundary=1.002/unique_G=244; saturation by chroma_ratio=0.957; brightness by mean_shift=-2.3; contrast_weaken_stretch:2 rejected (17.02dB). Peel blur4 residual: std=3.8, ch_stds R3.8/G3.9/B3.8 (rgb_ratio=1.03 -> RGB not YCrCb), smooth spatially-correlated (spatial_corr=0.998 -> NOT white: consistent with noise added BEFORE blur per blind_challenge order noise->blur, attenuated by kernel ~0.07x -> pre-blur sigma ~53 ~ gaussian_RGB sev4 sigma=51). SIGNAL mode because sigma(post-peel)=3.7 >= 2."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=144.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "thinking": "R3 severity scan: sev4 gave PARTIAL (blur slope+kernel+noise sigma matched; only structured-residual FWHM failed). Mandatory ±1 scan: test sev3 (sigma=38.25)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=70.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:5,blur_gaussian:4",
+        "thinking": "R3 severity scan: sev4 FWHM=144, sev3 FWHM=70; both PARTIAL 3/4. Test sev5 (sigma=63.75) to bracket; if FWHM grows further with sev, the residual structure scale scales with noise -> sev lower (3) preferred; if sev5 FWHM lower, sev 4-5."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=186.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:5,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_speckle:4,blur_gaussian:4",
+        "thinking": "R4 cross-family: peel vm_slope=0.0115 (>0.005 speckle hint, though contaminated by structure). Speckle sev4 sigma=0.35 multiplicative -> post-blur ~3.7 matches residual std 3.8. Test speckle as alternative to gaussian_RGB (SKILL Round1 noise-type coverage)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=174.0px)"
+        ],
+        "pipeline": "noise_speckle:4,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:4",
+        "thinking": "R4 blur cross-family: SKILL requires lens alternative test (gaussian<->lens MTF indistinguishable). blur_lens sev4 = disk radius 6. PSNR deterministic discriminator; if lens were true, PSNR should be >> gaussian's 35.6 (but noise step still caps it). Note radial_ratio content-dependent."
+      },
+      "test_result": {
+        "psnr_rgb": 34.32,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:5,blur_gaussian:4",
+        "thinking": "R5: comparing whole-image signal PROFILES (run_full_analysis on sim vs target) to discriminate noise severity. Target has variance_ratio=0.857, clipped_fraction=2.1% vs sev4-sim 0.746/0.0 - target is more contrasty with saturated pixels, suggesting stronger pre-blur noise (sev5 sigma=63.75 -> more clipping -> clipped whites + variance boost). Save sim for profile comparison."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=182.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:5,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "thinking": "R5 severity discrimination via whole-image profile: interpolation of variance_ratio (blur-only 0.913 / clean 0.0% clip / sev4 0.746 / sev5 0.679; clipped 3.46% blur-only, 0% sev4/5) suggests target (var=0.857, clipped=2.11%) lies between no-noise and sev4 -> test sev3 sigma=38.25 and profile it."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=70.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:4",
+        "thinking": "R5 chromosome re-check: blur4-peel residuals of support pairs 1-4 show rgb_ratio=1.43/1.67/2.02/1.74 (YCrCb noise predicts 1.8; wolf pair0=1.03 likely diluted by its larger structural residual std=3.8). YCrCb sev2 predicts post-blur residual rms ~2.4 (matches pairs 1-4 mean 2.3) and, unlike RGB sev3-5, mild clipping keeps variance_ratio ~0.86/clipped ~2% like the target. Test YCrCb:2+blur4 and profile."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=56.0px)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "thinking": "R6 decisive weak-noise test: cleaned-whites argument says ANY x_distortion noise severity>=1 pre-blur destroys saturated whites (all sims so far clipped=0.0% vs target 2.11% vs blur-only 3.46%). Verify with the WEAKEST noise (sev1 sigma=12.75): if its clipped fraction is still ~0%, target's 2.11% whites rule out a noise step; if it retains ~2%, a weak noise remains possible."
+      },
+      "test_result": {
+        "psnr_rgb": 36.98,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+      "psnr_rgb": 36.98,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 35.61,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 34.91,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_lens:4",
+      "psnr_rgb": 34.32,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 33.93,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_stretch:2",
+      "psnr_rgb": 17.02,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:1",
+      "psnr_rgb": 33.92,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4,
+      "note": "recorded in verification.json (reflection path typo on that call); merged here for full ranking. Below blur-only 35.61 -> no JPEG."
+    }
+  ],
+  "support_verification": {
+    "candidate": "blur_gaussian:4",
+    "mode": "psnr (deterministic reproduction)",
+    "results": {
+      "pair0": {"psnr_rgb": 35.61, "note": "primary analysis pair; wolf image has 6.18% saturated pixels in clean -> largest content-dependent mismatch"},
+      "pair1": {"psnr_rgb": 39.83},
+      "pair2": {"psnr_rgb": 37.86},
+      "pair3": {"psnr_rgb": 43.52, "note": ">40dB = near-exact deterministic reproduction"},
+      "pair4": {"psnr_rgb": 41.53, "note": ">40dB = near-exact deterministic reproduction"}
+    },
+    "verdict": "5/5 pairs reproduced by the same single-step pipeline; 2 pairs >40dB. Any extra step (noise sev>=2 / JPEG / global) would cap all-pair PSNR far lower, so the pipeline is confirmed. Pair0/1 deviations are content-dependent (highlight clipping/high-frequency texture) generator differences, not severity errors (severity scan 3/4/5 peaks at 4 on pair0).",
+    "source_file": "support_verification.json"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_gaussian",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "alternatives": [
+      {"pipeline": [{"function": "blur_gaussian", "severity": 5}], "psnr_rgb": 34.91, "family": "blur", "reason": "severity backup; DT gm_ratio suggested sev5, only 0.7dB below sev4 on pair0"},
+      {"pipeline": [{"function": "blur_lens", "severity": 4}], "psnr_rgb": 34.32, "family": "blur_lens", "reason": "SKILL-mandated cross-family candidate (gaussian<->lens MTF indistinguishable); 1.3dB below, radial profile less uniform"},
+      {"pipeline": [{"function": "noise_gaussian_RGB", "severity": 1}, {"function": "blur_gaussian", "severity": 4}], "psnr_rgb": 36.98, "family": "noise+blur", "reason": "highest pair0 PSNR (weak-noise clipping/mean-drop happens to compensate the pair0 highlight residual), but clipped-white analysis (target 2.11% vs 0.0% for all noise sims) and support-pair >40dB reproductions argue no real noise step; keep only as training-PSNR arbitration backup"}
+    ],
+    "rationale": "Single-step deterministic pipeline. Blur: gm_ratio target 0.1811 vs blur_gaussian:4 sim 0.181, spectral slope -1.644 vs -1.6506, FFT anisotropy 1.21 (<1.7 excludes motion), glass_score 0.058 (<0.25 excludes glass); PSNR severity scan {3:33.93, 4:35.61, 5:34.91} peaks at 4 and support pairs 3/4 reproduce >40dB with the same sev4. No JPEG (block_boundary 1.0017, jpeg:1 drops PSNR to 33.92), no quantization (unique_G 244), no global step (mean_shift -2.3/255, chroma 0.957, contrast test 17.02dB), no noise (noise_prior target 1.85 == blur-only sim 1.85; clipped whites 2.11% vs 0.0% for every noise candidate; support pairs >40dB). Pair0 PSNR 35.61 (30-40 band) is below the 40dB LIKELY threshold due to content-dependent (saturated highlights) generator mismatch in the wolf image, hence UNCERTAIN rather than LIKELY.",
+    "ci_pass_rate": "8/10"
+  },
+  "reflection_R1": {
+    "trigger": "R1 post-training reflection: R0 support PSNR 27.29 dB (<30) and R0 verdict UNCERTAIN; re-examine R0 signal analysis for misread/ignored/borderline signals and propose candidates that better match the 5 support pairs.",
+    "qwen_gate": {"available": false},
+    "reanalysis": {
+      "rerun": "run_full_analysis re-run on pair0 (full_analysis_R1.json) reproduces R0 values exactly; pairs1-4 analysed for the first time (full_analysis_R1_p1..p4.json). All 5 pairs: blur present, no JPEG, no global by thresholds, noise verdict unreliable (noise_prior sigma 0.74-1.85).",
+      "corrections_to_R0": [
+        "clipped_fraction = mean((x<=1)|(x>=254)) per channel. pair0 target 2.11% is entirely DARK clipping; target highlight (>=254) is 0.0% on all 5 pairs. R0's statement 'target 2.11% clipped whites vs 0.0% for noise sims' mislabels the metric. The no-noise conclusion still holds for the correct reason: every pre-blur noise sim (gaussRGB1/3/4/5, YCrCb2) collapses BOTH extreme fractions to ~0% because noise+clip lifts dark plateaus before blur, while the target dark extremes match the blur-only sim almost exactly (<=1: 2.11 vs 2.09, 0.01 vs 0.01, 0.03 vs 0.03, 0.27 vs 0.02, 18.00 vs 17.97 %).",
+        "step2 noise verdict GAUSSIAN_YCrCb 'high confidence sev5' is branch behaviour of run_full_analysis: the YCrCb branch fires whenever cross_channel_corr>0.12 (blur-contaminated, 0.617-0.960 on these pairs) and its sev5 is the fallthrough for sigma<10; noise_prior sigma 1.85 on pair0 is identical to the blur-only simulation (estimator floor).",
+        "residual_intensity_corr = 0.112 / 0.291 / -0.020 / 0.203 / 0.378 across pairs 0-4; the script itself flags gamma_suspect_from_noise=True on pairs1/3/4 (ric>0.15). Signal means the residual is an intensity-dependent deterministic transform, not random noise; pair0 sits just below the 0.15 boundary (threshold-boundary signal)."
+      ],
+      "new_signal_highlight_shoulder": "Binned residual (target minus blur_gaussian:4 simulation) by simulated intensity is monotone negative on all 5 pairs: about -0.2..-1.0 below 128; bin160 = -0.95/-2.13/-1.02/-1.65/-4.13; bin192 = -3.18/-5.23/-3.91; bin224 = -11.22/-10.50/-8.38 (dbins for pairs0/1/2). A pure linear tone fit would gain +2.38 (35.61->38.00) / +1.37 (39.83->41.20) / +2.15 (37.86->40.00) / +0.54 (43.52->44.06) / +1.39 (41.53->42.91) dB. The same shoulder on 5/5 pairs rules out content noise and indicates a systematic generator-side tone difference.",
+      "global_family_expressiveness": "No x_distortion global/brightness/contrast/saturation function has a mild enough minimum severity: brightness shift +/-0.1 (=25.5 levels) or gamma 0.8/1.4; contrast scale 0.75/1.4; contrast stretch 1.0 (identity) / 0.9 (17.02 dB when tested by R0); saturation 0.7/0.6; quantization 20-24 colours (would collapse unique_G 244 to <=24). Observed deviation is <=1 level below midtones and a -14 level shoulder at 249 only.",
+      "boundary_checks": "All discriminating signals except pair0 ric sit far from SKILL thresholds: block_boundary 0.9990-1.0017 vs 1.1; unique_G ratio 0.833-0.953 (pair3 194 because clean pair3 itself has only 233 unique G, not quantization); variance_ratio 0.835-0.934 vs 0.55 contrast trigger; spread_ratio 0.905-0.963 vs 0.80; chroma_ratio 0.890-0.963 vs 0.85; FFT anisotropy 1.15-1.58 vs 1.7 motion; glass_score 0.039-0.058 vs 0.25; mean_shift -1.0..-2.3 vs brightness minimum 25.5 levels."
+    },
+    "hypotheses": [
+      {"id": "H1", "pipeline": "blur_gaussian:4", "role": "control", "signal_source": "gm_ratio target 0.1811 == sim 0.1810 (pair0), spectral slope -1.644 vs -1.651, FFT anisotropy 1.21 (<1.7 excludes motion), glass_score 0.058 (<0.25 excludes glass); R0 PSNR severity scan {3:33.93, 4:35.61, 5:34.91} peaks at 4"},
+      {"id": "H2", "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4", "role": "noise backstop", "signal_source": "step2 GAUSSIAN_YCrCb label + R0 highest pair0 PSNR 36.98; checked against peeled-residual structure (spatial_corr 0.998) and extreme-pixel statistics"},
+      {"id": "H3", "pipeline": "blur_gaussian:4,brightness_darken_gamma_RGB:1", "role": "global tone", "signal_source": "highlight-shoulder residual + ric 0.20-0.38 on 3/5 pairs (gamma-like); mildest available gamma 1.4"},
+      {"id": "H4", "pipeline": "blur_gaussian:4,contrast_weaken_scale:1", "role": "global contrast", "signal_source": "variance_ratio 0.857 vs 0.913 for blur-only sim, spread_ratio 0.905; mildest available contrast 0.75"}
+    ],
+    "validation": [
+      {"pipeline": "blur_gaussian:4", "mode": "psnr", "pair_psnr_rgb": {"pair0": 35.61, "pair1": 39.83, "pair2": 37.86, "pair3": 43.52, "pair4": 41.53}, "ci_pass": "8/7/8/8/9", "result": "ACCEPT control: 5/5 pairs reproduced, identical to R0 support_verification"},
+      {"pipeline": "noise_gaussian_RGB:1,blur_gaussian:4", "mode": "signal", "pair": "pair0", "result": "PARTIAL (matched blur:spectral_slope, blur:wiener_kernel, noise:sigma; mismatched noise:structured_residual FWHM=106.0px) - no WEAK->PARTIAL->MATCH improvement vs R0 noise tests; rejected additionally by extreme-pixel contradiction on 5/5 pairs", "r0_psnr_reference": 36.98},
+      {"pipeline": "blur_gaussian:4,brightness_darken_gamma_RGB:1", "mode": "psnr", "pair": "pair0", "result": "20.34 dB (CI 7/10), -15.27 vs control -> REJECT"},
+      {"pipeline": "blur_gaussian:4,contrast_weaken_scale:1", "mode": "psnr", "pair": "pair0", "result": "25.06 dB (CI 4/10), -10.55 vs control -> REJECT"}
+    ],
+    "non_x_distortion_diagnostics": "To test whether the shoulder comes from a different blur implementation/formation: PIL GaussianBlur radius4 = 35.08 dB, cv2.GaussianBlur sigma4 = 35.07 dB, skimage linear-light = 31.96 dB, JPEG q90-98 intermediate before or after blur <= 35.50 dB (all on pair0, blur-only = 35.13 dB uint8-rounding). None reproduces the shoulder -> OOD generator-side tone difference, not representable by any x_distortion pipeline.",
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [{"function": "blur_gaussian", "severity": 4, "verdict": "UNCERTAIN"}],
+      "rationale": "No R1 candidate passes the validation rule. Control reproduces all 5 pairs (35.61-43.52 dB). Noise candidate is only PARTIAL on signal mode and contradicts extreme-pixel statistics on 5/5 pairs. Deterministic global candidates (mildest available severities) lose 10-15 dB. The residual is a systematic highlight-shoulder tone curve that x_distortion cannot express at any severity, so the best representable pipeline remains blur_gaussian:4 (UNCERTAIN: pair0 simulation 35.61 dB lies in the 30-40 band).",
+      "support_psnr_r0_from_training": 27.29
+    }
+  }
+}

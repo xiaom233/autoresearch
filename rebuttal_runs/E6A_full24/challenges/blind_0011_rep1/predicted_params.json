@@ -1,0 +1,57 @@
+{
+  "challenge_id": "blind_0011_rep1",
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 5}
+      ],
+      "psnr_rgb": 34.91,
+      "function_family": "blur_gaussian",
+      "reason": "severity alternative; gm_ratio DT estimated sev5, only 0.7 dB below sev4 on pair0"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4}
+      ],
+      "psnr_rgb": 34.32,
+      "function_family": "blur_lens",
+      "reason": "SKILL cross-family alternative (gaussian<->lens MTF indistinguishable); 1.3 dB below primary"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 1},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "psnr_rgb": 36.98,
+      "function_family": "noise+blur",
+      "reason": "highest pair0 PSNR (weak pre-blur noise clipping compensates pair0 highlight residual) but contradicted by clipped-white evidence (target 2.11% vs 0.0% for all noise sims) and by support pairs 3/4 reproducing >40 dB with blur only; kept as training-PSNR arbitration backup only"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "8/10",
+    "mode": "PSNR",
+    "rationale": "Single deterministic step: blur_gaussian:4. Signals: gm_ratio 0.1811 (target) vs 0.181 (sim), spectral slope -1.644 vs -1.6506, FFT anisotropy 1.21 (<1.7 excludes motion), glass_score 0.058 (<0.25 excludes glass), pca_ratio 1.33. Severity scan {3:33.93, 4:35.61, 5:34.91 dB} peaks at 4. No JPEG (block_boundary 1.0017 << 1.1; adding jpeg:1 drops PSNR to 33.92), no quantization (unique_G 244 > 200), no global (mean_shift -2.3/255, chroma ratio 0.957, contrast_stretch:2 test = 17.02 dB), no noise (whole-image noise_prior sigma target 1.85 == blur-only sim 1.85; clipped_fraction target 2.11% vs 0.0% for every pre-blur noise candidate; peel residual is structural, spatial_corr 0.998). Support verification: same blur_gaussian:4 reproduces all 4 remaining pairs (39.83 / 37.86 / 43.52 / 41.53 dB; two >40 dB), confirming type+severity+order across the 5-image set. Per-step verdict kept UNCERTAIN because pair0 PSNR 35.61 is in the 30-40 dB band (SKILL threshold: >=40 for LIKELY); the residual gap is a content-dependent generator/highlight-clipping mismatch (clean_0 has 6.18% saturated pixels), not a severity error.",
+    "support_verification": {
+      "candidate": "blur_gaussian:4",
+      "pair_psnr_rgb": {
+        "pair0": 35.61,
+        "pair1": 39.83,
+        "pair2": 37.86,
+        "pair3": 43.52,
+        "pair4": 41.53
+      }
+    },
+    "qwen_gate": {
+      "available": false
+    }
+  }
+}

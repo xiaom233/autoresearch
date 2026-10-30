@@ -1,0 +1,1127 @@
+{
+  "challenge_id": "blind_0021_rep1",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=5.3202 (>>1.1, 0%FP), dct_zero_ratio=0.954, unique_G=229/256 (ratio 0.894). JPEG confirmed, likely severe (q<=10, sev 4-5).",
+      "blur": "gm_ratio=0.1751 (severe blur), spectral_slope_ratio=1.2542 (>1.08), residual_anisotropy=2.2865 (>2.2 high-precision motion flag; >1.7 DT threshold), glass_score=1.3805 (>>0.25), blur_pca_ratio=1.157 (PCA unreliable, kernel corrupted). Candidates: motion (DT), glass (score), gaussian/lens (baseline).",
+      "noise": "noise_prior_sigma=0.74 (<2 -> NO_NOISE preliminary). spatial_corr=0.609 and cross_ch_corr=0.849 are likely blur/JPEG residual structure, not noise. signal later re-checked on peeled residual.",
+      "global": "Tool verdict NO_GLOBAL but low confidence. brightness_mean_shift=24.9 levels; tool attributed raw brightness to JPEG (FP check). JPEG q5 cannot shift mean by ~25 levels -> brightness_brighten_shfit_RGB:1 adds exactly +25.5 (c=0.1) and is a strong candidate (clipping only 0.56%). variance_ratio=0.848 consistent with blur+JPEG variance loss. saturation_chroma_ratio=1.0665 -> no saturation change."
+    },
+    "mode": "PSNR (sigma=0.74 < 2)",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "note": "sigma=0.74 < 2, gate not triggered; Qwen/API unavailable in this environment"
+    }
+  },
+  "noise_6step_check": {
+    "status": "completed via peeled_noise_check.py on final deterministic pipeline (blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4)",
+    "residual_std": 3.3,
+    "noise_prior_sigma": 1.24,
+    "extreme_pct": 95.31,
+    "zero_ratio": 0.9064,
+    "vm_slope": 3.415,
+    "var_slope": 0.0359,
+    "spatial_corr": 0.9235,
+    "rgb_ratio": 1.0629,
+    "cross_ch_corr": 0.8819,
+    "channel_stds": {
+      "R": 3.3,
+      "G": 3.2,
+      "B": 3.4
+    },
+    "diagnosis": "NO_NOISE. extreme_pct=95.31% is the documented JPEG/blur-residual false positive (SKILL trigger: extreme_pct>50% AND noise_prior sigma<5 -> ignore §B IMPULSE). zero_ratio=0.9064 shows most residual pixels are exactly 0 (flat JPEG blocks); the nonzero remainder is edge/block error structure -> vm_slope=3.415 and spatial_corr=0.9235 are structural artifacts, not speckle/spatial noise. var_slope=0.0359 << 1.0 rules out Poisson. rgb_ratio=1.0629 < 1.4 rules out YCrCb. Decisive: any real noise function in the grid adds sigma>=12.75 (gaussian_RGB sev1 = 0.05*255), which would cap PSNR near 26 dB; measured 37.75 dB excludes any noise step."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_motion:4,compression_jpeg:5",
+        "thinking": "R1-blur: DT residual_anisotropy=2.29>2.2 -> motion (high-precision flag). gm_ratio=0.175 suggests strong blur; motion sev4 (r15,s9) rather than sev5. brightness:+25.5 matches mean_shift 24.9. jpeg sev5 from block_boundary=5.32/dct_zero=0.954."
+      },
+      "test_result": {
+        "psnr_rgb": 23.35,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_motion:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:5",
+        "thinking": "R1-blur cross-family control: gaussian sev5 (sigma=5) vs motion. gm_ratio=0.175 could match gaussian+jpeg variance loss. Known motion FP ~18% -> PSNR arbitration needed."
+      },
+      "test_result": {
+        "psnr_rgb": 25.06,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:5,compression_jpeg:5",
+        "thinking": "R1-blur cross-family: lens sev5 (disk radius 8) - radial_ratio content-dependent but gm_ratio 0.175 fits lens+jpeg; deterministic subtype -> PSNR arbitrates vs motion."
+      },
+      "test_result": {
+        "psnr_rgb": 25.18,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:5,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:5",
+        "thinking": "R1-blur cross-family: glass_score=1.38 (>>0.25) + sigma<3 triggers glass per DT fallback; glass sev4 (sigma1.4, shift3, iter2). Non-deterministic -> PSNR expected to understate."
+      },
+      "test_result": {
+        "psnr_rgb": 24.87,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,compression_jpeg:5",
+        "thinking": "R2 control: JPEG q5 blocking is axis-aligned -> can inflate residual_anisotropy (2.29) and glass_score (1.38). Need no-blur control to isolate true blur contribution; gm_ratio=0.175 may be mostly JPEG gradient loss."
+      },
+      "test_result": {
+        "psnr_rgb": 22.52,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:1,blur_lens:5,compression_jpeg:5",
+        "thinking": "R2-global: residual_intensity_corr=-0.376 (negative) + gamma_suspect_from_noise=true -> dark regions brightened more than highlights = gamma brighten, not additive shift. Visual: target washed out/pastel vs shift-sim vivid. gamma=0.8 (sev1) explains mean+~20-25. Keep lens:5+jpeg:5."
+      },
+      "test_result": {
+        "psnr_rgb": 22.98,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:1,blur_lens:5,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:5",
+        "thinking": "R3 severity scan: gm_ratio=0.175 maybe overestimated blur strength (JPEG also reduces gradients). lens:5 best so far (25.18); try lens:4 (disk r6) to test if blur weaker."
+      },
+      "test_result": {
+        "psnr_rgb": 25.36,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:3,compression_jpeg:5",
+        "thinking": "R3 severity scan: lens:4 improved (25.36). Continue downward - lens:3 (disk r4) to locate optimum; JPEG itself contributes gradient loss."
+      },
+      "test_result": {
+        "psnr_rgb": 25.33,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:3,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "R3 severity scan: block_boundary diff -15% at jpeg:5 (sim less blocky), jpeg:5 is q5 minimum. Bracket jpeg:4 (q8) to confirm jpeg:5 is best."
+      },
+      "test_result": {
+        "psnr_rgb": 36.14,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:3,compression_jpeg:4",
+        "thinking": "R3b severity refine: jpeg:4 correct (36.14dB, CI 8/10, block_boundary diff 1%). Now refine blur while JPEG fixed: lens:3 vs lens:4 (25.36 before jpeg fix)."
+      },
+      "test_result": {
+        "psnr_rgb": 33.05,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:5,compression_jpeg:4",
+        "thinking": "R3b severity refine: lens:4 best (36.14) vs lens:3 (33.05) at jpeg:4. Bracket upward lens:5 to confirm optimum."
+      },
+      "test_result": {
+        "psnr_rgb": 32.56,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:4,compression_jpeg:4",
+        "thinking": "R2 blur subtype confirm at correct jpeg:4: lens:4 peak 36.14. gaussian:4 (sigma4) as cross-family control; MTF gaussian~lens known confusable, PSNR arbitrates."
+      },
+      "test_result": {
+        "psnr_rgb": 33.79,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R3 order check: sim has +0.34pp excess 255-clipping (impulse_pct_255 61%). Blur-before-brightness (priority=2 ISP order) smooths highlights before +25.5 shift -> less clipping. Physics allows brightness at priority 0 or 2."
+      },
+      "test_result": {
+        "psnr_rgb": 37.75,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_lens:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R3c severity scan with confirmed order: lens:4+brightness+jpeg:4 = 37.75dB CI10/10. Scan lens:3 (disk r4) to check if blur severity is -1."
+      },
+      "test_result": {
+        "psnr_rgb": 33.42,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_lens:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R3c severity scan: lens:3=33.42 worse; lens:4 peak 37.75. Check lens:5 (disk r8) upper bracket with confirmed order."
+      },
+      "test_result": {
+        "psnr_rgb": 33.14,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:3",
+        "thinking": "R3d jpeg severity scan +/-1: jpeg:4 = 37.75 peak. Test jpeg:3 (q12) lower bracket with confirmed lens:4 order."
+      },
+      "test_result": {
+        "psnr_rgb": 29.47,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_HSV:1,compression_jpeg:4",
+        "thinking": "R3 global variant: RGB shift:1 now at 37.75/CI10. Alternative brightness_brighten_shfit_HSV:1 (V+0.1) changes saturated colors less; mean_shift 24.9 may fit HSV better. Same order blur->brightness->jpeg."
+      },
+      "test_result": {
+        "psnr_rgb": 28.84,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_HSV:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:5",
+        "thinking": "R3d jpeg severity scan +1: complete bracket with confirmed order (jpeg:4=37.75, jpeg:3=29.47). Earlier jpeg:5 loses 10.8dB under same prefix; final confirmation."
+      },
+      "test_result": {
+        "psnr_rgb": 25.41,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "SUPPORT validation pair1: final R0 candidate must replicate deterministically (no noise) on independent support image. Expect comparable PSNR ~35+ and matching signals."
+      },
+      "test_result": {
+        "psnr_rgb": 33.11,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "SUPPORT validation pair2: same final pipeline, independent support image; deterministic reproduction check."
+      },
+      "test_result": {
+        "psnr_rgb": 35.13,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "SUPPORT validation pair3: same final pipeline, independent support image; deterministic reproduction check."
+      },
+      "test_result": {
+        "psnr_rgb": 33.99,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "SUPPORT validation pair4: same final pipeline, independent support image; deterministic reproduction check."
+      },
+      "test_result": {
+        "psnr_rgb": 34.02,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 37.75,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 36.14,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 35.13,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 34.02,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 33.99,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 33.79,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_lens:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 33.42,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_lens:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 33.14,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 33.11,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:3,compression_jpeg:4",
+      "psnr_rgb": 33.05,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:5,compression_jpeg:4",
+      "psnr_rgb": 32.56,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:3",
+      "psnr_rgb": 29.47,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_HSV:1,compression_jpeg:4",
+      "psnr_rgb": 28.84,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:5",
+      "psnr_rgb": 25.41,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:5",
+      "psnr_rgb": 25.36,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:3,compression_jpeg:5",
+      "psnr_rgb": 25.33,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:5,compression_jpeg:5",
+      "psnr_rgb": 25.18,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:5",
+      "psnr_rgb": 25.06,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:5",
+      "psnr_rgb": 24.87,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_motion:4,compression_jpeg:5",
+      "psnr_rgb": 23.35,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:1,blur_lens:5,compression_jpeg:5",
+      "psnr_rgb": 22.98,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,compression_jpeg:5",
+      "psnr_rgb": 22.52,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    }
+  ],
+  "signal_reinterpretation": {
+    "jpeg_severity": "block_boundary=5.32 initially suggested JPEG q5 (sev5), but PSNR dropped 10.8 dB with jpeg:5. The CI block_boundary_ratio metric (which is what the target value 5.32 really measures) matched jpeg:4 (q8) at 0-1% with jpeg:3/5 both far worse -> q8 (sev4).",
+    "blur_subtype": "DT flagged motion (anisotropy 2.2865) and glass_score=1.38, but axis-aligned JPEG 8x8 blocking inflates both anisotropy and glass_score. PSNR arbitration: lens:4=37.75 > gaussian:4=33.79 > glass=24.87 > motion=23.35 > no-blur=22.52. Known DT failure mode 'gaussian/motion FP -> PSNR wins' applied.",
+    "global": "full_analysis said NO_GLOBAL (brightness attributed to JPEG). Mean shift 24.9 levels cannot come from JPEG; brightness_brighten_shfit_RGB:1 (+25.5 before clipping) beats HSV shift (28.84) and gamma_RGB (22.98). gamma_suspect_from_noise / ric=-0.376 was a blur+JPEG residual artifact.",
+    "order": "blur -> brightness -> jpeg (37.75) beats brightness -> blur -> jpeg (36.14); blur-first matches target 255-clipping fraction (+0.008 vs +0.338 pp)."
+  },
+  "support_validation": {
+    "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+    "pair_0": {
+      "psnr_rgb": 37.75,
+      "ci_pass": "10/10"
+    },
+    "pair_1": {
+      "psnr_rgb": 33.11,
+      "ci_pass": "9/10"
+    },
+    "pair_2": {
+      "psnr_rgb": 35.13,
+      "ci_pass": "10/10"
+    },
+    "pair_3": {
+      "psnr_rgb": 33.99,
+      "ci_pass": "10/10"
+    },
+    "pair_4": {
+      "psnr_rgb": 34.02,
+      "ci_pass": "10/10"
+    },
+    "conclusion": "Deterministic reproduction on all 4 support pairs (PSNR 33.1-35.1 dB, block_boundary/hf_lf/overshoot diffs <=3%). Same degradation scenario confirmed."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_lens",
+        "severity": 4,
+        "verdict": "UNCERTAIN",
+        "evidence": "PSNR peak unimodal: lens:3=33.42, lens:4=37.75, lens:5=33.14 (pair0, confirmed order); cross-family gaussian:4=33.79; CI 10/10; support pairs 33.1-35.1 dB"
+      },
+      {
+        "function": "brightness_brighten_shfit_RGB",
+        "severity": 1,
+        "verdict": "UNCERTAIN",
+        "evidence": "mean_shift=24.9 vs +25.5 of c=0.1; HSV shift=28.84 and gamma_RGB=22.98 rejected; 255-clipping matches (+0.008pp) when applied after blur"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 4,
+        "verdict": "UNCERTAIN",
+        "evidence": "q8 bracket: jpeg:3=29.47, jpeg:4=37.75, jpeg:5=25.41; block_boundary_ratio diff 1%"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "verdict_rule": "all steps deterministic but PSNR 33-38 dB < 40 -> UNCERTAIN per SKILL verdict rules (severity may still be +/-1)",
+    "rationale": "3-step deterministic pipeline (no noise): lens blur sev4, RGB brightness shift sev1, JPEG q8. Identified by layer-wise peeling: JPEG severity corrected first (q8), then blur subtype by PSNR cross-family arbitration (DT motion/glass signals were JPEG-induced FPs), then global by mean-shift magnitude and variant comparison, then pipeline order by clipping semantics. Verified on 4 independent support pairs with consistent PSNR 33-35 dB and CI 9-10/10.",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "blur_gaussian",
+            "severity": 4
+          },
+          {
+            "function": "brightness_brighten_shfit_RGB",
+            "severity": 1
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 4
+          }
+        ],
+        "psnr_rgb": 33.79,
+        "function_family": "blur_gaussian",
+        "note": "cross-family blur alternative (tested with brightness-first order); same brightness/jpeg"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_lens",
+            "severity": 3
+          },
+          {
+            "function": "brightness_brighten_shfit_RGB",
+            "severity": 1
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 4
+          }
+        ],
+        "psnr_rgb": 33.42,
+        "function_family": "blur_lens",
+        "note": "severity -1"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_lens",
+            "severity": 5
+          },
+          {
+            "function": "brightness_brighten_shfit_RGB",
+            "severity": 1
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 4
+          }
+        ],
+        "psnr_rgb": 33.14,
+        "function_family": "blur_lens",
+        "note": "severity +1"
+      }
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "agent": "independent R1 reflection sub-agent (SKILL protocol, no GT access)",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "note": "pair0 sigma_prior=0.74<2 -> SKILL Step 0.5 gate not triggered. Cross-pair pair1/2/3 raw sigma_prior 2.84-4.08 lie inside the 2-10 boundary, but Qwen/API unavailable; boundary resolved by deterministic-reproduction argument + peeled structural-FP analysis (see reanalysis.noise)"
+    },
+    "reanalysis": {
+      "method": "run_full_analysis.py re-run on all 5 support pairs -> full_analysis_R1.json (pair0) + full_analysis_R1_p1..p4.json; R0 files untouched",
+      "pair0_primary_identical_to_R0": "block_boundary=5.3202, unique_G=229, dct_zero=0.954, sigma_prior=0.74, aniso=2.2865, glass=1.3805, gm=0.175, mean_shift=24.9, var_ratio=0.8484 (deterministic; confirms R0 output integrity)",
+      "cross_pair_signal_table": [
+        {
+          "pair": 0,
+          "block_boundary": 5.32,
+          "unique_G": 229,
+          "dct_zero": 0.954,
+          "sigma_prior": 0.74,
+          "aniso": 2.29,
+          "glass": 1.38,
+          "gm": 0.175,
+          "slope_ratio": 1.254,
+          "mean_shift": 24.9,
+          "var_ratio": 0.848,
+          "sat_ratio": 1.067,
+          "blur_DT": "motion",
+          "noise_DT": "GAUSSIAN_YCrCb"
+        },
+        {
+          "pair": 1,
+          "block_boundary": 3.59,
+          "unique_G": 237,
+          "dct_zero": 0.915,
+          "sigma_prior": 3.71,
+          "aniso": 1.33,
+          "glass": 1.38,
+          "gm": 0.15,
+          "slope_ratio": 1.369,
+          "mean_shift": 24.6,
+          "var_ratio": 0.672,
+          "sat_ratio": 0.908,
+          "blur_DT": "glass",
+          "noise_DT": "GAUSSIAN_YCrCb"
+        },
+        {
+          "pair": 2,
+          "block_boundary": 4.08,
+          "unique_G": 231,
+          "dct_zero": 0.927,
+          "sigma_prior": 2.84,
+          "aniso": 1.94,
+          "glass": 1.46,
+          "gm": 0.146,
+          "slope_ratio": 1.237,
+          "mean_shift": 24.7,
+          "var_ratio": 0.635,
+          "sat_ratio": 0.852,
+          "blur_DT": "glass",
+          "noise_DT": "GAUSSIAN_YCrCb"
+        },
+        {
+          "pair": 3,
+          "block_boundary": 3.94,
+          "unique_G": 247,
+          "dct_zero": 0.893,
+          "sigma_prior": 4.08,
+          "aniso": 1.53,
+          "glass": 1.46,
+          "gm": 0.132,
+          "slope_ratio": 1.311,
+          "mean_shift": 24.8,
+          "var_ratio": 0.75,
+          "sat_ratio": 0.91,
+          "blur_DT": "glass",
+          "noise_DT": "GAUSSIAN_YCrCb"
+        },
+        {
+          "pair": 4,
+          "block_boundary": 3.28,
+          "unique_G": 223,
+          "dct_zero": 0.895,
+          "sigma_prior": 2.22,
+          "aniso": 1.29,
+          "glass": 1.23,
+          "gm": 0.231,
+          "slope_ratio": 1.232,
+          "mean_shift": 24.4,
+          "var_ratio": 0.805,
+          "sat_ratio": 0.892,
+          "blur_DT": "glass",
+          "noise_DT": "GAUSSIAN_YCrCb"
+        }
+      ],
+      "signal_vs_verdict_checks": [
+        "Step1 compression: block_boundary 3.28-5.32 (>>1.1, 0% FP) + dct_zero 0.89-0.95 + unique_G 223-247 on every pair -> JPEG confirmed. Simulated q8 block_boundary within 0-4%; severity bracket q12/q8/q5 = 29.47/37.75/25.41 intact.",
+        "Step2 noise (verdict vs signal contradiction): DT says GAUSSIAN_YCrCb on all 5 pairs, but sigma_prior varies 0.74-4.08 for one identical scenario -> content-dependent estimate, not a physical noise level. Peeled check on pair1 (highest raw sigma 3.71): extreme_pct=86.78% 'IMPULSE' is the documented JPEG/blur structural FP (zero_ratio=0.736, var_slope=-0.0549, spatial_corr=0.9225, cross_ch=0.9523, rgb_ratio=1.0504, per-channel stds R=5.6/G=5.5/B=5.8); wavelet sigma 7.41 EXCEEDS total residual std 5.63 -> spiky structural residual, impossible for additive noise.",
+        "Step2 decisive ceiling argument: the fixed deterministic pipeline reproduces all 5 pairs at 33.11-37.75 dB (residual std 3.3-5.6 levels). Every grid noise function at severity 1 adds >=12.75 RMS levels of luma noise (gaussian_RGB and gaussian_YCrCb sigma_l=0.05 normalized = 12.75 levels; speckle 0.14*I ~23; poisson ~23; impulse ~13), which caps PSNR at ~29 dB or below -> NO_NOISE.",
+        "Step3 blur (boundary signal): residual_anisotropy 2.2865 on pair0 just over the 2.2 motion flag, but 1.29-1.94 on the other 4 pairs; glass_score 1.23-1.46 on all pairs, DT flips motion (1/5) vs glass (4/5) -> DT subtype unstable. Both DT families were re-tested at the corrected jpeg:4 prefix: motion:4=25.92 dB (grad 3.45 vs target 2.13, too directional), glass:4=30.48 dB. Gaussian:4 fair-order=34.60 dB (grad 1.72, too smooth). Lens:4=37.75 dB with grad 2.04 and var_ratio 0.8463 closest to target 2.13/0.8484.",
+        "Step4 global: tool NO_GLOBAL (brightness attributed to JPEG) contradicted by mean_shift 24.40-24.90 on every pair. Additive-shift signature: target shift invariant to clean mean (clean means 44.3-142.4 vs shifts 24.45-24.89); simulated RGB shift reproduces it within 0.03 levels on all 5 pairs. gamma_RGB:1 at corrected prefix gives shift +15.13, PSNR 25.61 -> rejected. HSV shift (R0) 28.84 -> rejected. variance_ratio 0.635-0.848 reproduced by blur+JPEG alone (sim 0.6306-0.8463) -> no independent contrast step.",
+        "Order axis (missed in R0): blur->jpeg->brightness (post-edit, SKILL order list item 5/6) = 37.66 dB, tie within 0.09 dB, BUT clipped-255 fraction 0.3257% vs target 0.0052% (63x) and CI 8/10 -> brightness must precede JPEG storage.",
+        "Residual structure: control residual zero_ratio=0.90/0.73, 8x8 block-boundary |r| 1.65-1.73x interior, lag1 autocorr 0.81, p99=13-21 -> JPEG-quantization-structured double-compression gap, not a missing degradation step."
+      ],
+      "second_order_reproduction": {
+        "columns": [
+          "pair",
+          "psnr",
+          "mean_shift_target",
+          "mean_shift_sim",
+          "var_ratio_target",
+          "var_ratio_sim",
+          "clip255_target_pct",
+          "clip255_sim_pct",
+          "residual_std"
+        ],
+        "rows": [
+          [
+            0,
+            37.75,
+            24.89,
+            24.88,
+            0.8484,
+            0.8463,
+            0.0052,
+            0.0055,
+            3.3
+          ],
+          [
+            1,
+            33.11,
+            24.59,
+            24.59,
+            0.6719,
+            0.6656,
+            0.0394,
+            0.0471,
+            5.63
+          ],
+          [
+            2,
+            35.13,
+            24.75,
+            24.78,
+            0.6353,
+            0.6306,
+            0.0,
+            0.0,
+            4.47
+          ],
+          [
+            3,
+            33.99,
+            24.82,
+            24.81,
+            0.7496,
+            0.7465,
+            0.0095,
+            0.0082,
+            5.09
+          ],
+          [
+            4,
+            34.02,
+            24.45,
+            24.44,
+            0.8046,
+            0.8006,
+            0.0787,
+            0.0787,
+            5.07
+          ]
+        ]
+      },
+      "missed_or_boundary_signals_examined": [
+        "residual_anisotropy 2.2865 > 2.2 motion flag (pair0): re-tested motion:4 at corrected prefix -> 25.92 dB (rejected)",
+        "glass_score 1.23-1.46 + DT GLASS on 4/5 pairs: re-tested glass:4 at corrected prefix -> 30.48 dB (rejected)",
+        "residual_intensity_corr -0.17..-0.38 + gamma_suspect_from_noise: re-tested gamma_RGB:1 at corrected prefix -> 25.61 dB, shift mismatch (rejected)",
+        "variance_ratio 0.635-0.848 (pair-dependent): reproduced by blur+JPEG without contrast step (sim within 1%)",
+        "saturation_chroma_ratio 0.85-1.07 (pair-dependent): control per-channel means/variances match target -> no saturation step",
+        "clipped_fraction 0.0000-0.0787%: order-sensitive; only blur->brightness->jpeg reproduces it",
+        "untested post-edit order JPEG->brightness: tested, rejected via clipping CI",
+        "sigma_prior boundary values 2.2-4.1 on pairs 1-4: resolved as structural FP by peeled check and noise-ceiling argument"
+      ]
+    },
+    "hypotheses": [
+      {
+        "id": "H0",
+        "role": "control (R0 pipeline)",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "signal_source": "R0 final decision; all 5-pair signals (JPEG block_boundary, blur gm_ratio/slope, mean_shift, clipping)",
+        "pair0_psnr": 37.75,
+        "support_psnr": [
+          37.75,
+          33.11,
+          35.13,
+          33.99,
+          34.02
+        ],
+        "ci": [
+          "10/10",
+          "9/10",
+          "10/10",
+          "10/10",
+          "10/10"
+        ],
+        "verdict": "RETAIN"
+      },
+      {
+        "id": "H1",
+        "role": "DT blur family re-test at corrected JPEG",
+        "pipeline": "blur_motion:4 / blur_glass:4 + brightness + jpeg:4",
+        "signal_source": "residual_anisotropy=2.2865 (pair0, boundary >2.2); glass_score=1.23-1.46 and DT GLASS on 4/5 pairs",
+        "pair0_psnr": {
+          "blur_motion:4": 25.92,
+          "blur_glass:4": 30.48
+        },
+        "verdict": "REJECT"
+      },
+      {
+        "id": "H2",
+        "role": "cross-family blur at fair order",
+        "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "signal_source": "gaussian/lens MTF confusability (SKILL known failure mode); R0 only tested gaussian under brightness-first order",
+        "pair0_psnr": 34.6,
+        "delta_db": -3.15,
+        "verdict": "REJECT"
+      },
+      {
+        "id": "H3",
+        "role": "global subtype re-test",
+        "pipeline": "blur_lens:4,brightness_brighten_gamma_RGB:1,compression_jpeg:4",
+        "signal_source": "residual_intensity_corr=-0.3762 + gamma_suspect_from_noise=true; R0 only tested gamma under wrong jpeg:5/lens:5 prefix",
+        "pair0_psnr": 25.61,
+        "simulated_shift": 15.13,
+        "target_shift": 24.89,
+        "verdict": "REJECT"
+      },
+      {
+        "id": "H4",
+        "role": "order axis (post-edit)",
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "signal_source": "SKILL order list items 5/6 (JPEG->global, post-editing); never tested by R0",
+        "pair0_psnr": 37.66,
+        "delta_db": -0.09,
+        "clip255_pct": 0.3257,
+        "target_clip255_pct": 0.0052,
+        "verdict": "REJECT (PSNR tie, fails clipping CI 8/10)"
+      }
+    ],
+    "validation": {
+      "criterion": "CHANGE iff candidate reproduces on 5 support pairs AND improves over R0 control (pair0 >2 dB or >35 dB, other pairs not worse); deterministic pipeline (no noise) -> PSNR mode valid",
+      "test_calls": 10,
+      "candidate_pipelines_tested": 6,
+      "formal_candidates_including_control": 5,
+      "control_reproduction": {
+        "pair_0": 37.75,
+        "pair_1": 33.11,
+        "pair_2": 35.13,
+        "pair_3": 33.99,
+        "pair_4": 34.02,
+        "note": "bit-exact reproduction of R0 stored numbers on all pairs"
+      },
+      "improvement": "none; best alternative -0.09 dB (tie, fails second-order clipping); remaining alternatives -3.15 to -12.14 dB",
+      "termination": "all plausible axes (blur subtype, blur severity, global subtype, JPEG severity, order) closed within 10/15 test calls; no candidate met CHANGE criterion"
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {
+          "function": "blur_lens",
+          "severity": 4
+        },
+        {
+          "function": "brightness_brighten_shfit_RGB",
+          "severity": 1
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 4
+        }
+      ],
+      "rationale": "R0 pipeline remains uniquely best: exact 5-pair reproduction (33.1-37.75 dB), mean shift identical within 0.03 levels, variance ratio within 1%, clipping matched; every untested axis loses or fails a second-order CI. Noise excluded by PSNR ceiling argument + structural-FP diagnosis. Residual gap is double-JPEG quantization, not missing degradation.",
+      "r0_model_context": "r0_result.json reports R0 model support_psnr=20.19 (best_step 11319); degraded-input PSNR is 16.0-18.3 dB, so restoration gain is only ~+2-4 dB. This is a training-side signal, not blind-ID evidence: simulator reproduction of the actual degraded images is near-exact on all 5 pairs."
+    },
+    "test_iterations": [
+      {
+        "round": 23,
+        "hypothesis": {
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "thinking": "R1-C0 control re-baseline: exact R0 pipeline, pair0, deterministic reproduction check; also save sim for variance/clipping second-order comparison"
+        },
+        "test_result": {
+          "psnr_rgb": 37.75,
+          "ci_pass": "10/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "mode": "psnr"
+        },
+        "decision": "ADJUST_SEVERITY"
+      },
+      {
+        "round": 24,
+        "hypothesis": {
+          "pipeline": "blur_motion:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "thinking": "R1-C1: residual_anisotropy=2.2865>2.2 (pair0) motion flag; R0 only tested motion at wrong jpeg:5. Retest motion:4 at corrected jpeg:4 + blur-first order. Cross-pair caveat: pair1 aniso=1.33 weak, so flag may be JPEG-blocking FP"
+        },
+        "test_result": {
+          "psnr_rgb": 25.92,
+          "ci_pass": "8/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_motion:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "mode": "psnr"
+        },
+        "decision": "TRY_ALTERNATIVE"
+      },
+      {
+        "round": 25,
+        "hypothesis": {
+          "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "thinking": "R1-C2: cross-family blur control at corrected prefix. R0 only tested gaussian:4 in brightness-first order (33.79); blur-first control needed for fair lens-vs-gaussian comparison. MTF gaussian/lens known confusable, PSNR arbitrates"
+        },
+        "test_result": {
+          "psnr_rgb": 34.6,
+          "ci_pass": "10/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "mode": "psnr"
+        },
+        "decision": "ADJUST_SEVERITY"
+      },
+      {
+        "round": 26,
+        "hypothesis": {
+          "pipeline": "blur_lens:4,brightness_brighten_gamma_RGB:1,compression_jpeg:4",
+          "thinking": "R1-C3: residual_intensity_corr=-0.376 + gamma_suspect=true (threshold-boundary signal); R0 only tested gamma at wrong jpeg:5/lens:5. Retest gamma_RGB:1 (gamma=0.8) at corrected lens:4+jpeg:4. Note: additive-shift signature (per-pair shift 24.45-24.89 invariant to clean mean 44-142) predicts gamma loses"
+        },
+        "test_result": {
+          "psnr_rgb": 25.61,
+          "ci_pass": "7/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_lens:4,brightness_brighten_gamma_RGB:1,compression_jpeg:4",
+          "mode": "psnr"
+        },
+        "decision": "TRY_ALTERNATIVE"
+      },
+      {
+        "round": 27,
+        "hypothesis": {
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "thinking": "R1-C0 control support-pair1: deterministic reproduction of R0 pipeline; pair1 signals (sigma_prior=3.71 FP under blur/JPEG residual, aniso=1.33 no-motion, glass=1.377) differ from pair0 -> verify control still reproduces"
+        },
+        "test_result": {
+          "psnr_rgb": 33.11,
+          "ci_pass": "9/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "mode": "psnr"
+        },
+        "decision": "ADJUST_SEVERITY"
+      },
+      {
+        "round": 28,
+        "hypothesis": {
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "thinking": "R1-C0 control support-pair2: deterministic reproduction; pair2 clean mean=44 (dark image) stresses additive-shift signature (target shift +24.75 vs +25.5 nominal)"
+        },
+        "test_result": {
+          "psnr_rgb": 35.13,
+          "ci_pass": "10/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "mode": "psnr"
+        },
+        "decision": "ADJUST_SEVERITY"
+      },
+      {
+        "round": 29,
+        "hypothesis": {
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "thinking": "R1-C0 control support-pair3: deterministic reproduction on independent support image"
+        },
+        "test_result": {
+          "psnr_rgb": 33.99,
+          "ci_pass": "10/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "mode": "psnr"
+        },
+        "decision": "ADJUST_SEVERITY"
+      },
+      {
+        "round": 30,
+        "hypothesis": {
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "thinking": "R1-C0 control support-pair4: deterministic reproduction on independent support image"
+        },
+        "test_result": {
+          "psnr_rgb": 34.02,
+          "ci_pass": "10/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "mode": "psnr"
+        },
+        "decision": "ADJUST_SEVERITY"
+      },
+      {
+        "round": 31,
+        "hypothesis": {
+          "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+          "thinking": "R1-C4: untested order axis. SKILL order list items 5/6 allow JPEG->global (post-edit); brightness priority=2 can shuffle after ISP JPEG. R0 only tested blur-first vs brightness-first (37.75 vs 36.14), never JPEG-before-brightness"
+        },
+        "test_result": {
+          "psnr_rgb": 37.66,
+          "ci_pass": "8/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+          "mode": "psnr"
+        },
+        "decision": "ADJUST_SEVERITY"
+      },
+      {
+        "round": 32,
+        "hypothesis": {
+          "pipeline": "blur_glass:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "thinking": "R1-C5: glass_score=1.38 (>>0.25) in pair0 AND 1.377 in pair1; pair1 DT verdict=GLASS_BLUR. R0 tested glass only at wrong jpeg:5 (24.87). Close the axis at corrected jpeg:4. Glass is stochastic pixel-shuffle -> expect structural CI mismatch vs control's 10/10"
+        },
+        "test_result": {
+          "psnr_rgb": 30.48,
+          "ci_pass": "10/10",
+          "ci_verdict": "GOOD",
+          "method": "PSNR",
+          "pipeline": "blur_glass:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+          "mode": "psnr"
+        },
+        "decision": "ADJUST_SEVERITY"
+      }
+    ]
+  }
+}

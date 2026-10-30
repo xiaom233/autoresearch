@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0012_rep1",
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "blur_motion", "severity": 5, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_impulse", "severity": 1, "verdict": "UNCERTAIN"},
+        {"function": "blur_motion", "severity": 5, "verdict": "LIKELY"},
+        {"function": "compression_jpeg", "severity": 3, "verdict": "LIKELY"}
+      ],
+      "psnr": null,
+      "stats": {
+        "pair0_signal_verdict": "WEAK 3/5",
+        "matched": ["blur:spectral_slope", "noise:sigma", "compression:block_boundary"],
+        "mismatched": ["blur:wiener_kernel (0.283)", "noise:structured_residual (FWHM=18.0px)"],
+        "note": "indistinguishable from gaussian_RGB:1 on sigma (noise precedes blur → subtype accuracy 54.7%); kept for cross-family coverage"
+      },
+      "function_family": "noise_impulse"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (signal mode)",
+    "mode": "SIGNAL (sigma=2.22; PSNR invalid due to noise)",
+    "rationale": "Three-step mixed degradation in generation order noise(p0)→blur(p1)→jpeg(p2). JPEG: block_boundary=2.9022 (0% FP) confirms compression; full-context severity scan (jpeg3 match, jpeg4 diff 39%, jpeg5 diff 105%) selects sev3 (q=12). Blur: residual_anisotropy=1.7022>1.7 + blur_pca_ratio=4.625>2.5 → motion; motion:5 reproduces spectral_slope on pair0 and pairs 1/4; motion:4 and gaussian:5 fail; support pair 4 gives full 5/5 MATCH including Wiener-kernel. Noise: gaussian_RGB:1 matches wavelet sigma 5/5 pairs; subtype not diagnosable because noise precedes blur (54.7%), noise_prior flat slope + rgb_ratio=1.06 favor gaussian_RGB; impulse:1 indistinguishable → alternative. Residual Wiener/FWHM mismatches on some pairs are caused by per-call random motion-blur angle (uniform -90..90) and pre-blur noise seed mismatch, not by wrong parameters.",
+    "support_verification": {
+      "pair_0": "WEAK 3/5",
+      "pair_1": "WEAK 2/5",
+      "pair_2": "WEAK 2/5",
+      "pair_3": "WEAK 1/5",
+      "pair_4": "MATCH 5/5",
+      "noise_sigma_match": "5/5 pairs",
+      "block_boundary_match": "3/5 pairs",
+      "spectral_slope_match": "3/5 pairs"
+    },
+    "candidate_tests": 14,
+    "qwen_gate": {"available": false}
+  }
+}

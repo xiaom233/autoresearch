@@ -1,0 +1,33 @@
+{
+  "challenge_id": "blind_0004_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 1]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL(gm/var/slope/dct) + PSNR stochastic-angle distribution (sigma=0.37-0.74 < 2, NO_NOISE)",
+    "support_validation": "R1 独立复现 (新随机角度): motion:1 PSNR p0=29.58/27.61, p1=34.14(CI 10/10), p2=48.40(CI 9/10), p3=28.28(CI 10/10), p4=28.16(CI 10/10); 信号逐对吻合 target: gm 差 ≤0.022, var 差 ≤0.005, slope 差 ≤0.022, dct_zero_ratio 差 ≤0.021, mean_shift/clipped_fraction/chroma 全部复现。pair2 的 48.40 dB 说明角度命中时管线像素级可复现 (>40dB), 排除隐藏第二步。",
+    "rationale": "维持 blur_motion:1。R1 新增证据: (1) motion 角度每次调用随机 (同管线 p0 三次 27.06/27.61/29.58 dB), PSNR 单样本不可比较; (2) 3 样本分布显示 motion:1 (gm 0.424/0.438, var 0.894/0.891, slope 1.046/1.049, dct 0.475/0.468) 贴合 target (0.446/0.897/1.040/0.493), 而 motion:2 (gm 0.335/0.348, var 0.865/0.863, slope 1.116/1.137) 明确过强 —— R0 的 29.62 dB 单样本优势是角度噪声 (R1 复测 26.80/27.17); (3) JPEG 排除升级为确定: motion:1+jpeg:1 使 block_boundary 1.652 (target 0.999), dct 0.879 (target 0.493), 且 sev1 已是最轻档, 任何 JPEG 都会过度产生块伪影; pair2/p3 的 MILD_COMPRESSION_POSSIBLE 是各向同性平滑抬高 dct_zero_ratio 的假阳性 (gaussian:1 sim dct=0.658 vs target 0.493); (4) 补测未覆盖族 blur_glass:1 (gm 0.311, dct 0.583, PSNR 27.07, CI 6/10) 被排除; (5) gamma_suspect 为模糊残差假阳性: sim 的 residual_intensity_corr -0.170/-0.172 与 target -0.177 一致, 无需测试 gamma。所有候选均未通过 CHANGE 判据 (确定性 PSNR 复现且 pair0 改善 >2dB 或 >35dB), 且 R0 管线在 5/5 对信号与 1/5 对像素级复现, 故 NO_CHANGE。",
+    "qwen_gate": {"available": false, "triggered": false, "note": "Qwen/API 不可用; sigma 底板 0.74 < 2, Step 0.5 未触发, 按 NO_NOISE 处理"}
+  },
+  "signal_sources": [
+    "step2 sigma 底板: 所有 6 个 blur 仿真 (含 gaussian/glass/motion) 的 noise_prior_sigma 均为 0.74, 与 target 相同 → sigma 无信息量, NO_NOISE; GAUSSIAN_YCrCb 是跨通道同步模糊导致的 FP (cross_ch_corr 0.88-0.96)",
+    "gamma 排除: sim residual_intensity_corr -0.170/-0.172 vs target -0.177 (pair0), 模糊残差本身与强度相关, 非 gamma",
+    "severity: motion:1 三次抽样 gm 0.424/0.438 (target 0.446); motion:2 两次 gm 0.335/0.348 → sev2 过强",
+    "JPEG: motion:1+jpeg:1 的 block_boundary=1.652, dct_zero_ratio=0.879 (target 0.999/0.493), sev1 为最轻档",
+    "dct 边界: target p0 0.493/p2 0.512/p3 0.571; motion:1 sim 0.475/0.511/0.550 (逐对差 ≤0.021); gaussian:1 (各向同性) 抬高到 0.658 → MILD_COMPRESSION 标志是 blur 假阳性",
+    "二阶统计: mean_shift (-0.4~-0.5)、clipped_fraction (p4 0.0531→sim 0.052)、chroma_ratio (0.966-0.992) 全部由 motion:1 复现",
+    "PSNR 复现: pair2 motion:1 = 48.40 dB (CI 9/10) 随机角度命中 → 管线单步可复现"
+  ]
+}

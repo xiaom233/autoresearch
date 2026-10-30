@@ -1,0 +1,68 @@
+{
+  "challenge_id": "blind_0003_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 2]],
+  "pipeline": [
+    {
+      "function": "blur_glass",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_glass",
+          "severity": 1,
+          "verdict": "UNCERTAIN"
+        }
+      ],
+      "psnr": 35.79,
+      "function_family": "blur_glass",
+      "note": "R1 p0 35.79dB CI8/10 (fail: impulse_total_pct 21%, impulse_pct_zero 73%); R0 p2 30.81 < glass:2 32.03 — 同族下边界未通过"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 2,
+          "verdict": "UNCERTAIN"
+        }
+      ],
+      "psnr": 34.83,
+      "function_family": "blur_gaussian",
+      "note": "R1 p0 34.83dB CI8/10; p4 31.17dB CI8/10 vs glass:2 32.35 — 确定性核若正确应>40dB, 跨族排除"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_lens",
+          "severity": 3,
+          "verdict": "UNCERTAIN"
+        }
+      ],
+      "psnr": 34.6,
+      "function_family": "blur_lens",
+      "note": "R1 p0 34.60dB CI9/10 (fail: overshoot_ratio 45%); MTF 上 gaussian/lens 不可区分, 但确定性核未达 40dB"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "mode": "PSNR (noise_prior sigma 0.74-1.48 < 2, 无实质噪声; 含 stochastic-floor 对照)",
+    "support_validation": "5/5 support: glass:2 PSNR 36.64/32.39/32.03/35.23/32.35 dB, CI 10/10,10/10,10/10,10/10,9/10 (p4 仅 impulse_pct_255 相对差20%, 绝对差0.000); p0 目标-模拟 PSNR 36.64 = 独立重模拟随机底噪 36.62 (RMS 3.75 vs 3.76); p0 模拟图信号与目标逐项相等: gm_ratio 0.5322/0.5322, spectral_slope -1.3994/-1.3995, variance_ratio 0.9539/0.9543, mean_shift -0.5/-0.5, chroma 0.9634/0.9634, noise_prior sigma 1.11/1.11, block_boundary 1.0014/1.0057, clipped_fraction 0.0027/0.0028",
+    "rationale": "R1 信号重释确认 R0 的 blur_glass:2 单步管线: (1) gm_ratio 0.3708-0.5322 (5/5 对, 远低于 0.85) 证明强模糊存在, p0/p2/p3 的 BLUR_UNLIKELY 是 spectral_slope_ratio 1.0693-1.0781 卡在 1.08 阈值的边界误判; (2) glass_score 0.4322/0.4152 (p1/p4, 超出校准上界0.41) 指向 glass 族; (3) glass:2 模拟图逐项复现目标全部一阶/二阶信号 (含 noise sigma 1.11 完全相等、variance_ratio 差 0.0004、chroma 相等) → 方差下降是 blur 所致而非 contrast/saturation, 微弱 DCT/compression 信号为 blur 诱导, 无独立噪声步; (4) 目标-模拟 PSNR 36.64 恰等于两次独立 glass:2 模拟之间的随机底噪 36.62, 说明目标统计上与 glass:2 抽样不可区分, 没有空间容纳额外退化; (5) gm_ratio 映射的 est_sev=3-4 对 glass 系统性高估 (模拟 glass:2 的 gm_ratio 与目标完全相等), severity 由 PSNR/CI 仲裁为 2; glass:1 (35.79, CI8/10)、glass:3 (33.01, CI8/10; p4 29.31, CI6/10)、gaussian:2 (34.83/31.17)、lens:3 (34.60, CI9/10) 全部劣于 glass:2 且 CI 更低。R0 verdict=UNCERTAIN 仅因 glass 的 shuffle 随机性使 PSNR 物理上无法达 40, 非核误判。"
+  },
+  "signal_sources": [
+    "gm_ratio 0.3708-0.5322 (5/5 对, <<0.85) → 强模糊存在; p0/p2/p3 BLUR_UNLIKELY 系 spectral_slope_ratio 1.0693/1.0781/1.0742 低于 1.08 阈值的边界误判",
+    "glass_score 0.4322 (p1) / 0.4152 (p4) >0.25 且超校准上界 0.41 → glass 族; p0/p2/p3 因 has_noise 分支未计算 glass_score",
+    "glass:2 模拟图复现目标信号: gm_ratio 0.5322=0.5322, variance_ratio 0.9539/0.9543, mean_shift -0.5/-0.5, chroma 0.9634/0.9634, noise_prior sigma 1.11/1.11, block_boundary 1.0014/1.0057 → 无独立 global/noise/JPEG 步",
+    "目标-模拟 PSNR 36.64 = 独立重模拟随机底噪 36.62 (RMS 3.75/3.76) → 残差完全由 glass shuffle 随机性解释",
+    "正确核 glass:2 剥离 §B: residual std 3.8, spatial_corr 0.9499 高度结构化, extreme_pct 65.74% 属 SKILL 已知假阳性 (extreme>50% 且 sigma<5); R0 误用 gaussian:2 剥离 (std 4.6) 已纠正",
+    "residual_intensity_corr 跨对不一致 (p0/p1 +0.155/+0.180, p2-p4 -0.096~-0.003) → 内容依赖, 非全局 gamma; 模拟图 ric 0.1638 与目标 0.1554 匹配",
+    "severity 边界: glass:1 p0 35.79 (CI8/10), glass:3 p0 33.01 (CI8/10) 与 p4 29.31 (CI6/10) 均劣于 glass:2",
+    "跨族确定性: gaussian:2 p0 34.83 / p4 31.17 (CI8/10), lens:3 p0 34.60 (CI9/10) — 确定性核正确时 PSNR 应>40dB"
+  ]
+}

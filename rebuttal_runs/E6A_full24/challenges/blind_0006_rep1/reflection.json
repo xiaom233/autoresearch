@@ -1,0 +1,166 @@
+{
+  "challenge_id": "blind_0006_rep1",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED (block_boundary=1.3297, unique_G_target=256, dct_zero_ratio=0.753) → JPEG",
+      "blur": "BLUR_UNLIKELY (gm_ratio=0.906, spectral_slope_ratio=1.0003, FFT anisotropy=0.0, pca=0.0)",
+      "noise": "noise_prior sigma=1.11 (low), rgb_ratio/cross_ch not decisive; residual_intensity_corr=-0.28 → gamma_suspect flag",
+      "global": "NO_GLOBAL (variance_ratio=0.9888, mean_shift=0.1, saturation_chroma_ratio=0.925, clipped_fraction=0.0064)"
+    },
+    "mode": "PSNR (sigma=1.1 < 2)",
+    "suspected": [
+      "compression_jpeg"
+    ],
+    "ruled_out": [
+      "contrast",
+      "brightness",
+      "saturation",
+      "motion_blur",
+      "glass_blur"
+    ],
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "sigma=1.1 < 2, not a boundary case; no API available in this environment"
+    }
+  },
+  "noise_6step_check": {
+    "residual_definition": "peeled residual after stripping compression_jpeg:1 (residual std = 0.0, pixel-exact)",
+    "extreme_pct": 100.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "diagnosis": "Degenerate case: peeled residual is exactly zero (std=0.0), so all §B statistics are undefined/artifacts (extreme_pct=100% is a division-by-zero artifact, NOT impulse noise). noise_prior sigma=1.1 (<2) on target → NO_NOISE. No noise/blur/global needed; single deterministic step compression_jpeg:1 reproduces all 5 pairs pixel-exactly (PSNR=inf)."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "block_boundary=1.3297 (0%FP JPEG signal). unique_G=256 so mild quality loss. Start with jpeg:2 as suggested candidate."
+      },
+      "test_result": {
+        "psnr_rgb": 29.07,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "Severity bracket for JPEG: block_boundary matched at sev2 but PSNR=29<30, test weaker sev1 to check direction."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "LIKELY",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 29.07,
+      "ci_pass": "8/10",
+      "verdict": "UNCERTAIN",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "support_verification": {
+    "pipeline": "compression_jpeg:1",
+    "mode": "PSNR (sigma<2)",
+    "results": [
+      {"pair": 0, "psnr_rgb": "inf", "ci_pass": "10/10"},
+      {"pair": 1, "psnr_rgb": "inf", "ci_pass": "10/10"},
+      {"pair": 2, "psnr_rgb": "inf", "ci_pass": "10/10"},
+      {"pair": 3, "psnr_rgb": "inf", "ci_pass": "10/10"},
+      {"pair": 4, "psnr_rgb": "inf", "ci_pass": "10/10"}
+    ],
+    "conclusion": "All 5 clean/degraded pairs pixel-exact under compression_jpeg:1 (PSNR=inf). No noise, no blur, no global component."
+  },
+  "final_decision": {
+    "pipeline": [
+      {"function": "compression_jpeg", "severity": 1, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "rationale": "block_boundary=1.3297 (0%FP JPEG signal) in pair 0; jpeg:1 reproduces the target pixel-exactly (PSNR=inf, CI 10/10) on all 5 pairs. Exact reproduction excludes any additional blur/noise/global step. noise_prior sigma=1.1<2 → NO_NOISE. Single deterministic step, Tier 1, PSNR>=40dB → LIKELY."
+  },
+  "reflection_R1": {
+    "reanalysis": {
+      "analysis_files": [
+        "full_analysis_R1.json (pair0, re-run)",
+        "full_analysis_R1_p1.json ... full_analysis_R1_p4.json (pairs 1-4)"
+      ],
+      "pair_level_signal_table": {
+        "pair0": {"block_boundary": 1.3297, "dct_zero_ratio": 0.7528, "unique_G_clean": 256, "unique_G_target": 256, "sigma": 1.11, "residual_intensity_corr": -0.2726, "gm_ratio": 0.9058, "spectral_slope_ratio": 1.0003, "variance_ratio": 0.9888, "mean_shift": 0.1, "clipped_fraction": 0.0064},
+        "pair1": {"block_boundary": 1.5687, "dct_zero_ratio": 0.7581, "unique_G_clean": 256, "unique_G_target": 256, "sigma": 2.22, "residual_intensity_corr": 0.0778, "gm_ratio": 0.7102, "spectral_slope_ratio": 1.0023, "variance_ratio": 0.9897, "mean_shift": 0.2, "clipped_fraction": 0.042},
+        "pair2": {"block_boundary": 1.7329, "dct_zero_ratio": 0.8731, "unique_G_clean": 256, "unique_G_target": 256, "sigma": 0.37, "residual_intensity_corr": 0.3283, "gm_ratio": 0.7529, "spectral_slope_ratio": 1.0019, "variance_ratio": 0.9932, "mean_shift": 0.1, "clipped_fraction": 0.0078},
+        "pair3": {"block_boundary": 1.2117, "dct_zero_ratio": 0.4815, "unique_G_clean": 256, "unique_G_target": 256, "sigma": 4.32, "residual_intensity_corr": 0.1181, "gm_ratio": 0.8601, "spectral_slope_ratio": 0.9966, "variance_ratio": 0.9437, "mean_shift": 0.6, "clipped_fraction": 0.0662, "heavy_clipping": true},
+        "pair4": {"block_boundary": 1.7373, "dct_zero_ratio": 0.8446, "unique_G_clean": 238, "unique_G_target": 252, "sigma": 0.62, "residual_intensity_corr": -0.1015, "gm_ratio": 0.8721, "spectral_slope_ratio": 0.9983, "variance_ratio": 0.9993, "mean_shift": 0.0, "clipped_fraction": 0.0084}
+      },
+      "verdict_vs_signal_checks": [
+        "step2 verdict GAUSSIAN_YCrCb (confidence low) is MISATTRIBUTED: step2 runs on the raw target-clean residual, which at JPEG quality 25 is dominated by 8x8 block/ringing artifacts; noise_prior conflates them with noise. Peeled_noise_check with pipeline compression_jpeg:1 gives residual std=0.0 (bit-exact) on pair1 and pair3 -> no noise. sigma=2.22/4.32 are threshold-boundary false positives, not real noise. §B extreme_pct=100% on a zero residual is the known division-by-zero artifact (R0 already noted it).",
+        "step3 gm_ratio=0.7102/0.7529/0.8721 (<0.85 blur-may-exist) on pairs 1/2/4 contradicts spectral_slope_ratio=1.0023/1.0019/0.9983 (threshold 1.08). Reinterpretation: gm_ratio is degraded by JPEG artifacts (SKILL C2: gm_ratio unreliable in mixed degradation), spectral slope is decisive -> BLUR_UNLIKELY holds. Falsified numerically (H4).",
+        "step4 pair3 variance_ratio=0.9437 + clipped_fraction=0.0662 (heavy_clipping=True) is a boundary signal near contrast detection, but mean_shift=0.6/255 and contrast_spread_ratio=0.9852. Reinterpretation: content-dependent JPEG smoothing and clean-content clipping -> NO_GLOBAL holds. Falsified numerically (H3).",
+        "gamma_suspect flags from residual_intensity_corr=-0.27/+0.33 (pairs 0/2) are JPEG artifact-intensity correlations, not a gamma transform: no global transform can coexist with bit-exact jpeg:1 reproduction.",
+        "dct_zero_ratio varies 0.4815-0.8731 across pairs (content-dependent) while block_boundary>1.1 on all 5 -> compression verdict robust across pairs; severity is fixed by bit-exact reproduction (sev1 = quality 25), not by block_boundary magnitude.",
+        "unique_G retains ~256 (pair4 target 252 vs clean 238) because quality-25 JPEG ringing adds new values; unique_G<200 compression heuristic does not apply here, block_boundary does."
+      ],
+      "second_order_stats_checked": {
+        "variance_ratio": "0.9437-0.9993 across pairs; lowest (pair3) falsified as non-contrast by H3",
+        "residual_intensity_corr": "-0.27 to +0.33; gamma_suspect flag falsified as JPEG artifact correlation",
+        "clipped_fraction": "0.0064-0.0662; pair3 heavy clipping is content-driven, no brightness/clipping step (bit-exact jpeg:1)",
+        "mean_shift": "0.0-0.6 (of 255), far below brightness threshold",
+        "noise_prior sigma": "0.37-4.32 crosses sigma>=2 in pairs 1/3; peeled residual std=0.0 -> NO_NOISE"
+      }
+    },
+    "hypotheses": [
+      {"id": "C1", "pipeline": "compression_jpeg:1", "role": "control (R0 pipeline)", "signal_source": "block_boundary 1.21-1.74 on all pairs (0%FP JPEG); spectral_slope_ratio~1.0 (no blur); variance_ratio/mean_shift null (no global)", "pair": "all 5"},
+      {"id": "H2", "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1", "role": "falsify missed noise", "signal_source": "pair1 noise_prior sigma=2.22 crosses the sigma>=2 mode-switch boundary; step2 verdict GAUSSIAN_YCrCb (low confidence)", "pair": 1},
+      {"id": "H3", "pipeline": "contrast_weaken_scale:1,compression_jpeg:1", "role": "falsify missed global", "signal_source": "pair3 variance_ratio=0.9437 (lowest of 5), clipped_fraction=0.0662 heavy_clipping=True, saturation_chroma_ratio=0.9194 (boundary region)", "pair": 3},
+      {"id": "H4", "pipeline": "blur_gaussian:1,compression_jpeg:1", "role": "falsify missed blur", "signal_source": "pair2 gm_ratio=0.7529 (<0.85) with BLUR_UNLIKELY verdict", "pair": 2}
+    ],
+    "validation": {
+      "C1_control": {
+        "pair0": {"psnr_rgb": "inf", "ci_pass": "10/10"},
+        "pair1": {"psnr_rgb": "inf", "ci_pass": "10/10"},
+        "pair2": {"psnr_rgb": "inf", "ci_pass": "10/10"},
+        "pair3": {"psnr_rgb": "inf", "ci_pass": "10/10"},
+        "pair4": {"psnr_rgb": "inf", "ci_pass": "10/10"},
+        "conclusion": "R0 pipeline independently re-confirmed bit-exact on 5/5 support pairs; no candidate can exceed PSNR=inf"
+      },
+      "H2_noise_pair1": {"mode": "signal", "verdict": "PARTIAL", "matched": ["noise:clean_residual", "compression:block_boundary"], "mismatched": ["noise:sigma (diff=200%)"], "interpretation": "noise:sigma mismatch: simulated sigma exceeds target by 200%; target has no noise (peeled residual std=0.0). PARTIAL is driven by degenerate structural checks on a zero-residual target; noise hypothesis falsified"},
+      "H3_contrast_pair3": {"mode": "psnr", "psnr_rgb": 22.26, "ci_pass": "7/10", "interpretation": "adding contrast_weaken_scale:1 breaks bit-exactness by >15 dB vs control inf -> no contrast step"},
+      "H4_blur_pair2": {"mode": "psnr", "psnr_rgb": 34.2, "ci_pass": "6/10", "interpretation": "adding blur_gaussian:1 breaks bit-exactness -> no blur step; gm_ratio=0.7529 is JPEG-induced"},
+      "peeled_noise_check": {"pair1": {"pipeline_stripped": "compression_jpeg:1", "residual_std": 0.0, "zero_ratio": 1.0}, "pair3": {"pipeline_stripped": "compression_jpeg:1", "residual_std": 0.0, "zero_ratio": 1.0}},
+      "decision_rule_applied": "candidate must reproduce on 5 pairs AND improve over control (pair0 >2 dB or >35 dB; other pairs not worse). Control is already bit-exact; alternatives are strictly worse. Pipeline contains no noise_* function -> PSNR criterion valid (no seed mismatch).",
+      "candidates_tested": 4,
+      "candidate_runs": 8,
+      "invalid_attempts": ["1 run aborted on invalid function name 'contrast_weaken' (valid: contrast_weaken_scale/stretch); re-run with contrast_weaken_scale:1"]
+    },
+    "decision": "NO_CHANGE",
+    "final_pipeline": [["compression_jpeg", 1]],
+    "qwen_gate": {"available": false, "triggered": false, "reason": "primary pair0 sigma=1.11<2 does not trigger the Qwen gate; pair-level sigma 2.22/4.32 was resolved deterministically by peeled residual=0.0; no API available in this environment"}
+  }
+}

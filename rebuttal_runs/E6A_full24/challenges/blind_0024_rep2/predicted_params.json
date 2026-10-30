@@ -1,0 +1,53 @@
+{
+  "challenge_id": "blind_0024_rep2",
+  "pipeline": [
+    {
+      "function": "saturate_strengthen_HSV",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "saturate_strengthen_HSV", "severity": 3}],
+      "psnr": 14.12,
+      "function_family": "saturation_HSV",
+      "stats": {"chroma_ratio": 2.6236, "mean_shift": -63.2, "variance_ratio": 1.5932},
+      "note": "色度更接近 target(chroma 3.74)但均值/方差过强"
+    },
+    {
+      "pipeline": [{"function": "saturate_strengthen_YCrCb", "severity": 2}],
+      "psnr": 15.44,
+      "function_family": "saturation_YCrCb",
+      "stats": {"chroma_ratio": 2.0428, "mean_shift": -1.7, "variance_ratio": 1.1576},
+      "note": "跨颜色空间替代; 产生 pct_255 与 target 不符"
+    },
+    {
+      "pipeline": [
+        {"function": "saturate_strengthen_HSV", "severity": 2},
+        {"function": "brightness_darken_gamma_HSV", "severity": 1}
+      ],
+      "psnr": 19.54,
+      "function_family": "saturation+brightness",
+      "stats": {"chroma_ratio": 1.7634, "mean_shift": -42.5, "variance_ratio": 1.2196},
+      "note": "第二佳 PSNR, gamma 补充压暗"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 1},
+        {"function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "psnr": null,
+      "function_family": "noise+saturation",
+      "stats": {"noise_prior_sigma_target": 1.11},
+      "note": "微量高频成分(σ_HH≈1.1; dct_zero 0.24 vs clean 0.72)的最接近库表示, 但库最小噪声 σ=12.75≈11×实测, 仅作训练期仲裁备选"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "6/10",
+    "mode": "PSNR (noise_prior sigma=1.11 < 2)",
+    "rationale": "压缩(block_boundary=1.0022, unique_G 232≈clean 234)、模糊(spectral_slope_ratio 0.9265, FFT anisotropy 0.0, pca 0.0)、噪声(σ=1.11)均排除。saturate_strengthen_HSV:2 在 pair0 复现 mean_shift -31.0 vs -34.7, variance_ratio 1.2311 vs 1.2305, clipped_fraction 0.0398 vs 0.0404, 且 HSV-S 缩放只降 min 通道不产 255 裁剪, 与 target pct_255≈0 / pct_zero≈4% 一致; 单独 brightness 候选(16.9-17.0dB)均劣于 sat2。5 对 support: 19.91/22.26/21.93/14.84/22.98 dB (pair3 极暗内容偏弱)。残余: target chroma_ratio 3.74≈sat2(1.94)的2×、dct_zero 0.239<<clean 0.720, 提示低于库粒度的微量加性噪声(σ_HH≈1.1), 最小库噪声 σ=12.75 会严重过噪(noise_gaussian_RGB:2+sat2 实测 chroma 14.2/var 3.29, WEAK), 故不纳入 → 确定性步骤 PSNR 未达 40dB, verdict=UNCERTAIN。"
+  }
+}

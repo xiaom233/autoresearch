@@ -1,0 +1,77 @@
+{
+  "challenge_id": "blind_0009_rep1",
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "saturate_strengthen_YCrCb",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 2},
+        {"function": "saturate_strengthen_YCrCb", "severity": 3}
+      ],
+      "psnr": null,
+      "function_family": "noise_gaussian_RGB",
+      "stats": {
+        "pair0_sim_signals": {
+          "noise_prior_sigma": 32.49,
+          "residual_intensity_corr": -0.0359,
+          "variance_ratio": 2.379,
+          "mean_shift": -21.5,
+          "clipped_fraction": 0.3853,
+          "saturation_chroma_ratio": 11.03
+        },
+        "pair0_target_signals": {
+          "noise_prior_sigma": 33.85,
+          "residual_intensity_corr": 0.1821,
+          "variance_ratio": 2.6144,
+          "mean_shift": -25.9,
+          "clipped_fraction": 0.4029,
+          "saturation_chroma_ratio": 11.6077
+        }
+      },
+      "reason": "加性噪声替代: 除 residual_intensity_corr (加性→约 0, 目标 +0.18 为乘性特征) 外多数信号接近; 若训练 PSNR 仲裁可回退"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "saturate_strengthen_YCrCb", "severity": 3}
+      ],
+      "psnr": null,
+      "function_family": "noise_gaussian_RGB",
+      "stats": {
+        "pair0_sim_signals": {
+          "noise_prior_sigma": 40.3,
+          "variance_ratio": 2.902,
+          "mean_shift": -27.9
+        }
+      },
+      "reason": "sigma 更接近但 vr/sigma 略过冲; 保留为噪声严重度上沿替代"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode; support pairs verify_signals 4/5 MATCH, pair2 WEAK 临界)",
+    "mode": "SIGNAL (sigma=33.9, PSNR 不可用)",
+    "rationale": "pair0 信号分析: block_boundary=0.999 + unique_G=256 → 无压缩; spectral_slope_ratio=0.973/0.979 (target/sim) 且 FFT_anisotropy=0 → 无模糊; 5 对 support 的 mean_shift (-6.3~-25.9) 随内容变化且被 saturate_strengthen_YCrCb:3 再现 (4/5 MATCH) → 无需独立 brightness 步. 噪声: residual_intensity_corr target=+0.182 vs gaussian sim=-0.036 vs speckle sim=+0.264~+0.308 → 乘性 speckle; 剥离 §B vm_slope=+2.11 (>0.01, speckle 特征). 最终候选 noise_speckle:1 + saturate_strengthen_YCrCb:3 在 pair0 上 verify_signals MATCH (4✓/0✗), 绝对信号: sigma 32.6/33.9, clipped 0.4017/0.4029, chroma 11.588/11.608, vr 2.653/2.614, mean -26.5/-25.9, block 1.002/0.999, gm 31.5/32.1, slope 0.979/0.973. Support: pair1/3/4 MATCH, pair2 WEAK (noise:sigma 23% vs 20% 阈值, mean_shift 0.0077 vs 0.005, 均为临界). sigma>2 故按协议全部步骤 verdict=UNCERTAIN (确定性步骤信号吻合度极高, 但无可用 PSNR).",
+    "steps_evidence": {
+      "noise_speckle:1": "乘性: residual_intensity_corr +0.182 (target) vs -0.036 (gaussian 模拟) vs +0.264/+0.308 (speckle1/speckle2 模拟); σ≈c·I, c=0.14 在均值强度约 150 处 σ≈21-32 覆盖 target noise_prior 33.9; speckle2 全信号过冲所以取 sev1",
+      "saturate_strengthen_YCrCb:3": "saturation_chroma_ratio 11.588 vs 11.608; clipped_fraction 0.4017 vs 0.4029; variance_ratio 2.653 vs 2.614; mean_shift -26.5 vs -25.9; 视觉: 5 对 support 白色/中性区域复现 beige/cyan/黄等色彩强化 (HSV 变体 R8 明显过暗 -70.7, YCrCb×5 均值效应小且匹配)"
+    },
+    "ruled_out": {
+      "compression": "block_boundary 0.997-1.007 全部 5 对, unique_G=256, dct_zero 0.0154",
+      "blur": "spectral_slope_ratio 0.947-0.986 全部 5 对 <1.08, FFT_anisotropy=0, PCA=0",
+      "brightness_separate_step": "R2 brightness_darken_shfit_HSV:1+noise2 仅 mean 匹配 (vr 1.11 vs 2.61); 饱和度 5/5 对再现内容依赖 mean_shift, 无需独立亮度步",
+      "contrast": "full_analysis 的 contrast 判定被 contrast_from_clipping/contrast_from_saturation 标记为 FP; R6 contrast×1.7 模拟 vr 仅 1.95 且 mean 过暗"
+    }
+  }
+}

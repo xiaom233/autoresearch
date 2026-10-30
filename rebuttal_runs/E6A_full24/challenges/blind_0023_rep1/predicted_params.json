@@ -1,0 +1,39 @@
+{
+  "challenge_id": "blind_0023_rep1",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 4, "verdict": "UNCERTAIN"},
+    {"function": "contrast_weaken_scale", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 24.23,
+      "ci_pass": "7/10",
+      "function_family": "blur+global+compression (cross-family blur 替代: gaussian)",
+      "note": "PSNR 与 glass 主候选差 < 0.3dB, CI 7/10; glass 为随机 shuffle, PSNR 无法仲裁子类型 (SKILL 已知: glass PSNR 天花板)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 3},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 24.3,
+      "ci_pass": "7/10",
+      "function_family": "same-family severity -1",
+      "note": "glass sev3 (gm_ratio 估计 sev4-5 可能因 contrast/JPEG 压低 gm 而高估); CI 7/10"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "7/10",
+    "mode": "PSNR (noise_prior sigma=0.74 < 2 -> NO_NOISE; 5 对 support sigma 0.74-0.86)",
+    "rationale": "pair0 信号: block_boundary=5.177 (0%FP) + unique_G 219 -> JPEG; gm_ratio=0.33 + spectral_slope_ratio=1.387 + glass_score=1.584>0.25 + anisotropy=1.232<1.7 -> glass blur (DT, medium); variance_ratio=0.589 + spread_ratio=0.797 -> contrast_weaken scale~0.75 (sev1)。JPEG severity 由 bb 校准: jpeg3 bb 低 22%, jpeg4 bb 差 3-5% 命中, jpeg5 bb 高 26%。逐层剥离 (peeled) 后 noise_prior sigma=1.73<2 -> NO_NOISE (§B extreme_pct=43% 与 spatial_corr=0.97 判为 JPEG/blur 结构残差 FP)。PSNR 在 glass3/glass4/glass5/gaussian3/gaussian4/gaussian5/lens5 间均在 24.0-24.5 dB 平台 —— glass 随机 shuffle + JPEG q8 量化去相关导致像素级验证不可用 (SKILL: 非确定性 blur PSNR 不会>40dB)。5 对 support CI=7-8/10 且 bb(0-4%)/zero_cross(1-18%)/hf_lf(0-1%)/overshoot(0-8%) 全部匹配, PSNR 23.45-25.54 一致。残留失配: mean_shift 差 7.9 (目标均比 sim 亮 ~8), variance_ratio 差 22-23% (verify_signals 口径), 可能由 contrast 与亮度耦合或内容依赖造成, 无法在 3 步约束内单独解释 -> 保持 UNCERTAIN, 交由训练 PSNR 仲裁。"
+  }
+}

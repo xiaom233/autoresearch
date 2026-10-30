@@ -295,12 +295,15 @@ def main():
     t.add_argument("--psnr-only", action="store_true",
                    help="compute only PSNR (fastest)")
     t.add_argument("--gpu-id", type=int, default=None)
+    t.add_argument("--device-id", type=int, default=None,
+                   help="physical CUDA device; defaults to --gpu-id")
     t.add_argument("--num-gpus", type=int, default=1)
     t.set_defaults(fn=cmd_test)
 
     args = ap.parse_args()
     if args.gpu_id is not None:
-        torch.cuda.set_device(args.gpu_id)
+        dev = args.device_id if args.device_id is not None else args.gpu_id
+        torch.cuda.set_device(dev)
     args.fn(args)
 
 

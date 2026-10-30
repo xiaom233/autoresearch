@@ -1,0 +1,66 @@
+{
+  "challenge_id": "blind_0020_rep1",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 4],
+    ["contrast_weaken_stretch", 4]
+  ],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 4, "verdict": "UNCERTAIN"},
+    {"function": "contrast_weaken_stretch", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "contrast_weaken_stretch", "severity": 4}
+      ],
+      "psnr": 37.73,
+      "support_psnr": {"pair0": 37.73, "pair1": 33.33, "pair2": 40.01, "pair3": 35.33, "pair4": 29.09},
+      "function_family": "R0 control (gaussian blur subtype); R1 re-verified pair0 = 37.73 dB, CI 8/10"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "contrast_weaken_stretch", "severity": 4}
+      ],
+      "psnr": 38.61,
+      "function_family": "glass severity+1 (pair0 only; gm retention 1.24-1.45x target -> too blurry)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 3},
+        {"function": "contrast_weaken_stretch", "severity": 4}
+      ],
+      "psnr": 38.14,
+      "function_family": "glass severity-1 (pair0 only; gm retention 0.78-0.97x target -> too sharp)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "contrast_weaken_stretch", "severity": 4}
+      ],
+      "psnr": 37.40,
+      "function_family": "lens cross-subtype (R0 measurement, not re-tested in R1; gm retention 1.09-1.29x target)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "mode": "PSNR (noise_prior sigma=1.11<2 on pair0 -> NO_NOISE; blur_glass shuffle is stochastic -> seed-variance repeats 39.52/39.53/39.54 dB used for stability)",
+    "support_validation": "12 test_candidate runs (<=15). Pair0 (reference): control 37.73 dB / CI 8/10 -> glass:4 39.53 dB / CI 10/10 (+1.80). Support pairs (control -> glass:4): pair1 33.33 -> 34.75 (+1.42, CI 6->8), pair2 40.01 -> 41.71 (+1.70, CI 7->7), pair3 35.33 -> 37.09 (+1.76, CI 8->7), pair4 29.09 -> 30.77 (+1.68, CI 8->10). All 5 pairs improve (+1.42..+1.80 dB, mean +1.67), none degrade. Glass:4 seed repeats on pair0: 39.52/39.53/39.54 (sigma <= 0.02 dB).",
+    "rationale": "R1 re-analysis (pair0 primary, all 5 pairs re-analysed): (1) The R0-validated global step contrast_weaken_stretch:4 is retained: under glass:4 it reproduces target channel means within 0.04, std within 0.12 and spectral slope -3.741 vs -3.757 (|delta|=0.016<0.08); stretch +/-1 scans collapse to 32.02/32.01 dB vs 39.53 dB at sev4. (2) Blur subtype revised gaussian->glass: glass_score = 0.2462/0.2432/0.2321/0.2394 on pairs 0-3 (all within 0.02 of the 0.25 DT gate) and 0.5804 on pair4, so the Hybrid DT splits inconsistently across support (gaussian/gaussian/gaussian/motion/glass). Second-order signal after stripping the verified global: gradient-magnitude ratio target/sim = 1.36/1.40/1.56/1.50/1.40 for gaussian:4 (target systematically 35-55% sharper) vs 1.03/1.02/1.05/1.05/1.02 for glass:4; std matches target almost exactly under glass:4 (pair0 [15.81,16.24,22.28] vs target [15.78,16.23,22.40]) while gaussian:4 is too low ([15.41,15.86,21.74]). (3) No compression: block_boundary 0.9966-1.0098 (<1.05), unique_G 94-107 reproduced within 3 by glass:4 (CI block_boundary diff 2%; 10/10 CI on pair0); R0's jpeg test already degraded PSNR (35.69) and R0's jpeg-last block_boundary error was 223%. (4) No noise: noise_prior sigma 0.74-2.84; peeled §B on both gaussian and glass residuals is fully structured (spatial_corr 0.994/0.988), extreme_pct 60-62% is the documented extreme_pct false positive; no x_distortion noise function at sev1 is that weak. (5) No saturation: target Cr std is 5-13% ABOVE the simulation, so a desaturation step acts in the wrong direction. Decision: CHANGE to blur_glass:4 + contrast_weaken_stretch:4. Verdict remains UNCERTAIN because glass shuffle is stochastic and PSNR 30-40 dB band maps to UNCERTAIN per SKILL verdict rules; confidence comes from CI 10/10 (pair0/pair4), the cross-pair +1.4..+1.8 dB gain and the 1.02-1.05x gm match on all 5 pairs."
+  },
+  "signal_sources": [
+    "full_analysis_R1*.json glass_score: pair0 0.2462, pair1 0.2432, pair2 0.2321, pair3 0.2394 (all just below the 0.25 gate), pair4 0.5804 (above) -> DT subtype unstable across support pairs",
+    "R1 second-order signal: gradient-magnitude ratio target/sim after stripping contrast_weaken_stretch:4 — gaussian:4 = 1.36/1.40/1.56/1.50/1.40 vs glass:4 = 1.03/1.02/1.05/1.05/1.02 (pairs 0-4)",
+    "std target vs glass:4 sim (pair0) [15.78,16.23,22.40] vs [15.81,16.24,22.28]; gaussian:4 sim [15.41,15.86,21.74]",
+    "spectral_slope target -3.741 vs glass:4 sim -3.757 (|delta|=0.016 < 0.08 tolerant threshold); channel-mean residual <= 0.18",
+    "stretch +/-1 scan under glass: sev3/4/5 = 32.02/39.53/32.01 dB -> stretch:4 identified; glass +/-1: sev3/4/5 = 38.14/39.53/38.61 dB",
+    "peeled §B: gaussian residual ch_stds [3.0,3.0,3.9] vs glass [2.4,2.4,3.2], both spatial_corr >= 0.988 structured -> NO_NOISE (extreme_pct 60-62% is documented FP)",
+    "compression: block_boundary 0.9966-1.0098; CI block_boundary diff 2% under glass:4; dct_zero_ratio 0.50-0.86 explained by blur+stretch",
+    "chroma: target Cr std / sim = 1.05-1.13 -> saturation step rejected (wrong direction)",
+    "R0 model support PSNR 16.44 (r0_result.json) is consistent with a kernel mismatch caused by the wrong blur subtype"
+  ]
+}

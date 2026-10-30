@@ -1,0 +1,31 @@
+{
+  "challenge_id": "blind_0021_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 3],
+    ["brightness_brighten_shfit_RGB", 1],
+    ["compression_jpeg", 4]
+  ],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+    {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (5/5 support pairs bit-exact, PSNR=inf; peeled residual std=0.0 -> NO_NOISE)",
+    "support_validation": "C0 (R0 pipeline) reproduces all 5 support pairs bit-exactly: pairs 0-4 PSNR=inf, CI 10/10, all CI metric diffs 0%. Nearest alternatives on pair0: order variant (brightness after JPEG) 52.36 dB, blur_gaussian:2 32.88 dB, compression_jpeg:3 29.51 dB, brightness_brighten_gamma_RGB:1 25.73 dB. No candidate can improve on PSNR=inf; R1 keeps R0 pipeline unchanged.",
+    "rationale": "R1 re-ran full analysis on all 5 support pairs and independently re-verified the R0 control. Every pair yields PSNR=inf with 0% deviation in all 10 CI metrics, so the deterministic pipeline blur_gaussian:3 -> brightness_brighten_shfit_RGB:1 -> compression_jpeg:4 is exact for this scenario. Signal reinterpretation resolves the R0 conflict points: (1) the raw-residual noise verdict GAUSSIAN_YCrCb is a false positive - noise_prior sigma swings 0.74-4.08 across content for a fixed degradation and the peeled residual after stripping the deterministic chain is exactly zero (channel std 0.0) on all 5 pairs, so the 100% extreme_pct is a zero-residual division artifact, not impulse noise; (2) the blur DT subtype flips between motion (pair0, anisotropy 2.29) and glass (pairs1-4, glass_score 1.23-1.46) at low confidence, i.e., content/JPEG-grid-driven false positives; gaussian:3 is confirmed by the bit-exact match; (3) full_analysis masks brightness as 'brightness_from_jpeg', but mean_shift is +24.4..+24.9 on all five pairs (matches shift sev1 = 25.5), so the global step is real and the variance_ratio 0.63-0.85 is blur+JPEG variance loss, not contrast; (4) gamma-suspect (residual_intensity_corr -0.17..-0.37) is excluded: the additive uniform shift reproduces exactly while brightness_brighten_gamma_RGB:1 only reaches 25.73 dB."
+  },
+  "signal_sources": [
+    "compression: block_boundary 3.28-5.32 (0% FP JPEG rule) on all 5 pairs; dct_zero_ratio 0.87-0.95; unique_G 223-247 (>=200, so block_boundary is the carrier, not quantization)",
+    "noise: peeled residual std=0.0 (R=G=B=0.0, zero_ratio=1.0) on all 5 pairs after stripping the deterministic chain -> NO_NOISE; raw noise_prior sigma 0.74/3.71/2.84/4.08/2.22 varies with content -> FP; §B extreme_pct=100% is the zero-residual artifact",
+    "blur: gm_ratio 0.13-0.23 (blur exists); residual_anisotropy 1.29-2.29 and glass_score 1.23-1.46 inconsistent across pairs -> DT subtype unstable; gaussian:3 bit-exact resolves at PSNR=inf (sev2=32.88 dB)",
+    "global: brightness_mean_shift +24.4..+24.9 consistent on 5 pairs (brightness sev1 shift=25.5); variance_ratio 0.63-0.85 attributed to blur+JPEG; clipped_fraction 0.0001-0.018 (no heavy clipping)",
+    "order: brightness between blur and JPEG reproduces exactly (inf); moving it after JPEG drops to 52.36 dB -> order confirmed by PSNR gap",
+    "test_candidate R1: C0 inf on pairs 0-4 (CI 10/10, 0% all metrics); C1 52.36; C2 32.88; C3 29.51; C4 25.73 dB"
+  ]
+}

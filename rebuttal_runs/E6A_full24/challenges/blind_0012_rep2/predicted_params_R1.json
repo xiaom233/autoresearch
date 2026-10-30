@@ -1,0 +1,47 @@
+{
+  "challenge_id": "blind_0012_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_motion", 5], ["compression_jpeg", 3]],
+  "pipeline": [
+    {"function": "blur_motion", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_motion", "severity": 4},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 26.56,
+      "function_family": "motion_blur",
+      "stats": {"note": "R1 三次复测 PSNR 26.38/29.47/23.83 (均值 26.56, 高于 control 21.98 +4.58 dB), 但属 motion 角度随机下的弱模糊偏置: 模拟图 slope_ratio=1.1836 vs 目标 1.2667 (差 0.083), PCA=3.802 vs 4.625, gm=0.2795 vs 0.2579, var_r=0.9062 vs 0.8825; p2 verify_signals WEAK (slope diff=0.105) 复核同样欠模糊 → 信号拒绝"}
+    },
+    {
+      "pipeline": [
+        {"function": "blur_motion", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 21.5,
+      "function_family": "compression",
+      "stats": {"note": "JPEG severity 上界备选; 模拟图 block_boundary=3.9202 vs 目标 2.9022 (35% 过强), dct_zero=0.913 vs 0.8989 → 明确过重, 仅保留作 severity 边界"}
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR(SIGNAL 辅助): 噪声已被排除 (p1/p4 noise_prior_sigma=0.74<2; 无噪声模拟图逐对复现 target sigma 0.74/3.71/2.10/0.74/2.22 → GAUSSIAN_YCrCb 为 blur+JPEG 伪影), 确定性部分 PSNR 可用; 但 motion 角度每次重新随机 → PSNR 系统性偏向较弱模糊 (角度失配下欠模糊伤害更小), severity 以幅度信号 (spectral_slope_ratio / blur_pca_ratio / gm_ratio / dct_zero) 为准",
+    "support_validation": "5 对 support 全部重跑 run_full_analysis (full_analysis_R1.json + _p1..p4): compression 信号 bb=2.90/2.52/2.66/2.21/2.65 (5/5 >1.1), dct_zero=0.899/0.970/0.871/0.933/0.911; blur PCA=4.63/3.87/4.80/5.51/5.16 (5/5 >2.5, motion 0%FP), slope_ratio=1.267/1.322/1.410/1.326/1.291, gm=0.258/0.321/0.229/0.287/0.385. 无噪声 control 模拟图 (motion5+jpeg3) 逐对复现 target: bb 差 1.2%/5.6%/3.0%/8.7% (p0 5.8%), dct_zero 差 ≤0.006 5/5, slope_ratio 差 ≤0.05 4/5 (p2 +0.116), var_r 0.932/0.646/0.884/0.829 vs target 0.934/0.684/0.896/0.856, sigma 完全一致 5/5. Control PSNR: p0 22.63/19.80/23.51 (3 次均值 21.98, CI 10/10×3), p1 27.35 (CI 9/10), p2 21.63 (7/10), p3 19.78 (9/10), p4 21.44 (7/10), 5 对均值 22.44 dB (单次采样, 角度随机方差 ~±2 dB); bb CI 差 p0 2-5%, p1 2%, p2 3%, p3 13%, p4 2%.",
+    "rationale": "R1 重分析未发现可替换 R0 管线的证据, 反而用 5 对 support 的无噪声模拟自洽验证了 motion5+jpeg3: (1) JPEG sev3 — jpeg:2 模拟 bb=2.324 vs 目标 2.902 (低 20%), dct_zero=0.8811 vs 0.8989, 三次 PSNR 均值 21.27 < control 21.98 → 过弱; jpeg:4 bb=3.920 (高 35%) → 过强; jpeg:3 bb/dct_zero 最接近. (2) motion sev5 — m4 虽 PSNR 均值 +4.58 dB, 但属随机角度下弱模糊偏置; m4 模拟信号全面欠模糊 (slope -0.083/-0.105, PCA -0.82, gm +0.022, var_r +0.024); m5 模拟 slope 差 ≤0.05 4/5 对. (3) 跨族 gaussian:5+jpeg3 本轮 MISMATCH (slope 0.214, wiener 0.458, bb 12%); lens 由 PCA=4.6-5.5 (>2.5, 0%FP) 及各向同性矛盾排除 (R0 lens:5+jpeg4 亦 WEAK, bb 37%). (4) 被忽略/边界信号全部解释为内容依赖伪影: p1 aniso=1.60<1.7 边界由 PCA=3.87 兜底; p1 saturation=1.1601 与无 global 模拟图 1.1615 完全一致; p2 var_r=0.6843/cspr=0.8065 与模拟 0.6456/0.7866 一致; p4 gm=0.3852 边界不影响 slope/PCA 结论. 故 NO_CHANGE, 管线保持 blur_motion:5 → compression_jpeg:3.",
+    "qwen_gate": {"available": false}
+  },
+  "signal_sources": [
+    "step1 block_boundary=2.9022/2.5177/2.6590/2.2123/2.6538 (5/5 >1.1, 0%FP) + dct_zero=0.8989/0.9703/0.8713/0.9325/0.9114 → JPEG 确认",
+    "jpeg3 定标: m5j3 模拟 bb=3.0703 (差 5.8%), dct0=0.8925; m5j2 模拟 bb=2.3244 (低 20%), dct0=0.8811; m5j4 模拟 bb=3.9202 (高 35%), dct0=0.913 → jpeg3 唯一同时匹配 bb+dct0",
+    "step3 blur_pca_ratio=4.625/3.871/4.801/5.505/5.162 (5/5 >2.5, motion 0%FP) + spectral_slope_ratio=1.2667/1.3223/1.4095/1.3258/1.2912 → motion 5/5",
+    "severity 定标: m5j3 模拟 slope_ratio=1.2666 (target 1.2667), m4j3 模拟 1.1836 (差 -0.083), p2 verify_signals slope diff=0.105 → m5 > m4",
+    "PCA 定标: m5j3 模拟 4.602 (target 4.625), m4j3 模拟 3.802 → m5 匹配",
+    "step2 noise_prior_sigma: target p1/p4=0.74 (<2); 无噪声模拟图复现 0.74/3.71/2.10/0.74/2.22 → 无独立噪声步, GAUSSIAN_YCrCb 为 FP_YCrCb_BLUR_JPEG 伪影",
+    "step4 异常信号: p1 saturation_chroma_ratio=1.1601 vs 模拟 1.1615 (无 global 步); p2 variance_ratio=0.6843 vs 模拟 0.6456, cspr=0.8065 vs 0.7866 → 内容依赖伪影, 非 global 步"
+  ]
+}

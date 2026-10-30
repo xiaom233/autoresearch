@@ -1,0 +1,81 @@
+{
+  "challenge_id": "blind_0021_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_lens", 4],
+    ["brightness_brighten_shfit_RGB", 1],
+    ["compression_jpeg", 4]
+  ],
+  "pipeline": [
+    {"function": "blur_lens", "severity": 4, "verdict": "UNCERTAIN"},
+    {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr_pair0": 34.60,
+      "function_family": "blur_gaussian",
+      "note": "R1 fair-order (blur-first) cross-family control; loses 3.15 dB vs control; too smooth (grad 1.72 vs target 2.13, var_ratio 0.830 vs 0.848)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1}
+      ],
+      "psnr_pair0": 37.66,
+      "function_family": "blur_lens+post-JPEG brightness",
+      "note": "post-edit order (SKILL order list item 5/6); ties PSNR (-0.09 dB) but clipped-255 fraction 0.3257% vs target 0.0052% and CI 8/10 -> rejected"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 3},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr_pair0": 33.42,
+      "function_family": "blur_lens",
+      "note": "severity -1 (R0 bracket, blur-first order)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 5},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr_pair0": 33.14,
+      "function_family": "blur_lens",
+      "note": "severity +1 (R0 bracket, blur-first order)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "mode": "PSNR (pair0 sigma_prior=0.74<2, NO_NOISE; peeled pair1 noise verdict is structural FP)",
+    "support_validation": "Control pipeline reproduced bit-exactly on 5/5 support pairs: pair0 37.75 (CI 10/10), pair1 33.11 (9/10), pair2 35.13 (10/10), pair3 33.99 (10/10), pair4 34.02 (10/10). Simulated mean shift matches target within 0.03 levels on all pairs (+24.88/+24.89, +24.59/+24.59, +24.78/+24.75, +24.81/+24.82, +24.44/+24.45); variance ratio within 1% relative; clipped-255 fraction matches. No alternative candidate improved on any pair.",
+    "rationale": "R1 re-ran run_full_analysis on all 5 pairs and re-tested every previously untested axis at the corrected JPEG q8 prefix: DT-predicted motion blur (anisotropy 2.29, pair0 only) 25.92 dB; DT-predicted glass (4/5 pairs, glass_score 1.23-1.46) 30.48 dB; gaussian at fair blur-first order 34.60 dB; gamma_RGB global (ric=-0.376, gamma_suspect) 25.61 dB with shift +15.13 vs target +24.89; post-JPEG brightness order 37.66 dB but clipping 0.3257% vs 0.0052%. R0 control remains best on PSNR and on all second-order statistics (mean shift, variance ratio, clipping, gradient). Noise is excluded: same fixed pipeline reproduces all 5 pairs at 33.1-37.75 dB, while every grid noise function at sev1 adds >=12.75 RMS levels (PSNR ceiling <=29 dB); peeled pair1 'IMPULSE' (extreme_pct 86.8%) is the documented JPEG/blur structural FP (zero_ratio 0.736, var_slope -0.05, spatial_corr 0.92, equal per-channel stds). Residual is JPEG-structured (zero_ratio 0.90, 8x8 block-boundary energy 1.7x interior), consistent with double-JPEG quantization, not a missing step. No candidate met the CHANGE criterion (pair0 >2 dB or >35 dB with supports not worse); R0 pipeline retained.",
+    "control_pair0_psnr": 37.75,
+    "control_support_psnr": [37.75, 33.11, 35.13, 33.99, 34.02],
+    "best_alternative_delta_db": -0.09,
+    "test_calls": 10
+  },
+  "signal_sources": [
+    "block_boundary 3.28-5.32 across 5 pairs (0% FP) + dct_zero_ratio 0.89-0.95 + unique_G 223-247 -> JPEG; severity bracket q12/q8/q5 = 29.47/37.75/25.41",
+    "mean_shift 24.40-24.90 invariant to clean image mean 44-142 -> additive RGB brighten sev1 (+25.5); gamma_RGB:1 re-test shift +15.13 -> rejected",
+    "gm_ratio 0.13-0.23 + spectral_slope_ratio 1.23-1.37 -> strong blur present",
+    "residual_anisotropy 2.29 on pair0 but 1.29-1.94 on other pairs -> DT motion flag content-dependent; motion:4 re-test at corrected prefix 25.92 dB (grad 3.45 vs target 2.13)",
+    "glass_score 1.23-1.46 and DT glass verdict on 4/5 pairs -> glass:4 re-test at corrected prefix 30.48 dB",
+    "gaussian/lens MTF confusability -> gaussian:4 fair-order re-test 34.60 dB (too smooth: grad 1.72, var_ratio 0.830)",
+    "variance_ratio 0.635-0.848 reproduced by blur+JPEG alone (sim within 1%) -> no independent contrast step",
+    "clipped_255 0.0052% pair0 matched only by blur->brightness->jpeg (+0.0003pp); blur->jpeg->brightness gives 0.3257%",
+    "sigma_prior 0.74-4.08 inconsistent across identical scenario; reproduction PSNR 33-38 dB exceeds all grid-noise ceilings (gaussian/YCrCb 12.75 levels, speckle/poisson ~23, impulse ~13) -> NO_NOISE",
+    "peeled pair1: extreme_pct 86.8% with zero_ratio 0.736, var_slope -0.0549, spatial_corr 0.9225, rgb_ratio 1.0504, stds R=5.6/G=5.5/B=5.8 -> structural FP; wavelet sigma 7.41 > residual std 5.63",
+    "control residual structure: zero_ratio 0.90, 8x8 block-boundary |r| 1.65-1.73x interior, lag1 autocorr 0.81 -> double-JPEG quantization gap, no missing step"
+  ]
+}

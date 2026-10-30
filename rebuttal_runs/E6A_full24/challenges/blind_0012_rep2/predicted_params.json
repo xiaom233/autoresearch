@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0012_rep2",
+  "pipeline": [
+    {"function": "blur_motion", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_motion", "severity": 4},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 28.28,
+      "stats": {"note": "同族 severity-1 备选; 单次 PSNR 28.28 (第二次复测 20.92 → 角度运气); signal mode slope diff=0.100 边缘超标, wiener corr=0.670 反而高于 sev5 (0.306); CI 最高一次 10/10"},
+      "function_family": "motion_blur"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_motion", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 21.5,
+      "stats": {"note": "JPEG severity+1 备选; block_boundary diff=35% (target 2.9022, motion5+jpeg4 模拟图实测 bb=3.9202) → 明显过重, 仅保留作 severity 边界"},
+      "function_family": "compression"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 1},
+        {"function": "blur_motion", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 20.24,
+      "stats": {"note": "仅在目标含真实噪声时的唯一自洽解 (sev1 σ=12.75 经 motion:5 核衰减≈1.95≈观测 2.22); 但无噪声对照模拟图 σ=2.22 与 target 完全一致, peeled rgb_ratio=1.05, 加噪后 CI 7/10 (impulse 指标 56-78% 偏差) → 不支持"},
+      "function_family": "noise"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "10/10",
+    "mode": "SIGNAL (sigma=2.22 为 blur+JPEG 伪影, 由无噪声对照模拟图 sigma=2.22 完全复现证明; PSNR 受 motion 随机角度限制 ~21dB, 以信号+CI 验证)",
+    "rationale": "Step1 compression: block_boundary=2.9022(0%FP) + dct_zero=0.8989 → JPEG 确认; 联合 severity 扫描 (motion:5+jpeg1..5): jpeg3 使 block_boundary 匹配 (<8%), jpeg4 差 35%, jpeg5 差 18%, jpeg3-only 差 27% → JPEG sev3 (q=12)。Step2 blur: PCA=4.625>2.5 (0%FP 主信号) + residual_anisotropy=1.7022 → motion; 各向同性 lens/gaussian 剥离残差更大 (21.8/21.1 vs motion 18.6); gaussian:5 全信号 MISMATCH, lens:5 与 motion:5 均 slope 匹配, 但 PCA 支持 motion; severity: gm_ratio=0.2579→sev5 (<0.35), motion:5+jpeg4 无噪声模拟图 gm_ratio=0.2631、slope_ratio=1.2463 (target 1.2667)、PCA=4.277 (target 4.625) 几乎完全一致 → motion sev5。Step3 noise: peeled §B extreme_pct=69% 触发已知 FP 规则 (>50% 且 sigma<5); peeled rgb_ratio=1.0467 → 非 YCrCb; 无噪声对照 (motion5+jpeg4 模拟图 run_full_analysis) 得 sigma=2.2200、spatial_corr=0.8383、cross_ch=0.8127, 与 target (2.22/0.8462/0.8285) 完全一致 → 判定无独立噪声步。Step4 global: NO_GLOBAL, 无噪声模拟图同样复现 variance_ratio=0.8888 (target 0.8825)。Support 复核 (5 对): spectral_slope 4/5 通过+1 边缘(0.087), block_boundary 4/5 通过+1 边缘(9%), 跨图一致性良好; wiener kernel corr 全低 (0.155-0.801) 归因 motion 随机角度+JPEG 污染, 不作为否定依据。CI (content-independent 全 10 项) 10/10。"
+  }
+}

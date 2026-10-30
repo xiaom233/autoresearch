@@ -1,0 +1,58 @@
+{
+  "challenge_id": "blind_0004_rep1",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [["blur_gaussian", 1]],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 1
+        }
+      ],
+      "support_psnr": [29.21, 30.64, 26.01, 26.35, 25.55],
+      "ci_pass_total": "37/50",
+      "function_family": "blur",
+      "note": "R0 control. PSNR-closest but systematic signal mismatch on pair0: gm_ratio 0.324 vs target 0.446 (-27%), raw-residual spatial_corr 0.155 vs 0.452 (-66%), dct_zero 0.658 vs 0.493 (+33%); HF CI fails (overshoot 51% off, zero-crossing 34% off). Same variance_ratio (0.894 vs 0.897) - the intensity statistics match but the kernel geometry does not."
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_lens",
+          "severity": 1
+        }
+      ],
+      "support_psnr": [29.05, 30.68, 25.87, 26.40, 25.59],
+      "ci_pass_total": "40/50",
+      "function_family": "blur",
+      "note": "R0 alternative. Re-verified in R1 (29.05 dB, CI 7/10 pair0). Same isotropic-kernel mismatch: gm 0.314 (-30%), residual sc 0.164 (-64%), dct_zero 0.572 (+16%), overshoot 43% off. Marginally better CI than gaussian but no PSNR gain (>2 dB rule not met)."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (single stochastic blur step: random motion angle; PSNR not reproducible, same class as noise seed mismatch)",
+    "support_validation": "5/5 support pairs. Paired target-vs-motion:1 signal match (angle-invariant statistics): gm_ratio rel-diff 2.1/0.9/8.3/6.0/4.3%, raw-residual spatial_corr 4.8/0.8/2.2/4.9/0.3%, variance_ratio 0.2/0.1/0.0/1.1/1.0%, spread_ratio 0.0/0.0/0.5/0.3/0.6%, block_boundary 0.3/0.3/0.0/0.5/0.6%, spectral_slope_ratio 3.0/0.1/0.1/2.7/2.1%, dct_zero_ratio 3.4/3.6/0.8/2.0/15.0%. Content-independent CI pass 46/50 (per pair 7,10,10,9,10) vs R0 gaussian:1 37/50 (6,6,8,9,8) and lens:1 40/50 (7,7,9,9,8). Two independent pair0 motion draws give PSNR 25.50/25.34 (angle-shift dominated) but identical global profile (gm 0.4548/0.4623, variance_ratio 0.8988/0.9013, spatial_corr 0.4736/0.4762, spread 0.9357/0.9357) - confirming the discriminating signals are angle-invariant and the PSNR gap is an angle-mismatch artifact, not a family mismatch.",
+    "rationale": "R0 modeled the pair as a mild isotropic blur (gaussian:1) but the target violates the isotropic-kernel manifold in a consistent way: variance_ratio matches gaussian:1 exactly (0.897 vs 0.894) while gradients are far less reduced (gm 0.446 vs 0.324) and raw-residual spatial correlation is 3x higher (0.452 vs 0.155), with HF extremes preserved (overshoot 0.49/zc 0.41/hf_lf 0.70 vs 0.24/0.27/0.60). No allowed isotropic kernel at any severity reproduces this (gaussian:2 tested: 28.90 dB, CI 4/10; lens:1, glass:1 both fail the same discriminators). An anisotropic motion kernel (radius 5, sigma 3, random angle) does, on all 5 pairs. PSNR cannot arbitrate a random-angle blur: the two pair0 draws differ only by angle (25.50 vs 25.34 dB) and SKILL C.4 states non-deterministic blurs never reach >40 dB. Per the protocol principle that stochastic components (noise seed, random angle) must be validated by statistical matching rather than PSNR, the candidate passes on >=4/5 pairs with a large margin (5/5; CI +9/50 over control). Residual risk: exact angle is unknowable, so verdict stays UNCERTAIN and training/GT PSNR should arbitrate; if the generator used an out-of-grid elongated kernel the family label is approximate but still far closer than isotropic gaussian:1.",
+    "noise_gate": "sigma_prior 0.37-0.74 (<2) on all 5 pairs -> NO_NOISE; GAUSSIAN_YCrCb verdict is the documented blur cross-channel FP (cc 0.64-0.93 matches motion sims cc 0.63-0.93)",
+    "compression_check": "block_boundary 0.9975-1.0079 (<1.05, 0% FP); compression_jpeg:1 tested = 25.29 dB, CI 4/10, block_boundary diff 142% -> excluded"
+  },
+  "signal_sources": [
+    "raw-residual spatial_corr: target 0.4521/0.8698/0.7528/0.7967/0.8676 vs isotropic sims 0.155 (gaussian:1)/0.164 (lens:1)/0.272 (glass:1) on pair0 -> requires a long-range / elongated kernel",
+    "gm_ratio 0.4456 at variance_ratio 0.8973: isotropic kernels at the same variance give gm 0.31-0.32 -> anisotropic smear (directional gradient loss without extra variance loss)",
+    "HF profile: target overshoot 0.49 / zero-crossing 0.41 / hf_lf 0.70; motion:1 sims match within 0-2% / 5-8% / 0-3% on two independent angle draws, while gaussian/lens/glass fail overshoot by 43-76%",
+    "paired motion:1 profile across 5 pairs within <=8.3% (gm), <=4.9% (residual sc), <=1.1% (variance), <=0.6% (spread), <=0.6% (block_boundary); dct_zero <=3.6% on 4/5 pairs",
+    "content-independent CI pass rate: motion 46/50 vs R0 gaussian 37/50 vs lens 40/50",
+    "x_distortion blur_motion sev1 = radius 5 / sigma 3 / uniform random angle; PSNR between a fixed target and a fresh draw is seed-limited (25.50 vs 25.34 dB for two pair0 draws) -> statistical validation per SKILL C.4 and the noise-seed principle",
+    "variance/spread/mean-shift are explained by severity 1 (gaussian:2 worse at 28.90 dB / CI 4/10; mean_shift -0.5/255 identical in all blur sims -> blur clipping, not brightness)",
+    "negative evidence: compression_jpeg:1 25.29 dB (block_boundary diff 142%); noise excluded by sigma<2 and ric sign flips (-0.18/+0.16/+0.22/-0.19/+0.01)"
+  ]
+}

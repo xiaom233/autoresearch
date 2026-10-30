@@ -1,0 +1,85 @@
+{
+  "challenge_id": "blind_0001_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_poisson", 5],
+    ["quantization_hist", 2],
+    ["brightness_darken_gamma_RGB", 2]
+  ],
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "quantization_hist", "severity": 2, "verdict": "UNCERTAIN"},
+    {"function": "brightness_darken_gamma_RGB", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 4},
+        {"function": "quantization_hist", "severity": 2},
+        {"function": "brightness_darken_gamma_RGB", "severity": 2}
+      ],
+      "function_family": "noise-severity variant (Poisson sev4)",
+      "support_validation": "5/5 pairs verify_signals WEAK (2✓/2✗): sigma✓ clean_residual✓ on all; mean_shift: pair0 0.0064 (差0.36灰阶, 最近), pair1 0.0791, pair2 0.1184, pair3 0.0081, pair4 0.0330; variance_ratio 全部✗ (75-150%)",
+      "verified": true
+    },
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 3},
+        {"function": "quantization_hist", "severity": 2},
+        {"function": "brightness_darken_gamma_RGB", "severity": 2}
+      ],
+      "function_family": "noise-severity variant (Poisson sev3, mean 修复方向)",
+      "support_validation": "5/5 WEAK: pair0 mean_shift✓ 但 sigma 25%✗; pair1/2 sigma✓ 但 mean 0.0977/0.1141✗; pair3 1✓/3✗ (sigma 25%✗, mean 0.0126✗); pair4 2✓/2✗ (mean 0.0269✗)",
+      "verified": true
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 2},
+        {"function": "quantization_hist", "severity": 2},
+        {"function": "brightness_darken_gamma_RGB", "severity": 2}
+      ],
+      "function_family": "cross-family noise alternative (Gaussian RGB, peeled 残差 noise_prior 斜率平坦支持)",
+      "support_validation": "pair0 only: WEAK 2✓/2✗ (mean_shift✓, clean_residual✓, sigma 24%✗, vr 126%✗)",
+      "verified": true
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "quantization_hist", "severity": 2},
+        {"function": "brightness_darken_gamma_RGB", "severity": 2}
+      ],
+      "function_family": "cross-family noise alternative (Gaussian RGB sev3)",
+      "support_validation": "pair0 only: WEAK 2✓/2✗ (sigma✓, clean_residual✓, mean_shift 0.0153✗, vr 131%✗)",
+      "verified": true
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 1},
+        {"function": "quantization_hist", "severity": 2},
+        {"function": "brightness_darken_gamma_RGB", "severity": 2}
+      ],
+      "function_family": "cross-family noise alternative (Gaussian RGB sev1)",
+      "support_validation": "pair0 only: WEAK 1✓/3✗ (sigma 54%✗, mean_shift 0.0065✗)",
+      "verified": true
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (residual sigma 8.4-20.5; 噪声 seed 失配, PSNR 不可用于仲裁)",
+    "support_validation": "15 次 test_candidate (7 个不同管线): 所有候选在 5 对 support 上均为 verify_signals WEAK, 无任何一对达到 PARTIAL/MATCH; 无候选满足 'WEAK→PARTIAL 改善在 ≥4/5 对'。最佳折中 Poisson:4 在 pair0 mean 差 0.0064 (0.36 灰阶) 为最近, 但 pairs1/2 mean 偏差 20-30 灰阶。确定性核心 (hist2+gamma2, 无噪声) pair0 MISMATCH: mean 0.0066✗ + vr 128%✗, 证明必须有随机步且确定性部分本身无法解释 vr。",
+    "rationale": "信号重释结论: (1) quantization_hist:2 由 unique_per_channel=[16,16,16] 在全部 5 对精确复现锁定 (c=16; median:2 最多15级, JPEG block_boundary≈1.0 排除); (2) brightness_darken_gamma_RGB:2 锁定: mean_shift=-0.6~-1.6 全对一致, hist-equalize 输出均值≈127.5 要求内容无关压暗约32灰阶, gamma1.7 对均匀16级的期望输出 0.3704*255=94.4 灰阶与目标≈95.5 吻合, 且保 0→0/255→255 与 16 级结构; (3) 噪声步真实存在 (确定性核心 PSNR=14.61, 残差 std 47.4, mean/sigma 均不达标), 但类型/严重度不可判: 残差白 (spatial_corr≤0.018) 且通道独立 (cross_ch≤0.011) 排除 YCrCb/SC, impulse_zero_ratio=0.046 排除 impulse, intensity_var_corr=0.73-0.89 的 POISSON 判定被 gamma+hist 确定性映射污染 (isvc 全负, 不支持 speckle); (4) 关键新发现: sigma 与 mean_shift 两个 verify 判据在 x_distortion 可用噪声档位间存在系统性权衡——sigma 达标需 Poisson≥4/Gaussian3, 但该强度使 hist 直方图尾部扩展→量化后均值额外压暗 1.6-3.9 灰阶 (pair1/2 达 20-30 灰阶), mean 达标需 Poisson3/Gaussian2 但 sigma 低 24-25%; 无档位同时满足 → 非本 challenge 的其它候选无法超越 R0; (5) variance_ratio 目标 1.08-1.61 与 hist+gamma 核心内在值 1.8-1.9 系统性偏差 (确定性核心单独亦 1.84), 任何 3 步内候选均无法通过 8% 阈值。peeled §B 在 5 对均为已知假阳性指纹 (extreme 29-75%, spatial_corr 0.56-0.76, 量化映射误差), 不构成 §B 显著改善依据。按 R1 判定规则 (CHANGE 仅当候选通过验证), 维持 R0 管线。"
+  },
+  "signal_sources": [
+    "unique_per_channel=[16,16,16] in all 5 pairs (full_analysis_R1*.json) → quantization_hist sev2 (c=16) locked; quantization_median:2 max 15 levels; block_boundary 0.9979-1.0099 → no JPEG",
+    "brightness_mean_shift = -1.1/-0.6/-1.6/-1.1/-1.2 (pairs 0-4) → content-independent darkening of hist-equalized output (mean≈127.5) by ~32 levels; gamma 1.7 uniform-16-level expectation = 94.4 vs target mean≈95.5",
+    "spectral_slope_ratio = 0.966-1.018 (<1.08) in all pairs → BLUR_UNLIKELY confirmed",
+    "spatial_corr = -0.0009..0.0176 and cross_channel_corr = 0.0006..0.0114 → white, channel-independent noise; rules out YCrCb / spatially-correlated",
+    "impulse_zero_ratio ≈ 0.046 (step2 target) → rules out impulse",
+    "intensity_var_corr = 0.728-0.885 (POISSON verdict all pairs) but confounded by gamma+hist deterministic mapping; intensity_scaled_var_corr negative (not speckle-like)",
+    "clipped_fraction = 0.050/0.087/0.120/0.302/0.433 and variance_ratio = 1.55/1.61/1.37/1.17/1.08 across pairs (content-dependent)",
+    "verify_signals detailed checks: 15 tests, all WEAK; per-check match pattern documented in reflection_R1.validation",
+    "peeled_noise_check (hist2+gamma2) 5 pairs: extreme_pct 29.14-75.42%, spatial_corr 0.5612-0.7637, residual_std 29.8-56.0 → known quantization-mapping FP fingerprint; §B unusable"
+  ]
+}

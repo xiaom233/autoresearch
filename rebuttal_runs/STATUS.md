@@ -52,11 +52,12 @@
 | T4 修正 | 旧 T1-best 子集 21.58 是选择偏差，已废弃；全 24 曲线为准 | `02_..._已填写.md` T4 |
 | E6-B support-set 稳定性 | ✅ 6 场景×3 组 support×R0–R2（规则控制器，33 次训练 / 64.93 GPU-h）：DIV2K 25.000/25.304/26.064；LSDIR 23.197/23.540/24.171；range 0.13–2.66 dB，场景相关 | `E6/e6_summary.json`、`E6/e6_summary.md` |
 | E6-B（LLM）support-set variation | ✅ 6 场景×3 组，完整 LLM 流程（Skill 盲识别→策略→R0→R1/R2→support 选择）：DIV2K macro **30.194** vs rule 25.456（**+4.737**，6 场景 CI [+0.341,+9.789]，4/6 胜）；LSDIR 27.662 vs 23.636（+4.026，CI [+0.183,+8.725]）；23 次训练 / 32.82 GPU-h；R1 4 次 CHANGE、R2 1 次训练 | `E6_LLM/e6llm_summary.json`、`E6-B_LLM_support_variation.md` |
-| E7 exp41 两次重复 | ⏹ 已停止（用户要求停止所有实验）；Rep A 只有部分中间文件、无最终预测；计划/计时规范已写，不作结果 | `rebuttal_plan/12_exp41_repeat_randomness.md`、`13_end_to_end_cost_and_timing.md`、`E7/` |
+| E6-A full24 run-to-run | ✅ 24 场景×2 次独立 agent（exp41 全部；同 support sha256 / 训练 seed 42）：R0 48/48、R1 9/9、R2 0；R0-only DIV2K 26.817 / within-SD **1.491** / max range 10.398；同 pipeline 10 场景 mean \|Δ\| **0.27 dB** vs 不同 pipeline 14 场景 **3.42 dB**；final **+0.837**（DIV2K）/+0.692（LSDIR），within-SD 0.856/0.724，max range 13.043（0009 单侧 R1 生效）；训练 81.12 GPU-h | `E6A_full24/e6a_full24_summary.json`、`rebuttal_plan/E6-A_full24_repeat2.md` |
+| E7 exp41 两次重复 | ⏹ 已停止（用户要求停止所有实验）；Rep A 只有部分中间文件、无最终预测；**E6-A full24（24 场景×2 次）已覆盖本计划的 Phase 1/2 需求**，E7 不再重启 | `rebuttal_plan/12_exp41_repeat_randomness.md`、`13_end_to_end_cost_and_timing.md`、`E6A_full24/` |
 | E7 计时/成本审计 | ✅ 现有 log 覆盖审计：训练 4.248 GPU-h/场景、support eval ~9.4 min；反思仅日期、候选/Token/API UNKNOWN；5 GPU-h 非端到端 | `E7/existing_timing_coverage.json`、`13_end_to_end_cost_and_timing.md` |
 | E5c blind_0005 4-cell | ✅ 完成：no-fix 21.915、DC-only 44.908、RS-only 21.976、both 41.620（DIV2K fixed-LQ 0005）；DC +22.99，RS-only +0.06，RS at correct DC −3.29 | `E5c/`、`rebuttal_plan/E5c_blind_0005_4cell.md` |
 | DFPIR-scratch test | ✅ full test 完成：best 23.833/21.811、last 23.638/21.667；见 `scratch_full_summary.md` | `E2_scratch/scratch_full_summary.*` |
-| 进行中/未执行 | **所有实验已停止**；E6-A 只完成 7+ 个 R0、E7 只有部分 Rep A 中间文件，均不作结果；未执行：E5b/E2-RS 完整四格 24 场景、E3-G 留出 | E5c 只能作为 blind_0005 的 targeted RS 诊断，不替代完整 E2-RS；E4 rain、E6-B（LLM）已完成；E7 重启前按 timing 规范记录 |
+| 进行中/未执行 | **E6-A full24 已完成**；E7 只有部分 Rep A 中间文件、不作结果；未执行：E5b/E2-RS 完整四格 24 场景、E3-G 留出 | E5c 只能作为 blind_0005 的 targeted RS 诊断，不替代完整 E2-RS；E4 rain、E6-B（LLM）、E6-A full24 已完成；E7 已被 E6-A full24 覆盖 |
 | 旧无人值守链 | 已完成 E2 评估；E1 段因 `E1/logs` 目录缺失失败，已创建目录并另起 `run_e1_stage.sh` | `chain.log`、`E1/stage.log` |
 | E1 规则控制器决策 | ✅ 24/24 完成；R1 可用 19、R2 可用 10；候选测试 196 次；arch=20 Swin+SG / 4 GCM | `E1/decisions/` |
 | E1 R0/R1/R2 训练 | ✅ 24 R0 / 19 R1 / 9 R2 完成；support 选择与固定 LQ test 完成 | `E1/stage.log` |
@@ -78,6 +79,7 @@
 - E1 决策：`rebuttal_runs/E1/decisions/`（含 candidate_scores 与信号来源）
 - E2 任务：`rebuttal_runs/E2/tasks.jsonl`
 - DFPIR 评估器：`rebuttal_runs/scripts/eval_dfpir.py`
+- E6-A full24 结果：`rebuttal_runs/E6A_full24/e6a_full24_summary.json` / `.md`；计划与解释：`rebuttal_plan/E6-A_full24_repeat2.md`
 
 ## 已知限制（必须在最终回应中保留）
 
@@ -86,7 +88,7 @@
 3. **E4 的 SIDD/UHDM 已执行（官方 DFPIR 为主基线）**：SIDD 全量 1,120 块上 AutoIR 与 M_blind 持平（+0.030 dB，CI 跨 0）、规则 specialist 灾难（−8.878 dB）、DFPIR official release 5D 分布外失败（CLIP σ=25 仅 26.465，低于 M_blind 4.038）。SIDD support 取自 validation 场景 0–4（不是官方 train）；test 为 35/40 场景、1,120/1,280 块。UHDM support 取自 test 0–4（不是 train）；已改 full 495 对：50 子集 LQ 均值 17.752 vs 全量 17.100，M_blind 子集 17.917 vs 全量 17.307，子集高估约 0.61 dB。blinded DFPIR 31.218 仅为项目参考，不是官方权重。**E4 specialist 只训练了 R0，没有训练后 R1/R2 反思**：训练前 Skill 候选反思有 15（SIDD）/7（UHDM）次，但任务库只有 `*_R0`，无 R1 任务、日志、params、checkpoint 或停止决策记录；R0 均正常完成、无 NaN。不是 agent 判定不需要，也不是运行崩溃，而是 E4 按最小真实实验只排了单轮 R0，训练后反思流程未调度；SIDD UNCERTAIN、UHDM POOR 按协议本应触发 R1。E4 只能标为 **R0-only**，不能写成完整三轮系统。详见 `E4/EXECUTION_NOTE.md`。**E4 rain 已执行**（Rain100H 95 对，R0-only）：不能声称库外去雨或真实数据显著提升；该雨集存在强全局亮度偏移，PSNR 会被规则的光度修正放大（见 `E4/rain/README.md`）。
 4. **E1/E2 support 与 DIV2K test 重叠**：24 场景共 120 次抽取、74 张唯一 DIV2K 图，每场景 5/100；support-excluded 敏感性显示影响 <0.01 dB（E1）/0.007 dB（E2 best），但不能声称严格独立 test。
 5. **LQ 协议**：7/24 场景的 `make_lq` 不可复现（impulse/glass 私有 RNG）。2026-10-27 复核：A0/E1 主指标 8,400 个共同图像行中 **2,450 行 `lq_sha256` 不一致**，正好是 **7 场景 × 350 张**（0003/0005/0017/0018/0020/0022/0023）；其余 17/24 hash 一致。**GT 管线没有变，变的是同一 GT 的随机 realization**。已用 `E1E2_fixed_lq` 同一份固定 LQ 重评：24 场景 macro/paired 变化 <0.001 dB（逐场景最大约 0.01 dB）。`LLM_vs_rule_choices.md` 的 7 个场景已改用 fixed-LQ；one-shot 的 6 个共同 fixed 场景（不含 0020）用 `eval_oneshot_fixed_lq.py` 同一份固定 LQ 重评，23 场景结论不变（rule 反思 +2.426/18 胜，LLM +1.279/15 胜）。未修正前这 7 个场景的逐图 Δ 不能当严格配对。历史 baseline 的 LQ 也未跨方法固定（18/24 随机场景）；AirNet 敏感度实测 mean +0.003/−0.009 dB。严格主表仍应统一重跑。
-6. **E6-B support-set 稳定性已完成**（规则控制器，6 场景×3 组）：DIV2K macro 25.0–26.1 dB，support-set range 0.13–2.66 dB；稳定性场景相关，不能声称普遍稳定。**E6-B（LLM）完整流程已完成**：DIV2K macro 30.194 vs rule 25.456（+4.737，6 场景 CI [+0.341,+9.789]，4/6 胜）；support 稳定性同样场景相关（LLM mean range 1.269 vs rule 1.326，但 0008/0017/0024 的 range 更大）。**E6-A 已停止（用户要求优先 LLM 版；仅完成 7+ 个 R0，不能报告）**；训练 seed 重复仍未执行；当前不能声称 E6-A run-to-run 方差。
+6. **E6-B support-set 稳定性已完成**（规则控制器，6 场景×3 组）：DIV2K macro 25.0–26.1 dB，support-set range 0.13–2.66 dB；稳定性场景相关，不能声称普遍稳定。**E6-B（LLM）完整流程已完成**：DIV2K macro 30.194 vs rule 25.456（+4.737，6 场景 CI [+0.341,+9.789]，4/6 胜）；support 稳定性同样场景相关（LLM mean range 1.269 vs rule 1.326，但 0008/0017/0024 的 range 更大）。**E6-A full24 已完成（2026-10-29）**：24 场景×2 次独立 agent（同 support sha256、同训练 seed）；R0-only DIV2K macro 26.817、within-SD 1.491 dB、max range 10.398；同 pipeline 10 场景 mean |Δ| 0.27 dB（训练/选点抖动）vs 不同 pipeline 14 场景 3.42 dB（DC 差异主导）；全流程 R1 9 次 CHANGE，final +0.837/+0.692 dB（DIV2K/LSDIR）、within-SD 0.856/0.724，但 max range 升到 13.04 dB（0009 单侧 R1 生效）。不能声称 LLM 方差普遍更小；R2 6 条全部 NO_CHANGE。**LQ 敏感性**：7 个私有 RNG 场景（0003/0005/0017/0018/0020/0022/0023）主评估 LQ 进程间不同；用 E1E2_fixed_lq 共享 LQ 重评后 mean Δ≤0.002 dB、max 0.018 dB，修正 macro 与主表一致到 3 位小数，结论不变。
 7. **E2-RS 四格未执行**；RS 架构贡献未单独隔离。
 8. **API model ID/版本/费用 UNKNOWN**；文档中的 DeepSeek/Qwen 只是声明。
 9. **E1-oneshot 的 NaN 失败必须如实报告**：E1-oneshot（无反思规则）为 **23/24 有效、1/24 NaN**（`blind_0020` 的 GCM R0 训练 NaN）。主表是 23 个有效场景 macro，不做 0 dB 插补/静默删除；E1-full 通过 R1 fallback 恢复到 15.98，AutoIR-oneshot 15.78、AutoIR-full 18.09。Swin+SG 稳定重训只作可选 sensitivity（fixed-LQ 0020 = 14.05，仍低于 AutoIR-oneshot 15.78 / E1-full 15.98），不冒充原始 one-shot。

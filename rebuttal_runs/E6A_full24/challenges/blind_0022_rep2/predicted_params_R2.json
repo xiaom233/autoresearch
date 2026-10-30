@@ -1,0 +1,78 @@
+{
+  "challenge_id": "blind_0022_rep2",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r1_pipeline": [["blur_glass", 3], ["compression_jpeg", 1]],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 1, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 3}, {"function": "compression_jpeg", "severity": 2}],
+      "stats": {
+        "pair0": "signal PARTIAL (2✓/1✗): block_boundary diff 10% (>8%, 过冲)",
+        "pair1": "signal MATCH 但相对 j1 更差: bb +6.8% (j1 为 -7.0%), dct_zero +0.030 (j1 +0.022), glass_score +0.112 (j1 +0.044), pca 1.230 (j1 1.095, target 1.093), var_ratio +0.054 (j1 +0.033)"
+      },
+      "function_family": "blur_glass+compression_jpeg",
+      "note": "JPEG ±1 候选。target bb 位于 j1-sim (-3.3%) 与 j2-sim (+10%) 之间且更接近 j1；pair1 细信号 4/5 变差 → 未通过改善判据，拒绝"
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 2}, {"function": "compression_jpeg", "severity": 1}],
+      "stats": {
+        "pair0": "signal PARTIAL (2✓/1✗): bb diff 9%; gm_ratio 0.4645 vs target 0.3968 (+17%); spectral_slope diff 0.055; sim 被判 BLUR_UNLIKELY"
+      },
+      "function_family": "blur_glass+compression_jpeg",
+      "note": "glass 严重度 -1 候选（R1 未测方向）。太锐：gm_ratio 超出 target、工具判断无模糊 → 拒绝"
+    },
+    {
+      "pipeline": [{"function": "compression_jpeg", "severity": 1}, {"function": "blur_glass", "severity": 3}],
+      "stats": {"pair0": "signal PARTIAL (2✓/1✗): block_boundary diff 42%"},
+      "function_family": "compression_jpeg+blur_glass",
+      "note": "顺序反置探针：JPEG 块边界被后续模糊抹平，bb 42% 失配 → 顺序确认为 blur→JPEG（与生成约束 priority 一致）"
+    },
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 3}, {"function": "compression_jpeg", "severity": 1}],
+      "psnr": 26.9,
+      "stats": {"signal_verdict": "WEAK 5/5 (R1 记录)"},
+      "function_family": "blur_gaussian+compression_jpeg",
+      "note": "R0 确定性回退（沿用 R1 alternatives）：5/5 对 WEAK，仅作保守备份"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "mode": "SIGNAL (blur_glass 洗牌 seed 不可复现 → PSNR 仅辅助；JPEG 步由 bb/dct 信号确认)",
+    "steps_detected": 2,
+    "degradation_order": "blur → JPEG（顺序反置 bb 42% 拒绝，确认）",
+    "support_validation": "control (blur_glass:3,compression_jpeg:1) 在 5/5 对新 seed 上 verify_signals MATCH (3✓/0✗)；R1 同管线亦为 5/5 MATCH。pair0 模拟信号 vs target: slope -1.3197 vs -1.3173, gm 0.3891 vs 0.3968, bb -3.3%, dct_zero +0.0157, var_ratio +0.050, spread +0.029, chroma +0.028。",
+    "residual_analysis": "R1 管线剥离后的残差与 seed 失配基线同构：pair0 target std 8.3 vs 基线 7.3（spatial_corr 0.9576 vs 0.9543, peeled sigma 1.73 vs 1.73, rgb_ratio 1.13 vs 1.08）；pair4 target std 8.9 vs 基线 7.9（spatial_corr 0.9609 vs 0.9588, rgb_ratio 1.078 vs 1.087）。残差由 glass 洗牌实现差异主导，无独立噪声/全局/第三步骤信号。",
+    "residual_structured_components": {
+      "block": "target bb 1.75-2.13 位于 j1-sim(-3.3%) 与 j2-sim(+10%) 之间，更接近 j1 → 无更优 on-grid JPEG 严重度",
+      "blur": "glass:3 为唯一 MATCH 严重度（sev2 太锐 gm+17%/BLUR_UNLIKELY，sev4 太糊 slope diff 0.122，确定性族 5/5 WEAK）",
+      "color_cast": "排除：mean_shift -0.3~2.0/255；spread 0.877-0.925、chroma 0.881-0.953 与 control 模拟 (0.954/0.967) 差 ~3%，最小 on-grid global (contrast_weaken:1 scale0.75, brightness sev1 0.1) 幅度大一个量级",
+      "noise": "排除：noise_prior sigma 0.74-1.24 < 2；剥离后 1.73 与 seed 基线 1.73 相同；x_distortion 最小 noise_gaussian_RGB:1 σ=12.75 远超门限",
+      "order": "blur→JPEG 确认（反置 bb 42%）"
+    },
+    "verdict_rationale": "control 在新 seed 下 5/5 对 MATCH 复现；四个扰动候选（jpeg+1, glass-1, 顺序反置, R0 gaussian 回退）均未通过『相对 R1 control 改善 ≥4/5』判据（多数在 2 对以内即失配或细信号变差）。残差无对应 on-grid 候选，故 NO_CHANGE，维持 R1 pipeline。",
+    "prediction_meta": {
+      "steps_detected": 2,
+      "degradation_order": "blur → JPEG",
+      "deterministic_subtypes_confirmed": ["JPEG (block_boundary 0%FP; j1 经 bb/dct 5/5 对验证)"],
+      "stochastic_step": "blur_glass 像素洗牌 (seed 不可复现)",
+      "type_uncertainty": "glass 与确定性候选的区别由非可复现性论证确立（R1）；sev3 为唯一 MATCH 严重度",
+      "severity_uncertainty": "blur_glass sev3（sev2/sev4 双侧被拒）；JPEG sev1（sev2 被拒）",
+      "support_verified": true
+    },
+    "qwen_gate": {"available": false, "note": "API 不可用；sigma<2 门控未触发（NO_NOISE 路径）"}
+  },
+  "signal_sources": [
+    "full_analysis_R2_p0..p4.json（5 对 target 全信号重跑）：bb 1.75-2.13, dct_zero 0.79-0.87, sigma 0.74-1.24, gm 0.24-0.45, pca 1.03-1.09, spread 0.877-0.925, chroma 0.881-0.953",
+    "pair0 control 模拟 full_analysis（/tmp/r2_c0p0_sim_analysis.json）：slope -1.3197 vs -1.3173, gm 0.3891 vs 0.3968, pca 1.117 vs 1.068, glass 0.610 vs 0.637, var_ratio 0.867 vs 0.817, bb -3.3%, dct +0.0157",
+    "剥离残差 vs seed 基线（peeled_noise_check, glass:3+jpeg:1）：pair0 std 8.3 vs 7.3 / sigma 1.73 vs 1.73 / spatial 0.958 vs 0.954；pair4 std 8.9 vs 7.9 / spatial 0.961 vs 0.959",
+    "JPEG 方向：pair0 j2-sim bb diff 10% (PARTIAL)；pair1 j2-sim bb +6.8%（j1 -7.0%），dct/glass_score/pca/var_ratio 均差于 j1",
+    "glass 方向：pair0 glass:2+j1 PARTIAL（bb -9%, gm +0.068=+17%, slope diff 0.055, BLUR_UNLIKELY）；glass:4+j1 PARTIAL（R1: slope diff 0.122）",
+    "顺序：jpeg:1→glass:3 反置 bb diff 42%（PARTIAL）→ blur→JPEG 确认",
+    "noise 排除：x_distortion noise_gaussian_RGB sev1 σ=12.75（0.05×255）≫ 目标 peeled sigma 1.73",
+    "全局排除：contrast_weaken:1 scale=0.75（方差×0.56）远强于观测的 var_ratio 相对差 ~5%；brightness sev1 位移 ≥0.1(25.5/255) 远大于观测 |mean_shift|≤2/255"
+  ]
+}

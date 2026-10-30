@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0003_rep1",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+      "psnr": 34.83,
+      "ci_pass": "8/10",
+      "function_family": "blur_gaussian",
+      "reason": "同图 PSNR 次优 (34.83), 但 CI 8/10 且信号向量不吻合 (gm 0.4638 vs target 0.5322; dct_zero 0.7798 vs 0.6244); 作为跨族备份"
+    },
+    {
+      "pipeline": [{"function": "blur_lens", "severity": 2}],
+      "psnr": 34.61,
+      "ci_pass": "8/10",
+      "function_family": "blur_lens",
+      "reason": "gaussian↔lens MTF 不可区分, 但 lens:2 的 CI 8/10 低于 glass:2 的 10/10"
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 1}],
+      "psnr": 35.79,
+      "ci_pass": "8/10",
+      "function_family": "blur_glass",
+      "reason": "同族 severity -1 备份; PSNR/CI 均低于 sev2"
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 3}],
+      "psnr": 33.12,
+      "ci_pass": "8/10",
+      "function_family": "blur_glass",
+      "reason": "同族 severity +1 备份; PSNR/CI 均低于 sev2"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR",
+    "rationale": "单步 blur_glass:2。无 JPEG (block_boundary=1.0014, 0%FP 信号), 无量化 (unique_G=256), 无噪声 (noise_prior sigma=1.11 < 2; x_distortion gaussian 噪声 sev1 应 ~12.75), 无独立全局 (variance_ratio=0.9539, mean_shift=-0.5, chroma_ratio=0.9634 均可由该步模糊完全解释)。模糊存在由 gm_ratio=0.5322 (<0.62) 确定 (脚本因误置 has_noise 输出 BLUR_UNLIKELY, 已按 sigma<2 人工覆盖)。子类型/severity 经 PSNR 扫描: gaussian:2=34.83, lens:2=34.61, motion:2=25.06, glass:1=35.79, glass:2=36.61/36.62 (CI 10/10), glass:3=33.12。glass:2 的模拟图重跑 run_full_analysis 后 14 项信号与真实 target 近乎逐位吻合 (gm 0.5325 vs 0.5322, slope_ratio 1.0678 vs 1.0693, dct_zero 0.6249 vs 0.6244, var 0.9545 vs 0.9539)。5 对 support 全部复核: pair1 32.42/10/10, pair2 32.04/10/10, pair3 35.25/10/10, pair4 32.34/9/10。verdict=UNCERTAIN 仅因 glass 像素 shuffle 为随机过程, PSNR 存在 ~36dB 天花板 (SKILL C.4), 按规程非确定性退化不标 LIKELY; 类型+severity 置信度实际很高。",
+    "qwen_gate": {"available": false}
+  }
+}

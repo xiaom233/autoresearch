@@ -1,0 +1,50 @@
+{
+  "challenge_id": "blind_0002_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_gaussian_YCrCb", 2]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_gaussian_YCrCb",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 2
+        }
+      ],
+      "verdict": "REJECTED_AS_MAIN",
+      "function_family": "noise",
+      "stats": {
+        "target_pair0": {"residual_std": 30.4, "ch_stds": [31.5, 22.4, 35.5], "rgb_ratio": 1.5868, "cross_ch_corr": 0.2994, "cross_channel_corr": 0.1721},
+        "candidate_pair0": {"residual_std": 23.7, "ch_stds": [23.9, 24.3, 22.8], "rgb_ratio": 1.0663, "cross_ch_corr": 0.0106, "cross_channel_corr": 0.0085}
+      },
+      "note": "子类型备份。verify_signals 无区分力 (仅检查 sigma/clean_residual, 标 MATCH), 但 run_full_analysis + §B 指纹明确不符: cross_ch 0.009 vs 0.172, rgb_ratio 1.07 vs 1.59, 三通道 std 被均衡为 ~24 vs 目标 (31.5/22.4/35.5)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (sigma=13.7-15.1)",
+    "support_validation": "5/5 对二阶统计逐项复现. 对每对 support 施加 noise_gaussian_YCrCb:2 后, 模拟图自身信号 vs 目标: sigma 14.33/14.46/15.07/13.71/14.33 vs 14.33/14.46/15.07/13.71/14.21; residual std 30.4/30.8/31.7/28.6/30.1 vs 30.4/30.8/31.7/28.6/30.1; ch_stds 逐项一致 (如 pair0 31.6/22.4/35.5 vs 31.5/22.4/35.5); rgb_ratio 1.585/1.656/1.714/1.667/1.615 vs 1.587/1.656/1.714/1.667/1.616; cross_ch 0.287-0.302 vs 0.285-0.302; RIC 0.200/0.035/0.060/0.190/0.179 vs 0.196/0.033/0.060/0.187/0.180; mean_shift 2.4/-1.0/-0.1/3.7/2.5 vs 2.4/-1.0/-0.1/3.7/2.5; variance_ratio 1.203/1.051/1.121/2.020/1.168 vs 1.203/1.051/1.121/2.020/1.168; clipped_fraction 0.138/0.135/0.101/0.208/0.148 vs 0.138/0.135/0.101/0.208/0.148. verify_signals MATCH 5/5 (noise:sigma, noise:clean_residual)",
+    "rationale": "R1 重释聚焦 R0 未验证/边界信号: (1) residual_intensity_corr=0.196 (pair0) 在 R0 仅归因裁剪, 未做模拟验证; 本轮实测 noise-only 模拟自身 RIC=0.200 (差 0.004), 且 5/5 对 (0.033-0.200) 全部由噪声自身复现 → gamma_suspect 为噪声+裁剪固有伪信号, 非确定性变换. (2) pair3 variance_ratio=2.020/contrast_detected_raw=true, 模拟复现 2.022 → 被噪声+内容饱和解释. (3) 替代候选判别: 子类型 RGB:2 被 cross_ch (0.009 vs 0.172)/rgb_ratio (1.07 vs 1.59) 否决; severity YCrCb:3 被残差 std (42.2 vs 30.4) 与 sigma 36% 误差否决 (verify_signals WEAK); gamma 假设 (brightness_brighten_gamma_RGB:1+YCrCb:2) 被 mean_shift 16.9 vs 2.4 与 variance_ratio 43% 偏差否决 (verify_signals WEAK); JPEG 假设 (compression_jpeg:1+YCrCb:2) 被 block_boundary 1.0492 vs 0.9983 (>5% 判据) 与 cross_ch 0.251 vs 0.299 否决. 所有候选中 R0 control 唯一在 5 对 support 上 §B/全局统计逐项复现, 无候选带来统计改善 → NO_CHANGE. 按 SKILL 噪声规则 verdict 保持 UNCERTAIN (噪声 seed 失配, 永不 LIKELY), 但统计证据接近确定性."
+  },
+  "signal_sources": [
+    "block_boundary=0.9983-1.004 (5/5 对, 阈值 1.1) + unique_G=256 + dct_zero_ratio=0.022 → 无压缩; jpeg:1+noise 模拟 bb=1.0492 与之相差 5.1%, 排除 JPEG",
+    "spectral_slope_ratio 目标 0.970-1.000 vs noise-only 模拟 0.968-0.999 (差 <0.003, 阈值 1.08) + FFT anisotropy=0 → 无模糊",
+    "残差通道指纹 rgb_ratio 1.586-1.714, cross_ch 0.286-0.302, ch_stds R~2x G, B~1.6x G (5/5 对) → noise_gaussian_YCrCb; RGB 等 sigma 模拟 rgb_ratio=1.066/cross=0.011 不符",
+    "residual std 28.6-31.7 与 sev2 模拟逐对一致 (sev3 模拟 std=42.2, verify_signals sigma 误差 36%) → severity=2",
+    "noise_prior_sigma 13.71-15.07 (5/5) 与 sev2 模拟 (13.71-14.46) 一致",
+    "residual_intensity_corr 0.033-0.200 (五对内容依赖) 与 noise-only 模拟 0.035-0.200 逐对一致 → gamma_suspect 为噪声+裁剪伪信号, 非 gamma",
+    "mean_shift -1.0~+3.7, variance_ratio 1.051-2.020, clipped_fraction 0.101-0.208, saturation_chroma_ratio 1.45-4.65 全部与 noise-only 模拟相差 <1% → 无 brightness/contrast/saturation",
+    "vm_slope -4.43~-7.11 (负值) → 排除 speckle; var_slope 在 target 与模拟中同向漂移 (pair3 2.86 vs 2.45) → Poisson 伪信号, 由噪声+裁剪解释",
+    "spatial_corr lag-1 0.004-0.014 + §B spatial_corr 0.37-0.41 = 白噪声邻域理论值 → 噪声后于模糊/无模糊"
+  ]
+}

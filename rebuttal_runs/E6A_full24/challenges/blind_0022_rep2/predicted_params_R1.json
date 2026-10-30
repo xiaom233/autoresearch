@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0022_rep2",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [["blur_gaussian", 3], ["compression_jpeg", 1]],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 1, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [["blur_gaussian", 3], ["compression_jpeg", 1]],
+      "psnr": 26.9,
+      "stats": {"signal_verdict": "WEAK on 5/5 pairs", "slope_diff": "0.097-0.202", "kernel_corr": "0.833-0.847"},
+      "function_family": "blur_gaussian+compression_jpeg",
+      "note": "R0 control-保守回退：确定性 gaussian 网格最佳，但 5/5 对 verify_signals WEAK（slope/kernel 均失配）且全部确定性网格点无法像素级复现"
+    },
+    {
+      "pipeline": [["blur_glass", 4], ["compression_jpeg", 1]],
+      "psnr": null,
+      "stats": {"signal_verdict": "PARTIAL (2/3)", "slope_diff": 0.122, "kernel_corr": 0.9561, "bb_diff_pct": 2.0, "dct_diff": 0.0255},
+      "function_family": "blur_glass+compression_jpeg",
+      "note": "glass 严重度 ±1 备选：sim 偏糊（slope 更陡 0.122 > 0.08），若训练后 GT PSNR 显示过锐可回退至 sev4"
+    },
+    {
+      "pipeline": [["blur_lens", 4], ["compression_jpeg", 1]],
+      "psnr": 26.73,
+      "stats": {"signal_verdict": "未测 signal"},
+      "function_family": "blur_lens+compression_jpeg",
+      "note": "确定性跨族精确复现探针：若 GT 为 lens:4+j1 应像素级复现（PSNR≈∞），实测 26.73 dB → 排除"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (blur_glass 为随机洗牌步, seed 与 GT 不可复现 → PSNR 仅作辅助判据; JPEG 确定性步由 block_boundary/dct 信号确认)",
+    "support_validation": "blur_glass:3+compression_jpeg:1 在 5/5 对 support 上 verify_signals MATCH (3✓/0✗)：spectral_slope diff 0.0029-0.0123 (<0.08)、Wiener 核相关 0.9994-0.9999 (>0.85)、block_boundary diff 2.2-7.0% (<8%)、dct_zero diff 0.0129-0.0221 (<0.08)。同一信号模式下 R0 control (gaussian:3+jpeg:1) 5/5 对均为 WEAK（slope diff 0.097-0.202, kernel corr 0.833-0.847）。PSNR（每对 1 次洗牌抽样）：control 26.90/29.69/27.99/29.65/27.03 → glass:3 29.75/31.41/30.24/31.46/28.93（Δ +2.85/+1.72/+2.25/+1.81/+1.90, 均值 +2.11 dB）。",
+    "rationale": "信号重释表明：1) target 相对 gaussian:3 模拟系统性更'粗糙'（pair1: dct_zero 0.873 vs 0.910, impulse_zero 0.165 vs 0.215, variance_ratio 0.821 vs 0.855, gm 0.250 vs 0.176, slope -1.329 vs -1.449），且 pair0 的 impulse_total_pct 偏差 63% — 说明真实模糊不是更强的高斯核，而是保留/打散高频的位移型模糊；2) clean_0 与 DIV2K_valid_HR/0891.png 像素完全一致（同图模式、x_distortion 确定性函数），若 GT 为网格内确定性管线，模拟应像素级复现（PSNR≈∞），但 R0 的 21 个候选与 R1 的 lens:4+j1 探针最大仅 26.90 dB → GT blur 必含随机成分；3) motion 被 PCA 排除（5/5 对 pca_ratio 1.02-1.09 < 2.5, 0%FP；且残差 FFT 各向异性主方向与 clean 内容主方向重合：pair0 均 72.0°, pair1 残差 82.3° vs clean 87.4°）；4) noise 被 sigma 排除（0.74-1.24 < 2；无噪声的 g3j1 模拟 cross_channel_corr=0.967 ≈ target 0.964；剥离后 spatial_corr=0.98 为结构失配）；5) global 排除（spread 0.877-0.925、chroma 0.881-0.953、|mean_shift|≤0.3/255、unique_G 254-256，均未达任何 global 函数 sev1 的最小幅度）。⇒ 唯一剩余 on-grid 随机模糊为 glass (像素洗牌)。严重度扫描：glass:4+j1 → PARTIAL (sim 偏糊, slope diff 0.122)；glass:3+j1 → 5/5 对 MATCH。故 R1 判定 CHANGE 为 blur_glass:3 → compression_jpeg:1。整体 UNCERTAIN：glass 洗牌 seed 不可复现，PSNR 永远无法达到 40 dB，需训练后 GT PSNR 仲裁。",
+    "prediction_meta": {
+      "steps_detected": 2,
+      "degradation_order": "blur → JPEG (物理约束: blur priority1, JPEG priority2)",
+      "deterministic_subtypes_confirmed": ["JPEG (block_boundary 0%FP, 5/5 对 j1 信号通过)"],
+      "stochastic_step": "blur_glass 像素洗牌 (seed 不可复现)",
+      "type_uncertainty": "glass 与 gaussian:2/3 在粗信号上相近，但确定性候选全部被'非精确复现'排除；glass:4 偏糊, glass:3 匹配",
+      "severity_uncertainty": "blur_glass ±1 (sev4 为备选)；JPEG ±1 (sev2 为备选)",
+      "support_verified": true
+    }
+  },
+  "signal_sources": [
+    "target vs g3j1-sim 二阶统计量 (pair1 full_analysis_p1_sim_g3j1.json): dct_zero 0.873 vs 0.910; impulse_zero 0.165 vs 0.215; variance_ratio 0.821 vs 0.855; gm_ratio 0.250 vs 0.176; spectral_slope -1.329 vs -1.449 → target 更粗糙",
+    "pair0 test_candidate control CI: impulse_total_pct diff -0.081 (63%), impulse_pct_zero diff -0.083 (66%) → 模拟过于光滑",
+    "同图精确源验证: clean_0 == datasets/DIV2K/DIV2K_valid_HR/0891.png 像素完全一致 (PSNR 99) → 确定性管线应像素级复现",
+    "非可复现性: R0 21 候选最大 PSNR 26.90 dB; R1 lens:4+j1 = 26.73 dB → 无确定性网格点匹配",
+    "motion 排除: blur_pca_ratio 1.02-1.09 (<2.5, 0%FP) 5/5 对; 残差 FFT 各向异性主方向 = clean 内容主方向 (72.0°/72.0°, 82.3°/87.4°)",
+    "noise 排除: noise_prior sigma 0.74-1.24 (<2); g3j1 模拟 (无噪声) cross_channel_corr 0.967 ≈ target 0.964; R0 peeled spatial_corr 0.98 结构性",
+    "global 排除: spread_ratio 0.877-0.925 (contrast_weaken sev1 → ~0.75); chroma_ratio 0.881-0.953 (saturation sev1 → ≤0.7); mean_shift ≤0.3/255; unique_G 254-256 (quantization 排除)",
+    "glass severity 扫描: glass:4+j1 signal PARTIAL (slope diff 0.122) → glass:3+j1 5/5 MATCH (slope diff 0.003-0.012, kernel 0.9994-0.9999, bb 2.2-7.0%)"
+  ]
+}

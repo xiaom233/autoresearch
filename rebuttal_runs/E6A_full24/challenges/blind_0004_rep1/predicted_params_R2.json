@@ -1,0 +1,87 @@
+{
+  "challenge_id": "blind_0004_rep1",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r1_pipeline": [["blur_motion", 1]],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 1,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 2,
+    "mode": "EXACT-REPRODUCTION + SIGNAL (stochastic angle draw; pipeline identity proven pixel-exact)",
+    "support_validation": {
+      "exact_reproduction_pairs": [3, 4],
+      "exact_reproduction": "40 draws of x_distortion blur_motion:1 per support pair (fixed RNG seed); pairs 3 and 4 reproduced the degraded target PIXEL-EXACTLY (PSNR 168.13 dB, residual = 0 across all 2040x1536 / 2040x1356 pixels). Pairs 0/1/2 reached 56.54 / 48.32 / 66.12 dB on their best draw. All 5/5 pairs exceed 40 dB within 40 draws.",
+      "best_of_40_psnr_pairs_0_4": [56.54, 48.32, 66.12, 168.13, 168.13],
+      "draws_gt40db_per_pair": [1, 5, 2, 5, 3],
+      "median_psnr_pairs_0_4": [27.98, 33.47, 26.40, 24.44, 23.84],
+      "test_candidate_psnr_draws": {
+        "pair0_motion1": [26.60, 26.94, 27.06],
+        "pair1_motion1": [32.32],
+        "pair2_motion1": [33.20],
+        "pair3_motion1": [28.65],
+        "pair4_motion1": [23.65]
+      },
+      "test_candidate_ci_pass": {
+        "pair0_motion1": "7/10",
+        "pair1_motion1": "10/10",
+        "pair2_motion1": "7/10",
+        "pair3_motion1": "10/10",
+        "pair4_motion1": "10/10"
+      },
+      "interpretation": "The target is produced by exactly this pipeline; the residual PSNR spread across draws is the unknown random angle (the x_distortion kernel is quantized into discrete integer-shift kernels, so a draw can hit the generator's kernel exactly). The angle is a stochastic nuisance parameter that is not encodable in the pipeline (function, severity) format and is regenerated per sample at training time, matching the generator's own behavior."
+    },
+    "residual_audit": {
+      "after_exact_draw": "residual identically zero on pairs 3/4 -> nothing left to explain; no block grid, no colour cast, no noise, no second step.",
+      "after_angle_mismatch_best_draw_pair0": "residual std 3.37 (37.59 dB), lag-1 autocorr 0.476, 8x8 boundary ratio 0.892 -> residual is the structured kernel-angle mismatch, NOT JPEG (no 8x8 grid), NOT global (mean 0.004), NOT noise (structureless-white criterion fails).",
+      "peeled_sb_on_mismatch_draws": "§B 'IMPULSE / extreme_pct 55-94%' is the documented false positive on structured blur residuals (peeled spatial_corr 0.64-0.98); noise_prior sigma 0.37-0.74 < 2 on all pairs -> NO_NOISE gate stands.",
+      "compression": "block_boundary 0.9975-1.0079 (<1.05, 0% FP); compression_jpeg:1 rejected in R1 (25.29 dB, CI 4/10, block_boundary diff 142%).",
+      "global": "variance_ratio, contrast_spread_ratio, saturation_chroma_ratio, brightness_mean_shift, clipped_fraction and unique_G of the best pair1 motion:1 draw match the target within <=1.9% (ms identical, vr -0.1%, spread 0.0%, chroma -0.1%, uG exact, bb +0.6%). No global/ISP step remains."
+    },
+    "severity_scan": {
+      "motion_2_40_draws": "pair0 max 34.24 dB, pair1 max 34.85 dB, 0/40 draws exceed 35 dB",
+      "motion_2_test_candidate": "pair0 draws 30.80 dB (CI 8/10) and 26.55 dB (CI 5/10); the 30.80 dB draw over-blurs the angle-invariant signals (gm -18.4%, raw-residual spatial_corr +23.5%, variance_ratio -3.6%, spectral_slope_ratio +6.7%) vs motion:1 (gm -0.6%, vr -0.1%, sc +0.4% on pair1)",
+      "conclusion": "severity 2 cannot reproduce any support pair; severity 1 is exact"
+    },
+    "family_controls": {
+      "blur_gaussian_1_psnr_pairs_0_4": [29.21, 30.64, 26.01, 26.35, 25.55],
+      "blur_lens_1_psnr_pairs_0_4": [29.05, 30.68, 25.87, 26.40, 25.59],
+      "blur_glass_1_psnr_pairs_0_4": [27.07, 29.85, 24.09, 24.27, 24.18],
+      "conclusion": "all deterministic isotropic kernels top out at ~30.7 dB and can never reproduce the target; blur_motion:1 is uniquely correct"
+    },
+    "pair1_full_signal_audit_vs_target_percent": {
+      "block_boundary": 0.6,
+      "unique_G": 0.0,
+      "dct_zero_ratio": 9.6,
+      "noise_prior_sigma": 0.0,
+      "raw_residual_spatial_corr": 0.4,
+      "cross_channel_corr": -1.5,
+      "residual_intensity_corr": -12.7,
+      "gm_ratio": -0.6,
+      "spectral_slope_ratio": 1.1,
+      "variance_ratio": -0.1,
+      "contrast_spread_ratio": 0.0,
+      "saturation_chroma_ratio": -0.1,
+      "brightness_mean_shift": 0.0,
+      "clipped_fraction": 1.9
+    },
+    "noise_gate": "sigma_prior 0.37-0.74 (<2) on all 5 pairs -> NO_NOISE; residual_intensity_corr sign flips across pairs (-0.19/+0.16/+0.21/-0.18/+0.01) -> no gamma/brightness",
+    "qwen_gate": {"available": false, "triggered": false, "reason": "sigma < 2 on all pairs, no boundary/contradiction -> noise gate not invoked"},
+    "rationale": "R1 changed the R0 isotropic gaussian:1 model to blur_motion:1 based on angle-invariant statistics. R2 closes the question with exact reproduction: a blur_motion:1 draw reproduces support pairs 3 and 4 pixel-for-pixel and all 5 pairs exceed 40 dB within 40 draws, while every deterministic blur family tops out at 30.7 dB and motion:2 never exceeds 34.9 dB. No residual structure survives an exact draw, and on angle-mismatch draws the leftover residual is structured kernel-angle error (lag-1 autocorr 0.48, no 8x8 grid), not a missing degradation. Therefore no further pipeline change can improve the match; the correct output is the R1 pipeline unchanged. R1 model support PSNR 35.05 dB already reflects this. The only irreducible uncertainty is the random angle, which is not parameterizable in params and should remain random during training."
+  },
+  "signal_sources": [
+    "pixel-exact reproduction: blur_motion:1 draw equals degraded_3/degraded_4 exactly (168.13 dB, zero residual over all pixels); best-of-40 PSNR on pairs 0-4 = 56.54/48.32/66.12/168.13/168.13, all >40 dB",
+    "x_distortion blur_motion integer-shift kernel is quantized; the generator's angle falls in a bin reachable by a random draw -> exact match confirms family+severity, and the residual gap across draws is angle-draw variance, not pipeline error",
+    "motion:2 40-draw max = 34.24 dB (pair0) / 34.85 dB (pair1), 0/40 >35 dB; test_candidate motion:2 over-blurs (gm -18.4%, sc +23.5%, vr -3.6%)",
+    "deterministic family controls: gaussian:1 / lens:1 / glass:1 max PSNR across pairs = 30.64 / 30.68 / 29.85 dB -> cannot reproduce",
+    "pair1 best-draw full-signal audit: bb +0.6%, uG 0%, sigma 0%, sc +0.4%, cc -1.5%, gm -0.6%, ssr +1.1%, vr -0.1%, spread 0.0%, chroma -0.1%, mean_shift identical, clip +1.9%; only dct_zero (+9.6%) and ric (-12.7%, sign-unstable across pairs) deviate",
+    "angle-mismatch residual on pair0: std 3.37, lag-1 autocorr 0.476, 8x8 boundary ratio 0.892, mean 0.004 -> structured kernel mismatch, no JPEG grid/global/noise",
+    "negative evidence: block_boundary 0.9975-1.0079; jpeg:1 25.29 dB with 142% block_boundary error (R1); sigma_prior 0.37-0.74 <2 (NO_NOISE); variance/spread/chroma/unique_G explained by the motion:1 draw within <=1.9%"
+  ]
+}

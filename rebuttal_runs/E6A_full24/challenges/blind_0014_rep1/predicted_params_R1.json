@@ -1,0 +1,26 @@
+{
+  "challenge_id": "blind_0014_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["brightness_brighten_shfit_HSV", 3], ["compression_jpeg", 2]],
+  "pipeline": [
+    {"function": "brightness_brighten_shfit_HSV", "severity": 3, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (per-pair sigma 0.37-2.22; pair2 crosses sigma=2 boundary but exact pixel match proves NO_NOISE)",
+    "support_validation": "5/5 support pairs PSNR=inf (pixel-identical), CI 10/10. Best tested alternative compression_jpeg severity boundary (jpeg:3) = 28.37 dB; raw-verdict rivals saturate_strengthen_HSV:5=11.90 dB, contrast_strengthen_stretch:3=12.38 dB; order swap=26.82 dB. No candidate can beat the inf control.",
+    "rationale": "R0 pipeline reproduces all 5 support targets pixel-identically (PSNR=inf), so R1 cannot improve on it. R1 signal reanalysis resolves the three R0 raw misattributions: (1) SATURATION_strengthen raw verdict is a proxy artifact of HSV V+0.3 raising max-channel chroma spread; (2) GLASS_BLUR on pair0 is caused by V+0.3 highlight clipping lowering gm_ratio/glass_score, absent on pairs1-4 and ruled out by exact match; (3) sigma=2.22 on pair2 is a noise_prior false positive from JPEG blocking/clipping (peeled residual is identically zero). JPEG severity is bracketed by jpeg:1=30.53 dB (R0) and jpeg:3=28.37 dB (R1) vs jpeg:2=inf; brightness-before-JPEG order confirmed (swap=26.82 dB). R0 support_psnr=28.66 dB reflects model underfit at 1.5 GPU-h, not pipeline mismatch, and is not addressable by a pipeline change.",
+    "support_psnr_r0": 28.66
+  },
+  "signal_sources": [
+    "Step1 compression: block_boundary 1.5265-3.0889 (>1.1, 0% FP) on 5/5 pairs + dct_zero_ratio 0.6377-0.8554 -> JPEG present; severity bracketed by PSNR inf (sev2) vs 30.53 dB (sev1, R0) and 28.37 dB (sev3, R1)",
+    "Step2 noise: noise_prior sigma 0.99/1.11/2.22/1.11/0.37; pair2 sigma=2.22 is the trigger-boundary case, PSNR=inf on pair2 proves peeled residual is zero -> sigma FP from JPEG blocking + highlight clipping; spatial_corr 0.72-0.95 and residual_intensity_corr -0.23..-0.57 are JPEG block structure + clipping correlation, not noise",
+    "Step3 blur: GLASS_BLUR only on pair0 (glass_score=1.4313, gm_ratio=0.8444); pairs1-4 BLUR_UNLIKELY (gm_ratio 0.7003-1.0759); pair-0-only signal inconsistent with a shared pipeline step, and exact match without blur proves clipping-induced gm_ratio drop",
+    "Step4 global: raw verdict SATURATION_strengthen_sev5 (4/5 pairs, sev4 p3) with saturation_chroma_ratio 1.311-1.767 and brightness_mean_shift 41.8-69.7; HSV V+0.3 raises max channel -> chroma-ratio proxy FP; variance_ratio content-dependent 0.799-1.5108 under clipping; direct PSNR disambiguation: brightness HSV:3 + jpeg:2 = inf vs saturate:5 11.90 dB vs contrast_strengthen_stretch:3 12.38 dB",
+    "Order: compression_jpeg:2 -> brightness_brighten_shfit_HSV:3 swap = 26.82 dB, confirming brightness(priority=0) before JPEG storage"
+  ]
+}

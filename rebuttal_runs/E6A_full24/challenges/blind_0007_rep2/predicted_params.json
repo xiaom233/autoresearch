@@ -1,0 +1,43 @@
+{
+  "challenge_id": "blind_0007_rep2",
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 1
+        }
+      ],
+      "function_family": "noise_additive_gaussian",
+      "psnr": null,
+      "signal_match": "verify_signals MATCH (pair 0: noise:sigma + noise:clean_residual)",
+      "note": "通用噪声门对类型不敏感; §B 乘性指纹(ivc=0.91, scaled_var_corr=0.42-0.80, 4/5 对)不支持加性噪声, 仅作跨族备份"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_poisson",
+          "severity": 1
+        }
+      ],
+      "function_family": "noise_poisson",
+      "psnr": null,
+      "signal_match": "verify_signals MATCH (pair 3: noise:sigma + noise:clean_residual)",
+      "note": "仅 pair 3 (clipped_fraction=0.083, 高光裁剪扭曲 var-mean) 的指纹偏向 poisson; 其余 4 对 scaled_var_corr>=0.42 指向 speckle"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "ci_pass_rate": "N/A (SIGNAL mode)",
+    "mode": "SIGNAL (sigma=5.44)",
+    "rationale": "单步乘性噪声. 无压缩: block_boundary 0.999-1.018 (<1.05, 0%FP), unique_G 256=clean. 无模糊: spectral_slope_ratio 0.994-1.006, FFT_anisotropy=0, gm_ratio 2.1-4.6 (噪声抬高). 无全局: mean_shift<=2.1/255, variance_ratio 1.02-1.07, contrast_spread 1.0-1.07 (pair3/4 saturation 为噪声假阳性 can_fake_saturation). 噪声类型: §B vm_slope=4.26 + ivc=0.91 + scaled_var_corr=0.65 -> speckle; impulse_zero_ratio=0.17 排除 impulse; var_slope=-5.95 排除 poisson; rgb_ratio=1.19 排除 YCrCb; 相邻像素 spatial_corr=0.006 为白噪声排除 gamma/contrast. 最终候选 noise_speckle:1 在 5/5 对 support 上 verify_signals MATCH; severity 由 sigma 门(sev2 diff=50% WEAK)与残差幅度(15.2≈0.14*RMS(I)~109)确认为 1. 噪声步骤按 exp34/37 规则永不 LIKELY, 故 UNCERTAIN."
+  }
+}

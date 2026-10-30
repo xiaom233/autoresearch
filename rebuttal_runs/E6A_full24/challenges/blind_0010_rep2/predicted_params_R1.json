@@ -1,0 +1,29 @@
+{
+  "challenge_id": "blind_0010_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_gaussian", 1], ["brightness_darken_gamma_HSV", 5]],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 1, "verdict": "LIKELY"},
+    {"function": "brightness_darken_gamma_HSV", "severity": 5, "verdict": "LIKELY"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (sigma 0.74-1.73 < 2, 5/5 pairs NO_NOISE; Qwen gate not triggered)",
+    "support_validation": "test_candidate.py 独立复测 control: 5/5 对 support PSNR=inf (像素级完全一致), CI 10/10; 4 个候选变体 (顺序交换 36.24, lens-first 45.76, gamma sev4 24.51, +saturate_weaken:1 33.39) 全部劣于 control (inf), 无改善空间",
+    "rationale": "R0 管线在 5 对 support 上逐像素精确复现 (PSNR=inf), 任何候选都不可能相对 inf 改善 → NO_CHANGE. R1 信号重释确认: (1) pair4 unique_G=167<200 的 compression 0%-FP 信号为阈值边界假阳性 — 极暗化 (mean_shift=-81.9) + clipping 减少 unique_G, block_boundary=1.0066<1.05 且管线可像素级复现, 排除 compression; (2) pair3 variance_ratio=1.307>1 的 contrast 信号为内容依赖假阳性 — blur-first 顺序下 gamma_HSV:5 仍精确复现; (3) saturation_chroma_ratio=0.24-0.56 的 SATURATION_weaken 信号是 gamma 压暗副产物 — 显式加入 saturate_weaken:1 使 PSNR 从 inf 降至 33.39; (4) 顺序关键: gamma-first 36.24 < inf, blur→brightness 确认; (5) gaussian vs lens 消歧: lens-first 45.76 dB 仍非精确匹配, gaussian:1 为真."
+  },
+  "signal_sources": [
+    "PSNR=inf ×5 pairs (test_candidate.py) → 确定性管线像素级精确复现, 最强判据",
+    "block_boundary 0.9724/1.0097/1.0159/1.0014/1.0066 全部 <1.05 → NO_COMPRESSION (0% FP 信号)",
+    "unique_G pair4=167<200 但被暗化+clipping 解释 (mean_shift=-81.9, clipped_fraction=0.0723) → compression 阈值边界假阳性, 被 inf 复现否定",
+    "noise_prior_sigma 0.74/1.73/0.74/1.11/0.74 全部 <2 → NO_NOISE; residual_intensity_corr -0.25~0.94 内容依赖, 无噪声步骤",
+    "FFT anisotropy=0.00 ×5 → motion 排除; gm_ratio 0.087-0.785 内容依赖, blur 存在但子类型由精确匹配定为 gaussian:1",
+    "lens-first 45.76 dB vs gaussian-first inf → gaussian 精确匹配, lens 仅近似 (MTF 不可区分的实测消歧)",
+    "gamma sev4 = 24.51 dB (blur-first) → severeity 5 边界确认",
+    "显式 saturate_weaken:1 = 33.39 dB (< inf) → saturation_chroma_ratio 信号为 gamma 副产物",
+    "顺序交换 (gamma-first) = 36.24 dB → blur→brightness 顺序确认"
+  ]
+}

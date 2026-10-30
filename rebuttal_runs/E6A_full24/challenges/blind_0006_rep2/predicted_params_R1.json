@@ -1,0 +1,27 @@
+{
+  "challenge_id": "blind_0006_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["compression_jpeg", 1]],
+  "pipeline": [
+    {"function": "compression_jpeg", "severity": 1, "verdict": "LIKELY"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR",
+    "support_validation": "compression_jpeg:1 reproduces all 5 support pairs byte-identically (md5 equal, MSE=0, PSNR=inf, CI 10/10). No candidate can improve on an exact match; counterfactuals are strictly worse (jpeg:2 = 29.07 dB; blur_gaussian:1+jpeg:1 = 28.10 dB; noise YCrCb/RGB pre-JPEG candidates fail sigma signal match at 33-200% error).",
+    "rationale": "Single effective deterministic JPEG step at PIL quality 25 (severity 1). Step1: block_boundary 1.2117-1.7329 and dct_zero_ratio 0.4815-0.8731 on all 5 pairs (0% FP signal). Exact md5 reproduction across 5 independent images fixes the severity at 1 (sev2 = 29.07 dB, sev3 = 26.51 dB). No blur: spectral_slope_ratio 0.9966-1.0023 (<1.08) on every pair despite gm_ratio dips (pair1 0.7102) caused by JPEG edge reconstruction. No global: variance_ratio 0.9437-0.9993, mean_shift <=0.6/255, spread_ratio 0.9852-1.0031, chroma 0.919-0.999; pair3 heavy clipping (0.0662) is content-inherent (clean 0.0478, delta +0.0183). No noise: per-pair sigma estimates vary 0.37-4.32 for the same pipeline (0.37/0.62/1.11/2.22/4.32) which is JPEG-artifact driven; peeled residual after jpeg:1 is identically zero (std=0.0) on pairs 0 and 3, and residual_intensity_corr sign flips across pairs (-0.287/+0.077/+0.324/+0.110/-0.095), excluding gamma/noise. R0 support_psnr=30.35 is therefore a model capacity/training outcome, not a blind-ID error."
+  },
+  "signal_sources": [
+    "block_boundary 1.2117-1.7329 (>1.05, 0%FP) + dct_zero_ratio 0.4815-0.8731 + unique_G 252-256 on 5/5 pairs -> compression_jpeg present",
+    "md5(clean_i -> compression_jpeg:1) == md5(degraded_i) on 5/5 pairs -> severity 1 exact, single effective deterministic step",
+    "JPEG severity boundary: sev1 = inf (exact), sev2 = 29.07 dB, sev3 = 26.51 dB (R0) -> severity 1",
+    "spectral_slope_ratio 0.9966-1.0023 (<1.08) all pairs -> no blur; pair1 gm_ratio=0.7102 is a threshold-boundary artifact overridden by flat spectral slope",
+    "variance_ratio 0.9437-0.9993 + mean_shift 0.0-0.6/255 + spread_ratio 0.9852-1.0031 -> no contrast/brightness/gamma",
+    "clipped_fraction pair3=0.0662 vs clean=0.0478 (delta +0.0183) -> content clipping, not a global step",
+    "noise_prior sigma 0.37/0.62/1.11/2.22/4.32 inconsistent across same-pipeline pairs + cross_ch_corr 0.2271-0.6836 from JPEG YCrCb transform + residual_intensity_corr sign flips -> step2 GAUSSIAN_YCrCb is JPEG-artifact FP",
+    "peeled residual after compression_jpeg:1: std=0.0 on pair0 and pair3 (peeled_noise_check) -> NO_NOISE; extreme_pct=100% there is the documented degenerate zero-residual FP (zero_ratio=1.0)"
+  ]
+}

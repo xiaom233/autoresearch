@@ -1,0 +1,52 @@
+{
+  "challenge_id": "blind_0024_rep1",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["brightness_darken_gamma_RGB", 3],
+    ["saturate_strengthen_YCrCb", 4]
+  ],
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 4, "verdict": "UNCERTAIN"},
+    {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+    {"function": "saturate_strengthen_HSV", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "function_family": "chroma-weighted gaussian noise + gaussian blur + HSV saturation (cross-family noise substitution)",
+      "evidence": "Same blur+saturation core; chroma-noise variant motivated by full_analysis step2 (rgb_ratio 1.51 pair0, cross_channel_corr 0.17-0.79) and pair0 chroma match x3.83 vs target x3.73. verify_signals: WEAK pair0 (3/6: global variance_ratio diff 72% because sim vr=1.398 vs target 1.231), PARTIAL pair4 (4/6, variance_ratio diff 10%). Global signal-stat fidelity slightly below the RGB variant on pairs 1/4. Kept as backup for the pre-blur noise type, which is unidentifiable per SKILL (noise-first §B accuracy 54.7%).",
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_darken_gamma_RGB", "severity": 3},
+        {"function": "saturate_strengthen_YCrCb", "severity": 4}
+      ],
+      "function_family": "R0 prediction (pointwise gamma darken + YCrCb saturation)",
+      "evidence": "Fallback only: direct support simulation gives PSNR 15.22/14.80/16.44/14.00/15.87 dB (mean 15.27); sim produces ~28% channel values at 255 while every target has exactly 0; cannot explain the pure-white spread (12078 identical (255,255,255) clean pixels map to 165-246 / std 32 in the target).",
+      "verdict": "POOR"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (pipeline contains noise; PSNR seed-mismatch makes PSNR non-decisive; PSNR reported only as auxiliary)",
+    "support_validation": "verify_signals PARTIAL on 5/5 support pairs (5 matched checks each: blur:spectral_slope, blur:wiener_kernel, noise:sigma, global:mean_shift, global:variance_ratio; single mismatch noise:structured_residual FWHM=4-8px, an expected artifact of independent noise seeds when noise precedes a blur kernel). Global statistic fidelity against target (mean / pct0 / count(>=254) / variance_ratio / chroma_ratio / max): pair0 169.7 vs 167.6 / 4.15 vs 4.04 / 0 vs 0 / 1.240 vs 1.231 / 2.17 vs 3.74 / 244 vs 236; pair1 91.2 vs 89.3 / 27.18 vs 26.78 / 0 vs 0 / 2.326 vs 2.124 / 3.15 vs 3.45 / 252 vs 246; pair2 59.0 vs 62.0 / 27.27 vs 25.37 / 0 vs 0 / 1.267 vs 1.169 / 1.90 vs 1.88 / 251 vs 244; pair3 34.3 vs 36.5 / 34.03 vs 30.28 / 0 vs 0 / 0.351 vs 0.362 / 1.20 vs 1.27 / 241 vs 226; pair4 69.2 vs 69.6 / 25.99 vs 26.11 / 0 vs 0 / 1.445 vs 1.434 / 2.48 vs 2.52 / 240 vs 231 (marginal statistics from the noise-seed screen; official test_candidate runs reproduce the same behavior). Auxiliary PSNR (target vs saved simulation, independent noise seed): 18.30/21.86/21.28/24.35/21.91 dB vs R0-control 15.22/14.80/16.44/14.00/15.87 dB -> +3.08/+7.06/+4.84/+10.35/+6.04 dB (all pairs improve; pair0 +3.08 dB > 2 dB criterion). Severity is a sharp optimum: neighbors noise sev 2/3/5 and blur sev 2/4 all deviate on the same statistics (e.g. pair0 chroma x2.67/x3.22/x4.21 and x5.02/x3.12; pair3 vr 0.352/0.355/0.372 and 0.399/0.344).",
+    "rationale": "Decisive overlooked evidence: (1) R0 (pointwise gamma + saturation) cannot be the true family - clean/255 pure-white pixels are mapped to a wide distribution (pair1: 12078 identical (255,255,255) pixels -> target 10-90th pct 165-246, std 32, channel means 213/207.6/203.6), which no pointwise function can produce; and all 5 targets contain exactly zero channel values at 255 while clean pair1 has 1.778% and pair3 1.474% exact 255, so the chain must spatially mix/kill highlights. (2) Wavelet sigma 0.74-1.24 (R0's reason for rejecting noise) is a blur artifact: gaussian_RGB noise sev4 (sigma=0.2*255=51) followed by blur_gaussian sev3 (sigma=3) leaves wavelet sigma ~0.1-0.25 yet its blurred field is amplified by HSV S x6 into the target's dense chroma speckle (pair0 clean chroma 9.06 -> target 33.84; satHV2 alone reaches only x1.94). (3) Pair3 (dark star trails) variance_ratio 0.362 cannot be produced by pointwise saturation alone (0.79 without blur); blur sigma3 + saturation gives 0.351-0.362 exactly. (4) The global darkening is produced by saturation min-channel clipping, not by a gamma/brightness step: satHV2 reproduces content-dependent mean shifts (pair0 -32.6 vs -34.7; pair1 -52.2 vs -53.1) and pct0 (4.0% vs 4.04%; 26.8% vs 26.78%). (5) The order noise(priority 0) -> blur(priority 1) -> saturation(priority 2) is exactly the physical order enforced by the challenge generator. R0's composite was never directly simulated; its simulation now scores 14.0-16.4 dB and creates 28% 255-clipping absent from every target.",
+    "qwen_gate": {"available": false, "triggered": false, "reason": "Step 0.5 gate not triggered: noise_prior sigma 0.74-1.24 < 2 -> SKILL NO_NOISE branch; no API call made"}
+  },
+  "signal_sources": [
+    "full_analysis_R1*.json: compression ruled out on 5/5 (block_boundary 0.9968-1.0022, unique_G ratio 0.93-0.99; pair3 0.59 is dark-content collapse, dct_zero_ratio 0.51 with bb flat); R0's 'BLUR_UNLIKELY' flags are unreliable under saturation clipping (SKILL C2 table: gm_ratio/spectral_slope lose recall in mixed degradation)",
+    "pure-white probe: clean pair1 has 12078 (255,255,255) pixels; target at those locations is 165-246 (10-90th pct), mean 208, std 32, R/G/B means 213/207.6/203.6 -> non-pointwise (spatial or random) operation required",
+    "exact-255 census: targets contain 0 channel values at 255 on all 5 pairs; clean pair1 1.778% and pair3 1.474% exact 255 -> highlight-preserving pointwise ops (gamma/HSV saturation/LUT) cannot be the final chain",
+    "clipping census: target exact-0 counts 330k/2.21M/2.07M/2.39M/2.16M (pair0 3.98%, pairs1-4 24.9-28.8%) and all clipping is dark-side -> saturation min-channel clipping after a spatial mixing step",
+    "pair3 star-trail variance collapse: target variance_ratio 0.362 vs pointwise satHV2 0.794; blur_gaussian:3 restores 0.351-0.362 -> blur presence",
+    "smooth-region chroma: pair0 clean chroma std 9.06 -> target 33.84 (x3.73) while satHV2 alone gives x1.94 -> chroma-variation seed (noise) amplified by S x6; noise_prior sigma 0.74-1.24 reflects post-blur HF suppression, not absence of noise",
+    "severity grid over signal statistics (mean/pct0/n255/vr/chroma/max) identifies a sharp optimum noise_gaussian_RGB:4 + blur_gaussian:3 + saturate_strengthen_HSV:2 on all 5 pairs (neighbors deviate)"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "challenge_id": "blind_0024_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["saturate_strengthen_HSV", 2]],
+  "r1_pipeline": [["saturate_strengthen_HSV", 2]],
+  "support_psnr_r0": 21.55,
+  "candidates_tested": 11,
+  "best_validation": {
+    "deterministic_best": {
+      "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:2",
+      "pair0_psnr": 20.77,
+      "r0_pair0_psnr": 19.91,
+      "delta_db": 0.86,
+      "gate": "pair0 >2 dB (即 >21.91) 或 >35 dB",
+      "passed": false,
+      "affine_color_correction_upper_bound_db": 21.19,
+      "note": "确定性路线结构性不可达: 平坦天空区 target 噪声 (RGB std 9.4/26.2/29.4) 决定 pair0 PSNR 天花板约 20.6-21.2 dB"
+    },
+    "deterministic_runner_up": {
+      "pipeline": "blur_gaussian:1,saturate_strengthen_HSV:2",
+      "pair0_psnr": 20.41,
+      "delta_db": 0.50,
+      "luma_hf_5x5": {"target": 3.21, "sim": 3.63},
+      "passed": false
+    },
+    "noise_best": {
+      "pipeline": "noise_gaussian_RGB:2,blur_gaussian:2,saturate_strengthen_HSV:2",
+      "pair0_psnr": 18.58,
+      "verify_signals": "WEAK (2 matched / 4 mismatched: sigma diff 50%, structured_residual FWHM=6.0px, mean_shift diff 0.0114, variance_ratio 39%)",
+      "sky_noise_stats": {"target_Yres": 15.31, "sim_Yres": 14.37, "target_Crres": 14.71, "sim_Crres": 12.78, "target_lag1": 0.96, "sim_lag1": 0.93},
+      "gate": "verify_signals WEAK→PARTIAL/MATCH 在 ≥4/5 对",
+      "passed": false,
+      "note": "target 噪声为 4-6px 空间相关 (lag1 0.96), 库噪声最小幅度过强且过细, 无可匹配函数"
+    },
+    "control": {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "pair0_psnr": 19.91,
+      "ci_pass": "6/10",
+      "note": "与 R0 完全一致 (确定性函数复现); R0 5 对仿真 PSNR 19.91/22.26/21.93/14.84/22.98"
+    }
+  },
+  "signal_sources": [
+    "天空平坦区 (pair0): target 残差 Y/Cr/Cb std 15.7/14.7/14.6, Cr lag1 自相关 0.96 → 空间相关加性噪声 (4-6px), noise_prior σ=1.11 仅测亮度漏检色度噪声",
+    "天空 RGB 残差 std R 9.4 / G 26.2 / B 29.4 → 噪声在饱和前注入并被 HSV S×6 放大 (max 通道 R 安静)",
+    "S 统计: target Smean 0.380 / clamp 11.88% vs sat_HSV:2 模拟 0.387 / 11.91% → 确定性核心 sat_HSV:2 确认",
+    "天空均值: target (215.5,179.5,165.6) vs sat2 模拟 (228.1,180.1,163.1) → G/B 精确匹配, R(max) 高 12.6 (未建模的轻度 V 压暗)",
+    "5 对 luma 5x5 高频比 target/clean = 0.41/0.27/0.59/0.11/0.35, 3/5 对 gm_ratio<0.85 → blur 类平滑被 R0 漏检 (pair0 gm_ratio=1.859 被饱和色梯度污染)",
+    "色度方差比 target Cr/Cb 19.69/10.94 vs sat2 2.47/4.67 → 饱和无法解释的色度方差缺口 (噪声)",
+    "dct_zero target 0.239 vs clean 0.720 vs sat2 0.722 → 额外高频成分 (噪声), 非 JPEG",
+    "block_boundary 0.997-1.002 全 5 对 → JPEG 排除; pct255=0 全 5 对 → HSV 型饱和而非 YCrCb"
+  ]
+}

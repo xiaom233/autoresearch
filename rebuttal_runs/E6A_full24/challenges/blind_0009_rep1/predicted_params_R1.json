@@ -1,0 +1,58 @@
+{
+  "challenge_id": "blind_0009_rep1",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [["noise_speckle", 1], ["saturate_strengthen_YCrCb", 3]],
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 2, "verdict": "UNCERTAIN"},
+    {"function": "saturate_strengthen_YCrCb", "severity": 3, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "noise_speckle", "severity": 1}, {"function": "saturate_strengthen_YCrCb", "severity": 3}],
+      "function_family": "noise_speckle (R0 control)",
+      "support_verdicts": {"pair0": "MATCH", "pair1": "MATCH", "pair2": "WEAK", "pair3": "MATCH", "pair4": "MATCH"},
+      "pair0_signals": {"noise_prior_sigma": 32.49, "residual_intensity_corr": 0.271, "variance_ratio": 2.653, "mean_shift": -26.5, "clipped_fraction": 0.402, "saturation_chroma_ratio": 11.59},
+      "reason": "R0 控制组: 幅度类信号接近, 但 sigma 系统性低估 (-12.7% MAD) 且 residual_intensity_corr 系统性过冲 (MAD 0.081, 5/5 对同号偏高); 保留为训练 PSNR 仲裁回退"
+    },
+    {
+      "pipeline": [{"function": "noise_poisson", "severity": 3}, {"function": "saturate_strengthen_YCrCb", "severity": 3}],
+      "function_family": "noise_poisson (severity 上边界)",
+      "support_verdicts": {"pair0": "WEAK"},
+      "pair0_signals": {"noise_prior_sigma": 37.6, "residual_intensity_corr": 0.174, "variance_ratio": 2.87, "mean_shift": -29.4, "clipped_fraction": 0.435, "saturation_chroma_ratio": 12.58},
+      "reason": "同族 severity 边界: ric 指纹正确 (0.174 vs 0.183) 但 sigma/vr/clip 过冲, pair0 WEAK; 若训练仲裁倾向更强噪声可回退"
+    },
+    {
+      "pipeline": [{"function": "noise_gaussian_YCrCb", "severity": 2}, {"function": "saturate_strengthen_YCrCb", "severity": 3}],
+      "function_family": "noise_gaussian_YCrCb",
+      "support_verdicts": {"pair0": "WEAK"},
+      "pair0_signals": {"noise_prior_sigma": 38.7, "residual_intensity_corr": -0.029, "variance_ratio": 2.83, "mean_shift": -27.7, "clipped_fraction": 0.441, "saturation_chroma_ratio": 12.53},
+      "reason": "加性 YCrCb 假说被 ric 符号否定 (-0.029 vs target +0.183); 保留为噪声族替代 (证据等级最低)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=33.9, PSNR 不可用)",
+    "support_validation": "5 对 support 全部 verify_signals MATCH (4✓/0✗), 无 WEAK; R0 control 为 4/5 MATCH + pair2 WEAK",
+    "rationale": "R0 用 pair0 单图 residual_intensity_corr (target +0.182 vs gaussian sim -0.036 vs speckle sim +0.264/+0.308) 判定乘性 speckle, 但该信号在 5 对 support 间波动 0.017~0.355 (p1=0.017, p4=0.059 近零), 单图 ric 被饱和度非线性与 chroma clipping 内容依赖干扰, 不是可靠子类型判别. R1 用跨 5 对的噪声指纹重新定案: Poisson (var ∝ I, c=60=sev2) 的 ric 期望介于加性与乘性之间且随亮度分布变化. 候选 noise_poisson:2 + saturate_strengthen_YCrCb:3 在全部 5 对 support 上绝对信号逐项复现 (5 对 MAD: sigma 0.05/255, ric 0.007, cross_ch 0.0001, variance_ratio 0.0007, mean_shift 0.0000, clipped 0.0002, chroma 0.0010, slope_ratio 0.0012), 优于 control (MAD: sigma 3.36, ric 0.081, mean_shift 0.84); peeled §B 亦复现 (extreme 0.008, vm_slope 0.032, ivc 0.0001, spatial_corr 0.0003, rgb_ratio 0.0016, cross_ch 0.0004, residual_std 0.02), 仅 var_slope MAD 2.3 偏大 (该统计本身在 target 跨 pair 为 -8.6~+13.8 极不稳定). 仿真与 target 像素 PSNR 仅 8-10 dB (噪声 seed 失配), 非同一图. 确定性部分同 R0: 无压缩 (block_boundary 0.997-1.007, unique_G=256), 无模糊 (slope_ratio 0.947-0.986, anisotropy=0), 无独立 brightness (mean_shift 随内容 -6.3~-25.9, 被 YCrCb 饱和度 x5 的 chroma clipping 复现).",
+    "steps_evidence": {
+      "noise_poisson:2": "c=60, sigma=sqrt(I); 5 对 support 预测 sigma 20.88/25.57/25.70/32.49/33.85 vs target 20.88/25.70/25.70/32.62/33.85 (相对误差 <0.6%); ric 0.184/0.026/0.363/0.199/0.063 vs target 0.183/0.017/0.348/0.193/0.059; 强于 R0 speckle:1 的 sigma 19.15-32.49 (系统性低估) 与 ric 0.087-0.447 (系统性过冲). 对照 poisson:3 (c=40) sigma 37.6/vr 2.87 过冲 (pair0 WEAK); gaussian_YCrCb:2 ric=-0.029 符号错误",
+      "saturate_strengthen_YCrCb:3": "scale=5.0; 与噪声解耦验证: 5 对 support 的 chroma ratio 3.85~11.61 (内容依赖, 由 clean 的 chroma std 与噪声被 x5 放大共同决定) 逐项复现 (MAD 0.001); clipped_fraction 0.364~0.470 复现 (MAD 0.0002); variance_ratio 1.88~4.34 复现 (MAD 0.0007); mean_shift 内容依赖 -6.3~-25.9 复现 (MAD 0.000)"
+    },
+    "ruled_out": {
+      "compression": "block_boundary 0.997-1.007 全部 5 对, unique_G=256, dct_zero 0.015-0.024",
+      "blur": "spectral_slope_ratio 0.947-0.986 (<1.08), FFT_anisotropy=0, PCA=0",
+      "brightness_separate_step": "5 对 clean 均值 133-202 而 mean_shift -6.3~-25.9 不成比例 (pair1 clean 149 仅 -6.3), 固定亮度偏移 (sev1 = -25.5) 不可解释; YCrCb x5 保 luma 的 chroma clipping 复现内容依赖 mean_shift",
+      "contrast": "contrast_from_clipping/contrast_from_saturation 标记 FP; YCrCb x5 已复现 variance_ratio",
+      "impulse_noise": "impulse_zero_ratio 0.010-0.015, zero_ratio ~1% — 非 impulse"
+    }
+  },
+  "signal_sources": [
+    "跨 5 对 support 的 noise_prior_sigma (20.9~33.9) 与 poisson c=60 预测完全一致 (MAD 0.05), speckle:1 系统性低估 12.7%",
+    "residual_intensity_corr 在 5 对 target 为 0.017~0.355 (非恒定正偏), 与 poisson (var∝I) 跨 pair 预测 0.026~0.363 一致; speckle:1 预测 0.087~0.447 系统性偏高, gaussian_YCrCb 为负",
+    "peeled §B (剥离 saturate_strengthen_YCrCb:3): poisson:2 复现 extreme 50.2~71.3%, vm_slope 0.94~11.6, ivc 0.26~0.35, spatial_corr 0.45~0.55, rgb_ratio 1.40~1.60, cross_ch 0.55~0.77, residual_std 61.2~73.3",
+    "global: variance_ratio 1.88~4.34 / mean_shift -6.3~-25.9 / clipped 0.364~0.470 / chroma 2.99~11.61 全部由 saturate_strengthen_YCrCb:3 复现",
+    "compression/blur 排除: block_boundary≈1.0, dct_zero<0.025, spectral_slope_ratio<0.99, anisotropy=0"
+  ]
+}

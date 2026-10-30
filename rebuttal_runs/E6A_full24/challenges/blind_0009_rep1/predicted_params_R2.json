@@ -1,0 +1,87 @@
+{
+  "challenge_id": "blind_0009_rep1",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r1_pipeline": [["noise_poisson", 2], ["saturate_strengthen_YCrCb", 3]],
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 2, "verdict": "UNCERTAIN"},
+    {"function": "saturate_strengthen_YCrCb", "severity": 3, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "noise_speckle", "severity": 1}, {"function": "saturate_strengthen_YCrCb", "severity": 3}],
+      "function_family": "noise_speckle (R0 control, 跨族回退)",
+      "support_verdicts_R1": {"pair0": "MATCH", "pair1": "MATCH", "pair2": "WEAK", "pair3": "MATCH", "pair4": "MATCH"},
+      "reason": "R1 已记录: 乘性 speckle 对 5 对协同 sigma 系统性低估 12.7% (MAD 3.36) 且 ric 过冲 (MAD 0.081); 保留为训练 PSNR 仲裁的跨族回退"
+    },
+    {
+      "pipeline": [{"function": "noise_poisson", "severity": 3}, {"function": "saturate_strengthen_YCrCb", "severity": 3}],
+      "function_family": "noise_poisson (severity 上边界)",
+      "support_verdicts_R1": {"pair0": "WEAK"},
+      "reason": "R1 已记录: c=40 sigma 37.6/vr 2.87 过冲 (pair0 WEAK); R2 未重测, 保留为噪声强度上界仲裁"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=33.9, PSNR 不可用)",
+    "r2_focus": "R1 管线剥离后的残余结构检验 (非修正已知错误): 5 对 support 重跑 run_full_analysis + target-vs-R1sim 残差分析 + 双抽样残差对照",
+    "support_validation_R2": "R2 控制重复 10 次 (R19-R23 5 对 + R27-R30 4 对 sim 复测 + R31 pair4 二次抽样) 全部 verify_signals MATCH (4✓/0✗)",
+    "residual_after_r1_5pairs": {
+      "method": "run_full_analysis --target degraded_i --clean sim_R1_pi (结构信号 target vs R1 模拟)",
+      "files": ["full_analysis_R2_residual_p0.json", "full_analysis_R2_residual_p1.json", "full_analysis_R2_residual_p2.json", "full_analysis_R2_residual_p3.json", "full_analysis_R2_residual_p4.json"],
+      "block_boundary": [0.9991, 1.0026, 1.0006, 1.0044, 0.9971],
+      "unique_G": [256, 256, 256, 256, 256],
+      "dct_zero_ratio": [0.0154, 0.0228, 0.0194, 0.0172, 0.024],
+      "spectral_slope_ratio": [0.9964, 1.0048, 0.9992, 0.9986, 1.0015],
+      "gm_ratio": [0.9996, 1.0004, 1.0002, 0.9994, 1.0003],
+      "brightness_mean_shift": [0.0, 0.0, 0.0, 0.0, 0.0],
+      "variance_ratio": [0.9996, 0.9997, 0.9996, 0.9991, 0.9999],
+      "saturation_chroma_ratio": [0.9998, 0.9999, 0.9998, 0.9993, 1.0],
+      "residual_spatial_corr": [-0.0003, -0.0003, -0.0001, 0.0003, -0.0003],
+      "residual_sigma": [47.81, 38.67, 37.31, 45.96, 32.49],
+      "sqrt2_x_target_sigma": [47.87, 36.35, 36.35, 46.13, 29.53],
+      "interpretation": "确定性部分 (压缩/模糊/亮度/对比/饱和) 残差全部为 1.0/0 量级 → R1 管线已完全解释; 残差 sigma 与 sqrt(2)*target_sigma 同量级, 超出部分 (pair1 +6.4%, pair4 +10%) 由 YCrCb x5 的 chroma clipping 非线性放大两种独立噪声抽样差异造成"
+    },
+    "double_draw_control": {
+      "pair": "pair4 (残差 sigma 超出 sqrt2 最大, +10%)",
+      "method": "同一 R1 pipeline 独立抽样 drawA vs drawB → run_full_analysis",
+      "drawA_vs_drawB": {"sigma": 32.49, "residual_intensity_corr": 0.3509, "spatial_corr": 0.0008, "spectral_slope_ratio": 0.9982, "mean_shift": 0.0, "variance_ratio": 0.9999},
+      "target_vs_drawA": {"sigma": 32.49, "residual_intensity_corr": 0.3528, "spatial_corr": -0.0003, "spectral_slope_ratio": 1.0015, "mean_shift": 0.0, "variance_ratio": 0.9999},
+      "conclusion": "两次同管线独立抽样的残差统计与 target-vs-sim 残差逐项一致 (sigma 32.49=32.49) → R1 残余是纯噪声种子失配 (不可约), 不含任何模型结构性偏差"
+    },
+    "rejected_candidates": [
+      {
+        "id": "C1_order_swap",
+        "pipeline": "saturate_strengthen_YCrCb:3,noise_poisson:2",
+        "signal_source": "顺序假设: 若噪声在 ISP 饱和之后加入, 则 chroma 不被 x5 放大",
+        "verdict": "WEAK (1✓/3✗)",
+        "detail": "noise:sigma diff=66%, global:mean_shift diff=0.0741, global:variance_ratio diff=73% → noise 必须先于 saturation (物理管线 noise<ISP), 与 R1 顺序一致"
+      },
+      {
+        "id": "C2_poisson_sev1",
+        "pipeline": "noise_poisson:1,saturate_strengthen_YCrCb:3",
+        "signal_source": "严重度下边界扫描 (c 更大 → sigma 更低); 残差 sigma 47.81 提示复核噪声强度是否被高估",
+        "verdict": "WEAK (2✓/2✗)",
+        "detail": "global:mean_shift diff=0.0096, global:variance_ratio diff=11%; 绝对信号 sigma 31.26 vs target 33.85 (-7.6%), vr 2.4355 vs 2.6144 (-6.8%), chroma 10.88 vs 11.61 (-6.3%) → 全面幅度不足, 确认 poisson:2 (c=60) 正确"
+      },
+      {
+        "id": "C3_mild_blur",
+        "pipeline": "blur_gaussian:1,noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "signal_source": "SKILL 要求 blur should_still_test; R1 残差 slope_ratio 0.9964 提示复核残余模糊",
+        "verdict": "MATCH (6✓/0✗) 但绝对信号更差",
+        "detail": "verify_signals blur 阈值过宽 (slope diff<0.08) 无法区分 sev1; 绝对信号: sim spectral_slope_ratio 0.9996 / slope -1.1179 vs target 0.9734 / -1.0886 (控制组 0.976 / diff 0.003) → 加入 blur 使 slope 指纹偏离 0.0293, 明确劣于控制; 无残余模糊"
+      }
+    ],
+    "rationale": "R2 目标为探索 R1 之后仍未被解释的残余信号. 5 对 support 的 target-vs-R1sim 残差中, 所有确定性信号 (block_boundary 0.997-1.004, unique_G=256, slope_ratio 0.999-1.005, variance_ratio 0.9991-0.9999, mean_shift=0, chroma_ratio 0.9993-1.0, spatial_corr≈0) 均为 1.0/0 量级, 证明 R1 管线已完整解释确定性退化; 残差 sigma 与 sqrt(2)*target_sigma 同量级, 且 pair4 双抽样对照 (同管线两次独立抽样残差 sigma 32.49 与 target-vs-sim 32.49 完全一致) 证明超出部分是 chroma clipping 非线性放大 seed 差异的不可约统计, 不是模型错误. 三个替代假设 (顺序交换/降至 poisson:1/加轻模糊) 在 verdict 或绝对信号上均劣于控制; 控制组在 R2 的 10 次重复中 5 对全部 MATCH. 无候选满足 CHANGE 判据 (含 noise: verify_signals 改善 ≥4/5 或 §B 统计显著改善), 故保持 R1 pipeline. sigma>2 → verdict 维持 UNCERTAIN (协议禁止 LIKELY)."
+  },
+  "signal_sources": [
+    "5 对 support 重跑 run_full_analysis (full_analysis_R2*.json): 目标信号与 R1 记录一致 — block_boundary 0.997-1.004 / unique_G=256 / dct_zero 0.015-0.024 (无压缩), spectral_slope_ratio 0.947-0.986 + anisotropy=0 (无模糊), sigma 20.88-33.85, ric 0.017-0.358, variance_ratio 1.875-4.339, mean_shift -6.3~-25.9, clipped 0.364-0.470, chroma 2.986-11.608",
+    "R1 剥离残差 (target - sim(R1), 5 对): block_boundary 0.997-1.004, unique_G=256, spectral_slope_ratio 0.999-1.005, gm_ratio≈1.000, mean_shift=0, variance_ratio 0.9991-0.9999, chroma_ratio 0.9993-1.0, spatial_corr -0.0003~+0.0008 → 无任何确定性残差结构",
+    "配对双抽样对照 (pair4): 同管线两次独立抽样残差 sigma 32.49 / ric 0.3509 / slope_ratio 0.9982 与 target-vs-sim 残差 sigma 32.49 / ric 0.3528 / slope_ratio 1.0015 一致 → 残差是纯 seed 失配, 排除噪声强度或管线模型偏差",
+    "C1 顺序交换 WEAK (sigma diff 66%, mean_shift 0.0741, vr 73%) → noise_poisson 必须先于 saturate_strengthen_YCrCb",
+    "C2 poisson:1 WEAK (mean_shift 0.0096, vr 11%) + 绝对信号 sigma -7.6% / vr -6.8% / chroma -6.3% → 严重度 2 正确, 下边界被排除",
+    "C3 blur_gaussian:1 verify_signals MATCH 但绝对 slope_ratio 0.9996 (target 0.9734, 控制 0.976) → 轻模糊使 slope 指纹偏离, 无残余模糊",
+    "R2 控制组 10 次重复 verify_signals 5 对全部 MATCH (4✓/0✗)"
+  ]
+}

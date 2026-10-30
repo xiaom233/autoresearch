@@ -1,0 +1,359 @@
+{
+  "challenge_id": "blind_0021_rep2",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED (block_boundary=5.320 >> 1.1, 0%FP); unique_G=229, dct_zero_ratio=0.954",
+      "blur": "BLUR detected (gm_ratio=0.175, spectral_slope_ratio=1.254); subtype ambiguous: residual_anisotropy=2.287 (>1.7 motion rule) but glass_score=1.381 (>0.25) and pca_ratio=1.157 (low conf)",
+      "noise": "noise_prior sigma=0.74 (<2 -> NO_NOISE gate); spatial_corr=0.609 and cross_channel_corr=0.849 likely from blur; raw §B unreliable before peeling",
+      "global": "raw brightness_detected (mean_shift=24.9/255=0.098, identical order of magnitude to brightness shift sev1=0.1*255=25.5) but full_analysis masked it as 'brightness_from_jpeg' FP due to block_uniformity>0.1; variance_ratio=0.848, spread_ratio=0.886, chroma_ratio=1.067 (no saturation change)"
+    },
+    "mode": "PSNR (sigma=0.74)",
+    "suspected": [
+      "compression_jpeg (sev TBD; block_boundary 5.32 is a strong 0%FP signal)",
+      "brightness_brighten_* (mean_shift=24.9 ~= sev1 shift=25.5; alternative: brightness_brighten_gamma ~0.7-0.8; full_analysis's JPEG-FP dismissal is implausible because JPEG q25 cannot shift global mean by 24.9)",
+      "blur (sev TBD; subtype candidate order: motion(FFT 2.29) > glass(score 1.38) > gaussian/lens)"
+    ],
+    "ruled_out": [
+      "noise (sigma=0.74<2 gate; will re-check with peeled_noise_check after deterministic peeling)",
+      "saturation (chroma_ratio 1.067)",
+      "quantization (unique_G=229>200, dct_zero_ratio shape JPEG-like)"
+    ],
+    "qwen_gate": {
+      "available": false,
+      "note": "Qwen/API unavailable in this environment; sigma=0.74<2 so gate not triggered anyway"
+    }
+  },
+  "noise_6step_check": {
+    "extreme_pct": 100.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "peeled_residual_std": 0.0,
+    "diagnosis": "NO_NOISE. peeled_noise_check after stripping 'blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4' gives residual std = 0.0 (bit-exact on pair 0), and test_candidate reproduces PSNR=inf on all 5 pairs. The §B numbers are degenerate artifacts of a zero residual (zero_ratio=1.0 -> extreme_pct=100%, nan from division by zero), NOT real impulse noise; noise_prior wavelet sigma=1.24 is a blur-underestimate lower bound on the raw target and is contradicted by the exact deterministic match."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "Step1 compression peel: block_boundary=5.320 (0%FP JPEG signal), unique_G=229, dct_zero_ratio=0.954. full_analysis suggested jpeg:4. Test JPEG q8 alone on clean; pick severity by block_boundary CI diff (PSNR confounded by blur+brightness)."
+      },
+      "test_result": {
+        "psnr_rgb": 18.86,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "thinking": "R1 blur-family coverage #1 (gaussian, safe default): target = blur + JPEG + brightness. mean_shift=24.9 matches brightness shift sev1 (0.1*255=25.5, uniform RGB shift, clipped_fraction only 0.56%). blur sev5 from gm_ratio=0.175 (<0.35). JPEG q8 from bb; refine later. blur placed before JPEG per priority-2 storage order."
+      },
+      "test_result": {
+        "psnr_rgb": 31.67,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "thinking": "R2 order check: previous best 31.67dB with brightness->blur->jpeg left impulse_pct_255 80% low (target has +0.447% saturated-255 pixels). If brightness is applied AFTER jpeg (priority-2 ISP group shuffle), 255-saturated pixels are not re-smoothed by blur -> more saturated pixels. Test blur->jpeg->brightness."
+      },
+      "test_result": {
+        "psnr_rgb": 32.11,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "thinking": "R3 severity scan blur -1: gm_ratio=0.175 maps to sev5 but gm can be inflated by JPEG blocking; hf_lf_ratio matched at sev5 though. Test gaussian sev4."
+      },
+      "test_result": {
+        "psnr_rgb": 34.59,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "thinking": "R3 severity scan blur -2: sev4 (34.59dB) > sev5 (32.11dB), continue down to sev3 per severity-scan rule."
+      },
+      "test_result": {
+        "psnr_rgb": 52.36,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R3 order confirmation: best pipeline blur3->jpeg4->brightness1 = 52.36dB. Check if brightness between blur and jpeg (physical priority-2 group shuffle) also matches; if much lower, order is confirmed."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support verification pair 1: exact pipeline found on pair 0 (PSNR=inf, bit-exact). Same-scenario support pair must reproduce bit-exact if pipeline identical."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support verification pair 2: exact pipeline found on pair 0 (PSNR=inf, bit-exact). Same-scenario support pair must reproduce bit-exact if pipeline identical."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support verification pair 3: exact pipeline found on pair 0 (PSNR=inf, bit-exact). Same-scenario support pair must reproduce bit-exact if pipeline identical."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support verification pair 4: exact pipeline found on pair 0 (PSNR=inf, bit-exact). Same-scenario support pair must reproduce bit-exact if pipeline identical."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 52.36,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 34.59,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 32.11,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": 31.67,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 18.86,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+      {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "LIKELY"},
+      {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR",
+    "rationale": "Bit-exact reconstruction: applying blur_gaussian:3 -> brightness_brighten_shfit_RGB:1 -> compression_jpeg:4 to the clean image reproduces the target with PSNR=inf dB and 10/10 CI metrics at 0% error on pair 0, and PSNR=inf on all 4 support pairs (1-4). Evidence chain: block_boundary=5.32 (0%FP JPEG) -> compression confirmed, severity fixed at q8 by block_boundary 0% CI diff; gm_ratio=0.175/spectral_slope_ratio=1.254/hf_lf_ratio 0% at sev3 -> gaussian blur sev3 (sev4=34.59dB, sev5=32.11dB; the FFT anisotropy=2.29 'motion' hint and glass_score=1.38 were JPEG-blocking artifacts); mean_shift=+24.9 matches brightness shift sev1 (0.1*255=25.5) and the 255-saturation excess resolved the order (brightness after JPEG: 52.36dB vs 32.11dB when moved before JPEG); peeled residual std=0.0 -> NO_NOISE (sigma gate 0.74 confirmed). Remaining uncertainty: none material; alternatives kept for order-robustness only."
+  },
+  "reflection_R1": {
+    "trigger": "训练后反思 R1：R0 support PSNR=20.41（无 GT 可对照），按协议重新审视信号分析，探索被忽略/误判/阈值边界的信号，提出可能更匹配 5 对 support 的候选管线",
+    "reanalysis": {
+      "method": "对 5 对 support 重跑 run_full_analysis.py（full_analysis_R1.json / full_analysis_R1_p1..4.json，未覆盖 R0），对全部 5 对重跑剥离检查 peeled_noise_check.py，并用 test_candidate.py 独立复验 R0 管线",
+      "compression": "5/5 COMPRESSION_DETECTED：block_boundary 5.32/3.59/4.08/3.94/3.28（远大于 1.1，0%FP 规则），dct_zero_ratio 0.87-0.95，unique_G 223-247。block_boundary 是载体（unique_G>=200 排除 quantization）。唯一性检查：compression_jpeg:3 仅 29.51dB（pair0）→ sev4 精确",
+      "noise": "R0 step2 的 GAUSSIAN_YCrCb（confidence=low）是原始残差误判：fixed 退化下 raw noise_prior sigma 随内容在 0.74-4.08 大幅波动（pair0 0.74 / p1 3.71 / p2 2.84 / p3 4.08 / p4 2.22），真实固定噪声不可能如此；按确定性管线剥离后 peeled residual 在 5/5 对均为 std=0.0（R=G=B=0.0, zero_ratio=1.0）→ NO_NOISE。§B extreme_pct=100% 是零残差除零的退化伪影（与 R0 判断一致，R1 用 5 对独立复核）。gamma_suspect=Yes 与 residual_intensity_corr -0.17..-0.37 是 brightness+JPEG+clipping 的复合效应，被精确加性匹配排除",
+      "blur": "模糊存在 (gm_ratio 0.13-0.23) 但 DT 子类型跨图像翻转：pair0=MOTION_BLUR (anisotropy 2.29, 阈值 2.2 边界) ；p1-p4=GLASS_BLUR (glass_score 1.23-1.46)，均 low confidence。fixed 退化下子类型不应随内容改变 → 内容依赖 + JPEG 8x8 块网格放大 anisotropy/glass_score 的 FP。决定性验证：gaussian:3 在 5 对全部 bit-exact；severity 边界 blur_gaussian:2 仅 32.88dB（pair0）→ sev3 唯一",
+      "global": "R0 step4 verdict=NO_GLOBAL 与信号矛盾：brightness_detected_raw=True 被 'brightness_from_jpeg' FP 规则掩盖，但 mean_shift 在 5 对高度一致且量级匹配：24.9/24.6/24.7/24.8/24.4 ≈ brightness_brighten_shfit_RGB sev1 的 0.1*255=25.5（差值来自 JPEG 舍入）。variance_ratio 0.63-0.85 是 blur+JPEG 的方差损失，不是 contrast（加性 brightness 不改变方差；若含 contrast 不可能 bit-exact）；clipped_fraction 0.0001-0.018 无重饱和。verdict 与信号矛盾时以可复现性为准 → brightness 真实存在",
+      "threshold_boundary": "检查了所有贴近阈值的信号：anisotropy 2.29（阈值 2.2，高出 4%）→ 正是 DT 翻转边界；glass_score 1.23-1.46（阈值 0.25，但纯 gaussian+JPEG 也可抬高）；unique_G 223-247（接近 200 但未越过，故未触发 quantization 分支）；clipped_fraction 最高 0.018（远低于 heavy_clipping）",
+      "second_order_stats": "variance_ratio (0.63-0.85)、residual_intensity_corr (-0.17..-0.37)、spectral_slope_ratio (1.23-1.37) 全部被 blur+JPEG+brightness 的组合解释；gamma 替代被 test_candidate 否定（25.73dB）；contrast 替代会破坏 bit-exact（未测，逻辑排除）"
+    },
+    "hypotheses": [
+      {
+        "id": "C0",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "signal_source": "block_boundary 0%FP + mean_shift +24.4~24.9 + gm_ratio + peeled residual std=0.0 + 5 对 bit-exact 复现",
+        "result": "pairs 0-4 全部 PSNR=inf, CI 10/10, 10 项 CI 指标 diff 全 0%"
+      },
+      {
+        "id": "C1",
+        "pipeline": "blur_gaussian:3,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "signal_source": "R0 alternatives 中的顺序变体：检验 brightness 在 JPEG 之后的顺序敏感性（255 饱和像素是否被重新平滑）",
+        "result": "pair0 PSNR=52.36dB, CI 8/10（impulse_pct_255 失配）→ 顺序确认为 brightness 在 JPEG 之前"
+      },
+      {
+        "id": "C2",
+        "pipeline": "blur_gaussian:2,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "signal_source": "severity 边界检查：gm_ratio 0.175 映射 sev5 但被 JPEG 抬高，R0 已降到 sev3；继续检查 sev2 是否也匹配（阈值边界）",
+        "result": "pair0 PSNR=32.88dB, CI 7/10 → sev2 不匹配，sev3 唯一"
+      },
+      {
+        "id": "C3",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:3",
+        "signal_source": "compression severity 边界：block_boundary=5.32 对应的 q 估计可能偏差 ±1",
+        "result": "pair0 PSNR=29.51dB, CI 6/10 → q8 (sev4) 唯一"
+      },
+      {
+        "id": "C4",
+        "pipeline": "blur_gaussian:3,brightness_brighten_gamma_RGB:1,compression_jpeg:4",
+        "signal_source": "二阶统计：gamma_suspect_from_noise=True + residual_intensity_corr=-0.37 提示 gamma 型亮度而非加性 shift",
+        "result": "pair0 PSNR=25.73dB, CI 7/10 → gamma 被排除，加性 shift 正确"
+      }
+    ],
+    "validation": {
+      "support_validation": "C0 在 5/5 对 support 上 bit-exact 复现（PSNR=inf, CI 10/10, 全部 CI 指标 diff=0%）；peeled residual std=0.0 ×5。无可改善空间（PSNR=inf 为上限）",
+      "pair_psnr": {"pair0": "inf", "pair1": "inf", "pair2": "inf", "pair3": "inf", "pair4": "inf"},
+      "candidates_tested": 5,
+      "test_candidate_runs": 9,
+      "runner_up": {"pipeline": "blur_gaussian:3,compression_jpeg:4,brightness_brighten_shfit_RGB:1", "psnr_rgb_pair0": 52.36},
+      "rejected_psnr": {"blur_gaussian:2_variant": 32.88, "compression_jpeg:3_variant": 29.51, "brightness_gamma_variant": 25.73},
+      "budget": "9/15 test_candidate 次，未超限"
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "r1_pipeline": [
+        {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "LIKELY"},
+        {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+      ],
+      "reason": "5 对独立 clean 图像用同一参数三元组全部 bit-exact 复现，不可能是巧合；任何替代（顺序/severity/子类型）PSNR 至少低 52dB 以上（runner-up 52.36 vs inf），故不满足 CHANGE 条件（无候选相对 control 有改善）",
+      "residual_uncertainty": "无。pipeline 与 R0 相同；R0 模型 support PSNR=20.41 低不是因为退化错配（仿真误差为 0），属于训练预算/优化问题（q8 JPEG + blur3 + 亮度偏移 的组合较难），不改变退化参数"
+    },
+    "qwen_gate": {
+      "available": false,
+      "note": "Qwen/API 不可用；且 pair0 sigma=0.74<2 未触发门控（pairs1-4 raw sigma>2 但经剥离残差为 0，NO_NOISE 结论由 exact match 决定性给出）"
+    },
+    "notes": "R1 未修改 R0 的 predicted_params.json / full_analysis.json；新增文件：full_analysis_R1.json、full_analysis_R1_p1..4.json、predicted_params_R1.json、r1_decision.json、agent_timing_R1.json"
+  }
+}

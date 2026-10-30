@@ -1,0 +1,40 @@
+{
+  "challenge_id": "blind_0015_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 1,
+      "verdict": "LIKELY"
+    },
+    {
+      "function": "brightness_darken_shfit_RGB",
+      "severity": 3,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (noise_prior sigma 0.74-1.24 < 2) on 5 support pairs + verify_signals",
+    "support_validation": "R1 fresh-draw reproduction of R0 control blur_motion:1 -> brightness_darken_shfit_RGB:3: pair0 47.61 dB CI 10/10; pair1 24.20 dB CI 10/10 (re-draw 43.11 dB CI 10/10); pair2 59.75 dB CI 10/10 (near pixel-exact, RMSE ~0.26 gray levels); pair3 32.91 dB CI 10/10; pair4 22.94 dB CI 10/10 (re-draw 24.04 dB CI 9/10; signal-mode MATCH 4/4: spectral_slope, wiener_kernel, mean_shift, variance_ratio). CI clipping (impulse_pct_zero) diff <= 0.06 pp, unique_G diff 0-2 values, hf_lf <= 1% on every pair. PSNR spread across draws/pairs (22.94-59.75) is fully explained by x_distortion blur_motion drawing np.random.uniform(-90,90) per call; content-independent signals stay matched at 10/10.",
+    "rationale": "R0 pipeline confirmed, not changed. Pair2 near-exact reproduction (59.75 dB) plus pair0 47.61 dB are inconsistent with any additional or different step (noise sigma>=1, JPEG, saturation, contrast, quantization, gamma/HSV darkening, or a stronger/isotropic blur would all cap PSNR well below 40). Two alternatives tested on pair2 where the control was near-exact: order swap brightness_darken_shfit_RGB:3 -> blur_motion:1 gives 22.21 dB CI 9/10 with zero-clipping fraction off by 5.0 pp (17%), confirming blur-first order; isotropic blur_gaussian:1 -> brightness_darken_shfit_RGB:3 gives 26.14 dB CI 8/10 (hf_lf off 10%), confirming motion rather than gaussian/lens. Runner-ups are < 30 dB, so no alternatives retained."
+  },
+  "signal_sources": [
+    "spectral_slope_ratio 1.009-1.065 (< 1.08, all 5 pairs): mild blur; blur_motion:1 confirmed by near-exact pair2 reproduction (59.75 dB) rather than by slope alone (run_full_analysis returns BLUR_UNLIKELY early, so residual_anisotropy/PCA are never computed)",
+    "mean_shift -50.8 (pair0) / -42.7..-46.6 (pairs 1-4): matches brightness_darken_shfit_RGB sev3 c=0.2 (-51) after clipping truncation; verify_signals global:mean_shift MATCH (pair0 R0, pair4 R1)",
+    "clipped_fraction target 0.0605/0.2598/0.2924/0.3651/0.1459 reproduced by blur-first order within 0.06 pp on all 5 pairs; darken-first gives 5.0 pp / 17% deviation => order blur -> brightness",
+    "variance_ratio 0.709-0.837 across pairs explained by shift+clipping; verify_signals global:variance_ratio MATCH (pair4)",
+    "noise_prior sigma 0.74-1.24 (< 2) => NO_NOISE; pair2 59.75 dB (RMSE 0.26 gray levels) excludes any noise sigma >= 1; residual_intensity_corr 0.50-0.67 is a clipping artifact (dark clipped pixels have smaller |residual|), not gamma",
+    "block_boundary 0.9911-1.0047 (< 1.05; 0% FP threshold 1.1) => NO_COMPRESSION; unique_G 172 (pair0) / 203 (pairs 1-4) reproduced by the control simulation with diff 0-2 values => unique_G<200 boundary flag explained by darkening+clipping, not quantization",
+    "dct_zero_ratio 0.399-0.590 triggered MILD_COMPRESSION_POSSIBLE on pairs 3-4 but bb stayed ~1.00 and pair2 near-exact reproduction (59.75 dB) excludes any JPEG/quantization step; content-driven threshold artifact",
+    "pair4 SATURATION_weaken_sev4 flag (saturation_chroma_ratio 0.7356) is content-driven (shared pipeline: pair0/pair2 reproduced near-exactly without saturation); verify_signals full MATCH on pair4",
+    "blur_motion angle is random per call (np.random.uniform(-90,90)): same-pipeline re-draws move support PSNR by up to ~19 dB (pair1 24.20 vs 43.11), so PSNR spread across supports is expected and not a pipeline error"
+  ]
+}

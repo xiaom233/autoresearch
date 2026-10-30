@@ -1,0 +1,132 @@
+{
+  "challenge_id": "blind_0002_rep1",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=0.9983 (<1.05), unique_G target=256 == clean=256, dct_zero_ratio=0.0223",
+      "blur": "BLUR_UNLIKELY: spectral_slope_ratio=1.0004 (threshold 1.08); gm_ratio=5.27 unusable (noise-destroyed); FFT_anisotropy=0; no MTF evidence. Pure-noise control sim reproduces slope ratio exactly (0.999), confirming no blur",
+      "noise": "STRONG: noise_prior sigma=14.3 (peeled wavelet 16.6), residual std=30.4, ch_stds R=31.5 G=22.4 B=35.5 (B>R>G), rgb_ratio=1.5868, cross_ch_corr=0.2994. Signal type candidates: YCrCb (rgb_ratio>1.4, per-channel sigma ratio 1.5), poisson (var_slope=1.0263, ivc=0.528), impulse (extreme_pct=51.27), speckle (vm_slope=-5.77 rules out)",
+      "global": "NO_GLOBAL flagged but suspicious: variance_ratio=1.2031, mean_shift=+2.4/255=0.0094, clipped_fraction=0.1378 (heavy clipping), contrast_spread_ratio=1.15, saturation_chroma_ratio=1.72 but saturation_from_noise FP=true. RESOLVED: control simulation clean+noise_gaussian_YCrCb:2 reproduces all global signals bit-for-bit (variance_ratio 1.2029 vs 1.2031, clipped 0.1379 vs 0.1378, chroma 1.7219 vs 1.7218, mean_shift 2.4 vs 2.4) -> global signals are entirely noise artifacts, NO_GLOBAL confirmed"
+    },
+    "peeled_check_pipeline": "(none - no deterministic step confirmed; peeled residual = target - clean)",
+    "mode": "SIGNAL (sigma=14.3)",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "sigma=14.3 > 10 -> noise confirmed, gate not triggered; API unavailable in this environment"
+    },
+    "residual_first_check": {
+      "unique_G_target": 256,
+      "unique_G_clean": 256,
+      "note": "unique_G not reduced -> no quantization; residual analyzed before any quantization conclusion (checklist A)",
+      "blur_signals": "spectral_slope_ratio=1.0004, FFT_anisotropy=0.00, pca=0.0, glass_score not flagged -> no blur (checklist C)"
+    }
+  },
+  "noise_6step_check": {
+    "residual": "pair0 target - clean (no deterministic step to peel)",
+    "extreme_pct": 51.27,
+    "zero_ratio": 0.0145,
+    "vm_slope": -5.7718,
+    "var_slope": 1.0263,
+    "spatial_corr": 0.3766,
+    "rgb_ratio": 1.5868,
+    "cross_ch_corr": 0.2994,
+    "ch_stds": [31.5, 22.4, 35.5],
+    "residual_std": 30.4,
+    "noise_prior_sigma": 14.33,
+    "noise_prior_channel_sigma_ratio": 1.5,
+    "diagnosis": "gaussian_YCrCb sev2. False-positive resolution: a control pure-noise sim (clean_0 + noise_gaussian_YCrCb:2) yields §B extreme_pct=51.28 (vs 51.27), vm_slope=-5.74 (vs -5.77), var_slope=0.94 (vs 1.03), spatial_corr=0.3774 (vs 0.3766), rgb_ratio=1.5862 (vs 1.5868), ch_stds 31.6/22.4/35.5 (vs 31.5/22.4/35.5), cross_ch 0.3002 (vs 0.2994), ivc 0.5282 (vs 0.5282). Therefore extreme_pct (IMPULSE), var_slope>1 (POISSON) and spatial_corr 0.38 (SC) signals are metric artifacts of this residual, not real. vm_slope<0 rules out speckle. rgb_ratio>1.4 + channel sigma ratio 1.5 -> YCrCb.",
+    "random_verification_note": "YCrCb sev1 would give equal 12.75 channel sigma (contradicts R=31.5/B=35.5), YCrCb sev3 predicts ch_stds ~50.8/32.3/62.7 (far above target) -> sev2 uniquely matches"
+  },
+  "signal_evidence_pair0": {
+    "target": {"block_boundary": 0.9983, "spectral_slope": -0.9612, "slope_ratio_vs_clean": 1.0004, "noise_sigma": 14.33, "variance_ratio": 1.2031, "mean_shift": 2.4, "clipped_fraction": 0.1378, "chroma_ratio": 1.7218},
+    "sim_YCrCb2": {"block_boundary": 1.001, "slope_ratio_vs_clean": 0.999, "noise_sigma": 14.46, "variance_ratio": 1.2029, "mean_shift": 2.4, "clipped_fraction": 0.1379, "chroma_ratio": 1.7219},
+    "sim_RGB2": {"noise_sigma": 11.6, "variance_ratio": 1.132, "mean_shift": 1.0, "rgb_ratio": 1.0659, "cross_ch_corr": 0.0095, "ch_stds": [23.9, 24.3, 22.8], "residual_std": 23.7},
+    "conclusion": "YCrCb:2 reproduces target signals to 3-4 decimals; RGB:2 fails channel signature (equal per-channel sigma, cross_ch_corr~0) and variance_ratio"
+  },
+  "support_verification": {
+    "criterion": "verify_signals MATCH/PARTIAL per SKILL noise mode + §B6 signature cross-check via peeled_noise_check",
+    "pair1": {"verify_signals": "MATCH (2/2)", "target_sb6": {"residual_std": 30.8, "extreme_pct": 51.84, "vm_slope": -4.43, "var_slope": -0.246, "spatial_corr": 0.4148, "rgb_ratio": 1.6564, "ch_stds": [31.9, 22.1, 36.7], "cross_ch": 0.2879}, "sim_sb6": {"residual_std": 30.9, "extreme_pct": 51.85, "vm_slope": -4.42, "var_slope": -0.120, "spatial_corr": 0.4144, "rgb_ratio": 1.6576, "ch_stds": [31.9, 22.2, 36.7], "cross_ch": 0.2877}},
+    "pair2": {"verify_signals": "MATCH (2/2)", "target_sb6": {"residual_std": 31.7, "extreme_pct": 51.41, "vm_slope": -7.11, "var_slope": -0.111, "spatial_corr": 0.3771, "rgb_ratio": 1.7144, "ch_stds": [32.6, 22.2, 38.1], "cross_ch": 0.3017}, "sim_sb6": {"residual_std": 31.7, "extreme_pct": 51.36, "vm_slope": -7.12, "var_slope": -0.023, "spatial_corr": 0.3760, "rgb_ratio": 1.7144, "ch_stds": [32.6, 22.2, 38.1], "cross_ch": 0.3018}},
+    "pair3": {"verify_signals": "MATCH (2/2)", "target_sb6": {"residual_std": 28.6, "extreme_pct": 51.30, "vm_slope": -5.84, "var_slope": 2.858, "spatial_corr": 0.3696, "rgb_ratio": 1.6666, "ch_stds": [28.8, 20.7, 34.5], "cross_ch": 0.2850}, "sim_sb6": {"residual_std": 28.6, "extreme_pct": 51.31, "vm_slope": -5.86, "var_slope": 2.989, "spatial_corr": 0.3709, "rgb_ratio": 1.6689, "ch_stds": [28.8, 20.7, 34.6], "cross_ch": 0.2852}},
+    "pair4": {"verify_signals": "MATCH (2/2)", "target_sb6": {"residual_std": 30.1, "extreme_pct": 51.26, "vm_slope": -6.20, "var_slope": 0.619, "spatial_corr": 0.3721, "rgb_ratio": 1.6159, "ch_stds": [31.1, 22.0, 35.6], "cross_ch": 0.2964}, "sim_sb6": {"residual_std": 30.1, "extreme_pct": 51.24, "vm_slope": -6.05, "var_slope": 0.448, "spatial_corr": 0.3709, "rgb_ratio": 1.6153, "ch_stds": [31.0, 22.0, 35.6], "cross_ch": 0.2962}},
+    "summary": "4/4 support pairs: verify_signals MATCH; §B6 residual std / extreme_pct / vm_slope / spatial_corr / rgb_ratio / per-channel stds / cross_ch all reproduce within noise-realization tolerance"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {"pipeline": "noise_gaussian_YCrCb:2", "thinking": "R1: noise_prior sigma=14.3 + rgb_ratio=1.5868 + per-channel sigma ratio 1.5 + residual ch_stds B>R>G (35.5/31.5/22.4) -> YCrCb signature; var_slope=1.03 also compatible with YCrCb chroma noise"},
+      "test_result": {"method": "verify_signals", "verdict": "MATCH", "matched_signals": ["noise:sigma", "noise:clean_residual"], "mismatched_signals": [], "pipeline": "noise_gaussian_YCrCb:2", "mode": "signal"},
+      "decision": "ACCEPT",
+      "post_hoc": "run_full_analysis + peeled_noise_check on the sim show every target signal (variance_ratio 1.2029/1.2031, clipped 0.1379/0.1378, chroma 1.7219/1.7218, sigma 14.46/14.33, §B ch_stds 31.6/22.4/35.5 vs 31.5/22.4/35.5) reproduced"
+    },
+    {
+      "round": 2,
+      "hypothesis": {"pipeline": "noise_gaussian_RGB:2", "thinking": "R2 cross-family control: RGB gaussian sev2 predicts equal per-channel sigma ~25.5; target channel stds B>R>G (35.5/31.5/22.4) are unequal -> expect sigma/type mismatch"},
+      "test_result": {"method": "verify_signals", "verdict": "MATCH", "matched_signals": ["noise:sigma", "noise:clean_residual"], "mismatched_signals": [], "pipeline": "noise_gaussian_RGB:2", "mode": "signal"},
+      "decision": "REJECT_ON_SIGNATURE",
+      "post_hoc": "tool MATCH is a weak-sigma false positive (wavelet sigma of RGB2 sim estimated 11.6 vs true 25.5). §B channel signature rejects RGB2: rgb_ratio 1.0659 vs target 1.5868, ch_stds 23.9/24.3/22.8 vs 31.5/22.4/35.5, cross_ch 0.0095 vs 0.2994, variance_ratio 1.132 vs 1.203"
+    },
+    {
+      "round": 3,
+      "hypothesis": {"pipeline": "noise_poisson:2", "thinking": "R2 signal-coverage: var_slope=1.03 + ivc=0.528 suggested Poisson; but ivc identical on pure YCrCb sim (0.5282) -> expect Poisson channel signature (equal-ish, intensity-dependent) to mismatch target B>R>G"},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=51%)"], "pipeline": "noise_poisson:2", "mode": "signal"},
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {"pipeline": "noise_impulse:2", "thinking": "R2 signal-coverage: peeled §B extreme_pct=51.27% suggested impulse; control on pure YCrCb sim reproduced extreme_pct=51.28% (metric artifact of residual<=1 counting negatives) -> expect impulse sigma/autocorr mismatch"},
+      "test_result": {"method": "verify_signals", "verdict": "WEAK", "matched_signals": ["noise:clean_residual"], "mismatched_signals": ["noise:sigma (diff=92%)"], "pipeline": "noise_impulse:2", "mode": "signal"},
+      "decision": "REJECT"
+    }
+  ],
+  "psnr_ranking": [],
+  "psnr_ranking_note": "Empty by design: sigma=14.3 > 2, SKILL forbids PSNR-based ranking for noise (seed mismatch makes PSNR a random number). Ranking was done on signal statistics (§B6 + verify_signals MATCH/WEAK), recorded in iterations[].test_result and signal_evidence_pair0.",
+  "final_decision": {
+    "pipeline": [
+      {"function": "noise_gaussian_YCrCb", "severity": 2, "verdict": "UNCERTAIN"}
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 2,
+    "rationale": "Single-step additive Gaussian YCrCb noise sev2. (1) No deterministic step: block_boundary 0.9983 with unique_G 256 rules out JPEG/quantization; spectral_slope_ratio 1.0004 and anisotropy 0 rule out blur; all global-looking signals (variance_ratio 1.203, clipping 13.8%, chroma 1.72) are reproduced exactly by the pure-noise control simulation, so no global step. (2) Noise type: rgb_ratio 1.5868 (>1.4), wavelet per-channel sigma ratio 1.5, residual ch_stds B>R>G (35.5/31.5/22.4) = YCrCb signature; sealed by exact §B6 reproduction (YCrCb2 control ch_stds 31.6/22.4/35.5, cross_ch 0.3002 vs 0.2994). RGB:2, poisson:2 (sigma -51%), impulse:2 (sigma -92%) all rejected; speckle excluded by vm_slope -5.77. (3) Severity: image-domain channel sigmas pin sev2 uniquely (sev1 predicts equal 12.75; sev3 predicts 50.8/32.3/62.7). Noise caveat: seed mismatch means the exact realization cannot be verified; verdict capped at UNCERTAIN per SKILL noise rule. Support: 4/4 remaining pairs verify_signals MATCH plus §B6 signature match.",
+    "alternatives": [
+      {"pipeline": [{"function": "noise_gaussian_RGB", "severity": 2}], "function_family": "noise", "signal_stats": {"rgb_ratio": 1.0659, "ch_stds": [23.9, 24.3, 22.8], "cross_ch_corr": 0.0095, "residual_std": 23.7}, "note": "tool MATCH but channel signature contradicts target; kept only as fallback"}
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "workflow": "Read SKILL.md -> re-ran run_full_analysis.py on 5/5 support pairs (full_analysis_R1.json + full_analysis_R1_p1..p4.json, R0 files untouched) -> signal re-interpretation vs R0 -> 5 candidates (control + severity/subtype boundaries) -> test_candidate.py signal mode (9 runs) -> run_full_analysis + peeled_noise_check on every simulation",
+    "reanalysis": {
+      "reproduction_of_R0": "R1 re-run on pair0 reproduces R0 exactly: block_boundary 0.9983, noise_prior_sigma 14.33, variance_ratio 1.2031, mean_shift 2.4, clipped_fraction 0.1378, raw-residual SB6 identical (extreme_pct 51.27, vm_slope -5.7718, var_slope 1.0263, spatial_corr 0.3766, rgb_ratio 1.5868, ch_stds [31.5,22.4,35.5], cross_channel_corr 0.2994, residual_std 30.4)",
+      "ignored_or_boundary_signals_examined": [
+        "pairs 1-2 raised SATURATION_strengthen_sev5 in the R1 full analysis (chroma_ratio 1.5287/1.4504, saturation_from_noise=false) - a flag R0 never saw because it analysed pair0 only (where the crude noise correction suppressed it). Fresh-seed noise-only controls reproduce chroma_ratio 1.5285/1.4508 AND the same verdict AND the same false_positive_checks flags -> content/clipping artifact, not a saturation step. Analytical cross-check: at fixed chroma noise sigma_C~22.2 (YCrCb sev2), clean chroma_std 33.20/37.33 rises to 50.75/54.15, matching the observed targets",
+        "pair 3 raised contrast_from_variance (variance_ratio 2.0197) with saturation_chroma_ratio 4.6499 -> noise-only control reproduces 2.0225 / 4.6531 and identical FP flags (contrast_from_saturation, contrast_from_noise, saturation_from_noise)",
+        "residual_intensity_corr 0.204/0.1959/0.1833 on pairs 0/3/4 (gamma_suspect_from_noise=true) vs 0.0357/0.0539 on pairs 1/2 - content dependent; the pair0 control reproduces 0.1966 (3.6% rel diff) -> gamma FP",
+        "var_slope 1.0263 > 1.0 (POISSON flag) and extreme_pct 51.27% (IMPULSE flag) - both boundary signals reproduced by the noise-only control (0.8927 / 51.27) -> metric artifacts of the clipped residual, as R0 argued",
+        "deterministic-step recheck on all 5 pairs: block_boundary 0.9983-1.0040 (<1.05) + unique_G 256 (== clean) + dct_zero_ratio ~0.022 -> no JPEG/quantization (0% FP signal); spectral_slope_ratio 0.9699-1.0004 (<1.08) + FFT anisotropy=0 + PCA=0, and the noise-only controls reproduce the slope ratios within 0.2% (p0 1.0004 vs 0.9995) -> no blur, including blur masked by noise"
+      ]
+    },
+    "hypotheses": [
+      {"id": "C0", "pipeline": "noise_gaussian_YCrCb:2", "role": "control (R0 pipeline)", "signal_source": "ch_stds B>R>G [31.5,22.4,35.5] + rgb_ratio 1.5868 + cross_channel_corr 0.2994 + noise_prior sigma 14.33", "result": "verify_signals MATCH on 5/5 pairs; SB6 and global signals reproduced", "decision": "RETAIN"},
+      {"id": "C1", "pipeline": "noise_gaussian_YCrCb:3", "role": "severity upper boundary", "signal_source": "severity sweep mandatory at boundary; sev3 sigma_C=33.9 predicts ch_stds ~[44,30,49]", "result": "verify_signals WEAK (sigma diff 36%); sim ch_stds [44.1,30.3,49.4], rgb_ratio 1.6310, cross_ch 0.4620, residual_std 42.2 (target 30.4)", "decision": "REJECT"},
+      {"id": "C2", "pipeline": "noise_gaussian_YCrCb:1", "role": "severity lower boundary", "signal_source": "sev1 = lowest severity with chroma/luma sigma ratio 1.0", "result": "verify_signals WEAK (sigma diff 32%); sim ch_stds [20.8,15.9,23.2], rgb_ratio 1.4615, residual_std 20.2", "decision": "REJECT"},
+      {"id": "C3", "pipeline": "noise_poisson:3", "role": "subtype boundary (var_slope>1.0 flag), magnitude-matched", "signal_source": "var_slope 1.0263 > 1.0 flagged POISSON; clean channel means R82.5>G78.0>B46.1 predict poisson ch_stds R>G>B, opposite to target B>R>G", "result": "verify_signals WEAK (sigma diff 41%); sim ch_stds [22.2,22.1,17.0] (B lowest), cross_ch 0.0012 (vs target 0.2994), residual_std 20.6", "decision": "REJECT"},
+      {"id": "C4", "pipeline": "noise_gaussian_RGB:3", "role": "cross-family boundary, magnitude-matched (R0 tested under-magnitude RGB:2)", "signal_source": "residual_std target 30.4; RGB:3 sigma 38.25 is the closest RGB severity. Tests whether equal-sigma noise + clipping can mimic unequal target ch_stds", "result": "verify_signals MATCH on weak sigma criterion (known tool false positive) but SB6 signature rejects: equal ch_stds [34.5,35.4,32.6], rgb_ratio 1.0851 (target 1.5868), cross_channel_corr 0.0131 (target 0.2994)", "decision": "REJECT"}
+    ],
+    "validation": {
+      "mode": "SIGNAL (sigma 13.71-15.07 > 2, PSNR invalid per SKILL)",
+      "pair0": {"verify_signals": "MATCH", "sim_sb6": {"ch_stds": [31.6, 22.4, 35.5], "rgb_ratio": 1.5868, "cross_channel_corr": 0.2997, "residual_std": 30.4, "extreme_pct": 51.27, "vm_slope": -5.8382, "var_slope": 0.8927, "spatial_corr": 0.3777}, "global": "variance_ratio 1.2030 vs 1.2031, clipped 0.1379 vs 0.1378, chroma 1.7222 vs 1.7218, mean_shift 2.4 vs 2.4; every step2/3/4 signal within 3.6%"},
+      "pair1": {"verify_signals": "MATCH", "sim_sb6": {"ch_stds": [31.9, 22.1, 36.7], "rgb_ratio": 1.6573, "cross_channel_corr": 0.2885, "residual_std": 30.9, "extreme_pct": 51.85, "vm_slope": -4.4323}, "global": "variance_ratio 1.0512 vs 1.0512, chroma 1.5285 vs 1.5287, clipped 0.1349 vs 0.1349; SATURATION flag and FP-check flag reproduced"},
+      "pair2": {"verify_signals": "MATCH", "sim_sb6": {"ch_stds": [32.6, 22.2, 38.1], "rgb_ratio": 1.7156, "cross_channel_corr": 0.3014, "residual_std": 31.7, "extreme_pct": 51.34, "vm_slope": -7.0397}, "global": "variance_ratio 1.1202 vs 1.1208, chroma 1.4508 vs 1.4504, clipped 0.1008 vs 0.1007; SATURATION flag reproduced"},
+      "pair3": {"verify_signals": "MATCH", "sim_sb6": {"ch_stds": [28.8, 20.7, 34.6], "rgb_ratio": 1.6689, "cross_channel_corr": 0.2858, "residual_std": 28.6, "extreme_pct": 51.28, "vm_slope": -5.8173}, "global": "variance_ratio 2.0225 vs 2.0197, chroma 4.6531 vs 4.6499, clipped 0.2085 vs 0.2084, mean_shift 3.7 vs 3.7; all three FP-check flags reproduced"},
+      "pair4": {"verify_signals": "MATCH", "sim_sb6": {"ch_stds": [31.1, 22.0, 35.6], "rgb_ratio": 1.6165, "cross_channel_corr": 0.2962, "residual_std": 30.1, "extreme_pct": 51.26, "vm_slope": -6.2093}, "global": "variance_ratio 1.1691 vs 1.1682, chroma 1.9168 vs 1.9161, clipped 0.1486 vs 0.1483, mean_shift 2.5 vs 2.5"},
+      "summary": "5/5 pairs: verify_signals MATCH; SB6 channel signature, residual magnitude and every global signal reproduced by noise-only controls. No candidate improved on the control - the saturation/contrast flags that R1 newly examined are fully explained by noise + clipping.",
+      "candidate_tests": 9
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [{"function": "noise_gaussian_YCrCb", "severity": 2, "verdict": "UNCERTAIN"}],
+      "reason": "R0 pipeline remains the unique match: severity bracketed by sev1/sev3 (±32-36% sigma error), subtype bracketed by magnitude-matched poisson:3 and RGB:3 (channel signature + cross-channel correlation), no deterministic step evidenced on any of the 5 pairs, and all newly examined global flags reproduced by noise-only controls. Noise seed mismatch keeps the verdict at UNCERTAIN."
+    },
+    "qwen_gate": {"available": false, "triggered": false, "reason": "sigma 13.71-15.07 > 10 -> noise confirmed; SKILL Step 0.5 gate not required"}
+  }
+}

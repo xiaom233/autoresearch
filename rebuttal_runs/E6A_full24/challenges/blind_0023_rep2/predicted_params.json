@@ -1,0 +1,41 @@
+{
+  "challenge_id": "blind_0023_rep2",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"},
+    {"function": "contrast_weaken_scale", "severity": 1, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 5}, {"function": "compression_jpeg", "severity": 4}, {"function": "contrast_weaken_scale", "severity": 1}],
+      "psnr_rgb": 24.51,
+      "function_family": "blur",
+      "reason": "cross-family blur backup; only 0.32 dB below glass:5"
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 5}, {"function": "compression_jpeg", "severity": 3}, {"function": "contrast_weaken_scale", "severity": 1}],
+      "psnr_rgb": 25.04,
+      "function_family": "compression",
+      "reason": "higher PSNR but block_boundary signal diff 40% vs 15% for jpeg:4"
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 4}, {"function": "compression_jpeg", "severity": 4}, {"function": "contrast_weaken_scale", "severity": 1}],
+      "psnr_rgb": 24.77,
+      "function_family": "blur",
+      "reason": "glass severity-1 backup; 0.06 dB below sev5"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "5/10",
+    "mode": "PSNR",
+    "psnr_rgb": 24.83,
+    "rationale": "3-step deterministic pipeline. JPEG: block_boundary=5.177 (0%FP) -> compression_jpeg:4 (signal severity curve 61%/15%/40% for sev5/4/3). Blur: DT glass (glass_score=1.58, gm_ratio=0.33, anisotropy=1.23 not motion); signal verify matched blur:spectral_slope + blur:wiener_kernel; glass:5 > gaussian:5 by 0.32 dB. Global: variance_ratio=0.589 -> contrast_weaken_scale:1 (+1.86 dB vs no-global; sev2/3 worse; stretch/brightness variants rejected by mean_shift/variance signal checks). Order blur->jpeg->contrast (block_boundary 15% vs 21% for contrast-first). Noise: NO_NOISE (sigma 0.74 target / 1.73 peeled << 2; peeled residual structured spatial_corr=0.96). PSNR<30 because glass blur is stochastic (pixel-shuffle random seed, SKILL C4: never >40 dB), and residual signal diffs (block_boundary 15%, variance_ratio 27%, mean_shift 0.031) are minor; verdict UNCERTAIN per exp37 PSNR rules.",
+    "support_verification": {
+      "method": "same pipeline, test_candidate --mode psnr on all 5 pairs",
+      "psnr": {"pair_0": 24.83, "pair_1": 25.79, "pair_2": 25.81, "pair_3": 23.95, "pair_4": 25.77},
+      "result": "REPRODUCED (23.95-25.81 dB, spread 1.9 dB)"
+    }
+  }
+}

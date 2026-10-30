@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0015_rep2",
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "brightness_darken_shfit_RGB",
+      "severity": 3,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "psnr": 29.27,
+      "ci_pass": "8/10",
+      "function_family": "blur_gaussian+darken",
+      "note": "确定性 fallback (PSNR 可复现)。全局统计与目标一致 (clip 6.00% vs 6.05%, variance_ratio 0.836 vs 0.837, chroma 0.972 vs 0.971, mean_shift -50.8 精确), 但 gm_ratio=0.302 vs 目标 0.417 且 dct_zero=0.652 vs 0.489, 提示平滑过强; support PSNR 26.14-29.34。若下游训练偏好确定性管线可选此项。"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "psnr": 29.03,
+      "ci_pass": "9/10",
+      "function_family": "blur_lens+darken",
+      "note": "pair0 上 CI 9/10 (仅 overshoot 不符), 但 gm_ratio=0.293 / dct_zero=0.578 同样显示平滑偏强; 未在 support 上复核。"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "9/10 (pair0, 两次运行均为 9/10); support pairs: 9/10, 10/10, 10/10, 9/10",
+    "mode": "SIGNAL (PSNR 名义可用 sigma=0.74<2, 但 motion blur 角度随机导致像素级 PSNR 封顶 ~26-34dB; 采用 content-independent CI + 全局二阶统计验证)",
+    "rationale": "1) brightness_darken_shfit_RGB:3 — mean_shift=-50.8 vs 模拟 -50.9, clipped_fraction=0.0605 vs 0.0606, variance_ratio=0.8367 vs 0.8333, saturation_chroma_ratio 0.9713 精确一致; 4 对 support 的 unique_G 均恰为 203 (= subtract 51 的直方图上界指纹), 且 HSV/gamma darken 全部被排除 (chroma 0.53 / clip 0.3% / gm 0.93)。2) blur_motion:1 — 唯一在全部信号上复现目标平滑特征的 blur: gm_ratio 0.427 vs 0.417, dct_zero 0.473 vs 0.489, spectral_slope_ratio 1.061 vs 1.039; gaussian:1 / lens:1 / lens:2 / gaussian:2 / glass:1 均过度平滑 (gm 0.15-0.30, dct_zero 0.58-0.83) 且 CI 中 overshoot_ratio 偏差 45-51%, 而 motion:1 偏差仅 4-16%。3) 顺序 blur→brightness: clip 精确匹配 (5.91-6.06% vs 6.05%), 反之 darken→blur 仅 3.3%。4) PSNR 无法达到 40dB 归因于 blur_motion 随机角度 (SKILL C.4 非确定性 blur 不追高 PSNR); 该模糊在 5 对 support 上 CI 9-10/10 一致复现, 故判类型正确、步骤 UNCERTAIN。5) 无噪声 (sigma=0.74<2, 剥离后 sigma=1.73<2), 无 JPEG (bb=1.0022 低于 clean 基线 1.0116), 无 contrast/saturation 步骤 (spread 0.895≈clip 预期, chroma 0.9713)。"
+  }
+}

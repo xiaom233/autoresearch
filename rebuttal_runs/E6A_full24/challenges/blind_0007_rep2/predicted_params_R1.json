@@ -1,0 +1,55 @@
+{
+  "challenge_id": "blind_0007_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_speckle", 1]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 1
+        }
+      ],
+      "function_family": "noise_additive_gaussian",
+      "signal_match": "verify_signals MATCH (仅通用噪声门 noise:sigma + noise:clean_residual, 对类型不敏感)",
+      "note": "R1 定量否证: pair0 §B 类型指纹失配 — ivc=0.177 vs target 0.908, scaled_var=-0.816 vs 0.651, vm_slope=-7.52 vs +4.26, ch_stds=[12.5,12.6,12.3] 平坦 vs target 随亮度缩放 [16.3,15.6,13.7]"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_poisson",
+          "severity": 1
+        }
+      ],
+      "function_family": "noise_poisson",
+      "signal_match": "verify_signals WEAK (pair0 noise:sigma diff=41%)",
+      "note": "R1 定量否证: pair0 residual_std 17.3 vs target 15.2, scaled_var=-0.318 vs 0.651, noise_prior sigma 7.54 vs 5.44 (+39%)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (sigma=5.44)",
+    "support_validation": "noise_speckle:1 verify_signals MATCH 5/5 对 (pair0-4); 模拟 speckle:1 在 5/5 对 support 上逐对复现 target 残差统计: residual_std 15.2/20.1/12.0/20.4/12.9 完全一致 (ratio=1.000), ch_stds 每通道差<=0.1, rgb_ratio 差<=0.005, spatial_corr 差<=0.003; pair0 14 项 §B/全分析统计 (sigma, ivc, scaled_var, vm_slope, var_slope, variance_ratio, saturation, clipped_fraction, block_boundary, spectral_slope_ratio, gm_ratio, impulse_zero_ratio, cross_ch, ch_stds) 均在 ~1% 内复现.",
+    "rationale": "R1 重跑 run_full_analysis (5 对) 与 R0 逐值一致, 确定性无漂移. 对 R0 的边界/误判信号重释: (1) full_analysis 按 sigma>5 的启发式给 sev~2, 但 speckle 的 wavelet sigma 随图像亮度/内容缩放 (target 5.44/8.03/3.34/8.03/5.44, 模拟 speckle:1 逐对完全复现), 该严重度启发式是假信号; 直接残差幅度对比确认 severity=1 (5/5 对 residual_std 精确相等; speckle:2 为 22.5 vs 15.2, +48%). (2) pair3 的 scaled_var_corr=-0.013 触发 POISSON verdict, 及 pair3/1/4 的 saturation 标记, 均为 8.3% 高光裁剪下的噪声假阳性 — 模拟 speckle:1 在 pair3 上逐值复现 POISSON/SATURATION_strengthen_sev3 verdict 和全部数值 (sat 1.2261 vs 1.2261, clip 0.0833 vs 0.0832). (3) 阈值边界信号: block_boundary 0.9988-1.0182 (<<1.1), spectral_slope_ratio 0.9939-1.0057 (噪声带 ±0.03 内), gm_ratio 2.07-4.60 为噪声抬高 (纯 speckle 模拟重现 4.6022 vs 4.6039) — 无压缩/无模糊/无全局. 跨族候选 gaussian_RGB:1 与 poisson:1 虽/或通过通用 noise 门, 但 §B 类型指纹显著失配. 原 pipeline noise_speckle:1 已定量确认, 无候选通过'相对 R0 改善'判据 → NO_CHANGE. 噪声步骤按 exp34/37 规则永不 LIKELY, verdict=UNCERTAIN."
+  },
+  "signal_sources": [
+    "run_full_analysis R1 重跑 5 对: step2 noise=SPECKLE 4/5 (pair3=POISSON 假阳性), intensity_var_corr 0.795-0.943, intensity_scaled_var_corr 0.42-0.80",
+    "peeled_noise_check §B (5 对 target + 模拟): residual_std 逐对精确复现 (15.2/20.1/12.0/20.4/12.9), vm_slope/var_slope/spatial_corr/rgb_ratio 同步复现",
+    "模拟 speckle:1 fingerprint vs target (pair0): sigma 5.44/5.44, ivc 0.9060/0.9075, scaled 0.6469/0.6514, vm_slope 4.2246/4.2602, var_slope -5.9058/-5.9492, ch_stds [16.2,15.6,13.7]/[16.3,15.6,13.7]",
+    "pair3 假阳性复现: POISSON(scaled -0.0125 vs -0.0134) 与 SATURATION_strengthen_sev3 (sat 1.2261/1.2261, clip 0.0832/0.0833) 由 speckle:1 模拟同样触发",
+    "speckle:2 否证: verify_signals WEAK (sigma diff=50%), residual_std 22.5 vs 15.2 (+48%)",
+    "gaussian_RGB:1 否证: ivc 0.177 vs 0.908, scaled -0.816 vs 0.651, vm_slope -7.52 vs 4.26",
+    "poisson:1 否证: verify_signals WEAK (sigma diff=41%), scaled -0.318 vs 0.651"
+  ]
+}

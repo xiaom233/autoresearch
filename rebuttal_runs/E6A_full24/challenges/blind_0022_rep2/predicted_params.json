@@ -1,0 +1,72 @@
+{
+  "challenge_id": "blind_0022_rep2",
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": 26.6,
+      "stats": {"ci_pass": "7/10", "block_boundary_diff_pct": 1, "zero_crossing_diff_pct": 19},
+      "function_family": "blur_gaussian+compression_jpeg",
+      "note": "analyze-metric block_boundary 匹配最优(1%)；PSNR 仅比主候选低 0.30 dB；JPEG 严重度备选(±1)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": 26.15,
+      "stats": {"ci_pass": "8/10", "zero_crossing_diff_pct": 19},
+      "function_family": "blur_gaussian+compression_jpeg",
+      "note": "CI 通过数最高(8/10)，blur severity 备选(±1)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 2},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": 25.84,
+      "stats": {"ci_pass": "6/10", "block_boundary_diff_pct": 1},
+      "function_family": "blur_gaussian+compression_jpeg",
+      "note": "pair1 全分析显示 gm_ratio(sim 0.176 < target 0.250) 提示模拟偏糊 → 更弱模糊备选"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 3},
+        {"function": "compression_jpeg", "severity": 1}
+      ],
+      "psnr": 26.22,
+      "stats": {"ci_pass": "7/10"},
+      "function_family": "blur_lens+compression_jpeg",
+      "note": "跨族备选：gaussian↔lens MTF 不可区分；disk radius4 表现接近但 PSNR 低 0.68 dB"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "7/10 (pair0)；5 对 support 7-8/10",
+    "mode": "PSNR (sigma=1.1 < 2 → PSNR 可用)",
+    "rationale": "compression: block_boundary=1.752 (pair0) / 1.949 (pair1)，0%FP 信号确认 JPEG；blur: gm_ratio=0.397/0.250 + spectral_slope_ratio 1.10/1.13 确认强模糊，PSNR 扫描 gaussian 2/3/4/5 与 lens 3/4/5、motion、glass 后 gaussian:3 最优(26.90 dB pair0)。glass 假设被排除：gaussian:3+jpeg:1 模拟图自身 glass_score=0.73（target 0.77）、pca_ratio 1.095（target 1.093）、noise sigma 0.74（target 0.74）、block_boundary 1.894（target 1.949，2.8%）完全同构 → 工具 glass 检测是 JPEG+blur 伪影。noise: noise_prior sigma=1.1/0.74 < 2 → NO_NOISE；剥离后 residual std 11.9 但 spatial_corr=0.98 为结构失配而非噪声。global: mean_shift=-0.3/255、variance_ratio 0.82（blur 解释）、chroma 0.94、clipping 0.13% → NO_GLOBAL。JPEG 严重度 q25(q=sev1) vs q18(sev2) 存在 ±1 不确定性：PSNR/ZC 支持 sev1，analyze-metric block_boundary 支持 sev2。PSNR 上限 26.9-29.7 dB (<30) 表明确定性管线无法像素级复现，提示真实参数不在 severity 网格或存在弱残留成分，故 overall=UNCERTAIN。",
+    "prediction_meta": {
+      "steps_detected": 2,
+      "degradation_order": "blur → JPEG (物理约束)",
+      "deterministic_subtypes_confirmed": ["JPEG (block_boundary 0%FP)", "blur 存在 (gm_ratio 0.25-0.40)"],
+      "type_uncertainty": "blur 子类型 gaussian 为主，lens 为跨族备选；glass 已排除",
+      "severity_uncertainty": "blur ±1 (3 最优, 2/4 接近)；JPEG ±1 (sev1/sev2)",
+      "support_verified": true
+    }
+  }
+}

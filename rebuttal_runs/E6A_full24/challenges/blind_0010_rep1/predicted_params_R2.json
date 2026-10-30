@@ -1,0 +1,75 @@
+{
+  "challenge_id": "blind_0010_rep1",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r1_pipeline": [
+    [
+      "blur_gaussian",
+      1
+    ],
+    [
+      "brightness_darken_gamma_HSV",
+      5
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 1,
+      "verdict": "LIKELY"
+    },
+    {
+      "function": "brightness_darken_gamma_HSV",
+      "severity": 5,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR",
+    "support_validation": "R2 re-verified R1 pipeline on all 5 support pairs: MSE=0, PSNR=inf, CI=10/10 on every pair (5/5 pixel-exact).",
+    "residual_analysis": "peeled_noise_check with R1 pipeline on 5/5 pairs: residual std = 0.0 (zero residual). §B extreme_pct=100% is a zero-residual artifact (ch_stds R=G=B=0, vm/var/spatial signals undefined), NOT impulse noise. No structured component (8x8 block, blur, tone/color offset, noise type, ordering) remains after R1.",
+    "candidate_comparison_pair0": {
+      "C0_control_r1_blur_gaussian:1,brightness_darken_gamma_HSV:5": {
+        "pair0_psnr": "inf",
+        "ci": "10/10",
+        "note": "pixel-exact (re-verified 5/5 pairs)"
+      },
+      "C1_reversed_order_gamma_HSV:5,blur_gaussian:1": {
+        "pair0_psnr": 36.24,
+        "ci": "9/10",
+        "note": "order residual hypothesis rejected"
+      },
+      "C2_gamma_only_brightness_darken_gamma_HSV:5": {
+        "pair0_psnr": 28.54,
+        "ci": "5/10",
+        "note": "no-blur ablation rejected"
+      },
+      "C3_severity_boundary_blur_gaussian:1,brightness_darken_gamma_HSV:4": {
+        "pair0_psnr": 24.51,
+        "ci": "8/10",
+        "note": "gamma -1 boundary rejected"
+      },
+      "C4_blur_severity_blur_gaussian:2,brightness_darken_gamma_HSV:5": {
+        "pair0_psnr": 32.48,
+        "ci": "7/10",
+        "note": "blur +1 boundary rejected"
+      }
+    },
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "sigma=0.74<2 below boundary gate; Qwen/API unavailable"
+    },
+    "rationale": "R1 pipeline already reproduces all 5 support pairs pixel-exactly; residual after peel is identically zero, so no structured residual signal exists to explain. All four alternative hypotheses (reversed order 36.24 dB, gamma-only 28.54, gamma sev4 24.51, blur sev2 32.48) are strictly worse than the pixel-exact control on pair0. No candidate can improve on exact reproduction; changing the pipeline would break exactness. Decision: NO_CHANGE, keep R1 pipeline."
+  },
+  "signal_sources": [
+    "peeled residual std=0.0 on 5/5 pairs (R1 pipeline applied forward to clean, diff vs degraded) -> no remaining structured component in any dimension",
+    "test_candidate re-verification: 5/5 pairs PSNR=inf, MSE=0, CI=10/10 for blur_gaussian:1 -> brightness_darken_gamma_HSV:5",
+    "run_full_analysis R2 (raw target vs clean, 5 pairs): sigma 0.74-1.73, block_boundary<=1.016, spectral_slope_ratio 0.85-1.07 -> raw signals unchanged, explained by R1",
+    "order residual test: gamma_HSV:5 -> blur_gaussian:1 = 36.24 dB (not exact) vs blur -> gamma = inf -> ordering blur(priority=1) before global(priority=2) confirmed",
+    "severity boundary tests: gamma sev4 24.51 dB, blur sev2 32.48 dB -> R1 severities (1,5) are exact"
+  ]
+}

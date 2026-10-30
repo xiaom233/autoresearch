@@ -1,0 +1,66 @@
+{
+  "challenge_id": "blind_0009_rep2",
+  "pipeline": [
+    {
+      "function": "noise_gaussian_YCrCb",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "saturate_strengthen_YCrCb",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 5},
+        {"function": "saturate_strengthen_YCrCb", "severity": 1}
+      ],
+      "psnr": null,
+      "function_family": "poisson_noise + YCrCb_saturation",
+      "stats": {
+        "mode": "signal",
+        "pair0_verify_signals": "WEAK 2/4 (sigma, clean_residual matched; mean diff 0.0236, vr diff 22%)",
+        "pair0_fingerprint": {"sigma": 31.0, "variance_ratio": 2.254, "mean_shift": -19.9, "clipped_fraction": 0.3768, "chroma_ratio": 10.14, "residual_intensity_corr": 0.204},
+        "reason": "Only candidate reproducing residual-intensity correlation (+0.204 vs target +0.182); under-shoots VR/mean/chroma"
+      }
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 5},
+        {"function": "brightness_darken_gamma_RGB", "severity": 1}
+      ],
+      "psnr": null,
+      "function_family": "YCrCb_noise + gamma_darken",
+      "stats": {
+        "mode": "signal",
+        "pair0_verify_signals": "PARTIAL 3/4 (sigma, clean_residual, variance_ratio matched; mean diff 0.0173)",
+        "pair0_fingerprint": {"sigma": 35.1, "variance_ratio": 2.495, "mean_shift": -30.3, "clipped_fraction": 0.347, "chroma_ratio": 11.11, "spread_ratio": 1.324},
+        "reason": "Alternative global family; gamma darkens less on highlights (pair1 mean shift small) but over-darkens pair0 and under-shoots clip"
+      }
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 3},
+        {"function": "saturate_strengthen_YCrCb", "severity": 1}
+      ],
+      "psnr": null,
+      "function_family": "YCrCb_noise(weaker) + YCrCb_saturation",
+      "stats": {
+        "mode": "signal",
+        "pair0_verify_signals": "WEAK (sigma 29.9 within 20%; vr diff 31%, mean diff 0.0388)",
+        "pair0_fingerprint": {"sigma": 29.9, "variance_ratio": 2.114, "mean_shift": -16.0, "clipped_fraction": 0.358, "chroma_ratio": 9.83, "spread_ratio": 1.2418},
+        "reason": "Severity -1 scan; likely better sigma consistency on supports 1/2/4 but under-shoots pair0 VR/mean/chroma"
+      }
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (sigma=33.85 -> SIGNAL mode; verify_signals used instead of CI/PSNR)",
+    "mode": "SIGNAL (sigma=33.85 from pair0; Qwen gate not triggered, API unavailable)",
+    "rationale": "Compression and blur ruled out on all 5 pairs (block_boundary 0.997-1.004, spectral_slope_ratio 0.947-0.986, FFT anisotropy 0). Degradation = strong chroma-dominant Gaussian noise in YCrCb space + luma-preserving saturation strengthen. Pair0 final candidate: sigma 36.8 vs 33.85, VR 2.623 vs 2.614, mean -23.1 vs -25.9, clip 0.4227 vs 0.403, chroma 11.89 vs 11.61, cross 0.30 vs 0.32; pair1: mean -6.6 vs -6.3, VR 4.03 vs 4.34, chroma 3.73 vs 3.85, spread 1.83 vs 1.81, cross 0.38 vs 0.39. Key evidence for YCrCb-space (not HSV) saturation: pair1/pair4 colorful images get vividly saturated with small mean shift (HSV saturation darkens -45 to -83 dB-scale luminance). Severity 4 confirmed by +/-1 scan (sev3 and sev5 both WEAK). Support validation: pair0 PARTIAL, pair1 WEAK, pair2 WEAK, pair3 PARTIAL, pair4 WEAK; sigma over-shoots 57-68% on supports 1/2/4 (content-dependent noise energy / clipping), residual-intensity correlation suggests possible poisson component (kept as alternative). Noise step cannot be LIKELY under signal mode -> overall UNCERTAIN."
+  }
+}

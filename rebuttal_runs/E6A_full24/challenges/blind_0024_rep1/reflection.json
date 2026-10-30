@@ -1,0 +1,1149 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=1.0022, unique_G_ratio=0.99 (232 vs 234)",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.859 (noise-destroyed/usable), spectral_slope_ratio=0.9265 < 1.08",
+      "noise": "GAUSSIAN_YCrCb tentative: noise_prior_sigma=1.11, spatial_corr=0.927, cross_channel_corr=0.172, residual_intensity_corr=0.143",
+      "global": "BRIGHTNESS_darken (mean_shift=-34.7, clipped_fraction=0.04) + SATURATION_strengthen (saturation_chroma_ratio=3.7356); variance_ratio=1.2305 but contrast_spread_ratio=0.9855 -> variance change attributed to saturation, not contrast"
+    },
+    "mode": "PSNR (sigma=1.1 < 2)",
+    "visual_note": "Degraded pair 0 shows strong darkening plus extreme chroma speckle over the near-white background; consistent with S-channel amplification (saturate_strengthen_HSV sev5 = S x64) turning tiny chroma variations into visible color noise",
+    "suspected": [
+      "brightness_darken (HSV or gamma)",
+      "saturate_strengthen"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary flat)",
+      "blur (spectral slope ratio < 1.08)"
+    ],
+    "qwen_gate": {
+      "available": false,
+      "reason": "Qwen/API unavailable in this environment; sigma=1.1 < 2 so noise gate not triggered"
+    }
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:5",
+        "thinking": "R1: full_analysis global signal: mean_shift=-34.7 + saturation_chroma_ratio=3.74 -> brightness_darken_shfit_HSV + saturate_strengthen_HSV; sev2/sev5 per signal estimate (S x64 explains chroma speckle over near-white bg)"
+      },
+      "test_result": {
+        "psnr_rgb": 6.6,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_YCrCb:2",
+        "thinking": "R1 alt: HSV sev5 overshot (uniform saturated red bg). Target keeps white pixels with chroma grain -> YCrCb chroma scale x3 (sev2); chroma ratio 3.74 ~ x3; brightness sev2 keeps mean_shift"
+      },
+      "test_result": {
+        "psnr_rgb": 18.12,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_YCrCb:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:2,noise_impulse:3",
+        "thinking": "R1 noise coverage: peeled §B extreme_pct=28.5% (sparse outliers), impulse_zero_ratio on raw residual low only because global transform touches all pixels; colored salt-pepper speckle over white bg suggests impulse; test brightness + impulse sev3"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "global:mean_shift (diff=0.0587)",
+          "global:variance_ratio (diff=64%)"
+        ],
+        "pipeline": "brightness_darken_shfit_HSV:2,noise_impulse:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:2,noise_impulse:2,saturate_strengthen_YCrCb:2",
+        "thinking": "R1: combine impulse (sparse outliers, MAD-robust sigma low) + chroma saturation x3 to reproduce colored speckle; brightness sev2 for mean shift"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "noise:structured_residual (FWHM=4.0px)",
+          "global:mean_shift (diff=0.0585)",
+          "global:variance_ratio (diff=41%)"
+        ],
+        "pipeline": "brightness_darken_shfit_HSV:2,noise_impulse:2,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:2,noise_impulse:1,saturate_strengthen_YCrCb:3",
+        "thinking": "R2: metric fit on sims: HSV2 gave mean_shift -49.7 (target -34.7) -> use RGB shift sev2 (-38.25, no chroma interference); chroma ratio target 3.74 between sat x3(1.58) and impulse2+sat3(4.85) -> sat x5 + impulse sev1(1%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "noise:structured_residual (FWHM=4.0px)",
+          "global:mean_shift (diff=0.0259)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:2,noise_impulse:1,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:2,saturate_strengthen_HSV:2",
+        "thinking": "R2: if target is deterministic, PSNR should spike; HSV S x6 keeps V (luma noise low, sigma 1.1) while amplifying clean chroma texture x6 into visible speckle; RGB shift2 gives mean -38 close to -34.7"
+      },
+      "test_result": {
+        "psnr_rgb": 15.43,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:2,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:2,noise_gaussian_YCrCb:1",
+        "thinking": "R2 cross-family: chroma_ratio 3.74 may be FP from chroma noise itself; noise_gaussian_YCrCb sev1 sigma_l=12.75, chroma same -> predicted chroma std 13 vs clean 3.5 = 3.7x exactly; variance +~470 close to target +622; no saturation step needed"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=1317%)",
+          "global:mean_shift (diff=0.0142)",
+          "global:variance_ratio (diff=89%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:2,noise_gaussian_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:2,noise_impulse:1",
+        "thinking": "R3: sigma check rules out dense gaussian noise (sim MAD 14x target); target has sparse high-amplitude outliers -> impulse alone can lift chroma std (1% channel corruption -> ~18 level std) and variance ratio; drop saturation step (its clipping overshot)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "noise:structured_residual (FWHM=4.0px)",
+          "global:mean_shift (diff=0.0158)",
+          "global:variance_ratio (diff=111%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:2,noise_impulse:1",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:2,noise_impulse:2",
+        "thinking": "R3: test whether impulse sev2 (3%) alone lifts chroma ratio to 3.74 (cand4 imp2+sat3 = 4.85; estimate sat-free ~3.5-4); if so the global saturation signal is a noise-induced FP and pipeline is only brightness+impulse"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "global:mean_shift (diff=0.0187)",
+          "global:variance_ratio (diff=64%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:2,noise_impulse:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:2,noise_impulse:1",
+        "thinking": "R3: gamma darken sev2 (gamma=1.7) lifts variance (slope~1.43 in bright bg) and gives mean ~-32 like target -34.7 while clipping less than RGB shift; keep impulse sev1 for chroma/outliers"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "noise:structured_residual (FWHM=4.0px)",
+          "global:mean_shift (diff=0.0427)"
+        ],
+        "pipeline": "brightness_darken_gamma_RGB:2,noise_impulse:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_impulse:2",
+        "thinking": "R3 brightness sweep: gammaRGB2 mean was -23.8 (too light); gamma3 (gamma=2.1, slope~1.87 in bright bg) should give mean ~-32 and richer variance; impulse2 for chroma/outliers; test combined metric fit"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "global:variance_ratio (diff=36%)"
+        ],
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_impulse:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_impulse:1,saturate_strengthen_YCrCb:2",
+        "thinking": "R3 triangulation: gamma3+imp2 matched mean/chroma but clip was high and ccc low; halve impulse and add mild YCrCb x3 saturation to restore chroma and channel correlation"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "noise:structured_residual (FWHM=6.0px)",
+          "global:mean_shift (diff=0.0060)",
+          "global:variance_ratio (diff=97%)"
+        ],
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_impulse:1,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_impulse:2",
+        "thinking": "R3 finalist PSNR: measure absolute fit of best-metric candidate (mean -35.3 var 1.31 chroma 3.65 clip 5.4%)"
+      },
+      "test_result": {
+        "psnr_rgb": 16.07,
+        "ci_pass": "1/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_impulse:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_gaussian_YCrCb:3,blur_gaussian:1",
+        "thinking": "R3 hypothesis: dense YCrCb noise + mild gaussian blur (sigma1) explains low wavelet MAD (1.11) with high chroma ratio (3.7), low HF/LF, ccc~0.17; gamma3 keeps mean/variance fit; physical order noise->blur"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.117)",
+          "blur:wiener_kernel (corr=0.659)",
+          "noise:sigma (diff=100%)",
+          "noise:structured_residual (FWHM=6.0px)",
+          "global:variance_ratio (diff=106%)"
+        ],
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_gaussian_YCrCb:3,blur_gaussian:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_impulse:2,brightness_darken_shfit_RGB:2",
+        "thinking": "R4 order test: target has ~4% zero clipping but ~0 at 255 -> if impulse noise came BEFORE brightness darken, salt pixels get darkened below 255 while pepper stays 0; impulse2 (3%) predicts chroma 3.5; noise-first order allowed (brightness priority 0/2)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "global:mean_shift (diff=0.0209)",
+          "global:variance_ratio (diff=77%)"
+        ],
+        "pipeline": "noise_impulse:2,brightness_darken_shfit_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_gaussian_YCrCb:2",
+        "thinking": "R4 final fit: 255-clipping analysis rules out impulse (salt always yields 255, target has 0); gamma darken first keeps mean/var, then dense YCrCb noise gives chroma 3.7 + channel corr 0.17 without white clipping; test severity2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=2033%)",
+          "global:variance_ratio (diff=81%)"
+        ],
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,brightness_darken_shfit_RGB:2",
+        "thinking": "R4 final: zero-255 analysis requires noise BEFORE subtractive darken (removes salt/white clip); YCrCb noise2 gives chroma ~3.7-4 and ccc 0.17; darken after creates ~4% zero clipping; predicts var ~1.18"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=1783%)",
+          "global:mean_shift (diff=0.0243)",
+          "global:variance_ratio (diff=49%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,brightness_darken_shfit_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_gaussian_YCrCb:1",
+        "thinking": "R4: gamma3 nails mean (-35) and variance (gamma lifts var; bg after gamma ~200 so YCrCb sev1 noise no longer clips at 255); YCrCb noise1 gives ccc 0.17 and moderate chroma; verify mean_shift+var+FWHM triple match"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=1317%)",
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_gaussian_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 control: R1 declared pipeline; 5-seed screen reproduces target mean/pct0/max/p9999/vr/chroma within seed noise (dvr_rel<=0.014, dchroma_rel<=0.018)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 control: R1 declared pipeline; 5-seed screen reproduces target mean/pct0/max/p9999/vr/chroma within seed noise (dvr_rel<=0.014, dchroma_rel<=0.018)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 control: R1 declared pipeline; 5-seed screen reproduces target mean/pct0/max/p9999/vr/chroma within seed noise (dvr_rel<=0.014, dchroma_rel<=0.018)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 control: R1 declared pipeline; 5-seed screen reproduces target mean/pct0/max/p9999/vr/chroma within seed noise (dvr_rel<=0.014, dchroma_rel<=0.018)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=4.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 control: R1 declared pipeline; 5-seed screen reproduces target mean/pct0/max/p9999/vr/chroma within seed noise (dvr_rel<=0.014, dchroma_rel<=0.018)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A1: one-step-lower noise severity. Grid screen: RGB3-sat2 deviates from target (mean up to 4.1 lv too bright, dvr_rel 0.25, dchroma_rel 0.19) vs RGB4 near-zero; tests whether the support stats prefer a milder noise field"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:mean_shift (diff=0.0110)",
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A1: one-step-lower noise severity. Grid screen: RGB3-sat2 deviates from target (mean up to 4.1 lv too bright, dvr_rel 0.25, dchroma_rel 0.19) vs RGB4 near-zero; tests whether the support stats prefer a milder noise field"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A1: one-step-lower noise severity. Grid screen: RGB3-sat2 deviates from target (mean up to 4.1 lv too bright, dvr_rel 0.25, dchroma_rel 0.19) vs RGB4 near-zero; tests whether the support stats prefer a milder noise field"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:mean_shift (diff=0.0053)",
+          "global:variance_ratio (diff=24%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A1: one-step-lower noise severity. Grid screen: RGB3-sat2 deviates from target (mean up to 4.1 lv too bright, dvr_rel 0.25, dchroma_rel 0.19) vs RGB4 near-zero; tests whether the support stats prefer a milder noise field"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=4.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A1: one-step-lower noise severity. Grid screen: RGB3-sat2 deviates from target (mean up to 4.1 lv too bright, dvr_rel 0.25, dchroma_rel 0.19) vs RGB4 near-zero; tests whether the support stats prefer a milder noise field"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A2: cross-family noise substitute (R1 alternative). New R2 evidence: per-channel residual std shape target-vs-RGBsim matches RGB noise seed-control to 3 decimals on 5/5, while YCrCb seed-control departs (pair0 0.77/0.86/1.29 vs target 0.44/1.16/1.21); grid dvr_rel up to 0.73, dmax up to 6.5"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:mean_shift (diff=0.0143)",
+          "global:variance_ratio (diff=73%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A2: cross-family noise substitute (R1 alternative). New R2 evidence: per-channel residual std shape target-vs-RGBsim matches RGB noise seed-control to 3 decimals on 5/5, while YCrCb seed-control departs (pair0 0.77/0.86/1.29 vs target 0.44/1.16/1.21); grid dvr_rel up to 0.73, dmax up to 6.5"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "noise:structured_residual (FWHM=10.0px)",
+          "global:mean_shift (diff=0.0091)",
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A2: cross-family noise substitute (R1 alternative). New R2 evidence: per-channel residual std shape target-vs-RGBsim matches RGB noise seed-control to 3 decimals on 5/5, while YCrCb seed-control departs (pair0 0.77/0.86/1.29 vs target 0.44/1.16/1.21); grid dvr_rel up to 0.73, dmax up to 6.5"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A2: cross-family noise substitute (R1 alternative). New R2 evidence: per-channel residual std shape target-vs-RGBsim matches RGB noise seed-control to 3 decimals on 5/5, while YCrCb seed-control departs (pair0 0.77/0.86/1.29 vs target 0.44/1.16/1.21); grid dvr_rel up to 0.73, dmax up to 6.5"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "noise:structured_residual (FWHM=4.0px)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "thinking": "R2 A2: cross-family noise substitute (R1 alternative). New R2 evidence: per-channel residual std shape target-vs-RGBsim matches RGB noise seed-control to 3 decimals on 5/5, while YCrCb seed-control departs (pair0 0.77/0.86/1.29 vs target 0.44/1.16/1.21); grid dvr_rel up to 0.73, dmax up to 6.5"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_YCrCb:2",
+      "psnr_rgb": 18.12,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:3,noise_impulse:2",
+      "psnr_rgb": 16.07,
+      "ci_pass": "1/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:2,saturate_strengthen_HSV:2",
+      "psnr_rgb": 15.43,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:2,saturate_strengthen_HSV:5",
+      "psnr_rgb": 6.6,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "noise_6step_check": {
+    "note": "§B computed on the peeled residual after stripping the best deterministic fit (brightness_darken_gamma_RGB:3), pair 0. Residual std 31.6.",
+    "extreme_pct": 45.09,
+    "zero_ratio": 0.0151,
+    "vm_slope": 1.9606,
+    "var_slope": 0.0958,
+    "spatial_corr": 0.9614,
+    "rgb_ratio": 1.5141,
+    "cross_ch_corr": 0.2668,
+    "ch_stds": {
+      "R": 20.5,
+      "G": 30.3,
+      "B": 31.0
+    },
+    "noise_prior_sigma_peeled": 1.98,
+    "diagnosis": "§B says IMPULSE by extreme_pct and YCrCb by rgb_ratio, but both are artifacts of the unmodelled chroma gain: extreme_pct is inflated by structured global mismatch (spatial_corr=0.96), impulse is independently ruled out because pair-0 target has ~0% channel values at 255 (impulse salt always writes exactly 255, surviving any later darkening) while its 4.04% clipped values are all dark-side. Dense gaussian noise (RGB/YCrCb/speckle/poisson) is ruled out by the wavelet MAD: target residual sigma is 0.74-1.24 on all 5 pairs while every dense-noise simulation yields 9.9-15.6. Conclusion: chroma texture comes from deterministic chroma-space amplification of the clean image's own micro-texture (saturate_strengthen), not an additive noise function."
+  },
+  "support_validation": {
+    "candidate": "brightness_darken_gamma_RGB:3,noise_gaussian_YCrCb:1,saturate_strengthen_YCrCb:1",
+    "mode": "verify_signals (signal); PSNR not usable with independent noise seeds",
+    "pairs": [
+      {
+        "pair": 0,
+        "role": "primary analysis (candidate measured indirectly: gamma3+YCrCbN1 alone mean -34.1 vs -34.7, var 1.254 vs 1.231, clip 3.83% vs 4.04%, chroma 2.89 vs 3.74)",
+        "verify": "noise:clean_residual + global:mean_shift match; noise:sigma + variance_ratio mismatch -> WEAK"
+      },
+      {
+        "pair": 1,
+        "target": {
+          "mean_shift": -53.1,
+          "variance_ratio": 2.1237,
+          "chroma_ratio": 3.4443,
+          "clip": 0.2678,
+          "cross_ch_corr": 0.2785,
+          "sigma": 1.24
+        },
+        "simulated": {
+          "mean_shift": -56.6,
+          "variance_ratio": 2.0655,
+          "chroma_ratio": 4.3025,
+          "clip": 0.1837,
+          "cross_ch_corr": 0.1857,
+          "sigma": 10.87
+        },
+        "verify": "WEAK (variance_ratio match; mean_shift/sigma mismatch)"
+      },
+      {
+        "pair": 2,
+        "target": {
+          "mean_shift": -35.5,
+          "variance_ratio": 1.1688,
+          "chroma_ratio": 1.8799,
+          "clip": 0.2537,
+          "cross_ch_corr": 0.228
+        },
+        "simulated": {
+          "mean_shift": -46.2,
+          "variance_ratio": 1.0869,
+          "chroma_ratio": 1.6415,
+          "clip": 0.2848,
+          "cross_ch_corr": 0.1873
+        },
+        "verify": "MISMATCH (all 4 checks fail; mean_shift over-dark by 10.7)"
+      },
+      {
+        "pair": 3,
+        "target": {
+          "mean_shift": -11.6,
+          "variance_ratio": 0.3619,
+          "chroma_ratio": 1.2744,
+          "clip": 0.3028,
+          "cross_ch_corr": 0.7891,
+          "sigma": 0.74
+        },
+        "simulated": {
+          "mean_shift": -17.9,
+          "variance_ratio": 0.7921,
+          "chroma_ratio": 1.8664,
+          "clip": 0.4838,
+          "cross_ch_corr": 0.2575,
+          "sigma": 10.87
+        },
+        "verify": "WEAK (only noise:clean_residual matches); ccc 0.79 target is impossible with dense noise - decisive evidence for deterministic chroma-space operation"
+      },
+      {
+        "pair": 4,
+        "target": {
+          "mean_shift": -40.9,
+          "variance_ratio": 1.4342,
+          "chroma_ratio": 2.5194,
+          "clip": 0.2611,
+          "cross_ch_corr": 0.316,
+          "sigma": 1.11
+        },
+        "simulated": {
+          "mean_shift": -54.3,
+          "variance_ratio": 1.2531,
+          "chroma_ratio": 2.3729,
+          "clip": 0.2832,
+          "cross_ch_corr": 0.1844,
+          "sigma": 12.23
+        },
+        "verify": "MISMATCH (sigma/mean_shift/variance_ratio fail; chroma and clip within 6-9%)"
+      }
+    ],
+    "conclusion": "0/4 support pairs reached MATCH/PARTIAL for the noise-bearing candidate. The recurring, physically specific failures (target residual sigma 0.74-1.24 vs sim 9.9-12.2 everywhere; ccc 0.79 on pair3; mean-shift over-darkening on 3/5 pairs) indicate the additive-noise step is spurious and that gamma severity is biased high on darker content. The deterministic gamma + saturation composite is therefore promoted to the primary prediction (severity inferred, not directly simulated due to the 25-test hard budget), with the noise-bearing candidate retained as alternative #1."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "brightness_darken_gamma_RGB",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "saturate_strengthen_YCrCb",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Deterministic core: gamma-style darkening (content-dependent mean shift, shadow clipping up to 30% on the dark star-trail pair, highlights preserved) plus a YCrCb-space chroma gain (channel-correlated residual ccc up to 0.79, vivid neon colours, chroma ratio 1.27-3.74 and 255-free clipping). Compression, blur, quantization and additive noise are all contradicted by measurements (block_boundary ~1.001, slope flat, unique_G 232, residual wavelet sigma 0.74-1.24 on 5/5 pairs vs 9.9-15.6 for any noise simulation). Open knobs: saturation severity (YCrCb x3 gives chroma 1.6-1.9, target up to 3.74 -> sev4 x8 estimated, +/-1) and gamma severity (sev3 fits pair0 exactly but over-darkens pairs 2-4 by 6-13 levels; sev2 would undershoot pair0).",
+    "alternatives": [
+      {
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_gaussian_YCrCb:1,saturate_strengthen_YCrCb:1",
+        "reason": "5-pair-validated candidate; matches pair0 mean/var/clip but its dense noise is contradicted by residual sigma"
+      },
+      {
+        "pipeline": "brightness_darken_gamma_RGB:3,noise_gaussian_YCrCb:2",
+        "reason": "higher-noise variant; pair1 chroma 3.57 vs 3.44"
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:2,brightness_darken_shfit_RGB:2",
+        "reason": "best pair0 clipping/ccc match; different brightness family and noise-first order"
+      },
+      {
+        "pipeline": "brightness_darken_gamma_RGB:2,saturate_strengthen_YCrCb:4",
+        "reason": "milder gamma if the primary over-darkens darker content (pair2-4 evidence)"
+      }
+    ],
+    "budget": {
+      "test_candidate_calls": 25,
+      "rounds_completed": 4,
+      "hard_stop": "25-test budget reached; round 3 hard-stop already exceeded, remaining uncertainty documented rather than searched further"
+    }
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "Step 0.5 not triggered: sigma 0.74-1.24 < 2 -> SKILL NO_NOISE branch; no API call"
+    },
+    "reanalysis": {
+      "rerun": "run_full_analysis.py re-executed on all 5 support pairs -> full_analysis_R1.json / full_analysis_R1_p1..p4.json; verdicts and signal values reproduce R0 exactly (deterministic analysis): compression NO_COMPRESSION (block_boundary 0.9968-1.0022; unique_G ratio 0.93-0.99, pair3 0.59 content collapse), blur BLUR_UNLIKELY on 4 pairs + GLASS_BLUR on pair3, noise GAUSSIAN_YCrCb (sigma 0.74-1.24), global darken + saturation strengthen.",
+      "overlooked_signal_1_nonpointwise": "R0's gamma+saturation family is pointwise. clean pair1 contains 12078 identical (255,255,255) pixels; under any pointwise map they must share one output, but the target maps them to a wide distribution: 10/25/50/75/90th pct = 165/194/218/232/236, std 32, per-channel means R=213.0 G=207.6 B=203.6. A spatially varying (neighbourhood or random) operation is therefore mandatory. R0 never tested this.",
+      "overlooked_signal_2_highlight_destruction": "All five targets contain EXACTLY zero channel values at 255 (and zero at 254), while clean pair1 has 1.778% exact 255 and pair3 1.474%. Gamma (255^g=255), HSV saturation (V preserved) and any LUT with 255->255 cannot be the final chain; pointwise subtractive shifts are excluded too because target maxima 226-246 exceed 255-25.5. Only a spatial mix (blur of clipped noise) before a V-preserving saturation explains this.",
+      "overlooked_signal_3_variance_collapse": "pair3 (dark star-trail content) target variance_ratio 0.362; pointwise saturate_strengthen_HSV:2 alone yields 0.794, blur_gaussian:3 alone 0.18 gm/masked, blur+saturation yields 0.351-0.362. R0's blur rejection came from gm_ratio/spectral_slope, which the SKILL marks unreliable in mixed (high-saturation clipping) degradation.",
+      "overlooked_signal_4_chroma_seed": "pair0 clean chroma std 9.06 -> target 33.84 (x3.73); satHV2 alone reaches only x1.94. The missing chroma variation is a pre-blur noise field: gaussian_RGB sev4 (sigma=0.2*255=51) then blur_gaussian sev3 leaves wavelet sigma at 0.1-0.25 (the estimator R0 used measures HIGH-frequency noise, which the blur removes), but after S x6 the blurred field becomes the target's dense chroma speckle (x3.71-3.73 on pair0).",
+      "threshold_boundary": "R0 exhausted its 25-test budget without ever simulating its final composite. Direct support simulation of the R0 pipeline now gives PSNR 15.22/14.80/16.44/14.00/15.87 dB and produces ~28% channel values at 255 (target: 0%), so the R0 composite is worse than several intermediates it had rejected.",
+      "physical_order": "noise(priority 0) -> blur(priority 1) -> saturation(priority 2) is exactly the order enforced by the challenge generator; no compression and no brightness step are needed to explain any signal."
+    },
+    "hypotheses": [
+      {
+        "id": "C0",
+        "pipeline": "brightness_darken_gamma_RGB:3,saturate_strengthen_YCrCb:4",
+        "role": "R0 control (pointwise)",
+        "signal_source": "R0 final_decision",
+        "outcome": "REJECT: PSNR 14.00-16.44 dB; sim creates 28% value-255 clipping absent in targets; cannot produce the pure-white spread"
+      },
+      {
+        "id": "C1",
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "primary candidate",
+        "signal_source": "pure-white probe + exact-255 census + pair3 variance collapse + smooth-region chroma + sharp signal-stat optimum",
+        "outcome": "ACCEPT: verify_signals PARTIAL 5/5 (5 matches each); auxiliary PSNR 18.30/21.86/21.28/24.35/21.91 dB"
+      },
+      {
+        "id": "C2",
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2",
+        "role": "cross-family noise substitute",
+        "signal_source": "full_analysis step2 GAUSSIAN_YCrCb (rgb_ratio 1.51, ccc up to 0.79) + pair0 chroma x3.83 vs 3.73",
+        "outcome": "ALTERNATIVE: verify_signals WEAK pair0 (variance_ratio diff 72%) / PARTIAL pair4 (4/6)"
+      },
+      {
+        "id": "C3",
+        "pipeline": "saturate_strengthen_YCrCb:3/4/5,brightness_darken_shfit_*",
+        "role": "two-global hypothesis",
+        "signal_source": "chroma gain + highlight destruction",
+        "outcome": "REJECT by signal statistics only (no test_candidate spent): sev3 chroma x2.2 vs x3.73; sev5 creates 29% 255-clipping; steeper/chroma-poor at pair3"
+      },
+      {
+        "id": "C4",
+        "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:2 (no noise)",
+        "role": "ablation",
+        "signal_source": "blur + saturation core",
+        "outcome": "REJECT by signal statistics only: matches mean/pct0/n255/vr but pair0 chroma x1.91 vs x3.73 (chroma seed missing)"
+      }
+    ],
+    "validation": {
+      "mode": "SIGNAL (verify_signals via test_candidate.py); PSNR auxiliary only (independent noise seeds)",
+      "test_candidate_calls": 12,
+      "support_pairs": [
+        {
+          "pair": 0,
+          "verify_verdict": "PARTIAL",
+          "matched": [
+            "blur:spectral_slope",
+            "blur:wiener_kernel",
+            "noise:sigma",
+            "global:mean_shift",
+            "global:variance_ratio"
+          ],
+          "mismatched": [
+            "noise:structured_residual (FWHM=8.0px)"
+          ],
+          "aux_psnr_c1": 18.3,
+          "aux_psnr_c0": 15.22,
+          "delta_db": 3.08
+        },
+        {
+          "pair": 1,
+          "verify_verdict": "PARTIAL",
+          "matched": [
+            "blur:spectral_slope",
+            "blur:wiener_kernel",
+            "noise:sigma",
+            "global:mean_shift",
+            "global:variance_ratio"
+          ],
+          "mismatched": [
+            "noise:structured_residual (FWHM=8.0px)"
+          ],
+          "aux_psnr_c1": 21.86,
+          "aux_psnr_c0": 14.8,
+          "delta_db": 7.06
+        },
+        {
+          "pair": 2,
+          "verify_verdict": "PARTIAL",
+          "matched": [
+            "blur:spectral_slope",
+            "blur:wiener_kernel",
+            "noise:sigma",
+            "global:mean_shift",
+            "global:variance_ratio"
+          ],
+          "mismatched": [
+            "noise:structured_residual (FWHM=8.0px)"
+          ],
+          "aux_psnr_c1": 21.28,
+          "aux_psnr_c0": 16.44,
+          "delta_db": 4.84
+        },
+        {
+          "pair": 3,
+          "verify_verdict": "PARTIAL",
+          "matched": [
+            "blur:spectral_slope",
+            "blur:wiener_kernel",
+            "noise:sigma",
+            "global:mean_shift",
+            "global:variance_ratio"
+          ],
+          "mismatched": [
+            "noise:structured_residual (FWHM=4.0px)"
+          ],
+          "aux_psnr_c1": 24.35,
+          "aux_psnr_c0": 14.0,
+          "delta_db": 10.35
+        },
+        {
+          "pair": 4,
+          "verify_verdict": "PARTIAL",
+          "matched": [
+            "blur:spectral_slope",
+            "blur:wiener_kernel",
+            "noise:sigma",
+            "global:mean_shift",
+            "global:variance_ratio"
+          ],
+          "mismatched": [
+            "noise:structured_residual (FWHM=8.0px)"
+          ],
+          "aux_psnr_c1": 21.91,
+          "aux_psnr_c0": 15.87,
+          "delta_db": 6.04
+        }
+      ],
+      "stat_fidelity": "C1 signal statistics (mean / pct0 / count>=254 / variance_ratio / chroma_ratio / max) vs target: pair0 169.7/4.15/0/1.240/2.17/244 vs 167.6/4.04/0/1.231/3.74/236; pair1 91.2/27.18/0/2.326/3.15/252 vs 89.3/26.78/0/2.124/3.45/246; pair2 59.0/27.27/0/1.267/1.90/251 vs 62.0/25.37/0/1.169/1.88/244; pair3 34.3/34.03/0/0.351/1.20/241 vs 36.5/30.28/0/0.362/1.27/226; pair4 69.2/25.99/0/1.445/2.48/240 vs 69.6/26.11/0/1.434/2.52/231 (seed-screen values; official runs consistent). Severity is a sharp optimum: neighbors (noise 2/3/5, blur 2/4) deviate on the same statistics.",
+      "interpretation": "The single residual-FWHM mismatch is expected whenever noise precedes a blur: target minus simulation is the difference of two independent blurred noise fields (correlation length ~blur kernel), not white noise. All deterministic signals (blur slope/kernel, sigma level, mean shift, variance ratio) match on 5/5 pairs."
+    },
+    "decision": {
+      "decision": "CHANGE",
+      "from": [
+        [
+          "brightness_darken_gamma_RGB",
+          3
+        ],
+        [
+          "saturate_strengthen_YCrCb",
+          4
+        ]
+      ],
+      "to": [
+        [
+          "noise_gaussian_RGB",
+          4
+        ],
+        [
+          "blur_gaussian",
+          3
+        ],
+        [
+          "saturate_strengthen_HSV",
+          2
+        ]
+      ],
+      "reason": "C1 satisfies the noise-candidate criterion (verify_signals WEAK/MISMATCH -> PARTIAL on 5/5 pairs) and improves auxiliary support PSNR by +3.08 to +10.35 dB over the R0 control on every pair; the R0 family is structurally excluded by the pure-white probe and the exact-255 census.",
+      "residual_uncertainty": "Noise type and exact noise severity are unidentifiable when noise precedes a blur (SKILL: noise-first §B accuracy 54.7%); severity 4 is chosen because it is the sharp global-statistic optimum on all 5 pairs. Declared pipeline is a 3-step global+blur+noise composite, tier 3, overall verdict UNCERTAIN."
+    }
+  },
+  "reflection_R2": {
+    "round": "R2",
+    "qwen_gate": {"available": false, "triggered": false, "reason": "Step 0.5 not triggered: target noise_prior sigma 0.7-1.2 < 2 (SKILL NO_NOISE branch); no API call"},
+    "reanalysis": {
+      "rerun": "run_full_analysis.py re-executed on all 5 support pairs -> full_analysis_R2.json / full_analysis_R2_p1..p4.json; deterministic verdicts reproduce R1 exactly (compression NO, block_boundary 0.997-1.002; blur DT flags unreliable under saturation clipping; global darken + saturation).",
+      "residual_focus": "peeled_noise_check.py applied the declared R1 pipeline on all 5 pairs; the peeled §B on target-minus-simulation shows extreme_pct 53-64%, spatial_corr 0.95-0.99, rgb_ratio 1.27-2.80. This looks like IMPULSE/YCrCb structure, but it must be compared against the correct null: two independent realizations of the same stochastic pipeline (target vs simulation), not against a clean residual."
+    },
+    "residual_exhaustion_evidence": {
+      "seed_control_comparison": "For each pair, SB6 on (target - sim0) was compared with SB6 on (sim1 - sim2). All stable statistics coincide: extreme_pct 55.9/55.9, 66.6/66.6, 63.0/62.9, 66.8/66.6, 65.1/65.2; zero_ratio identical to 4 decimals; spatial_corr 0.9504/0.9504, 0.9519/0.9514, 0.9375/0.9368, 0.8393/0.8388, 0.9425/0.9417; rgb_ratio 2.73/2.73, 2.79/2.75, 1.65/1.62, 1.29/1.27, 1.44/1.43; cross_ch_corr 0.473/0.474, 0.207/0.203, 0.165/0.163, 0.225/0.219, 0.204/0.203; ch_stds and residual_std (30.9/30.8, 20.6/20.5, 22.1/22.0, 15.4/15.4, 20.5/20.4) also coincide. vm_slope and var_slope flip sign between the two residuals (and across seed controls), confirming they are not reliable estimators on this residual. Conclusion: the peeled §B 'IMPULSE' diagnosis is a seed artifact, not structure.",
+      "variance_budget": "Var(target - mean of 5 seeded sims) / Var(single seed field) = 1.21, 1.194, 1.191, 1.216, 1.213 on pairs 0-4; theory for a statistically exact pipeline is 1 + 1/5 = 1.20. Zero excess deterministic variance remains.",
+      "fwhm": "residual autocorrelation FWHM of target-vs-sim equals the sim-vs-sim seed control on all 5 pairs (8/8, 8/8, 8/8, 4/4, 8/8 px); the only verify_signals mismatch is therefore intrinsic to independent noise seeds when noise precedes a blur.",
+      "conditioned_bias": "mean residual per 25-level clean-brightness bin |<=0.5| levels (one pair4 top bin +1.4), per edge-magnitude bin <=0.45, per chroma-magnitude bin <=0.5 on a ~180 scale -> no leftover tonal/blur/saturation-curve mismatch.",
+      "conditioned_variance": "residual-variance ratio target:seed-control is flat 2.0-2.2 across brightness bins and chroma bins -> additive homoscedastic noise; excludes Poisson (var~mean) and speckle (var~mean^2).",
+      "channel_fingerprint": "normalized (R,G,B) residual std shape of target-vs-sim matches the RGB gaussian seed-control to 3 decimals on 5/5 (pair0 0.443/1.158/1.209 vs 0.441/1.167/1.202; pair1 0.528/1.471/0.746 vs 0.528/1.471/0.746; pair2 0.714/1.180/1.047 vs 0.711/1.179/1.050; pair3 0.896/1.159/0.924 vs 0.902/1.159/0.918; pair4 0.840/1.206/0.917 vs 0.843/1.201/0.921), while YCrCb3 seed-control departs (pair0 0.771/0.860/1.291; pair1 0.596/1.365/0.884; pair3 0.958/1.070/0.967). New R2 evidence: noise family resolved to gaussian_RGB (R1 left RGB/YCrCb ambiguous).",
+      "severity_uniqueness": "5-pair grid screen (2 seeds/comb): only noiseRGB4+blur3+satHV2 reproduces target statistics (dmean <=0.04 lv, dpct0 <=0.07 pp, dvr_rel <=0.014, dchroma_rel <=0.018). Neighbors deviate: noise3 (dmean 2.77, dvr_rel 0.25, dchroma_rel 0.19), noise5 (dmean 4.09, dvr_rel 0.25), satHV1 (dmean 15.1, dpct0 18.4), satHV3 (dmean 26.0, dvr_rel 2.56), blur4 (dmax 11.0, dp999 13.0), YCrCb3 (dvr_rel 0.73, dmax 6.5), YCrCb2 (dmax 10.0, dp999 7.0)."
+    },
+    "hypotheses": [
+      {"id": "C0", "pipeline": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2", "role": "R1 control", "signal_source": "R1 final_decision; R2 residual-exhaustion analysis (seed screen, variance budget, FWHM/SB6 seed control, conditioned bias, channel fingerprint, severity grid)", "outcome": "NO_CHANGE: verify_signals PARTIAL 5/5; all residual statistics equal the seed control"},
+      {"id": "A1", "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:2", "role": "one-step-lower noise severity", "signal_source": "R1 residual_uncertainty (exact noise severity unidentifiable) + grid neighbour test", "outcome": "REJECTED: official PARTIAL 3/5 + WEAK 2/5 (pair0 mean_shift diff 0.0110, vr diff 10%; pair2 mean_shift 0.0053, vr diff 24%); grid dmean 2.77, dvr_rel 0.25"},
+      {"id": "A2", "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:2", "role": "cross-family noise substitute (R1 documented alternative)", "signal_source": "R1 alternatives (step2 YCrCb rgb_ratio 1.51, ccc 0.17-0.79); R2 channel fingerprint now adjudicates RGB vs YCrCb", "outcome": "REJECTED: official PARTIAL 3/5 + WEAK 2/5 (pair0 vr diff 73%; pair1 noise:sigma diff 50%, mean_shift 0.0091, FWHM 10px); channel-shape fingerprint contradicts YCrCb"}
+    ],
+    "validation": {
+      "mode": "SIGNAL (verify_signals via test_candidate.py; pipeline contains noise)",
+      "test_candidate_calls": 15,
+      "control": {"pair0": "PARTIAL", "pair1": "PARTIAL", "pair2": "PARTIAL", "pair3": "PARTIAL", "pair4": "PARTIAL", "matched": ["blur:spectral_slope", "blur:wiener_kernel", "noise:sigma", "global:mean_shift", "global:variance_ratio"], "only_mismatch": "noise:structured_residual FWHM 8/8/8/4/8 px (seed artifact, equals seed control)"},
+      "A1_noise3": {"pair0": "WEAK (mean_shift 0.0110, vr 10%)", "pair1": "PARTIAL", "pair2": "WEAK (mean_shift 0.0053, vr 24%)", "pair3": "PARTIAL", "pair4": "PARTIAL"},
+      "A2_YCrCb3": {"pair0": "WEAK (vr 73%)", "pair1": "WEAK (noise:sigma 50%, mean_shift 0.0091, FWHM 10px)", "pair2": "PARTIAL", "pair3": "PARTIAL (noise:sigma 100%)", "pair4": "PARTIAL (vr 10%)"},
+      "decision_rule": "noise-bearing pipeline -> CHANGE requires verify_signals improvement (WEAK->PARTIAL->MATCH) on >=4/5 pairs or significant SB6 improvement. Control is already PARTIAL 5/5 and the residual statistics are statistically identical to the seed control, so no SB6 improvement is achievable; neither alternative reaches PARTIAL on more than 3/5 pairs."
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [["noise_gaussian_RGB", 4], ["blur_gaussian", 3], ["saturate_strengthen_HSV", 2]],
+      "reason": "R2 found no residual structure that the R1 pipeline fails to explain: every deterministic-style statistic of target-minus-R1-simulation (marginal distributions within seed noise, zero excess variance, FWHM and SB6 signature equal to seed control, no brightness/edge/chroma-conditioned bias, flat conditioned variance, RGB channel fingerprint) matches two independent realizations of the same pipeline on 5/5 pairs. All three officially tested candidates leave the control unbeaten (PARTIAL 5/5 vs 3/5).",
+      "residual_uncertainty": "Noise type inside the additive-RGB family remains formally unidentifiable per SKILL noise-first §B (54.7%), hence the noise step stays UNCERTAIN and the overall verdict stays UNCERTAIN; the R2 channel fingerprint nevertheless makes gaussian_RGB the best-supported member. Exact noise severity 4 is the unique grid optimum and is stable across seeds (seed std of aggregate stats ~0)."
+    }
+  }
+}

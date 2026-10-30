@@ -1,0 +1,71 @@
+{
+  "challenge_id": "blind_0014_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["brightness_brighten_shfit_HSV", 3],
+    ["compression_jpeg", 2]
+  ],
+  "pipeline": [
+    {
+      "function": "brightness_brighten_shfit_HSV",
+      "severity": 3,
+      "verdict": "LIKELY"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [["compression_jpeg", 2], ["brightness_brighten_shfit_HSV", 3]],
+      "psnr_pair0_db": 26.82,
+      "ci": "8/10",
+      "verdict": "REJECTED",
+      "signal_source": "顺序可辨识性检验（SKILL 物理约束 JPEG 存储最后，需数据确认）",
+      "reason": "顺序交换后无法复现（26.82 dB << inf），确认 GT 顺序为 brightness→jpeg"
+    },
+    {
+      "pipeline": [["brightness_brighten_shfit_HSV", 3], ["compression_jpeg", 3]],
+      "psnr_pair0_db": 28.37,
+      "ci": "10/10",
+      "verdict": "REJECTED",
+      "signal_source": "block_boundary=1.582 只确认 JPEG 存在，未确认 severity；检验 jpeg sev 边界",
+      "reason": "jpeg:3 (quality12) 无法复现（28.37 dB），CI 指标对 JPEG severity 不敏感（10/10 但 PSNR 判别），确认 jpeg sev=2 (quality18) 唯一"
+    },
+    {
+      "pipeline": [["brightness_brighten_shfit_HSV", 2], ["compression_jpeg", 2]],
+      "psnr_pair0_db": 23.48,
+      "ci": "9/10",
+      "verdict": "REJECTED",
+      "signal_source": "mean_shift 41.8-69.7 跨对稳定，但 severity 需边界检验（R0 global-only sweep sev2=22.75 vs sev3=27.88）",
+      "reason": "brightness sev2 叠加精确 JPEG 仍只有 23.48 dB，确认 sev=3 (V+0.3) 唯一"
+    },
+    {
+      "pipeline": [["brightness_brighten_gamma_HSV", 3], ["compression_jpeg", 2]],
+      "psnr_pair0_db": 22.80,
+      "ci": "8/10",
+      "verdict": "REJECTED",
+      "signal_source": "ric=-0.30 + gamma_suspect=True 曾被列为 gamma 证据；R0 只测过 gamma sev2，R1 补测最强 gamma 替代",
+      "reason": "gamma_HSV:3 (gamma=0.4) 叠加精确 JPEG 仅 22.80 dB，确认 ric 为 HSV V 抬升+高光截断的伪信号，非 gamma"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR",
+    "support_validation": "control brightness_brighten_shfit_HSV:3+compression_jpeg:2 在 5/5 pairs 独立复核 PSNR=inf、CI=10/10；4 个反事实候选在 pair0 仅 22.80-28.37 dB（均 <35），无任何候选可优于 control",
+    "rationale": "R1 重跑信号分析（pair0 与 R0 一致，pair1-4 补充）显示 full_analysis 的 GLASS_BLUR / GAUSSIAN_YCrCb / SATURATION 均为 brightness HSV V+0.3 与 JPEG 耦合产生的系统性伪信号：剥离精确管线后 5/5 pairs 残差 std=0.0；blur 信号只在 pair0 越过阈值（pair1-4 BLUR_UNLIKELY）；sigma 跨对 0.37-2.22（pair2 越 2.0 边界）但残差为零。顺序交换/severity 边界/gamma 替代均无法复现。R0 管线唯一且逐像素精确，R1 无更优候选 → NO_CHANGE。"
+  },
+  "signal_sources": [
+    "block_boundary=1.526-3.089（5/5 pairs >1.1，0%FP 规则）→ JPEG 存在（full_analysis_R1*.json step1）",
+    "mean_shift=41.8-69.7（5/5 pairs 稳定）→ 亮度整体抬升（step4）",
+    "saturation_chroma_ratio=1.31-1.77（5/5 pairs 系统偏高）→ HSV V 抬升的伴随伪信号，非独立 saturation 操作（step4）",
+    "variance_ratio=0.80-1.51（跨对不稳）+ clipped_fraction=0.011-0.191（内容依赖）→ 不能作为 severity 判据（step4）",
+    "glass_score/gm_ratio/spectral_slope_ratio 仅 pair0 越阈值（pair1-4 BLUR_UNLIKELY）→ blur 为内容依赖阈值边界伪信号（step3）",
+    "noise_prior sigma unpeeled=0.37-2.22（pair2 越 2.0）但 peeled residual std=0.0（5/5）→ 无噪声；spatial_corr=0.72-0.95 为 JPEG 块自相关、ric=-0.23~-0.56 为 V 抬升+截断（step2 + peeled_noise_check）",
+    "test_candidate: control 5/5 PSNR=inf；顺序交换 26.82 / HSV:2 23.48 / jpeg:3 28.37 / gamma_HSV:3 22.80 dB"
+  ]
+}

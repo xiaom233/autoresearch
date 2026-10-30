@@ -1,0 +1,49 @@
+{
+  "challenge_id": "blind_0015_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "pipeline": [
+    {"function": "blur_motion", "severity": 1, "verdict": "LIKELY"},
+    {"function": "brightness_darken_shfit_RGB", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "note": "确定性 fallback: 5 对 support PSNR 26.14-29.34 (mean 27.56), 可完全复现; 但 overshoot_ratio 偏差 35-51%、zero_crossing_density 24-41%, 5 对 CI 仅 7-8/10 → 信号不匹配, 仅在训练偏好确定性退化时备选",
+      "support_psnr": {"pair0": 29.27, "pair1": 26.3, "pair2": 26.14, "pair3": 29.34, "pair4": 26.74},
+      "signal_mismatch": "overshoot 35-51%, zero_crossing 24-41%"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "note": "pair0 PSNR 29.03 CI 9/10, 但 overshoot_ratio 偏差 45%, zero_crossing 17% → 与 gaussian 同族过平滑 (R0 记录 gm 0.293 vs 目标 0.417)",
+      "support_psnr": {"pair0": 29.03},
+      "signal_mismatch": "overshoot 45%"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (sigma 0.74-1.24 < 2; motion 角度为按图随机, 单次 PSNR 方差 22.55-71.12 dB, 判据 = 5 对 CI 9-10/10 + pair1 71.12 dB 精确复现)",
+    "support_validation": "control (blur_motion:1,brightness_darken_shfit_RGB:3) 5 对 R1 复测: pair0 25.74 (CI 9/10), pair1 40.47 与 71.12 (CI 10/10, 后者全部 10 项 CI 差值 0.000, unique_RGB 精确一致), pair1 第三次 22.55 (CI 10/10, 角度随机回落), pair2 27.33 (9/10), pair3 31.20 (9/10), pair4 23.08 (10/10); 同 pipeline 4 次测 pair1 = 22.55/25.91/40.47/71.12 dB, 证明 motion 角度随机而 CI 稳定 9-10/10. 确定性替代 gaussian:1+darken 5 对 29.27/26.30/26.14/29.34/26.74 (全复现) 但 overshoot/zc 每对均失配.",
+    "rationale": "1) brightness_darken_shfit_RGB:3: 5 对独立二阶统计一致 (mean_shift -42.7~-50.8 随 clip 比例偏移, 与 subtract-51+clip 模型一致; clip 6.05-36.51%; variance_ratio 0.709-0.837; unique_G pairs1-4 精确 203 = subtract-51 直方图上界指纹); 候选仿真零像素比例与目标差 1% (56), 排除 sev2/4 与 HSV 族. 2) blur_motion:1: pair1 一次运行 PSNR 71.12 dB、10 项 content-independent CI 差值全部 0.000 → 模拟图与目标近乎像素级相同, 仅当模糊函数=motion、radius5/sigma3 (sev1)、角度命中真实数字直线核且顺序正确时可达, 构成本管线几乎确定的复现证据; 数字直线核空间有限 (width=11, 180° 内 182 种), 其余采样角度给出 22.55-40.47 dB. 3) 顺序 blur→darken: zero-fraction 差 1% (正确顺序) vs darken→blur 差 42% (反序, CI 7/10). 4) 无噪声 (sigma 0.74-1.24<2, 剥离后 1.73; 全部噪声函数最小 sigma 12.75), 无 JPEG (bb 0.991-1.005 << 1.05 阈值), 无 contrast (spread 0.78-0.90 由 clip 解释), 无 saturation (5 对 chroma 比 0.7356-1.0922 不一致, 真实饱和步骤应固定比例). 5) R0 的 'FFT_anisotropy=0.00/pca=0.0' 证据实为未计算默认值 (blur 门控因 step2 低置信噪声判定被 slope_ratio 路径绕过), 该误读不影响 R0 结论方向, R1 已更正.",
+    "verdict_note": "相对 R0 的 UNCERTAIN 升级为 LIKELY: pair1 71.12 dB (>40 dB 阈值) + CI 10/10 全指标零差 + 4 次同 pipeline 采样的角度随机性解释, 使 blur 类型/严重度/顺序由信号匹配升级为接近确定复现; 但单图 PSNR 不可作为常规判据 (角度未对齐时 22-31 dB)."
+  },
+  "signal_sources": [
+    "run_full_analysis_R1 (5 对): gm_ratio 0.412-0.540, spectral_slope_ratio 1.009-1.065, block_boundary 0.9911-1.0047, sigma 0.74-1.24, mean_shift -42.7~-50.8, clipped_fraction 6.05-36.51%, variance_ratio 0.709-0.837, unique_G 172/203",
+    "test_candidate pair1 blur_motion:1+darken:3 复测 PSNR 71.12 dB, CI 10/10 全部差值 0.000",
+    "test_candidate 顺序对照: blur→darken zero-fraction 差 -0.063 (1%) vs darken→motion 差 +2.557 (42%)",
+    "test_candidate gaussian:1+darken (确定性) 5 对 overshoot 偏差 35-51%, zero_crossing 24-41%",
+    "test_candidate blur_motion:2+darken pair0: zero-fraction +7%, zero_crossing 14%, overshoot 16% → sev1 优于 sev2",
+    "run_full_analysis step2 低置信 GAUSSIAN_YCrCb 使 blur 门控走 slope_ratio 路径, FFT_anisotropy/pca 未计算 (=0.00 默认值, 非证据)"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "challenge_id": "blind_0005_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_impulse", 5]],
+  "pipeline": [
+    {"function": "noise_impulse", "severity": 5, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (random salt&pepper noise; noise seed mismatch -> PSNR unreliable)",
+    "support_validation": "verify_signals: pair0-pair4 all MATCH (noise:sigma, noise:clean_residual). Changed-fraction fingerprint target vs simulated imp5 (%): p0 9.105/9.087, p1 9.998/9.999, p2 9.985/9.974, p3 9.927/9.932, p4 10.010/9.995. Changed channel values exclusively {0,255} (other=0.0000%); salt:pepper = 49.77-54.09 : 45.91-50.23 (pair0 skewed by pepper-on-zero collisions). Per-channel independent mask: all3-changed/any-changed = 0.0036-0.0039 (simulated 0.0036-0.0037). Collision-corrected amount decode: changed = amount - 0.05*clean_zero_frac - 0.05*clean_255_frac; amount=0.10 predicts 9.102/10.000/9.984/9.937/9.998 vs observed 9.105/9.998/9.985/9.927/10.010 (delta <= 0.012 pp). Second-order stats target vs sim imp5: mean_shift delta <= 0.0001, variance_ratio delta <= 0.0011, chroma_ratio delta <= 0.003 (including pair0 +0.0312 brightness-like shift and pair3 chroma 5.09).",
+    "rationale": "R0 pipeline confirmed at mechanism level, not just by signal verdicts: 90-91% of channel values are bit-exact equal to clean, and every changed channel is exactly 0 or 255 in ~50:50 salt/pepper with per-channel independent masks. x_distortion noise_impulse amount map = [0.01,0.03,0.05,0.07,0.10]; observed amount = 0.100 -> sev5. sev4 (0.07) simulated changed=6.998% vs target 9.998% -> rejected (verify_signals WEAK, sigma diff 33%). Any global/blur/JPEG step is physically excluded: each would alter nearly all channel values, contradicting 90% bit-exact unchanged; cross-category controls (saturate_strengthen_HSV:2 changes 63.3% of channels, compression_jpeg:2 changes 92.2%) both MISMATCH. The apparent global signals (variance_ratio 1.1884-1.6082, mean_shift -0.0058~+0.0312, chroma 2.17-5.09, clipped 0.10-0.35) are fully reproduced by pure impulse simulation to 3 decimals -> outlier artifacts of the sparse replacement, not independent degradations. Per SKILL, a noise step is never LIKELY -> UNCERTAIN. No candidate improved over the R0 control (MATCH already maximal) -> NO_CHANGE.",
+    "candidates_tested": 4,
+    "test_candidate_calls": 8,
+    "qwen_gate": {"available": false, "triggered": true}
+  },
+  "signal_sources": [
+    "impulse_zero_ratio = 0.9138/0.9000/0.9002/0.9011/0.8999 (full_analysis_R1.json, full_analysis_R1_p1..p4.json step2)",
+    "changed channel values exactly {0,255} (other=0.0000%); salt 49.77-54.09% / pepper 45.91-50.23% -> skimage s&p salt_vs_pepper=0.5",
+    "collision-corrected amount decode: amount=0.10 matches observed changed fraction on all 5 pairs within 0.012 percentage points",
+    "per-channel independent mask: all3/any = 0.0036-0.0039, matches independent Bernoulli p=0.1 prediction 0.0037",
+    "simulated noise_impulse:5 reproduces target mean_shift (delta<=0.0001), variance_ratio (delta<=0.0011) and chroma_ratio (delta<=0.003) -> 'global' signals are outlier artifacts",
+    "no compression: block_boundary 0.9973-1.0074 (<1.1), unique_G_ratio 1.0-1.0042, dct_zero_ratio 0.0124-0.0155",
+    "no blur: spectral_slope_ratio 0.9679-0.9900 (<1.08); any convolution would change ~all channel values",
+    "run_full_analysis estimated_severity=3 is a coarse zero_ratio>0.85 heuristic; true decode via amount=0.10 -> sev5"
+  ]
+}

@@ -1,0 +1,633 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED (block_boundary=2.2405, dct_zero_ratio=0.8144, unique_G=256)",
+      "blur": "BLUR_UNLIKELY (gm_ratio=1.5514 noise-destroyed, spectral_slope_ratio=0.987 < 1.08)",
+      "noise": "noise_prior sigma=0.86 (<2 → NO_NOISE); spatial_corr=0.955/cross_ch_corr=0.947 疑为 JPEG 块结构污染，需剥离后复核",
+      "global": "variance_ratio=2.9263 → contrast strengthen (1.7²≈2.89 → scale sev2); saturation_chroma_ratio=1.5882; mean_shift=-9.0 但 brightness_from_jpeg=true (FP 疑似)"
+    },
+    "mode": "PSNR (sigma=0.86 < 2)",
+    "suspected": [
+      "contrast_strengthen_scale:2 (variance_ratio 2.926 ≈ 1.7^2=2.89)",
+      "saturate_strengthen (chroma_ratio 1.588)",
+      "compression_jpeg (block_boundary 2.2405, 0% FP 强信号)"
+    ],
+    "ruled_out": [
+      "blur (spectral_slope_ratio 0.987, gm_ratio>1.0)",
+      "pure brightness (mean_shift 可被 contrast clipping + JPEG 解释)"
+    ],
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "note": "sigma=0.86<2 → 按 SKILL 规则 NO_NOISE 分支，无需 Qwen 门"
+    }
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py, 剥离 pipeline=contrast_strengthen_stretch:4,compression_jpeg:5 后的残差",
+    "extreme_pct": 90.57,
+    "vm_slope": 1.7489,
+    "var_slope": -0.022,
+    "spatial_corr": 0.865,
+    "rgb_ratio": 1.0794,
+    "cross_ch_corr": 0.8397,
+    "noise_prior_sigma": 1.73,
+    "residual_std": 8.6,
+    "diagnosis": "NO_NOISE. extreme_pct=90.57% 为 SKILL 明确记载的 JPEG/blur 伪影假阳性 (extreme_pct>50% + sigma<5 → 忽略 §B IMPULSE); noise_prior sigma=1.73<2 → NO_NOISE. 另: x_distortion 所有 noise 函数最小 sigma=0.05*255=12.75, 若含噪声 PSNR 上限≤26dB, 与实测 29.4dB 矛盾, 从能量上排除噪声步骤"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:3",
+        "thinking": "R1: variance_ratio=2.926≈1.7^2 指向 contrast_strengthen_scale sev2; block_boundary=2.2405 (0%FP) 指向 JPEG; saturation_chroma=1.588 可能由 contrast 拉动 (1.7×clipping), 先不加入饱和. 采用 ISP→存储自然顺序"
+      },
+      "test_result": {
+        "psnr_rgb": 18.83,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3,contrast_strengthen_scale:2",
+        "thinking": "R2: 顺序二元对比。优先级2的 contrast/JPEG 在同优先级随机 shuffle, 检验 JPEG→contrast 顺序 (JPEG 块被对比度放大). 其余参数不变"
+      },
+      "test_result": {
+        "psnr_rgb": 18.67,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3,contrast_strengthen_scale:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:3",
+        "thinking": "R3: contrast 子类型替代。scale 1.7 模拟高光剪裁过多 (pct_255 diff=-6.05, 即 target 更少), 检验 stretch (c=2, 以均值为中心的 S 曲线, 高光不易过裁) 能否以更少剪裁达到同方差比 2.93"
+      },
+      "test_result": {
+        "psnr_rgb": 13.65,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:1,saturate_strengthen_HSV:1,compression_jpeg:3",
+        "thinking": "R4: 组合假设。contrast scale sev2 剪裁过多/R3 stretch 剪裁过少 → 真值居中; chroma_ratio=1.588 需饱和增强解释; variance_ratio 2.93 可由 contrast 1.4^2=1.96 + 饱和调色方差叠加. 顺序 ISP: contrast→saturation→JPEG"
+      },
+      "test_result": {
+        "psnr_rgb": 15.54,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:1,saturate_strengthen_HSV:1,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:4",
+        "thinking": "R5: JPEG severity 扫描 (基于最佳 R1)。zero_crossing_density 显示 target 比模拟平滑 39%, 且目视 target 细节更少 → 检验更重 JPEG (q8)"
+      },
+      "test_result": {
+        "psnr_rgb": 18.85,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:4",
+        "thinking": "R6: signal 模式复核最佳 PSNR 候选, 读取 mean_shift/variance_ratio 的 target vs simulated 精确数值, 定位 PSNR 平台化的来源"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=11%)",
+          "global:mean_shift (diff=0.0382)",
+          "global:variance_ratio (diff=37%)"
+        ],
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:2,saturate_strengthen_HSV:1,compression_jpeg:4",
+        "thinking": "R7: R6 信号缺口: sim variance_ratio≈2.21 vs target 2.926; sim mean_shift≈+0.003 vs target -0.0353. 饱和增强 (HSV max 通道不变, 最小通道下降) 可同时降低均值并抬高颜色方差 → 在 contrast2+JPEG4 基础上加入 sat HSV sev1"
+      },
+      "test_result": {
+        "psnr_rgb": 16.44,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:2,saturate_strengthen_HSV:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:4",
+        "thinking": "R8: severity 扫描 contrast sev3 (scale 2.1)。R6 测得 scale1.7 仅得 variance_ratio≈2.21 (<target 2.926); 目标可能为更强 contrast 经剪裁/JPEG 衰减后落在 2.93。signal 模式读取 mean_shift/variance_ratio"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=17%)",
+          "global:mean_shift (diff=0.0397)",
+          "global:variance_ratio (diff=14%)"
+        ],
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:1,contrast_strengthen_scale:2,compression_jpeg:4",
+        "thinking": "R9: 均值缺口 -0.0353 无法由 mean-preserving contrast 解释, target 高光剪裁反而更少 (排除剪裁压低均值). 检验 brightness darken (priority0, 先于 contrast) 能否同时给出负均值与正方差"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=12%)",
+          "global:mean_shift (diff=0.0398)",
+          "global:variance_ratio (diff=44%)"
+        ],
+        "pipeline": "brightness_darken_shfit_HSV:1,contrast_strengthen_scale:2,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:2,compression_jpeg:4",
+        "thinking": "R10: contrast 子类型再探。stretch 以各通道均值为中心把均值拉向 0.5, 可产生负 mean_shift 且抬升方差; stretch sev1 剪裁仅为 target 一半, 尝试 sev2 (c=4). signal 读取精确 mean/var"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0290)",
+          "global:variance_ratio (diff=60%)"
+        ],
+        "pipeline": "contrast_strengthen_stretch:2,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:1,compression_jpeg:4",
+        "thinking": "R11: 跨pair证据: mean_shift 随内容变号(-9/+18.6/+9.3)→排除 brightness; chroma_ratio 1.55-2.01 (p2=2.012≈×2) → saturate_strengthen_YCrCb sev1; clipping 随内容 4.6-15% 符合饱和度裁剪. 测试 饱和度→JPEG"
+      },
+      "test_result": {
+        "psnr_rgb": 14.29,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_YCrCb:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:4",
+        "thinking": "R12: stretch severity 扫描。p3 (天空白→灰, mean -57.5) 是 stretch 的强特征; p0 目标 mean -9/var 2.93 介于 stretch1(-19.6/0.83) 与 stretch2(-16.4/1.78) 之外, c 更大时 S 曲线更陡 → 方差更高. 测试 sev3 (c=6)"
+      },
+      "test_result": {
+        "psnr_rgb": 23.14,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:4",
+        "thinking": "R13: stretch sev3 统计已接近 (var 2.51 vs 2.926, mean -12.5 vs -9.0, spread 1.327 vs 1.338, clip 2.85% vs 4.65%). 方向均为 sev3 略欠 → 测试 sev4 (c=8)"
+      },
+      "test_result": {
+        "psnr_rgb": 24.11,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "R14: JPEG severity 扫描。stretch4+J4 时 CI 9/10, 但 zero_crossing target 低 21% (更平滑) 且 block_boundary target 高 13% → 更重 JPEG (q5) 可同时降低高频并增强块效应"
+      },
+      "test_result": {
+        "psnr_rgb": 29.42,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5,contrast_strengthen_stretch:4",
+        "thinking": "R15: 顺序二元对比。stretch4→J5 已达 CI 10/10, PSNR 29.42; 检验 JPEG→stretch 顺序 (块效应被 S 曲线放大) 是否更接近"
+      },
+      "test_result": {
+        "psnr_rgb": 20.26,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5,contrast_strengthen_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,contrast_strengthen_stretch:4,compression_jpeg:4",
+        "thinking": "R16: 残差假设: stretch4+J5 全局统计 (spread/mean/var/chroma/bb) 已精确吻合但 PSNR 仅 29.4 → 缺一个不改统计的局部算子. spectral_slope 略降 (0.987) 提示极轻 blur. 物理顺序 blur(priority1)→stretch(2)→JPEG(2); J4 以补偿 blur 带来的额外平滑"
+      },
+      "test_result": {
+        "psnr_rgb": 23.98,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,contrast_strengthen_stretch:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "Support p1: 在 support 对上复核最终候选 stretch4→J5 (pair0: PSNR 29.42, CI 10/10, spread/mean/var/chroma/bb 全匹配)"
+      },
+      "test_result": {
+        "psnr_rgb": 28.7,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "Support p2: 在 support 对上复核最终候选 stretch4→J5 (pair0: PSNR 29.42, CI 10/10, spread/mean/var/chroma/bb 全匹配)"
+      },
+      "test_result": {
+        "psnr_rgb": 28.75,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "Support p3: 在 support 对上复核最终候选 stretch4→J5 (pair0: PSNR 29.42, CI 10/10, spread/mean/var/chroma/bb 全匹配)"
+      },
+      "test_result": {
+        "psnr_rgb": 37.22,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "Support p4: 在 support 对上复核最终候选 stretch4→J5 (pair0: PSNR 29.42, CI 10/10, spread/mean/var/chroma/bb 全匹配)"
+      },
+      "test_result": {
+        "psnr_rgb": 26.06,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "最终 signal 确认: 剥离后噪声检查显示 residual std=8.6 为 JPEG 编码器差异, noise_prior sigma=1.73<2 → NO_NOISE; §B extreme_pct=90.6% 为 SKILL 记载的 JPEG 伪影假阳性. 官方验证 mean_shift/variance_ratio/block_boundary 三信号"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "compression:block_boundary",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 37.22,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 29.42,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 28.75,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 28.7,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 26.06,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:4",
+      "psnr_rgb": 24.11,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_gaussian:1,contrast_strengthen_stretch:4,compression_jpeg:4",
+      "psnr_rgb": 23.98,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:4",
+      "psnr_rgb": 23.14,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "compression_jpeg:5,contrast_strengthen_stretch:4",
+      "psnr_rgb": 20.26,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:2,compression_jpeg:4",
+      "psnr_rgb": 18.85,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:2,compression_jpeg:3",
+      "psnr_rgb": 18.83,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:3,contrast_strengthen_scale:2",
+      "psnr_rgb": 18.67,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:2,saturate_strengthen_HSV:1,compression_jpeg:4",
+      "psnr_rgb": 16.44,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:1,saturate_strengthen_HSV:1,compression_jpeg:3",
+      "psnr_rgb": 15.54,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "saturate_strengthen_YCrCb:1,compression_jpeg:4",
+      "psnr_rgb": 14.29,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:3",
+      "psnr_rgb": 13.65,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {"function": "contrast_strengthen_stretch", "severity": 4, "verdict": "UNCERTAIN"},
+      {"function": "compression_jpeg", "severity": 5, "verdict": "UNCERTAIN"}
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "确定性 2 步退化 (无噪声/无模糊): contrast_strengthen_stretch:4 → compression_jpeg:5。判定证据链: (1) verify_signals 官方 3/3 MATCH (block_boundary, mean_shift, variance_ratio); (2) pair0 全局统计与 target 精确吻合: mean_shift -8.9 vs -9.0, variance_ratio 2.963 vs 2.9263 (1.9%), contrast_spread 1.3383 vs 1.3383 (完全一致), chroma 1.5946 vs 1.5882, clipped 4.74% vs 4.65%, block_boundary 2.199 vs 2.2405; (3) 5 对 support 全部 CI 10/10; (4) p3 (平滑天空图) PSNR 37.22dB 证明管线数学上一致。verdict=UNCERTAIN 而非 LIKELY 的原因: pair0 PSNR 29.42<40 且略低于 30 (SKILL 禁止 PSNR<30 声称 LIKELY); 残余差异集中于高纹理图的 JPEG 块级编码差异 (p1/p2/p4 26-29dB), 属生成环境与当前 venv 的 JPEG 编码器实现级差异, 非函数/severity 错误 — 已穷尽 subtype (scale/stretch)、severity (1-5)、顺序 (2种)、饱和 (HSV/YCrCb)、brightness、blur 共 21 次候选验证。早期错误假设 corrections: variance_ratio 被误读为 scale 1.7^2; 实为 stretch sev4 的非线性曲线 (S 曲线) 同时产生 mean_shift -9 和方差比 2.93。",
+    "alternatives": [],
+    "alternatives_note": "按 SKILL alternatives 质量要求, 所有备选 (stretch3+J4 23.14dB, stretch4+J4 24.11dB, contrast_scale2+J4 18.85dB) PSNR<30 且已被最终候选在统计与 CI 上全面超越, 不留存"
+  },
+  "support_validation": {
+    "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+    "pairs": {
+      "p0": {"psnr_rgb": 29.42, "ci_pass": "10/10"},
+      "p1": {"psnr_rgb": 28.7, "ci_pass": "10/10"},
+      "p2": {"psnr_rgb": 28.75, "ci_pass": "10/10"},
+      "p3": {"psnr_rgb": 37.22, "ci_pass": "10/10"},
+      "p4": {"psnr_rgb": 26.06, "ci_pass": "10/10"}
+    },
+    "note": "确定性复核: 5/5 对 CI 10/10 (所有内容无关指标 ≤5% 误差), 无一对出现信号的符号/类型反转; 跨 pair 全局信号 (mean_shift 随内容变号 -57.5~+18.6, chroma 0.72~2.01) 均由同一 stretch 函数在不同图像统计下自然产生, 进一步支持单一管线假设"
+  },
+  "agent_notes": {
+    "qwen_gate": {"available": false, "triggered": false, "note": "sigma=0.86<2, 未触发; API 不可用已按要求记录"},
+    "test_candidate_calls": 21,
+    "explored_hypotheses": [
+      "contrast_strengthen_scale (sev 1/2/3) + JPEG (3/4/5)",
+      "contrast_strengthen_stretch (sev 1/2/3/4) + JPEG (3/4/5)",
+      "saturate_strengthen_HSV / YCrCb (+contrast)",
+      "brightness_darken_shfit_HSV + contrast",
+      "blur_gaussian:1 三步假设",
+      "顺序变体: JPEG→contrast, JPEG→stretch"
+    ]
+  },
+  "reflection_R1": {
+    "trigger": "R0 verdict=UNCERTAIN 且 R0 specialist support PSNR=18.6 dB (r0_result.json, 无 GT); R1 独立重审信号, 不假设 R0 正确",
+    "reanalysis": {
+      "full_analysis_rerun": "对 5 对 support 重跑 run_full_analysis → full_analysis_R1.json / full_analysis_R1_p1..p4.json; 与 R0 数值逐位一致 (确定性信号, 仅 residual_intensity_corr 舍入差异); pair0 为主, p1-p4 交叉验证",
+      "verdict_vs_signal_consistency": [
+        "step1 compression: block_boundary 1.665-2.493 (全 5 对 >1.1, 0%FP 强信号), unique_G=255-256 (无量化), dct_zero_ratio 0.47-0.96 → JPEG 判据与信号一致",
+        "step2 noise: sigma 0.86/2.22/1.11/0.0/2.35; R0 只引用 pair0 的 0.86<2; p1/p4 实际越过 2.0 边界 → R1 重新论证 (见 threshold_boundary)",
+        "step3 blur: gm_ratio 1.551/0.879/1.534/0.550/1.226 — p3=0.550, p1=0.879 低于/接近 0.85 阈值, 但 spectral_slope_ratio 0.980-1.028 全 <1.08, gm 偏高值 (1.2-1.6) 与 'contrast 增强抬升梯度' 一致",
+        "step4 global: variance_ratio 1.05-3.28 与 mean_shift -57.5~+18.6 随内容大幅变化; R0 已识别为单一 S 曲线。R1 新增指纹: mean_shift 精确等于 127.5 减 clean 通道均值 (p0 -9.0, p1 +18.6, p2 +9.3, p3 -57.5, p4 -6.0) → contrast_strengthen_stretch 的 '均值锚定 0.5' 特征, 排除 brightness_shift / gamma / scale 家族"
+      ],
+      "threshold_boundary_recheck": [
+        "sigma 边界: p1=2.22, p4=2.35 (>2)。剥离后 noise_prior sigma 4.45/3.71 (>2)。R1 校准实验: 对 clean 直接施加 compression_jpeg:5 的失真 floor=13.1; 预加 noise_gaussian_RGB:1 (σ=12.75) 后再 J5 仅 13.2 (+1.6 级) → q5 量化把预 JPEG 噪声几乎全部吸收。peeled residual 8.6-12.7 与 codec floor 同量级。且 x_distortion 噪声最小 σ=12.75 若存在会与 p3 的 37.22 dB 复现矛盾 → 噪声步不可检出、无收益 → 排除",
+        "gm_ratio 边界: p3=0.550 (强 blur 信号) — 平滑天空内容使 gm_ratio 失效; spectral_slope_ratio 1.028 <1.08; 直接测试 blur_gaussian:1+stretch4+J5 → 24.86 dB (CI 9/10, hf_lf 5%/zero_crossing 10% 变差) → 无缺步模糊",
+        "saturation FP: full_analysis step4 saturation_detected_raw=true (chroma 1.55-2.01) — 重释为 stretch 逐通道均值锚定的副产物: R0 模拟 chroma 1.5946 vs target 1.5882 (p0) 已吻合; saturate 最小强度 2-3x 会过冲 → 排除",
+        "severity 边界: step4 原始判定 sev5, 但 sev5 模拟 (c=10) 24.27 dB / CI 7/10 (clipping 偏离 24-67%), 说明真实曲线弱于 sev5",
+        "JPEG severity: target 对 compression_jpeg:5 重编码 residual std=1.2 (p0)/0.5 (p3), 对 sev4(q8) 为 7.0 → target 确为本仓库 q5 输出",
+        "R0 severity 扫描 confound: R0 的 stretch3 只与 J4 组合测过; R1 在已确认的 J5 下补测 stretch3 (=23.32 dB, CI 7/10), 双向确认 sev4"
+      ],
+      "second_order_stats": [
+        "peeled residual (p0, control 管线): std=8.6, spatial_corr=0.865, rgb_ratio=1.0794, cross_ch_corr=0.840, ch_stds R8.6/G8.3/B9.0 — 无方向性结构 (非 motion), 无低频突起; 可视化呈块状彩色编码噪声",
+        "§B extreme_pct=90.57% / zero_ratio=0.809 为 signed residual 诊断的已知伪影 (残差≤0 约占一半, 非 impulse); 与 SKILL 记载 'extreme_pct>50% + sigma<5 → JPEG 伪影假阳性' 一致",
+        "block_boundary 1.665-2.493 与 unique_G=256 并存 → 压缩强但无量化 (quantization_* 排除)",
+        "零交叉/hf_lf 在 control 下与 target 偏差 0-2% → 频谱内容已匹配, 无缺步 sharpening/blur"
+      ]
+    },
+    "hypotheses": [
+      {
+        "id": "C0",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "role": "control (R0 管线)",
+        "signal_source": "block_boundary + mean_shift=127.5−通道均值 + variance_ratio 2.926/spread 1.3383",
+        "result": "p0 29.42 dB CI 10/10; p1 28.70; p2 28.75; p3 37.22; p4 26.06 (5 对 CI 10/10), 与 R0 逐对完全一致"
+      },
+      {
+        "id": "C1",
+        "pipeline": "blur_gaussian:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+        "role": "缺步模糊 (R0 的 blur 测试仅配 J4, confound)",
+        "signal_source": "spectral_slope_ratio 0.987<1; p3 gm_ratio 0.550; p1 0.879",
+        "result": "p0 24.86 dB (-4.56), CI 9/10 → 否定"
+      },
+      {
+        "id": "C2",
+        "pipeline": "contrast_strengthen_stretch:5,compression_jpeg:5",
+        "role": "severity 上边界 (R0 从未测 sev5; step4 原始判定 sev5)",
+        "signal_source": "full_analysis step4 verdict CONTRAST_strengthen_sev5",
+        "result": "p0 24.27 dB (-5.15), CI 7/10 (clipping 24-67%) → 否定"
+      },
+      {
+        "id": "C3",
+        "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:5",
+        "role": "severity 下边界 (R0 的 stretch3 仅与 J4 组合, confound)",
+        "signal_source": "R13 记录 stretch3 variance=2.51 < target 2.926",
+        "result": "p0 23.32 dB (-6.10), CI 7/10 → 否定"
+      }
+    ],
+    "validation": {
+      "mode": "PSNR (sigma<2, 全部为确定性管线); 含 noise 的候选未进入验证 — 预 JPEG 噪声被 q5 吸收且 control 已 verify_signals MATCH, 无法改善判定",
+      "candidate_tests": 8,
+      "support_5pair": {"p0": 29.42, "p1": 28.70, "p2": 28.75, "p3": 37.22, "p4": 26.06},
+      "ci": "control 5/5 对 CI 10/10",
+      "improvement_vs_control": "0.00 dB (无候选优于 control; 其余候选 -4.3 ~ -6.1 dB)",
+      "change_rule": "pair0 >31.42dB 或 >35dB 且其余 pair 不明显变差 — 无候选满足"
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "contrast_strengthen_stretch", "severity": 4, "verdict": "UNCERTAIN"},
+        {"function": "compression_jpeg", "severity": 5, "verdict": "UNCERTAIN"}
+      ],
+      "rationale": "R1 重跑信号与 R0 一致; 三个 R0 盲区 (缺步模糊 / sev5 / stretch3+J5) 全部实测否定; JPEG q5 经 fixed-point 实验确证; 残余 8.6-12.7 dB 为 q5 编解码级差异 (codec floor 13.1 同量级), 非缺步或 severity 错误; 无候选达到 CHANGE 阈值",
+      "residual_note": "pair0 29.42 dB 主要由 q5 块级量化差异贡献 (代码层可复现性限制), 训练 PSNR (R0 18.6 dB) 低不能单独反证管线; 若需进一步提升, 应关注训练策略而非盲识别"
+    },
+    "qwen_gate": {"available": false, "triggered": false, "note": "pair0 sigma=0.86<2 未触发; p1/p4 边界情况在本轮用剥离残差 + JPEG 噪声存活实验替代 Qwen 门 (API 不可用)"}
+  }
+}

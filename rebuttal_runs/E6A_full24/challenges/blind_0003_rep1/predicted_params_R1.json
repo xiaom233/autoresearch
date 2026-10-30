@@ -1,0 +1,65 @@
+{
+  "challenge_id": "blind_0003_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 2]],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 1}],
+      "psnr_pair0": 35.79,
+      "ci_pass": "8/10",
+      "function_family": "blur_glass",
+      "source": "R0",
+      "reason": "同族 severity -1 备份; 低于 glass:2 (36.60), 仅在 PSNR 仲裁时使用"
+    },
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+      "psnr_pair0": 34.83,
+      "ci_pass": "8/10",
+      "function_family": "blur_gaussian",
+      "source": "R0 + R1 复测一致 (34.83)",
+      "reason": "确定性跨族对照 (无 shuffle 随机); 比 glass:2 低 1.77 dB, 且信号向量不吻合 (R0: gm 0.4638 vs target 0.5322, dct0 0.7798 vs 0.6244)"
+    },
+    {
+      "pipeline": [{"function": "blur_lens", "severity": 2}],
+      "psnr_pair0": 34.61,
+      "ci_pass": "8/10",
+      "function_family": "blur_lens",
+      "source": "R0",
+      "reason": "gaussian↔lens MTF 不可区分, 跨族备份; 低于 glass:2"
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 3}],
+      "psnr_pair0": 33.12,
+      "ci_pass": "8/10",
+      "function_family": "blur_glass",
+      "source": "R0",
+      "reason": "同族 severity +1 备份; 低于 glass:2"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "mode": "PSNR (sigma=0.74-1.48 < 2, 5/5 对)",
+    "support_validation": "R1 重新施加 blur_glass:2 于 5 对 support: pair0 36.60 dB (CI 10/10), pair1 32.38 (10/10), pair2 32.05 (10/10), pair3 35.24 (10/10), pair4 32.35 (9/10, 唯一未过指标为 impulse_pct_255 极小值相对差 diff=0.000)。与 R0 的 36.61-36.62/32.42/32.04/35.25/32.34 一致 (glass shuffle 随机, 波动 ≤0.06 dB)。",
+    "rationale": "R1 未改变管线: 5 对 support 全部确认 blur 存在 (gm_ratio 0.3708-0.5322, 5/5 < 0.62) 且子类型玻璃 (pair1/pair4 glass_score 0.4322/0.4152 > 0.25 + sigma<3, 直接命中 SKILL Step2 glass 分支; 另 3 对因脚本 has_noise 误置提前返回未计算该信号)。4 个替代候选全部未通过: +contrast_weaken_scale:1 = 25.85 dB (-10.75), compression_jpeg:1 = 29.35 dB (-7.25), blur_gaussian:2 = 34.83 dB (-1.77), +noise_gaussian_RGB:1 的 verify_signals 中 noise:sigma 失配 1600%。control 在 pair0 36.60 dB (>35) 且 5 对复现, 无候选同时满足 5 对复现且相对 control 改善 (pair0 >2 dB), 故 NO_CHANGE。verdict 保持 UNCERTAIN 仅因 glass 像素 shuffle 为随机过程、PSNR 有 ~36 dB 天花板 (SKILL C.4), 类型+severity 证据强但按规程非确定性退化不标 LIKELY。",
+    "qwen_gate": {
+      "available": false,
+      "note": "Qwen/API 不可用; SKILL Step 0.5 门控触发条件未满足 (sigma<2 直接 NO_NOISE, 边界情形由 peeled_noise_check + verify_signals 替代)"
+    }
+  },
+  "signal_sources": [
+    "gm_ratio: pair0..4 = 0.5322/0.3708/0.4454/0.4814/0.4149, 全部 < 0.62 (无噪声阈值) -> 模糊确定存在; run_full_analysis 在 pair0/2/3 因 step2 verdict=GAUSSIAN_YCrCb 误置 has_noise=True 而走 slope 分支并提前返回 BLUR_UNLIKELY, 属分支/阈值边界, 按 SKILL 信任 gm_ratio",
+    "glass_score: pair1=0.4322, pair4=0.4152 (>0.25 且 sigma<3) -> GLASS (SKILL Step2 决策树); 对照模拟 gaussian:2 的 glass_score=0.0989 (R0 full_analysis_sim_g2)",
+    "spectral_slope_ratio: 1.0693/1.0845/1.0781/1.0742/1.0874, 横跨 1.08 阈值 (3/5 未达); glass shuffle 保留高频细节使 slope 信号低估模糊, 与 gm_ratio 并用时取 gm",
+    "block_boundary: 1.0014/1.0047/0.9886/1.0027/1.0063 (5/5 << 1.05, 0%FP) -> NO JPEG; compression_jpeg:1 实测 29.35 dB (-7.25 vs control) 佐证",
+    "unique_G: 256/255/250/211/251 (>200 阈值), dct_zero_ratio: 0.6244/0.4855/0.5505/0.6345/0.5201 (>0.5 但为 blur 伪影) — R0 用 glass:2 模拟图复核 dct0=0.6249 vs 目标 0.6244, 排除真实 JPEG/量化",
+    "variance_ratio: 0.9539/0.8916/0.9419/0.9620/0.9216 (<1 但 >0.55), brightness_mean_shift -0.5/-0.5/-0.4/-0.5/-0.4 (/255), clipped_fraction 0.0027/0.0148/0.0722/0.0/0.0062, chroma_ratio 0.9634/0.9237/0.9376/0.9869/0.9568 -> 均为 blur 可解释, 无独立全局步骤; +contrast_weaken_scale:1 实测 25.85 dB (-10.75) 排除",
+    "residual_intensity_corr: 0.1677/0.1791/-0.094/0.0007/-0.0628 符号不一致 -> 非确定性 gamma 变换 (gamma 应全对同向); gamma_suspect_from_noise 仅在 pair0/1 低置信触发, glass:2 模拟图 ric=0.163 与目标 0.165-0.168 同量级 -> 排除",
+    "noise_prior_sigma: 1.11/1.36/0.74/0.99/1.48 (5/5 < 2); peeled glass:2 残差 sigma 下界 pair0/1/4 = 1.98/2.97/3.21 (低于 x_distortion sev1 量级, blur 低估警告), 残差 spatial_corr 0.950-0.951 + intensity_var_corr 0.91-0.97 为 glass shuffle 失配的结构化残差; glass:2+noise_gaussian_RGB:1 verify_signals noise:sigma 失配 1600% -> NO_NOISE",
+    "residual_anisotropy: pair1=1.966, pair4=1.5177 (<2.2 脚本 motion 阈值; SKILL C.2 阈值为 4.0), R0 motion:2 实测 25.06 dB (-11.5) -> 排除 motion"
+  ]
+}

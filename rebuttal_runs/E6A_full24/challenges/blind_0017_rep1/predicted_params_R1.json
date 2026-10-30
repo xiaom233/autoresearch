@@ -1,0 +1,85 @@
+{
+  "challenge_id": "blind_0017_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_gaussian",
+      4
+    ],
+    [
+      "compression_jpeg",
+      4
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 3
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 4
+        }
+      ],
+      "psnr_pair0": 28.35,
+      "support_mean_psnr": 27.47,
+      "function_family": "blur.gaussian + compression.jpeg",
+      "reason": "severity -1 near tie (pair0 28.35 = control; 5-pair mean 27.47 vs 27.44; MTF/slope fingerprint on pair0 closer to target: mtf 1.164 vs target 1.154, slope_ratio 1.263 vs 1.215)"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_lens",
+          "severity": 4
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 4
+        }
+      ],
+      "psnr_pair0": 28.28,
+      "support_mean_psnr": null,
+      "function_family": "blur.lens + compression.jpeg",
+      "reason": "cross-family backup (gaussian/lens MTF indistinguishable); pair0 only, -0.07 dB"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR (sigma=0.74<2; pair2 raw sigma 4.08 fully reproduced by deterministic sim -> no noise)",
+    "support_validation": "control blur_gaussian:4,compression_jpeg:4 reproduced exactly on all 5 support pairs: PSNR 28.35/27.84/26.49/27.76/26.78 (mean 27.44), CI 7/7/7/7/8, identical to R0. No R1 candidate met the >2 dB / >35 dB improvement bar on pair0.",
+    "rationale": "R1 re-ran full analysis on all 5 pairs and re-interpreted every step. (1) JPEG: block_boundary 5.17-7.52 on all pairs (>1.1, 0%FP) + dct_zero 0.89-0.99 -> step confirmed; jpeg:4 remains PSNR optimum. (2) Noise: raw noise_prior sigma varies 0.0-4.08 across pairs; replaying the deterministic g4j4 pipeline on the same clean images reproduces the target sigma exactly (pair0 0.74=0.74, pair1 1.11=1.11, pair2 4.08=4.08) and peeled residuals have spatial_corr~0.96 -> sigma is a blur/JPEG artifact, NO_NOISE confirmed. (3) Blur: glass_score 1.26-1.57 but deterministic gaussian/lens sims also score 1.48-1.58 -> non-discriminative; anisotropy 1.21-1.61<1.7 (motion probe 25.12 dB, -3.23) -> gaussian family; severity 3 vs 4 remains a tie (mean 27.47 vs 27.44). (4) Global: target/sim contraction ratios are constant across pairs (var x0.824-0.833, chroma x0.895-0.906, spread x0.902-0.927) i.e. a systematic ~0.91 gain effect, but every allowed global function at its mildest setting overshoots by 2-3x and hurts PSNR (contrast_weaken_scale:1 27.28, contrast_weaken_stretch:1 22.03, saturate_weaken_HSV:1 24.97 from R0); raw global verdicts flip between target and same-pipeline sims on identical content (pair2 target SATURATION_weaken_sev3 vs sim NO_GLOBAL; pair1 target NO_GLOBAL vs sim SATURATION_strengthen_sev4) -> detector false positives, no global step representable on the grid. Residual is an OOD/continuous-parameter effect (e.g. JPEG quality between q8 and q5) that the discrete grid cannot express; the grid optimum remains g4+j4.",
+    "support_simulation_psnr": {
+      "pair0": 28.35,
+      "pair1": 27.84,
+      "pair2": 26.49,
+      "pair3": 27.76,
+      "pair4": 26.78
+    },
+    "support_simulation_mean_psnr": 27.44
+  },
+  "signal_sources": [
+    "block_boundary 5.17-7.52 (5 pairs, >1.1, 0% FP) -> JPEG present (step LIKELY)",
+    "noise_prior sigma reproduced exactly by deterministic sim: 0.74/1.11/4.08 (pairs 0/1/2) -> no noise step",
+    "peeled residual spatial_corr 0.9595-0.9715 (pairs 1/2) + extreme_pct>50% known FP trigger -> structured mismatch, not noise",
+    "glass_score 1.26-1.57 target vs 1.48-1.58 on deterministic gaussian/lens sims -> glass DT non-discriminative",
+    "residual_anisotropy 1.21-1.61 < 1.7 + pca_ratio 1.02-1.15; motion probe 25.12 dB -> not motion",
+    "pair0 MTF/slope fingerprint: target mtf 1.154 / slope 1.215 vs g3 sim 1.164 / 1.263 vs g4 sim 1.369 / 1.421 -> gaussian severity near g3/g4",
+    "constant target/sim contraction ratios (var x0.83, chroma x0.90) vs minimum discrete global steps (contrast x0.75, saturate x0.7) -> global step not representable; probes 27.28/22.03 dB reject it"
+  ]
+}

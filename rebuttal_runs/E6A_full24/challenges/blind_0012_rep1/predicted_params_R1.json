@@ -1,0 +1,104 @@
+{
+  "challenge_id": "blind_0012_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "noise_gaussian_RGB",
+      1
+    ],
+    [
+      "blur_motion",
+      5
+    ],
+    [
+      "compression_jpeg",
+      3
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_gaussian_RGB",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "blur_motion",
+      "severity": 5,
+      "verdict": "LIKELY"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 3,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_motion",
+          "severity": 5
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 3
+        }
+      ],
+      "function_family": "no-noise ablation",
+      "support_verdicts": {
+        "pair0": "PARTIAL 2/3",
+        "pair1": "MATCH 3/3",
+        "pair2": "MATCH 3/3",
+        "pair3": "MATCH 3/3",
+        "pair4": "PARTIAL 2/3"
+      },
+      "psnr": null,
+      "note": "Best-looking R1 candidate, but verify_signals omits the noise checks for this pipeline (3 checks vs 5); after normalizing same-pair control draws to the same 3-check set, control already reaches 4/5 PARTIAL+. No positive signal supports removing noise; noise-last probe shows sigma diff 6054%. Kept only as exploratory alternative, not adopted."
+    },
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 1
+        },
+        {
+          "function": "blur_motion",
+          "severity": 4
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 3
+        }
+      ],
+      "function_family": "blur severity boundary",
+      "support_verdicts": {
+        "pair0": "WEAK 2/5 (slope diff 0.090)",
+        "pair4": "WEAK 3/5 (slope/sigma/bb match; wiener 0.485)"
+      },
+      "psnr": null,
+      "note": "pair4 gm_ratio=0.385 -> est sev 4; motion:4 matches slope+bb on pair4 but fails slope on pair0; mixed, no consistent gain over motion:5"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=2.22 on pair0; PSNR invalid due to noise seed mismatch and per-call random motion-blur angle)",
+    "support_validation": "15 test_candidate.py signal-mode runs. Control (noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3) fresh draws on pairs 0-4: WEAK 3/5, WEAK 3/5, WEAK 3/5, PARTIAL 4/5, WEAK 1/5 (1/5 PARTIAL+); R0's original draws: 3/5,2/5,2/5,1/5,MATCH 5/5. No-noise ablation: PARTIAL,MATCH,MATCH,MATCH,PARTIAL (5/5 PARTIAL+) but with only 3 checks; normalized control = 4/5 PARTIAL+ on the same check set, difference not significant (p~0.16). motion:4 mixed (pair0 WEAK 2/5, pair4 WEAK 3/5). lens:5 pair0 WEAK 2/5 (slope diff 0.090, wiener 0.392). jpeg:4 pair1 WEAK 2/5 (bb diff 29% vs 12% at jpeg:3). noise-last probe pair0 WEAK 2/5 (sigma diff 6054%, bb 54%).",
+    "rationale": "R1 re-analysis confirms the deterministic core (blur_motion:5 -> compression_jpeg:3) on all 5 support pairs: block_boundary>2.2 (5/5), PCA 3.87-5.51>2.5 (5/5), and the JPEG/blur severity boundaries are bracketed (jpeg:4 worse, motion:4 mixed, lens:5 fails slope/wiener). No overlooked global step is supported (pair1 saturation flag is a 1/5 content artifact). The only boundary signal is noise (sigma=2.22 just above 2, type unidentifiable when noise precedes blur), but every direct test supports gaussian_RGB:1 applied before blur: sigma matches 5/5 fresh draws (and 5/5 in R0), YCrCb is ruled out by rgb_ratio math (expected ~2.54 vs measured 1.065), and the noise-last probe rejects post-blur noise (sigma diff 6054%). The no-noise ablation's PARTIAL/MATCH gain is a verification-design artifact (omitted FWHM check) rather than a signal improvement, so no candidate passes a valid improvement test over R0 -> NO_CHANGE.",
+    "candidate_tests": 15,
+    "qwen_gate": {
+      "available": false
+    }
+  },
+  "signal_sources": [
+    "compression: block_boundary=2.212-2.902 on 5/5 support pairs (>1.1, 0% FP per SKILL exp17/18) + dct_zero_ratio=0.871-0.970 + unique_G=256 -> JPEG confirmed; severity kept 3 (jpeg:4 on pair1 gives bb diff 29% vs 12% at jpeg:3 on the same pair; R0 pair0 jpeg:4 39%, jpeg:5 105%)",
+    "blur family: blur_pca_ratio=3.871-5.505 >2.5 on 5/5 pairs (0% FP per SKILL signal_reliability; primary signal) -> motion; residual_anisotropy on pair1=1.602 is BELOW the 1.7 boundary (threshold-boundary signal), but PCA overrides; glass_score=0.703-1.215 >0.25 on all pairs was re-examined and rejected because shuffle-based glass blur cannot produce radial spectral_slope -1.219..-1.702 nor directional PCA",
+    "blur severity: gm_ratio=0.229-0.385 -> estimated severity 5 on pairs 0/1/2/3 and 4 on pair4 (boundary); motion:4 in correct jpeg:3 context: pair0 spectral_slope diff=0.090 (fail) vs motion:5 slope match, pair4 slope+bb matched but wiener 0.485 -> mixed, no consistent gain over motion:5",
+    "blur cross-family: deterministic lens:5 (disk kernel, no random angle) on pair0: spectral_slope diff=0.090 (fail), wiener corr=0.392 (<0.85) -> motion retained over lens",
+    "noise type: full_analysis step2 verdict GAUSSIAN_YCrCb is driven by cross_channel_corr 0.83-0.97, a documented blur+JPEG FP (failure_risk FP_YCrCb_BLUR_JPEG); re-derived expected residual rgb_ratio for noise_gaussian_YCrCb:1 from inverse YCrCb coefficients Var(R):Var(G):Var(B) = 2.97:1.63:4.14 -> ratio ~2.54, while measured residual rgb_ratio=1.065 -> YCrCb ruled out, gaussian_RGB retained",
+    "noise presence/severity: verify_signals noise:sigma (wavelet HH MAD of target vs simulated image) matches within 20% for noise_gaussian_RGB:1 on 5/5 pairs this round (and 5/5 in R0); noise-last order probe (blur->jpeg->noise) gives sigma diff=6054% and block_boundary diff=54% -> noise must precede blur+JPEG as in R0 order; dropping noise is not supported by a direct signal",
+    "global ruled out: pair1 alone flags SATURATION_strengthen_sev3 (chroma_ratio=1.160) while 4/5 pairs are NO_GLOBAL with chroma_ratio=0.865-0.956 (JPEG 4:2:0 direction = weakening); a shared pipeline step cannot appear in 1/5 pairs and saturation is a documented mixed-degradation FP (~33%); contrast: variance_ratio=0.684-0.934 vs contrast_weaken_scale:1 expected variance ~0.56; mean_shift=-0.3..-1.3/255 -> no brightness/contrast",
+    "verify-signal check-set asymmetry: verify_signals computes noise:sigma and noise:structured_residual(FWHM) only when a noise_* step is present (5 checks for C0 vs 3 for the no-noise ablation). Re-normalizing fresh same-pair C0 draws to the no-noise check set: pair0 2/3 PARTIAL, pair1 2/3 PARTIAL, pair2 2/3 PARTIAL, pair3 3/3 MATCH, pair4 0/3 MISMATCH -> C0 = 4/5 PARTIAL+ vs C1 = 5/5; combined control draws 6/10 PARTIAL+ vs 5/5 (Fisher exact p~0.16, not significant). C1's apparent WEAK->PARTIAL/MATCH gain is the omitted FWHM structural check plus motion-angle lottery, not a real improvement."
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "challenge_id": "blind_0011_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_speckle", 1],
+    ["blur_gaussian", 4]
+  ],
+  "pipeline": [
+    {"function": "noise_speckle", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "blur_gaussian", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 1},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "psnr_pair0": 39.14,
+      "ci": "10/10",
+      "function_family": "noise-poisson",
+      "note": "噪声族亚军, Δ-0.78 dB vs control; 剥离后 var_slope=0.0958 平坦 (不支持 Poisson 的信号依赖方差), PSNR 亦更低"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 1},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "psnr_pair0": 36.95,
+      "ci": "8/10",
+      "function_family": "noise-gaussian-additive",
+      "note": "加性噪声族: 黑端 clipping 过冲 pair0 +2.114pp / pair4 +18.0pp(100%) → 与 target 的黑端签名 (≈blur-only 水平) 矛盾, 排除"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "psnr_pair0": 35.61,
+      "ci": "8/10",
+      "function_family": "no-noise(control)",
+      "note": "无噪声对照: Δ-4.31 dB, 且无法解释近白端 (>=254) target 5/5 对全为 0.000% 而 blur-only 模拟 pair0=1.367%/pair1=0.153%/pair2=0.065% → 需要预模糊零均值噪声"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR + SIGNAL (sigma_prior=1.85<2; 5 对 support 复核)",
+    "support_validation": "control (noise_speckle:1,blur_gaussian:4) 5 对仿真 PSNR: pair0 39.92 / pair1 42.17 / pair2 41.16 / pair3 42.85 / pair4 42.73 (mean 41.77 dB, CI 8-10/10); 全部 6 个变体均低于 control: poisson:1 39.14(pair0), gaussian_RGB:1 36.95(pair0)/38.88(pair4), YCrCb:1 36.97(pair0), speckle:1+blur:3 36.25(pair0), speckle:1+lens:4 36.91(pair0), blur:4→speckle:1 21.99(pair0, 顺序反证); verify_signals pair0 PARTIAL (blur:spectral_slope + blur:wiener_kernel + noise:sigma 匹配; noise:structured_residual FWHM=14px 不匹配为 noise→blur 顺序固有); peeled_noise_check(pair0, blur_gaussian:4): residual_std=3.8, ivc=0.8964, vm_slope=0.0115, var_slope=0.0958, rgb_ratio=1.028, spatial_corr=0.9979",
+    "rationale": "R1 重跑 5 对 run_full_analysis 与 R0 一致且跨对稳定: block_boundary 0.999-1.0017 (0%FP <1.1) + unique_G 194-244 → 排除 JPEG/quantization; NO_GLOBAL 5/5 (mean_shift -1.0~-2.3 远小于库内最小全局步进 brightness 25.5 / contrast scale 0.75 / saturation 0.7); blur=gaussian 5/5 (gm_ratio 0.181-0.381, spectral_slope_ratio 1.246-1.495, anisotropy 1.147-1.582<1.7, glass_score 0.039-0.058<0.25)。信号重释新增两项 R0 未用的证据: (1) 剥离后 ivc=0.8964 (残差方差∝亮度) → 乘性噪声, 支持 speckle; (2) 近白端 (>=254) target 5/5 对全为 0.000%, blur-only 模拟为 1.367/0.153/0.065/0/0% → 亮端被预模糊零均值噪声 clipping 压暗, 且近黑端 (<=1) target (2.114/0.014/0.034/0.266/18.002%) ≈ blur-only 模拟 (2.090/0.010/0.028/0.017/17.975%) → 加性 gaussian/YCrCb 会产生黑端过冲 (+2.114pp pair0 / +18.0pp pair4), 被排除。修正 R0 一处方向性错误: R0 称'blur-only 比 target 少 1.195pp 纯255', 精确 uint8 复算为 blur-only 比 target 多 1.367pp 近白像素 (方向相反), 但结论 (存在噪声步, speckle 优于加性) 不变且被黑端签名与 ivc 进一步支持。trained R0 support PSNR=27.0 dB 与仿真 40-43 dB 的差距归因于 1.42 GPU-h / EPOCH=2 训练预算, 非盲识别误差 → NO_CHANGE。",
+    "verdict_note": "noise 按 SKILL 规则永不 LIKELY (seed 失配) → UNCERTAIN; blur 5/5 对双信号匹配 → LIKELY; overall=UNCERTAIN (与 R0 一致)"
+  },
+  "signal_sources": [
+    "full_analysis_R1 (+p1-p4): block_boundary 0.9990-1.0017 (0%FP 规则 <1.1) + unique_G 194-244 + dct_zero_ratio 0.827 → 排除 JPEG/quantization (quantization 库内 sev1 仅 20/24 色)",
+    "full_analysis_R1 (+p1-p4): gm_ratio 0.1811-0.3805, spectral_slope_ratio 1.2463-1.4945, residual_anisotropy 1.1466-1.5824 (<1.7 非 motion), glass_score 0.0387-0.0580 (<0.25 非 glass) → blur_gaussian",
+    "peeled_noise_check(pair0, strip blur_gaussian:4): residual_std=3.8, ivc=0.8964 (残差方差∝亮度 → 乘性噪声), vm_slope=0.0115, var_slope=0.0958 (平坦, 排除 Poisson), rgb_ratio=1.028 + ch_stds R/G/B=3.8/3.9/3.8 (排除 YCrCb), spatial_corr=0.9979 (平滑残差 → 噪声先于 blur)",
+    "近白端 (>=254) 统计 (5 对): target 全为 0.000%; blur-only 模拟 pair0=1.367%, pair1=0.153%, pair2=0.065% → 预模糊零均值噪声在亮端 clipping 压暗 (乘性/加性均可解释白端, 需黑端区分)",
+    "近黑端 (<=1) 统计 (5 对): target 2.114/0.014/0.034/0.266/18.002% ≈ blur-only 模拟 2.090/0.010/0.028/0.017/17.975%; 加性 gaussian_RGB:1 和 YCrCb:1 使 pair0 黑端 +2.114pp, gaussian_RGB:1 使 pair4 黑端 +18.0pp (100%) → 排除加性族, speckle 黑端 diff 仅 -0.05/-0.18/-0.01/-0.72/-0.18pp",
+    "mean_shift 随图像亮度变化: 亮图 pair0 (-2.36,-2.42,-2.23) vs 暗图 pair4 (-0.94,-1.07,-1.73) per-channel → 高光 clipping 的乘性噪声签名; 库内全局步骤最小步进 (brightness 0.1*255=25.5, contrast_weaken_scale 0.75, saturate 0.7) 均远超观测 → NO_GLOBAL",
+    "顺序判别: blur_gaussian:4→noise_speckle:1 = 21.99 dB / CI 4/10 vs noise→blur = 39.92 dB → 物理顺序 noise→blur (噪声先于光学模糊)",
+    "Step2 'GAUSSIAN_YCrCb (high)' 判决确认为 blur 残差污染: rgb_ratio=1.028, cross_ch=0.960 来自 blur; YCrCb:1+blur:4 实测 36.97 dB (低于 control 2.95 dB) 且黑端 +2.114pp → 排除",
+    "test_candidate 5 对 control 复现: 39.92/42.17/41.16/42.85/42.73 dB, impulse_pct_255 diff=0.000 5/5 对; verify_signals pair0 PARTIAL (3✓/1✗)"
+  ]
+}

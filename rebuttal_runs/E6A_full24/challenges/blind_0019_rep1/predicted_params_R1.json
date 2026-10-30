@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0019_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_lens", 4], ["compression_jpeg", 4], ["saturate_weaken_HSV", 5]],
+  "pipeline": [
+    {"function": "blur_lens", "severity": 4, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"},
+    {"function": "saturate_weaken_HSV", "severity": 5, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [["blur_lens", 4], ["saturate_weaken_HSV", 5], ["compression_jpeg", 4]],
+      "pair0_psnr_db": 28.92,
+      "function_family": "order_swap",
+      "rejected_reason": "JPEG 必须最后: 灰度先于 JPEG 改变色度编码, 28.92dB << inf"
+    },
+    {
+      "pipeline": [["blur_lens", 4], ["compression_jpeg", 4], ["saturate_weaken_YCrCb", 5]],
+      "pair0_psnr_db": 21.18,
+      "function_family": "saturation_colorspace",
+      "rejected_reason": "YCrCb 保持 luma, 与 brightness_mean_shift 随内容变化不符; 21.18dB << inf (HSV 胜)"
+    },
+    {
+      "pipeline": [["blur_gaussian", 3], ["compression_jpeg", 4], ["saturate_weaken_HSV", 5]],
+      "pair0_psnr_db": 37.78,
+      "function_family": "blur_subtype",
+      "rejected_reason": "gaussian 核无法复现盘状 lens 核; 37.78dB << inf. residual_anisotropy 在 pair2/pair4 低于 1.7 属内容依赖边界"
+    },
+    {
+      "pipeline": [["blur_lens", 4], ["compression_jpeg", 4], ["saturate_weaken_HSV", 4]],
+      "pair0_psnr_db": 34.82,
+      "function_family": "saturation_severity",
+      "rejected_reason": "5/5 pair saturation_chroma_ratio=0.0 (全去色) 对应 HSV scale=0.0 即 sev5; sev4 保留 20% 色度, 34.82dB << inf"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (deterministic; peeled residual std=0.0, sigma<2 outside blur)",
+    "support_validation": "5/5 pairs bit-exact: pair0-4 全部 PSNR=inf, CI 10/10 (diff=0.000)",
+    "rationale": "R1 独立重跑 run_full_analysis (pair0 + p1-p4) 复现 R0 信号; test_candidate 独立验证 R0 管线在 5 对 support 上逐像素复现 (PSNR=inf, CI 10/10), 决定性证明无噪声且各步唯一。边界候选全部劣于 R0: 顺序交换 28.92dB, YCrCb 21.18dB, gaussian 37.78dB, saturate sev4 34.82dB — 相对 control 无改善, 故 NO_CHANGE。",
+    "qwen_gate": {
+      "available": false,
+      "triggered_by": "pair4 noise_prior sigma=2.22 落入 (2,10) 边界",
+      "resolution": "bit-exact 无噪声管线复现 + pair4 peeled residual std=0.0 → 噪声信号为 blur/JPEG/灰度污染伪影, 无需 Qwen 门控"
+    }
+  },
+  "signal_sources": [
+    "block_boundary=3.86/5.29/9.10/3.87/3.97 (>1.1, 0%FP) → compression_jpeg 存在 (5/5)",
+    "unique_G=218-256 (>200, pair3/4=256): <200 规则不触发, 压缩存在性仅由 block_boundary 支撑 (信号边界记录)",
+    "gm_ratio=0.19-0.28 (severe blur) + blur_pca_ratio=1.03-1.18 (lens hint) → blur_lens:4; gaussian:3 对照仅 37.78dB",
+    "residual_anisotropy=1.35-2.36 跨 1.7 阈值 (pair2/pair4 低于): DT 在本内容下不可靠, 由 PSNR 仲裁 lens (信号重释)",
+    "saturation_chroma_ratio=0.0 (5/5, 全去色) → saturate_weaken_HSV:5 (scale=0.0); sev4=34.82dB, YCrCb:5=21.18dB 对照",
+    "brightness_mean_shift=2.4-28.4 随内容变化归因于 HSV 灰度 (V=max≥luma), 非独立 brightness; variance_ratio=0.826-1.049 归因于 blur+JPEG",
+    "noise_prior_sigma=0.37-2.22 与 spatial_corr/ric 均为 raw residual 污染信号; 无噪声管线 5/5 bit-exact + pair4 peel std=0.0 排除 noise/gamma",
+    "顺序信号: blur→jpeg→saturation bit-exact; 交换 saturation/jpeg 后 28.92dB"
+  ]
+}

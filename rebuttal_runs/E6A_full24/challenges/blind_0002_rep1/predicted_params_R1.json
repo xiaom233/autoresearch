@@ -1,0 +1,43 @@
+{
+  "challenge_id": "blind_0002_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_gaussian_YCrCb", 2]],
+  "pipeline": [
+    {"function": "noise_gaussian_YCrCb", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "noise_gaussian_RGB", "severity": 3}],
+      "function_family": "noise",
+      "psnr": null,
+      "stats": {"rgb_ratio": 1.0851, "ch_stds": [34.5, 35.4, 32.6], "cross_ch_corr": 0.0131, "residual_std": 34.2},
+      "note": "Magnitude-matched cross-family fallback (R0 used under-magnitude RGB:2). verify_signals MATCH is a weak-sigma false positive; SB6 channel signature rejects: equal per-channel sigma and cross_ch 0.0131 vs target 0.2994"
+    },
+    {
+      "pipeline": [{"function": "noise_poisson", "severity": 3}],
+      "function_family": "noise",
+      "psnr": null,
+      "stats": {"rgb_ratio": 1.3054, "ch_stds": [22.2, 22.1, 17.0], "cross_ch_corr": 0.0012, "residual_std": 20.6},
+      "note": "Magnitude-matched poisson boundary (var_slope=1.0263>1.0 flag). Rejected: channel ordering R=G>B (target B>R>G), cross_ch ~0, rstd 32% below target"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL",
+    "support_validation": "5/5 support pairs: fresh-seed noise_gaussian_YCrCb:2 controls give verify_signals MATCH and reproduce SB6 + global signals. Worst relative deviations: rgb_ratio 0.14% (p3), cross_channel_corr 0.28% (p3), residual_std 0.3% (p1), variance_ratio 0.14% (p3), saturation_chroma_ratio 0.07% (p3). Pairwise ch_stds target/sim: p0 [31.5,22.4,35.5]/[31.6,22.4,35.5]; p1 [31.9,22.1,36.7]/[31.9,22.1,36.7]; p2 [32.6,22.2,38.1]/[32.6,22.2,38.1]; p3 [28.8,20.7,34.5]/[28.8,20.7,34.6]; p4 [31.1,22.0,35.6]/[31.1,22.0,35.6].",
+    "rationale": "R0's single-step YCrCb:2 prediction survives an independent R1 signal re-interpretation. R1 newly inspected the support pairs' global flags that R0 never examined: pairs 1-2 show SATURATION_strengthen_sev5 with saturation_from_noise=false, and pair 3 shows contrast_from_variance (variance_ratio 2.0197) with chroma_ratio 4.6499. Fresh-seed noise-only controls reproduce every one of these values (chroma 1.5285 vs 1.5287 / 1.4508 vs 1.4504, variance 2.0225 vs 2.0197, chroma 4.6531 vs 4.6499) and reproduce the identical false_positive_checks flags, so all global detections are noise+clipping artifacts. Deterministic steps have no supporting signal on any pair (block_boundary 0.9983-1.0040 <1.05, unique_G 256 == clean, spectral_slope_ratio 0.9699-1.0004 <1.08, FFT anisotropy=0, PCA=0; the controls reproduce the slope ratios within 0.2%). Severity is bracketed: sev1 ch_stds [20.8,15.9,23.2] and sev3 [44.1,30.3,49.4] both fail (sigma diff 32%/36%, WEAK) while sev2 matches to 0.1. Subtype: YCrCb signature (ch_stds B>R>G, rgb_ratio 1.5868, cross_ch 0.2994) is not reproducible by magnitude-matched poisson:3 ([22.2,22.1,17.0], cross_ch 0.0012) or RGB:3 (equal channels, cross_ch 0.0131); extreme_pct 51.27%, var_slope 1.0263 and residual_intensity_corr 0.204 are all metric artifacts reproduced by the control. No candidate passes the CHANGE criterion; the noise realization itself remains unverifiable (seed mismatch), so the verdict stays UNCERTAIN.",
+    "qwen_gate": {"available": false, "triggered": false, "reason": "sigma 13.71-15.07 > 10 -> noise confirmed; SKILL Step 0.5 gate not required"}
+  },
+  "signal_sources": [
+    "target raw-residual SB6 pair0: ch_stds R31.5/G22.4/B35.5 (B>R>G), rgb_ratio 1.5868, cross_ch 0.2994, residual_std 30.4 -> YCrCb signature",
+    "YCrCb severity bracket: sev1 sim ch_stds [20.8,15.9,23.2] rstd 20.2 (sigma diff 32%, WEAK); sev3 sim [44.1,30.3,49.4] cc 0.4620 rstd 42.2 (sigma diff 36%, WEAK); sev2 [31.6,22.4,35.5] rstd 30.4 MATCH",
+    "pairs 1-2 R1 full analysis: SATURATION_strengthen_sev5, chroma_ratio 1.5287/1.4504, saturation_from_noise=false -> fresh-seed noise-only control reproduces 1.5285/1.4508 and the same FP flag -> saturation is a clipping/content artifact",
+    "pair 3 R1 full analysis: variance_ratio 2.0197 (contrast_from_variance), chroma_ratio 4.6499 -> control reproduces 2.0225/4.6531 with identical FP flags",
+    "var_slope 1.0263>1.0 (POISSON flag) -> poisson:3 ch_stds [22.2,22.1,17.0] opposite channel ordering, cross_ch 0.0012 -> metric artifact of clipped residual",
+    "residual_intensity_corr 0.204 (pair0) / 0.0357 (pair1) content-dependent -> control reproduces 0.1966 on pair0 -> gamma FP",
+    "block_boundary 0.9983-1.0040 + unique_G 256 + dct_zero_ratio ~0.022 on all 5 pairs -> no JPEG/quantization (0% FP signal)",
+    "spectral_slope_ratio 0.9699-1.0004 + FFT anisotropy=0 + PCA=0, reproduced by noise-only controls within 0.2% -> no blur"
+  ]
+}

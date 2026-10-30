@@ -1,0 +1,78 @@
+{
+  "challenge_id": "blind_0016_rep2",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 4],
+    ["compression_jpeg", 1]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 4,
+      "verdict": "UNCERTAIN",
+      "note": "Directional blur confirmed on all 5 supports: identify_blur_type=MOTION_BLUR 5/5 (PCA 2.553/3.380/2.527/2.341/3.345; PCA>2.5 = 0% FP signal, exp28 calibration). Isotropic families rejected at their untested max severity: gaussian:5 25.58 dB, lens:5 25.60 dB (deterministic, below same-session control 26.32 dB). Severity 4 retained: R0 pair0 signal spectral_slope diff sev4=0.166 < sev5=0.183; gm_ratio per pair 0.319-0.657 (sev estimate 2-5, noisy/content-dependent, mode=4). UNCERTAIN because blur_motion draws angle=uniform(-90,90) per application, so the target's actual angle is unrepresentable and pixel PSNR is not reproducible (identical-pipeline repeats on pair0: 22.02/26.32/32.54 dB)."
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "LIKELY",
+      "note": "JPEG confirmed on all 5 supports (block_boundary 1.591-2.428 >> 1.1, 0% FP; dct_zero_ratio 0.79-0.97; unique_G 222-256). Severity revised 1->2 (q25->q18): at jpeg:1 the block_boundary mismatch on supports 1-4 was 10-15% and was treated by R0 as an acceptable near-miss; at jpeg:2 block_boundary matched 5/5. Pair1 bracketing with two independent random motion angles per level: jpeg:1 13% and 15% (mismatch), jpeg:2 <8% both times (match), jpeg:3 32% (overshoot) -> target blockiness corresponds to a quality between q25 and q12, closest to q18. Combined PSNR pair0 27.35 dB (CI 9/10) vs control 26.32 dB (CI 7/10) same session; R0 jpeg:2 sample 26.86 dB (CI 10/10)."
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        ["blur_motion", 4],
+        ["compression_jpeg", 1]
+      ],
+      "note": "R0 control (q25). Signal validation 5 pairs: block_boundary matched only 2/5 (pair1 13%/15%, pair2 10%, pair3 12% mismatch), spectral_slope 4/5, overall verdicts WEAK/WEAK/WEAK/MISMATCH/PARTIAL. Pair0 PSNR 26.32 dB (CI 7/10) this session. Retained as fallback because q25 sits inside the 8% tolerance on 2 pairs.",
+      "signal": "compression:block_boundary 2/5; blur:spectral_slope 4/5; blur:wiener 0/5 (angle-limited)"
+    },
+    {
+      "pipeline": [
+        ["blur_motion", 5],
+        ["compression_jpeg", 2]
+      ],
+      "note": "Untested severity boundary: gm_ratio=0.3596 on pair0 is 0.0096 above the sev5 threshold 0.35, and pair3 gm_ratio=0.3190 maps to sev5. Not validated (sev5 at jpeg:1 had worse spectral_slope 0.183 and PSNR 21.49/29.20); keep only for training-time arbitration.",
+      "signal": "blur:gm_ratio boundary 0.3596 (pair0) / 0.3190 (pair3)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL-primary (noise_prior sigma=0.74 < 2 so PSNR would nominally be allowed, but blur_motion re-samples angle per application -> pixel PSNR not reproducible: identical-pipeline repeats on pair0 span 22.02-32.54 dB, 10.52 dB). PSNR kept as descriptive secondary evidence.",
+    "support_validation": "pairs 0-4, verify_signals via test_candidate. C2 blur_motion:4+compression_jpeg:2: pair0 WEAK (bb match; slope diff 0.135; wiener 0.326), pair1 MATCH (slope+bb+wiener), pair1 repeat PARTIAL (slope+bb match; wiener 0.282), pair2 PARTIAL (slope+bb match; wiener 0.236), pair3 PARTIAL (slope+bb match; wiener 0.371), pair4 PARTIAL (slope+bb match; wiener 0.196). Control jpeg:1: pair0 WEAK (bb match; slope 0.166), pair1 WEAK (slope match; bb 13%, repeat 15%), pair2 WEAK (slope; bb 10%), pair3 MISMATCH (slope 0.121; bb 12%), pair4 PARTIAL (slope+bb; wiener 0.207). Compression block_boundary: control 2/5 -> C2 5/5. Spectral_slope: 4/5 both (pair3 fixed 0.121->match; pair0 0.166->0.135). Verdict level: improved 3/5 (pair1 WEAK->MATCH, pair2 WEAK->PARTIAL, pair3 MISMATCH->PARTIAL), unchanged 2/5, worse 0/5. PSNR pair0: 27.35 (C2) vs 26.32 (control) = +1.03 dB, CI 7/10->9/10.",
+    "rationale": "Two-step blur->JPEG pipeline (physical order). R0's pipeline family and motion severity are confirmed by reanalysis of all 5 supports, but R0 chose JPEG severity 1 on a PSNR tie (23.81 vs 23.91) and dismissed a systematic block_boundary near-miss on supports 1-4 as 'quality=25 is the mildest level available'. Re-bracketing shows the target blockiness is not at q25: two independent angles at jpeg:1 are 13%/15% below tolerance, two at jpeg:2 match, and jpeg:3 overshoots by 32%; severity 2 is the unique best available level. The compression claim is a deterministic, 0%-FP signal, holds on 5/5 supports, and no support pair regressed on any pipeline-controllable signal (bb/slope). The only unfixable mismatch is the Wiener-kernel correlation, which is angle-dependent by construction for re-sampled motion and therefore never matches across supports. Noise is ruled out by an order of magnitude (any noise_* severity 1 adds sigma ~12.75 in 0-255 scale vs measured 0.74-1.85). No global step on 5/5 (contrast_spread_ratio 0.885-0.975, mean_shift -0.2..-0.5, chroma_ratio 0.92-1.03). glass_score 0.48-1.04 is far above the calibrated glass(2-4) range 0.19-0.41 and is inflated by JPEG blockiness; glass:3 simulated only 22.76 dB, so glass is rejected. Overall UNCERTAIN remains solely because the motion angle is not a pipeline parameter.",
+    "deterministic_family_ceiling": {
+      "blur_gaussian:5,compression_jpeg:1": 25.58,
+      "blur_lens:5,compression_jpeg:1": 25.60,
+      "note": "untested max severities of isotropic families; deterministic so PSNR is directly comparable; both below control 26.32 -> directional blur confirmed"
+    },
+    "psnr_pair0": {
+      "control_blur_motion:4,compression_jpeg:1": 26.32,
+      "c2_blur_motion:4,compression_jpeg:2": 27.35,
+      "delta_db": 1.03,
+      "ci_control": "7/10",
+      "ci_c2": "9/10"
+    },
+    "noise_6step_check": {
+      "noise_prior_sigma_unpeeled_pairs": [0.74, 1.24, 0.74, 1.85, 0.74],
+      "peeled_sigma_pair0_r0": 1.48,
+      "diagnosis": "NO_NOISE. Any noise_* severity 1 adds sigma ~12.75 (0.05*255); observed 0.74-1.85 is an order of magnitude below. run_full_analysis's low-confidence GAUSSIAN_YCrCb verdicts and the peeled extreme_pct=50.07 / spatial_corr=0.9933 are structured residual artifacts (motion-angle mismatch + JPEG), the SKILL-documented false-positive pattern."
+    }
+  },
+  "signal_sources": [
+    "block_boundary target per support 2.136/1.948/1.888/2.428/1.591; jpeg:1 sim 10-15% off on supports 1-4 (2/5 pass) vs jpeg:2 <8% on 5/5 -> JPEG severity 1->2",
+    "JPEG severity bracket on pair1 with two random motion angles per level: jpeg:1 13%/15% (fail), jpeg:2 <8%/<8% (pass), jpeg:3 32% (overshoot) -> target quality between q25 and q12, closest q18",
+    "blur_pca_ratio 2.553/3.380/2.527/2.341/3.345 with identify_blur_type=MOTION_BLUR 5/5 (PCA>2.5: 41% recall, 0% FP per exp28) -> motion family",
+    "residual_anisotropy 1.659/1.611/1.822/2.137/1.534, spectral_slope_ratio 1.151/1.260/1.219/1.166/1.306 -> directional blur, severity 4",
+    "spectral_slope diff sev4 0.166 vs sev5 0.183 on pair0 (R0) + C2 slope matched 4/5 supports -> motion severity 4 retained (gm_ratio 0.3596 pair0 near sev5 boundary kept as alternative)",
+    "gaussian:5 25.58 dB / lens:5 25.60 dB at untested max severity (deterministic) below control 26.32 dB -> isotropic families excluded",
+    "noise_prior sigma 0.74-1.85 (peeled 1.48) vs sigma ~12.75 implied by any noise_* severity 1 -> NO_NOISE by order of magnitude; spatial_corr 0.83-0.93 residual = structured artifacts",
+    "variance_ratio 0.779-0.965, contrast_spread_ratio 0.885-0.975, mean_shift -0.2..-0.5, clipped_fraction 0.000-0.045, chroma_ratio 0.92-1.03 -> NO_GLOBAL 5/5",
+    "glass_score 0.482-1.041 exceeds calibrated glass(2-4) 0.19-0.41 (JPEG-blockiness inflated); glass:3 = 22.76 dB -> glass rejected",
+    "block_boundary identical-pipeline angle repeats (pair1 jpeg:1: 13%,15%; jpeg:2: match,match) -> bb improvement is angle-robust, not an angle artifact",
+    "identical-pipeline PSNR repeats on pair0 (22.02/26.32/32.54 dB, 10.52 dB spread) -> pixel PSNR not reproducible for blur_motion; signal validation used as primary"
+  ]
+}

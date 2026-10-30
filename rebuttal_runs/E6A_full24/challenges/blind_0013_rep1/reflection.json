@@ -1,0 +1,493 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=1.3257 (>1.1, 0%FP), dct_zero_ratio=0.5587, unique_G=256 (no quantization evidence) -> JPEG",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.5594 (noise-destroyed, unusable), spectral_slope_ratio=0.9954 (<1.08) -> blur unlikely, but noise coupling can mask blur, must still test 2-3 blur candidates",
+      "noise": "GAUSSIAN_YCrCb (low confidence): noise_prior sigma=2.59, spatial_corr=0.5196, cross_channel_corr=0.8935, residual_intensity_corr=0.4867 (gamma_suspect)",
+      "global": "NO_GLOBAL: variance_ratio=0.8426 but contrast_spread_ratio=0.9612 (raw contrast not detected), brightness_mean_shift=-6.9/255 with brightness_from_jpeg=true (JPEG artifact FP), clipped_fraction=0.0205"
+    },
+    "mode": "SIGNAL (sigma=2.59)",
+    "qwen_gate": {
+      "available": false,
+      "note": "sigma=2.59 in border zone (2,10) would trigger Qwen noise gate; API unavailable in this environment, skipped per protocol"
+    },
+    "suspected": [
+      "compression_jpeg",
+      "noise (type TBD after peeling)"
+    ],
+    "ruled_out": [
+      "quantization (unique_G=256)",
+      "motion/glass blur (no anisotropy/glass signals)"
+    ]
+  },
+  "noise_6step_check": {
+    "peeled_pipeline": "compression_jpeg:1",
+    "extreme_pct": 62.84,
+    "zero_ratio": 0.033,
+    "vm_slope": 0.5099,
+    "var_slope": -0.0283,
+    "spatial_corr": 0.744,
+    "rgb_ratio": 1.0541,
+    "cross_channel_corr": 0.9138,
+    "ch_stds": [
+      19.9,
+      20.2,
+      20.9
+    ],
+    "residual_std": 20.4,
+    "diagnosis": "IMPULSE verdict of the §B tool is a KNOWN FALSE POSITIVE: peeled_noise_check counts signed residual <=0 or >=255, so ~63% is an artifact (SKILL known-FP rule: extreme_pct>50% AND noise_prior sigma<5 -> ignore IMPULSE). Structure metrics (vm_slope 0.51, spatial_corr 0.74) are inflated by JPEG block residual (JPEG quantizes HF noise -> smooth residual). True type evidence: (1) target residual_intensity_corr=0.4867 vs additive-noise sims approx 0 (-0.08/-0.03) -> multiplicative noise; (2) equal RGB channel stds (rgb_ratio 1.05 < 1.4) -> not YCrCb; (3) var_slope -0.03 -> not Poisson; (4) empirical full-pipeline verification: noise_speckle:2 + compression_jpeg:1 = MATCH (sigma + clean_residual + block_boundary all matched) and closest fingerprint overall (dct 0.561 vs 0.5587, clipped 0.0208 vs 0.0205, RIC 0.447 vs 0.487, gm 1.441 vs 1.559)."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "R1 compression: block_boundary=1.3257 (0%FP JPEG signal), recommended jpeg:2; noise sigma=2.59 so signal mode, verify block_boundary/dct_zero_ratio"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,compression_jpeg:1",
+        "thinking": "R2 full candidate: peeled residual at jpeg:1 has std=20.4, spatial_corr=0.74 (blocking structure), rgb_ratio=1.05 equal-channel; x_distortion gaussian sev1 sigma=12.75 is weakest available; ordering noise->jpeg per generator priority"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=60%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,compression_jpeg:1",
+        "thinking": "R3 severity scan +1 (mandatory after PARTIAL): sim sev1 est sigma=1.1 & gm=1.10 vs target 2.59 & 1.56 -> target has more HF energy; test gaussian_RGB sev2 (sigma 25.5) with jpeg sev1"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=20%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:1",
+        "thinking": "R4 severity scan sev3 (mandatory): sev2 sigma diff 20% at threshold, target noise_prior 2.59 vs sev2 sim 1.9; gm 1.56 vs 1.35 -> target still stronger; jpeg fixed at sev1 (lowest residual)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=60%)",
+          "compression:block_boundary (diff=8%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "thinking": "R5 noise-type coverage: run_full_analysis initially suggested GAUSSIAN_YCrCb (cross_ch=0.89, gamma_suspect); test YCrCb sev2 (chroma 1.45x) as cross-type candidate vs RGB sev2 best"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=20%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,compression_jpeg:1",
+        "thinking": "R6 noise-type coverage: target residual_intensity_corr=0.487 vs additive sims ~0 -> multiplicative noise candidate; §B pattern table maps high intensity-residual correlation to speckle; test speckle sev1 (c=0.14) + jpeg1"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=40%)"
+        ],
+        "pipeline": "noise_speckle:1,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2,compression_jpeg:1",
+        "thinking": "R7 severity scan speckle +1: speckle:1 gave RIC=0.32 vs target 0.49, mean_shift -3.0 vs -6.9, sigma 1.61 vs 2.59 - all directionally correct but weaker; test speckle sev2 (c=0.21)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:2,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:1",
+        "thinking": "R8 boundary check speckle sev3 (c=0.28): sev2 MATCHed but target gm 1.56>1.44, sigma 2.59>2.22, mean -6.9>-4.9 suggest slightly stronger; confirm sev2 vs sev3 and guard against overshoot"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=40%)",
+          "compression:block_boundary (diff=11%)"
+        ],
+        "pipeline": "noise_speckle:3,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "noise_speckle:2,compression_jpeg:1",
+      "psnr_rgb": null,
+      "verify_verdict": "MATCH",
+      "score": "3✓/0✗",
+      "mode": "signal",
+      "round": 7,
+      "note": "WINNER. Fingerprint: sigma 2.22 vs 2.59; gm 1.441 vs 1.559; dct_zero_ratio 0.561 vs 0.5587; clipped_fraction 0.0208 vs 0.0205; variance_ratio 0.883 vs 0.843; mean_shift -4.9 vs -6.9; RIC 0.447 vs 0.487"
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": null,
+      "verify_verdict": "MATCH",
+      "score": "1✓/0✗",
+      "mode": "signal",
+      "round": 1,
+      "note": "compression-only check; block_boundary matched but dct_zero_ratio/saturated bb cannot pin severity alone; later fingerprint at jpeg:1 is closer (dct 0.561 vs 0.5587)"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:2,compression_jpeg:1",
+      "psnr_rgb": null,
+      "verify_verdict": "PARTIAL",
+      "score": "2✓/1✗",
+      "mode": "signal",
+      "round": 3,
+      "note": "sigma diff 20% (threshold); RIC -0.03 vs target 0.49; dct 0.5929 vs 0.5587"
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+      "psnr_rgb": null,
+      "verify_verdict": "PARTIAL",
+      "score": "2✓/1✗",
+      "mode": "signal",
+      "round": 5,
+      "note": "sigma diff 20%; RIC 0.056 vs target 0.49; dct 0.6094 vs 0.5587"
+    },
+    {
+      "pipeline": "noise_speckle:1,compression_jpeg:1",
+      "psnr_rgb": null,
+      "verify_verdict": "PARTIAL",
+      "score": "2✓/1✗",
+      "mode": "signal",
+      "round": 6,
+      "note": "sigma diff 40%; RIC 0.32 vs 0.49; mean_shift -3.0 vs -6.9 (direction correct, too weak)"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,compression_jpeg:1",
+      "psnr_rgb": null,
+      "verify_verdict": "PARTIAL",
+      "score": "2✓/1✗",
+      "mode": "signal",
+      "round": 2,
+      "note": "sigma diff 60%"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:3,compression_jpeg:1",
+      "psnr_rgb": null,
+      "verify_verdict": "WEAK",
+      "score": "1✓/2✗",
+      "mode": "signal",
+      "round": 4,
+      "note": "sigma diff 60% + block_boundary diff 8% (overshoot)"
+    },
+    {
+      "pipeline": "noise_speckle:3,compression_jpeg:1",
+      "psnr_rgb": null,
+      "verify_verdict": "WEAK",
+      "score": "1✓/2✗",
+      "mode": "signal",
+      "round": 8,
+      "note": "sigma diff 40% + block_boundary diff 11% (overshoot; confirms speckle:2 upper boundary)"
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_speckle",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Pair-0 signal analysis (SIGNAL mode, sigma=2.59): JPEG confirmed by 0%-FP block_boundary=1.3257 (severity 1: lowest peeled residual 20.4 and dct_zero_ratio 0.561 vs target 0.5587; stronger q overshoots: sev3 bb diff 11%, base jpeg5 residual 25.0). Noise confirmed but type/shape: residual_intensity_corr 0.4867 (additive gaussian/YCrCb sims approx 0) + highlight clipping pattern (target clipped 0.0205; speckle:2 sim 0.0208) point to multiplicative speckle; equal RGB channel stds rule out YCrCb (peeled rgb_ratio 1.05); var_slope -0.03 rules out Poisson; §B IMPULSE is the documented extreme_pct false positive (signed-residual counting, extreme 62.8% >50% with sigma<5). noise_speckle:2 + compression_jpeg:1 = verify_signals MATCH (3/3) and best fingerprint across 8 signals. Blur absent: spectral_slope_ratio 0.995, FFT anisotropy 0, glass 0, gm_ratio>1 (noise-dominated), peeled residual worsened with blur (20.4 -> 22.0/26.4). Global absent: variance_ratio 0.843 / mean_shift -6.9 fully reproduced by speckle clipping (sim 0.883 / -4.9), no contrast/brightness/saturation function range matches (contrast_weaken sev1 scale 0.75 would give var 0.56; brightness darken min shift -25.5). Order fixed by generator priority: noise (priority 0) before JPEG (priority 2). Verdict UNCERTAIN per protocol: noise step can never be LIKELY (seed mismatch) and deterministic PSNR>=40 is unavailable in sigma>=2 mode.",
+    "support_validation": {
+      "pair_1": "MATCH (3/3: noise:sigma, noise:clean_residual, compression:block_boundary)",
+      "pair_2": "MATCH (3/3)",
+      "pair_3": "PARTIAL (2/3: compression:block_boundary diff=11%)",
+      "pair_4": "PARTIAL (2/3: noise:sigma diff=25%)",
+      "summary": "4/4 supports acceptable (MATCH/PARTIAL, none WEAK/MISMATCH) -> pipeline generalizes across the 5-image support set; per-image noise realization explains sigma variability on pair 4"
+    },
+    "alternatives": [
+      {
+        "pipeline": "noise_gaussian_RGB:2,compression_jpeg:1",
+        "function_family": "additive gaussian RGB",
+        "signal_result": "PARTIAL (sigma diff 20%)",
+        "fingerprint": "RIC -0.03 vs target 0.49, dct 0.5929 vs 0.5587"
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "function_family": "additive gaussian YCrCb",
+        "signal_result": "PARTIAL (sigma diff 20%)",
+        "fingerprint": "RIC 0.056 vs target 0.49, dct 0.6094 vs 0.5587"
+      },
+      {
+        "pipeline": "noise_speckle:3,compression_jpeg:1",
+        "function_family": "speckle upper severity",
+        "signal_result": "WEAK (sigma 40%, bb 11% overshoot)",
+        "fingerprint": "used only as severity boundary; exceeds target"
+      }
+    ]
+  },
+  "agent_timing_start_utc": "2026-10-29T08:38:11Z",
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "E6A_full24 R1 chain for blind_0013_rep1 (R0 verdict UNCERTAIN, noise-containing pipeline, r0 support PSNR 28.0 -> mandatory post-training reflection)",
+    "mode": "SIGNAL (sigma=2.59 pair0; noise present, PSNR is not a decision criterion)",
+    "qwen_gate": {
+      "available": false,
+      "note": "sigma=2.59 lies in the (2,10) border zone -> SKILL Step 0.5 Qwen noise gate would trigger; API unavailable in this environment, gate skipped per protocol"
+    },
+    "reanalysis": {
+      "summary": "Re-ran run_full_analysis on all 5 support pairs (full_analysis_R1.json + full_analysis_R1_p1..p4.json) and peeled_noise_check with the R0 deterministic strip (compression_jpeg:1) on all 5 pairs. Pair0 reproduces R0 exactly (same JSON values), confirming the R1 rerun is faithful. Cross-pair signals are highly consistent: JPEG in 5/5, multiplicative noise in 5/5, no blur 5/5, no global 5/5.",
+      "pair_signal_table": {
+        "p0": {
+          "block_boundary": 1.3257,
+          "dct_zero_ratio": 0.5587,
+          "noise_prior_sigma": 2.59,
+          "residual_intensity_corr": 0.4804,
+          "mean_shift": -6.9,
+          "variance_ratio": 0.8426,
+          "clipped_fraction": 0.0205,
+          "spectral_slope_ratio": 0.9954,
+          "peeled_rgb_ratio": 1.0541
+        },
+        "p1": {
+          "block_boundary": 1.7437,
+          "dct_zero_ratio": 0.6844,
+          "noise_prior_sigma": 1.85,
+          "residual_intensity_corr": 0.249,
+          "mean_shift": -3.5,
+          "variance_ratio": 0.9387,
+          "clipped_fraction": 0.0052,
+          "spectral_slope_ratio": 0.9696,
+          "peeled_rgb_ratio": 1.0764
+        },
+        "p2": {
+          "block_boundary": 1.4004,
+          "dct_zero_ratio": 0.478,
+          "noise_prior_sigma": 3.21,
+          "residual_intensity_corr": 0.3511,
+          "mean_shift": -3.3,
+          "variance_ratio": 0.9111,
+          "clipped_fraction": 0.0532,
+          "spectral_slope_ratio": 0.9754,
+          "peeled_rgb_ratio": 1.0727
+        },
+        "p3": {
+          "block_boundary": 1.64,
+          "dct_zero_ratio": 0.8073,
+          "noise_prior_sigma": 1.11,
+          "residual_intensity_corr": 0.566,
+          "mean_shift": -0.9,
+          "variance_ratio": 0.9872,
+          "clipped_fraction": 0.0021,
+          "spectral_slope_ratio": 0.991,
+          "peeled_rgb_ratio": 1.0479
+        },
+        "p4": {
+          "block_boundary": 1.4301,
+          "dct_zero_ratio": 0.5473,
+          "noise_prior_sigma": 2.22,
+          "residual_intensity_corr": 0.569,
+          "mean_shift": -9.1,
+          "variance_ratio": 0.8106,
+          "clipped_fraction": 0.0543,
+          "spectral_slope_ratio": 0.9894,
+          "peeled_rgb_ratio": 1.0279
+        }
+      },
+      "verdict_vs_signal_checks": [
+        "Noise verdict GAUSSIAN_YCrCb in 5/5 pairs contradicts the peeled evidence: the step2 YCrCb branch (cross_ch_corr>0.12 AND RIC>0.15) returns early, so the Gaussian/Poisson/speckle fingerprinting (intensity_var_corr) is never executed (None in all 5 pairs). R1 bypassed this branch by direct family simulations and second-order fingerprints instead of trusting the verdict label.",
+        "Blur verdict BLUR_UNLIKELY is consistent with spectral_slope_ratio 0.9696-0.9954 in 5/5 pairs (all below the 1.08 threshold and below 1.0, i.e. target is not steeper than clean). glass_score/residual_anisotropy are absent because step3 returns early before those sub-signals are computed; the blur hypothesis was therefore tested end-to-end with a blur-inclusive simulation (noise:sigma 80% mismatch) rather than relying on missing sub-signals.",
+        "Global verdict NO_GLOBAL is consistent; the p4 SATURATION_strengthen_sev4 detection (chroma_ratio 1.2423) is a noise artifact: across pairs chroma_ratio scatters 0.8901-1.2423 with no uniform step, and noise can only add chroma variance, not the x2.0 minimum saturation step.",
+        "The peeled section-B extreme_pct 57.28-64.93% IMPULSE suggestion is the documented signed-residual counting false positive (residual<=0 or >=255); impulse is independently excluded by impulse_zero_ratio 0.0746-0.1656 (an impulse sev1 would leave >85% near-zero residuals)."
+      ],
+      "threshold_boundary_checks": [
+        "JPEG severity boundary: block_boundary target 1.3257-1.7437 vs jpeg:1 sims 1.2196 (p0, -8%) and 1.4572 (p3, -11%); jpeg:2 sims 1.3377 (p0, +0.9%) and 1.6705 (p3, +1.9%). bb alone favors jpeg:2, but dct_zero_ratio (pair0 0.6134 vs target 0.5587, +9.8%) and noise_prior_sigma (pair0 1.85 vs 2.59, -29%) regress, and verify_signals reports noise:sigma mismatches of 27% (p0) and 67% (p3). jpeg:1 wins 3 of 5 canonical signals on both audited pairs -> severity 1 retained.",
+        "Speckle severity boundary: speckle:3 sim reproduces the clipping-derived global stats on pair0 almost exactly (mean_shift -7.01 vs -6.93; variance_ratio 0.8489 vs 0.8426; RIC 0.4921 vs 0.4804) while sev2 sim undershoots (-4.89 / 0.8828 / 0.4477). However sev3 canonically loses on the block/noise-spectrum signals (sigma 3.34 vs target 2.59, +29%; bb 1.1787, -11%; dct 0.4924, -12%) and R0 recorded WEAK on pair0 (sigma 40%, bb 11%). The global-stat advantage may be a noise-realization tail effect (Gaussian multiplicative tails drive clipping excess, which mean_shift/variance_ratio integrate). Per verify_signals protocol, sev2 stands; the sev2-vs-sev3 boundary is the main residual uncertainty of this challenge.",
+        "Noise_prior_sigma is not a monotone severity readout here: peeled residual std is 12.0-21.1 levels after jpeg:1 stripping while the wavelet sigma estimate is 1.11-3.21, i.e. JPEG q25 smooths most high-frequency noise. Sigma threshold comparisons are therefore treated as secondary to the RIC/clipping/spectral fingerprints."
+      ],
+      "second_order_stats_checks": [
+        "residual_intensity_corr (RIC): target 0.2490-0.5690, positive in 5/5 pairs; speckle:2 sims 0.2329-0.5481; additive gaussian_RGB -0.03, gaussian_YCrCb 0.056, poisson:2 0.2321 (pair0) -> multiplicative speckle is the only family reproducing the intensity-dependent residual magnitude.",
+        "variance_ratio and mean_shift: target variance_ratio 0.8106-0.9872 and mean_shift -0.85..-9.07 track per-pair clipped_fraction 0.0021-0.0543; speckle:2 sim reproduces clipping (pair0 0.0208 vs 0.0205; pair2 0.0521 vs 0.0532; pair4 0.0965 vs 0.0543). No x_distortion global function has a minimum step this mild (brightness shift min 25.5 levels, darken gamma sev1 1.4, contrast_weaken_scale sev1 0.75 -> variance ratio 0.5625).",
+        "Peeled residual channel statistics: rgb_ratio 1.0279-1.0764 (<1.4) and cross_ch 0.8611-0.9420 in 5/5 pairs. Cross-channel correlation is JPEG-induced (the same pair peeled under jpeg:1 leaves it), not chroma-weighted noise; gaussian_YCrCb sim RIC 0.056 vs 0.49 also excludes it.",
+        "Section-B var_slope (-0.0748..0.1538) is computed by binning on residual intensity, not clean intensity, so it is not a valid Poisson test; the poisson hypothesis was instead tested by direct simulation (RIC 0.2321, mean_shift -2.78, variance_ratio 0.9310 vs target 0.4755/-6.93/0.8426)."
+      ]
+    },
+    "hypotheses": [
+      {
+        "candidate": "noise_poisson:2,compression_jpeg:1",
+        "signal_source": "RIC positive in 5/5 pairs (target 0.24-0.57) is also compatible with Poisson (variance proportional to intensity); R0's var_slope rejection is invalid because section-B bins on residual intensity",
+        "tested_on": "pair0 (1 test_candidate run)",
+        "result": "PARTIAL (noise:sigma diff 20%); fingerprint RIC 0.2321 vs target 0.4755, mean_shift -2.78 vs -6.93, variance_ratio 0.9310 vs 0.8426",
+        "decision": "REJECT (zero-mean Poisson cannot reproduce the clipping-driven darkening/variance loss)"
+      },
+      {
+        "candidate": "noise_speckle:2,compression_jpeg:2",
+        "signal_source": "block_boundary target 1.3257/1.6400 vs jpeg:1 sims -8%/-11% low; jpeg:2 raises bb to +0.9%/+1.9% and fixes the R0 pair3 mismatch; pair1/pair3 have the highest bb and dct",
+        "tested_on": "pair3 and pair0 (2 test_candidate runs) + canonical fingerprints on both sims",
+        "result": "p3 PARTIAL (noise:sigma diff 67%); p0 PARTIAL (noise:sigma diff 27%); canonical p0 dct 0.6134 vs 0.5587, sigma 1.85 vs 2.59; canonical p3 bb 1.6705, dct 0.8301, sigma 1.11",
+        "decision": "REJECT (bb-only gain; dct/sigma/spatial_corr regress and verify_signals degrades on both pairs)"
+      },
+      {
+        "candidate": "noise_speckle:1,compression_jpeg:1",
+        "signal_source": "noise_prior_sigma is 1.11-1.85 on p3/p1, below the sev2 sim level; test whether sev2 overestimates noise on low-sigma content",
+        "tested_on": "pair3 (1 test_candidate run)",
+        "result": "PARTIAL (compression:block_boundary diff 10%); fingerprint RIC 0.4660 vs target 0.5609, variance_ratio 0.9952 vs 0.9872, clipped 0.0014 vs 0.0021",
+        "decision": "REJECT (weaker than sev2; R0 pair0 already PARTIAL at sigma 40%)"
+      },
+      {
+        "candidate": "noise_speckle:3,compression_jpeg:1",
+        "signal_source": "R1 fingerprint review of R0's existing sev3 sim: global clipping stats match pair0 target almost exactly while sev2 undershoots -> severity boundary re-check",
+        "tested_on": "pair0 via existing R0 simulation artifacts (no new test_candidate run) + canonical run_full_analysis on sim_cand_r8",
+        "result": "canonical sigma 3.34 (+29%), bb 1.1787 (-11%), dct 0.4924 (-12%), spatial_corr 0.4454 (-14%) vs sev2 2.22/1.2196/0.5610/0.4584; mean_shift -7.01, variance_ratio 0.8489, RIC 0.4921, clipped 0.0245",
+        "decision": "KEEP AS RESIDUAL UNCERTAINTY (global stats favor sev3, block/noise-spectrum signals favor sev2; verify protocol keeps sev2)"
+      },
+      {
+        "candidate": "noise_speckle:2,blur_gaussian:1,compression_jpeg:1",
+        "signal_source": "SKILL requires blur testing when verdict is BLUR_UNLIKELY; noise can mask blur in gm/spectral signals; R0 never ran an explicit blur candidate",
+        "tested_on": "pair0 (1 test_candidate run)",
+        "result": "PARTIAL (4/5 signals match, but noise:sigma diff 80%); spectral_slope_ratio 0.9696-0.9954 in 5/5 pairs shows target is not steeper than clean",
+        "decision": "REJECT (blur destroys the noise fingerprint; no blur evidence)"
+      },
+      {
+        "candidate": "noise_speckle:2,compression_jpeg:1 (control)",
+        "signal_source": "R0 winner; revalidated for a uniform 5-pair R1 measurement",
+        "tested_on": "all 5 support pairs (5 test_candidate runs incl. p3 re-check)",
+        "result": "p0 MATCH, p1 MATCH, p2 MATCH, p3 PARTIAL (bb 11%), p4 PARTIAL (sigma 25%); 0 WEAK/MISMATCH",
+        "decision": "ACCEPT / NO_CHANGE"
+      }
+    ],
+    "validation": {
+      "control_5pair": {
+        "p0": "MATCH (3/3)",
+        "p1": "MATCH (3/3)",
+        "p2": "MATCH (3/3)",
+        "p3": "PARTIAL (2/3: compression:block_boundary diff=11%)",
+        "p4": "PARTIAL (2/3: noise:sigma diff=25%)",
+        "summary": "3 MATCH + 2 PARTIAL, no WEAK/MISMATCH; identical to R0's support validation (reproducible)"
+      },
+      "candidate_comparison": {
+        "poisson:2+jpeg:1": "p0 PARTIAL; fingerprint clearly worse (RIC 0.232 vs 0.476; mean -2.78 vs -6.93)",
+        "speckle:2+jpeg:2": "p3 PARTIAL (sigma 67%), p0 PARTIAL (sigma 27%); bb better, spectrum worse",
+        "speckle:1+jpeg:1": "p3 PARTIAL (bb 10%); fingerprint weaker (RIC 0.466 vs 0.561)",
+        "speckle:2+blur:1+jpeg:1": "p0 PARTIAL (sigma 80%); blur contradicted by slope 5/5",
+        "speckle:3+jpeg:1": "R0 WEAK; canonical spectrum signals worse, only clipping stats better"
+      },
+      "improvement_rule_check": "No candidate improves verify_signals on >=4/5 pairs relative to the control (control is already MATCH on 3/5 and PARTIAL on 2/5); no candidate yields a section-B statistical improvement either because peeling (jpeg:1) is unchanged and section-B is target-based. CHANGE criterion not met -> NO_CHANGE.",
+      "budget": {
+        "test_candidate_runs": 9,
+        "budget_limit": 15,
+        "run_full_analysis_runs": "5 support pairs (R1) + 4 candidate-sim fingerprints (p3 jpeg1, p3 jpeg2, p0 jpeg2, p0 speckle3) + R0's existing r7",
+        "peeled_noise_check_runs": 5
+      }
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        [
+          "noise_speckle",
+          2
+        ],
+        [
+          "compression_jpeg",
+          1
+        ]
+      ],
+      "rationale": "R0 pipeline remains the best-supported explanation after re-running the full signal analysis on all 5 support pairs and testing every plausible alternative family (poisson, jpeg severity 2, speckle severities 1/3, blur-inclusive). JPEG is confirmed 5/5 by the 0%-FP block_boundary and severity 1 is the best multi-signal compromise; noise is multiplicative in 5/5 (RIC 0.24-0.57 matched only by speckle sims), YCrCb/impulse/additive gaussian/poisson are all excluded by second-order statistics; no blur and no global step can match the signals or the function severity ranges. The control reproduces R0's support verdicts exactly (3 MATCH + 2 PARTIAL). The only open uncertainty is the speckle sev2-vs-sev3 boundary (global clipping stats favor sev3, block/noise-spectrum signals favor sev2); it does not meet the CHANGE criterion and is recorded rather than acted upon.",
+      "support_psnr_r0": 28.0
+    }
+  }
+}

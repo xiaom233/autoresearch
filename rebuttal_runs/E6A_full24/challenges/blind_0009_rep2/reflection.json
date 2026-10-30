@@ -1,0 +1,1307 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=0.9991 (<1.05), unique_G=256 (per-channel 256,256,256), dct_zero_ratio=0.0154 -> JPEG/quantization ruled out",
+      "blur": "BLUR_UNLIKELY: spectral_slope_ratio=0.9734 (<1.08), gm_ratio=32.1 unusable (noise-destroyed) -> no blur evidence on pair 0",
+      "noise": "GAUSSIAN_YCrCb (low confidence, gamma_suspect): noise_prior sigma=33.85, cross_channel_corr=0.3154, residual_intensity_corr=0.1817, impulse_zero_ratio=0.0107, spatial_corr=0.0118. sigma>10 -> noise presence confirmed, but residual is polluted by global transforms (unpeeled)",
+      "global": "BRIGHTNESS_darken_sev2 + SATURATION_strengthen_sev5: mean_shift=-25.9/255=-0.1016, variance_ratio=2.614, clipped_fraction=0.4029, chroma_ratio=11.61. FP checks: contrast_from_clipping=true, contrast_from_saturation=true (contrast not independently required)"
+    },
+    "mode": "SIGNAL (sigma=33.85, sigma>=2 -> PSNR unreliable; verify via signal matching)",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "note": "sigma=33.85 > 10 -> noise presence directly confirmed by wavelet prior; no boundary ambiguity. Qwen/API unavailable in this environment."
+    },
+    "plan": "Peel deterministic global transforms (saturation/brightness) first, then §B 6-step on peeled residual to determine noise type/severity. Compression/blur ruled out by signals but will re-verify block_boundary/spectral_slope on simulated full pipeline.",
+    "pair0_size": "clean_0=1545124 bytes, degraded_0=6214016 bytes",
+    "skipped_api": true
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py on pair0 residual = degraded_0 - saturate_strengthen_YCrCb:1(clean_0); i.e. §B on the residual of the final deterministic step (noise remains)",
+    "extreme_pct": 50.68,
+    "zero_ratio": 0.0087,
+    "vm_slope": 1.9278,
+    "var_slope": 2.0657,
+    "intensity_var_corr": 0.3372,
+    "spatial_corr": 0.4961,
+    "rgb_ratio": 1.5706,
+    "cross_channel_corr": 0.5393,
+    "ch_stds_rgb": [
+      71.0,
+      55.1,
+      86.5
+    ],
+    "residual_std": 72.5,
+    "diagnosis": "Auto-classifier flags IMPULSE because extreme_pct=50.68%>0.3%, but zero_ratio=0.0087 (<0.01) rules out salt&pepper (real impulse leaves >85% unchanged pixels). extreme_pct/vm_slope/var_slope/spatial_corr are inflated by saturation clipping structure (peeled residual is the saturation-amplified noise field; naive std 72.5 matches the YCrCb4 x2-saturation model). Discriminating signals: rgb_ratio=1.57>1.4 and cross_ch_corr=0.54 with channel balance B(86.5)>R(71.0)>G(55.1) -> chroma-dominant noise in YCrCb space (G suppressed because luma noise is small). Gaussian RGB would give equal channel stds and cross_ch<0.1. Speckle/poisson were tested as full candidates (poisson4/5+satYCrCb1) and failed VR/mean; only poisson5 matched ric. Conclusion: noise_gaussian_YCrCb, severity 4 (sev3 under-shoots sigma/VR/chroma, sev5 over-shoots all three)."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:5,brightness_darken_shfit_HSV:2",
+        "thinking": "R1: run_full_analysis global verdict suggests saturation strengthen sev5 (chroma_ratio 11.6) + brightness darken sev2 (mean_shift -25.9); validate global mean_shift/variance_ratio signals first"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.4214)",
+          "global:variance_ratio (diff=42%)"
+        ],
+        "pipeline": "saturate_strengthen_HSV:5,brightness_darken_shfit_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:1,noise_gaussian_YCrCb:4",
+        "thinking": "R1: mean_shift=-25.9 ~= brightness_darken_HSV sev1 (-0.1*255); chroma_ratio 11.6 and variance_ratio 2.61 may be driven by strong chroma noise (YCrCb sev4 chroma sigma~48) rather than saturation. Test full hypothesis."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0159)",
+          "global:variance_ratio (diff=48%)"
+        ],
+        "pipeline": "brightness_darken_shfit_HSV:1,noise_gaussian_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:1,noise_gaussian_YCrCb:5",
+        "thinking": "R2: YCrCb sev4 under-shot all strength signals (sigma 27.6 vs 33.9, VR 1.83 vs 2.61, chroma 8.7 vs 11.6, clipping 20% vs 40%). Severity scan +1 -> YCrCb sev5"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0321)",
+          "global:variance_ratio (diff=23%)"
+        ],
+        "pipeline": "brightness_darken_shfit_HSV:1,noise_gaussian_YCrCb:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:5",
+        "thinking": "R2 control: isolate noise-only contribution (chroma clipping asymmetry shifts mean). Needed to decompose mean_shift=-25.9 into brightness vs noise-clipping parts."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:1,noise_gaussian_YCrCb:5",
+        "thinking": "R2: flat darken sev1 overshoots mean (-34.1 vs -25.9) while gamma darken sev1 (gamma=1.4, intensity-dependent) should add ~-16 mean, +clipping in shadows, +ric (residual-intensity corr target 0.182). Noise YCrCb5 matched sigma/residual. Test gamma(env light, pre-noise) + YCrCb5."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=23%)"
+        ],
+        "pipeline": "brightness_darken_gamma_RGB:1,noise_gaussian_YCrCb:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:5,brightness_darken_gamma_RGB:1",
+        "thinking": "R3: gamma AFTER noise (ISP priority 2, blind_challenge order) nonlinearly expands noise in midtones -> higher VR/clipping/ric than gamma-before-noise (H4: VR 2.25 vs 2.61, ric 0.037 vs 0.182). Keep YCrCb5 + gamma darken sev1."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0173)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:5,brightness_darken_gamma_RGB:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,saturate_strengthen_YCrCb:1",
+        "thinking": "R3: posterized color bands in degraded image (large uniform magenta/green regions) suggest saturation clipping; saturation on bright bg lowers mean while clipping pushes extremes (target clip 0.403 > noise-only 0.347). Test weaker chroma noise YCrCb3 + sat YCrCb x2."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0388)",
+          "global:variance_ratio (diff=31%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:3",
+        "thinking": "R1 noise-type coverage + saturation hypothesis: HSV S-scaling (x12 at sev3) explains mean drop (-21 on bright bg), high clipped_fraction (min channels ->0), high chroma ratio, lower spread, and amplifies low-severity chroma noise into strong colored grain while luma noise stays low (target BG grain looks chroma-only). Test YCrCb2 (+HSV sat s3)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=45%)",
+          "global:mean_shift (diff=0.2236)",
+          "global:variance_ratio (diff=82%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+        "thinking": "R2 severity scan: sat HSV s3 overshot mean (-82.9 vs -25.9) and VR (3.94 vs 2.61). Scan down to s1 (S x3) keeping YCrCb2."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0772)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:1",
+        "thinking": "R2 control: quantify deterministic mean/variance effect of saturate_strengthen_HSV sev1 alone on this bright-background image (S x3). Needed to decompose mean_shift=-25.9."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0479)",
+          "global:variance_ratio (diff=90%)"
+        ],
+        "pipeline": "saturate_strengthen_HSV:1",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:1",
+        "thinking": "R2 control: quantify deterministic effect of contrast_strengthen_scale sev1 (c=1.4) alone. Target has clip 0.403 > noise-only 0.347 with VR 2.61 — a symmetric extreme-pushing transform (contrast) is the candidate; need its exact mean/VR/clip signature."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.1085)",
+          "global:variance_ratio (diff=65%)"
+        ],
+        "pipeline": "contrast_strengthen_scale:1",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:1,noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+        "thinking": "R3: satHSV1 present across all 5 pairs (chroma x3). Pair0 YCrCb2+satHSV1 (H8) matched sigma/VR/chroma but was too dark (mean -45.6 vs -25.9) and clip too low (0.218 vs 0.403). Brighten s1 at priority0 (+0.1, before noise) offsets mean and adds highlight clipping. Test brighten+noise+sat."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0385)",
+          "global:variance_ratio (diff=19%)"
+        ],
+        "pipeline": "brightness_brighten_shfit_HSV:1,noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+        "thinking": "Support pair1 probe: saturate_strengthen_HSV s1 hypothesis. Pair1 (fox/snow) visually shows strong saturation (vivid cyan snow, vivid orange fox; target VR=4.34, spread=1.81, chroma=3.85). Test whether YCrCb2+satHSV1 reproduces pair1 signals."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.1554)",
+          "global:variance_ratio (diff=35%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "thinking": "R3: pair1 (mean -6.3 with vivid colors) rules out HSV saturation (darkens -46) and rules in luma-preserving YCrCb saturation. YCrCb x2 on YCrCb4 chroma noise -> chroma ratio ~11 (target 11.6), VR/clip up, mean stays moderate. Test noise YCrCb4 + satYCrCb1 on pair0."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0110)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4,saturate_strengthen_YCrCb:1",
+        "thinking": "R3 noise-type coverage: H12 (YCrCb4+satYCrCb1) matched all dims except ric (-0.04 vs +0.18). Target ric>0 suggests variance grows with intensity -> Poisson. Test poisson4 + satYCrCb1."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=23%)",
+          "global:mean_shift (diff=0.0445)",
+          "global:variance_ratio (diff=44%)"
+        ],
+        "pipeline": "noise_poisson:4,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:1",
+        "thinking": "R4 severity scan: poisson4 under-shot (sigma 25.8 vs 33.9, VR 1.91 vs 2.61, chroma 8.6 vs 11.6) but ric direction correct (+0.22 vs target +0.18). Scan poisson +1 (c=15)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0236)",
+          "global:variance_ratio (diff=22%)"
+        ],
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "thinking": "Support 1 validation of final candidate: noise YCrCb sev4 (chroma-dominant, sigma-matched) + saturate_strengthen_YCrCb sev1 (luma-preserving chroma x2, explains pair1 vivid colors with small mean shift)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)",
+          "global:variance_ratio (diff=9%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "thinking": "Support 2 validation of final candidate: noise YCrCb sev4 (chroma-dominant, sigma-matched) + saturate_strengthen_YCrCb sev1 (luma-preserving chroma x2, explains pair1 vivid colors with small mean shift)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=57%)",
+          "global:mean_shift (diff=0.0237)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "thinking": "Support 3 validation of final candidate: noise YCrCb sev4 (chroma-dominant, sigma-matched) + saturate_strengthen_YCrCb sev1 (luma-preserving chroma x2, explains pair1 vivid colors with small mean shift)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0126)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "thinking": "Support 4 validation of final candidate: noise YCrCb sev4 (chroma-dominant, sigma-matched) + saturate_strengthen_YCrCb sev1 (luma-preserving chroma x2, explains pair1 vivid colors with small mean shift)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=68%)",
+          "global:variance_ratio (diff=18%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "thinking": "Pair1 diagnostic: determine whether sigma 62% overshoot is due to clipping differences (content) or noise severity by saving sim and inspecting its clipped_fraction/signals."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)",
+          "global:variance_ratio (diff=9%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:5,saturate_strengthen_YCrCb:1",
+        "thinking": "R4 mandatory severity scan +1 around best candidate (noise YCrCb4+satYCrCb1, PARTIAL on pair0). Check if sev5 improves mean/sigma at cost of VR/chroma overshoot."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=27%)",
+          "global:mean_shift (diff=0.0148)",
+          "global:variance_ratio (diff=30%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:5,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 101,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "thinking": "R1 anchor/control: reproduce R0 final pipeline on pair0 with fresh seed. Signal source: R0 fingerprint (sigma 33.85, VR 2.614, mean -25.9, chroma 11.61, clip 0.403) and residual channel ratio B>R>G=1.57 (YCrCb signature, clean channel means equal 1.07)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0110)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 102,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:1,noise_gaussian_YCrCb:4",
+        "thinking": "R1 H-order: saturation BEFORE noise (untested by R0). Signal source: target residual channel std ratio 1.57 with clean channel means equal; sat-first predicts RGB noise stds [70,43,87] vs target [71.9,55.2,86.6] whereas noise-first (x2 chroma amplification then clipping) predicts ~[85,51,106]. Tests whether target sigma (33.85) reflects unamplified chroma noise."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=27%)",
+          "global:mean_shift (diff=0.0545)",
+          "global:variance_ratio (diff=54%)"
+        ],
+        "pipeline": "saturate_strengthen_YCrCb:1,noise_gaussian_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 103,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:1,noise_gaussian_YCrCb:4",
+        "thinking": "R1 H-order support validation on pair1 (colorful fox): sat-first removes x2 chroma-noise amplification. If target sigma 25.7 (lowest-but-one) is due to unamplified noise, sat-first should approach 20% sigma agreement here; VR must stay near target 4.34."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0136)",
+          "global:variance_ratio (diff=47%)"
+        ],
+        "pipeline": "saturate_strengthen_YCrCb:1,noise_gaussian_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 104,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "thinking": "R1 H-poisson-sat2: target ric=+0.181 (residual grows with intensity) is reproduced only by poisson (R0: poisson5+sat1 ric +0.204) but R0 poisson5+sat1 under-shot VR/chroma/mean (2.254/10.14/-19.9 vs 2.614/11.61/-25.9). Going satYCrCb sev2 (x3) to raise deterministic chroma variance and gamut clipping; poisson also predicts target sigma scaling with content brightness (sqrt(I))."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0083)",
+          "global:variance_ratio (diff=15%)"
+        ],
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 105,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "thinking": "R1 H-poisson-sat2 support validation on pair1 (colorful fox, target sigma 25.7 vs gaussian-control sim 41.6 +62%): poisson sigma scales with sqrt(I) and saturation x3 clipping should compress noise on this clip-heavy content; checks whether the pair-wise sigma overshoot of the gaussian control is resolved."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=49%)",
+          "global:mean_shift (diff=0.0106)"
+        ],
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 106,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:2",
+        "thinking": "R1 H-sat2: keep R0 noise type/severity/order (YCrCb4 then saturation) but raise saturation to sev2 (x3). Signal source: pair1 control (R0) matched VR 4.03/4.34, chroma 3.73/3.85, mean -6.6/-6.3, ric 0.38/0.39 but overshot sigma +62% while clipping target 0.373 > sim 0.334. Stronger saturation should raise gamut clipping on colorful content (clip up) and compress the clipped chroma-noise field (sigma down) toward target 25.7."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=84%)",
+          "global:mean_shift (diff=0.0103)",
+          "global:variance_ratio (diff=14%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 107,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,saturate_strengthen_YCrCb:1",
+        "thinking": "R1 severity scan -1 (mandated): noise severity 3 instead of 4 on pair1 where control sim sigma 41.6 vs target 25.7 (+62%). Signal source: sigma is the lone systematic mismatch of control on pairs 1/2/4; scan expects sigma drop to ~+30-35%, testing whether severity alone can reconcile."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=33%)",
+          "global:mean_shift (diff=0.0082)",
+          "global:variance_ratio (diff=30%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 108,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "thinking": "R1 H-poisson-sat2 on pair2 (control WEAK: sigma +57%, mean 0.0237; target ric 0.366 highest of all pairs -> poisson-like intensity-dependent residual). Validates whether poisson+strong saturation fixes the WEAK supports flagged by R0."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=38%)"
+        ],
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 109,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "thinking": "R1 H-poisson-sat2 on pair4 (control WEAK: sigma +68%, VR -18%; target has highest clip 0.470 and lowest sigma 20.88). Poisson sqrt(I) noise + x3 gamut clipping should compress the noise on this near-white ice content; checks the second WEAK support."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "global:mean_shift (diff=0.0138)"
+        ],
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 110,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "thinking": "R1 control seed replicate on pair1 (R0 documented WEAK: sigma +62%, VR -9%): same-session baseline for judging alternatives, quantifies seed variance of verify_signals."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)",
+          "global:variance_ratio (diff=9%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 111,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:5,brightness_darken_gamma_RGB:1",
+        "thinking": "R1 cross-pair validation of R0 alternative #2 (no saturation; gamma darken after noise): on pair0 it reached PARTIAL 3/4 (sigma 35.1, VR 2.495, mean -30.3, chroma 11.11, ric 0.137) making the chroma boost possibly noise-only. Pair1 has target mean -6.3: if gamma darken is present it must not over-darken this mid-brightness fox image."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=46%)",
+          "global:mean_shift (diff=0.0685)",
+          "global:variance_ratio (diff=27%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:5,brightness_darken_gamma_RGB:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 112,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "thinking": "R1 H-poisson-sat2 on pair3, completing the 5-pair profile of the leading alternative (control = PARTIAL here: sigma matched, mean diff 0.0126). Checks regression on a low-chroma pair where the gaussian control already passes."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0072)",
+          "global:variance_ratio (diff=12%)"
+        ],
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 113,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4,saturate_strengthen_YCrCb:2",
+        "thinking": "R1 mandated severity scan -1 for the PARTIAL poisson candidate on pair2 (poisson5+sat2 was PARTIAL 3/4, sigma +38% only): poisson4 lowers sigma toward target 25.7 but might under-shoot VR (target 2.276); determines whether severity or type is the residual gap."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=16%)"
+        ],
+        "pipeline": "noise_poisson:4,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 114,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4,saturate_strengthen_YCrCb:2",
+        "thinking": "R1 poisson4+sat2 on pair1 (the constraining pair; poisson5+sat2 was WEAK 2/4 with sigma +49%, VR matched, mean 0.0106): checks whether the severity -1 variant changes the residual gap on the pair that all candidates fail."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=27%)",
+          "global:variance_ratio (diff=17%)"
+        ],
+        "pipeline": "noise_poisson:4,saturate_strengthen_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "rank": 1,
+      "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "PARTIAL (3/4: sigma, clean_residual, variance_ratio; mean_shift 0.0110 off)",
+      "pair0_fingerprint": {
+        "sigma": 36.8,
+        "vr": 2.623,
+        "mean": -23.1,
+        "clip": 0.4227,
+        "chroma": 11.89,
+        "spread": 1.2964,
+        "cross": 0.3016,
+        "ric": -0.045
+      },
+      "target_pair0": {
+        "sigma": 33.85,
+        "vr": 2.614,
+        "mean": -25.9,
+        "clip": 0.403,
+        "chroma": 11.61,
+        "spread": 1.2545,
+        "cross": 0.3154,
+        "ric": 0.182
+      },
+      "note": "BEST overall; cleared on pair0 + pair3 (PARTIAL); supports 1/2/4 WEAK only due to sigma overshoot (target noise weaker on those contents); pair1 full fingerprint: mean -6.6/-6.3, vr 4.03/4.34, chroma 3.73/3.85, spread 1.83/1.81, cross 0.38/0.39"
+    },
+    {
+      "rank": 2,
+      "pipeline": "noise_gaussian_YCrCb:5,brightness_darken_gamma_RGB:1",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "PARTIAL (3/4: sigma, clean_residual, variance_ratio; mean_shift diff 0.0173)",
+      "pair0_fingerprint": {
+        "sigma": 35.1,
+        "vr": 2.495,
+        "mean": -30.3,
+        "clip": 0.347,
+        "chroma": 11.11,
+        "spread": 1.324,
+        "cross": 0.288,
+        "ric": 0.137
+      },
+      "note": "alternative global family (gamma darken after noise); worse clip/chroma/mean on pair0"
+    },
+    {
+      "rank": 3,
+      "pipeline": "brightness_darken_gamma_RGB:1,noise_gaussian_YCrCb:5",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "PARTIAL (3/4: sigma, clean_residual, mean_shift; variance_ratio diff 23%)",
+      "pair0_fingerprint": {
+        "sigma": 31.9,
+        "vr": 2.246,
+        "mean": -26.5,
+        "clip": 0.312,
+        "chroma": 10.18,
+        "spread": 1.324,
+        "cross": 0.291,
+        "ric": 0.037
+      },
+      "note": "gamma-before-noise order; mean matched but amplification (VR/clip/chroma) missing"
+    },
+    {
+      "rank": 4,
+      "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:1",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "WEAK (2/4: sigma, clean_residual; mean diff 0.0236, vr diff 22%)",
+      "pair0_fingerprint": {
+        "sigma": 31.0,
+        "vr": 2.254,
+        "mean": -19.9,
+        "clip": 0.3768,
+        "chroma": 10.14,
+        "spread": 1.2673,
+        "cross": 0.208,
+        "ric": 0.204
+      },
+      "note": "ric matched (+0.204 vs +0.182) but VR/mean/chroma under-shot"
+    },
+    {
+      "rank": 5,
+      "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "PARTIAL on pair0 (mean diff 0.0772), WEAK on pair1 (mean diff 0.1554)",
+      "pair0_fingerprint": {
+        "sigma": 34.6,
+        "vr": 2.551,
+        "mean": -45.6,
+        "clip": 0.218,
+        "chroma": 11.41,
+        "spread": 1.3618,
+        "cross": 0.2228,
+        "ric": 0.332
+      },
+      "note": "HSV-space saturation rejected: darkens pair0 by -45.6 (target -25.9) and pair1 by -45.9 (target -6.3)"
+    },
+    {
+      "rank": 6,
+      "pipeline": "noise_gaussian_YCrCb:3,saturate_strengthen_YCrCb:1",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "WEAK (sigma/mean/vr mismatches)",
+      "pair0_fingerprint": {
+        "sigma": 29.9,
+        "vr": 2.114,
+        "mean": -16.0,
+        "clip": 0.358,
+        "chroma": 9.83,
+        "spread": 1.2418,
+        "cross": 0.307,
+        "ric": -0.043
+      },
+      "note": "severity -1 scan; under-shoots VR/mean/chroma"
+    },
+    {
+      "rank": 7,
+      "pipeline": "noise_gaussian_YCrCb:5,saturate_strengthen_YCrCb:1",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "WEAK (sigma 27% high, vr 30% high, mean diff 0.0148)",
+      "pair0_fingerprint": {
+        "sigma": 42.9,
+        "vr": 3.093,
+        "mean": -29.7,
+        "clip": 0.477,
+        "chroma": 13.56,
+        "spread": 1.34,
+        "cross": 0.296,
+        "ric": -0.045
+      },
+      "note": "severity +1 scan; over-shoots"
+    },
+    {
+      "rank": 8,
+      "pipeline": "brightness_darken_shfit_HSV:1,noise_gaussian_YCrCb:4",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "WEAK",
+      "pair0_fingerprint": {
+        "sigma": 27.6,
+        "vr": 1.833,
+        "mean": -30.0,
+        "clip": 0.201,
+        "chroma": 8.68,
+        "spread": 1.28,
+        "cross": 0.282,
+        "ric": 0.142
+      },
+      "note": "flat darken (HSV shift) under-shoots noise strength, over-darkens mean"
+    },
+    {
+      "rank": 9,
+      "pipeline": "brightness_darken_shfit_HSV:1,noise_gaussian_YCrCb:5",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "WEAK",
+      "pair0_fingerprint": {
+        "sigma": 33.5,
+        "vr": 2.251,
+        "mean": -34.1,
+        "clip": 0.273,
+        "chroma": 10.61,
+        "spread": 1.333,
+        "cross": 0.296,
+        "ric": 0.109
+      },
+      "note": "flat darken + sev5; mean -34.1 vs -25.9 (flat darken adds ~-17 net on top of noise)"
+    },
+    {
+      "rank": 10,
+      "pipeline": "noise_gaussian_YCrCb:5",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "MATCH on noise signals only (control)",
+      "pair0_fingerprint": {
+        "sigma": 30.4,
+        "vr": 2.071,
+        "mean": -16.7,
+        "clip": 0.347,
+        "chroma": 9.79,
+        "spread": 1.249,
+        "cross": 0.275,
+        "ric": -0.052
+      },
+      "note": "noise-only control; target exceeds it on VR/clip/chroma/mean"
+    },
+    {
+      "rank": 11,
+      "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:3",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "WEAK",
+      "pair0_fingerprint": {
+        "sigma": 49.0,
+        "vr": 3.94,
+        "mean": -82.9,
+        "clip": 0.451,
+        "chroma": 16.62,
+        "spread": 1.391,
+        "cross": 0.315,
+        "ric": 0.691
+      },
+      "note": "HSV sat s3; massive over-darkening"
+    },
+    {
+      "rank": 12,
+      "pipeline": "brightness_brighten_shfit_HSV:1,noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "WEAK",
+      "pair0_fingerprint": {
+        "sigma": 28.9,
+        "vr": 2.315,
+        "mean": -16.1,
+        "clip": 0.392,
+        "chroma": 9.51,
+        "spread": 1.2418,
+        "cross": 0.172,
+        "ric": 0.118
+      },
+      "note": "brighten+HSV sat; clip matched but mean/sigma/chroma low"
+    },
+    {
+      "rank": 13,
+      "pipeline": "saturate_strengthen_HSV:5,brightness_darken_shfit_HSV:2",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "MISMATCH (mean diff 0.4214, vr diff 42%)",
+      "note": "classifier's raw guess; rejected"
+    },
+    {
+      "rank": 14,
+      "pipeline": "saturate_strengthen_HSV:1 (deterministic control)",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "MISMATCH (control)",
+      "pair0_fingerprint": {
+        "sigma": 0.0,
+        "vr": 1.164,
+        "mean": -13.7,
+        "clip": 0.0284,
+        "chroma": 1.61,
+        "spread": 1.0073
+      },
+      "note": "deterministic-only control for decomposition"
+    },
+    {
+      "rank": 15,
+      "pipeline": "contrast_strengthen_scale:1 (deterministic control)",
+      "psnr_rgb": null,
+      "mode": "SIGNAL",
+      "verdict": "MISMATCH (control)",
+      "pair0_fingerprint": {
+        "sigma": 0.0,
+        "vr": 1.566,
+        "mean": 1.7,
+        "clip": 0.0651,
+        "chroma": 1.19,
+        "spread": 1.2618
+      },
+      "note": "deterministic-only control; contrast mean-neutral, not the mean source"
+    }
+  ],
+  "support_pairs_summary": {
+    "pair0": {
+      "target": {
+        "sigma": 33.85,
+        "vr": 2.614,
+        "mean": -25.9,
+        "clip": 0.403,
+        "chroma": 11.61,
+        "spread": 1.2545,
+        "cross": 0.315,
+        "ric": 0.182
+      },
+      "final_candidate_verdict": "PARTIAL 3/4 (mean diff 0.0110)"
+    },
+    "pair1": {
+      "target": {
+        "sigma": 25.7,
+        "vr": 4.339,
+        "mean": -6.3,
+        "clip": 0.373,
+        "chroma": 3.854,
+        "spread": 1.8117,
+        "cross": 0.39,
+        "ric": 0.018
+      },
+      "final_candidate_verdict": "WEAK 2/4 (sigma +62%, vr -9%); sim matched mean -6.6, chroma 3.73, spread 1.83, cross 0.38, clip 0.334"
+    },
+    "pair2": {
+      "target": {
+        "sigma": 25.7,
+        "vr": 2.276,
+        "mean": -8.3,
+        "clip": 0.364,
+        "chroma": 4.267,
+        "spread": 1.3398,
+        "cross": 0.351,
+        "ric": 0.35
+      },
+      "final_candidate_verdict": "WEAK 2/4 (sigma +57%, mean diff 0.0237)"
+    },
+    "pair3": {
+      "target": {
+        "sigma": 32.62,
+        "vr": 2.242,
+        "mean": -18.6,
+        "clip": 0.372,
+        "chroma": 6.28,
+        "spread": 1.1777,
+        "cross": 0.329,
+        "ric": 0.196
+      },
+      "final_candidate_verdict": "PARTIAL 3/4 (mean diff 0.0126)"
+    },
+    "pair4": {
+      "target": {
+        "sigma": 20.88,
+        "vr": 1.875,
+        "mean": -19.2,
+        "clip": 0.47,
+        "chroma": 2.986,
+        "spread": 1.32,
+        "cross": 0.281,
+        "ric": 0.06
+      },
+      "final_candidate_verdict": "WEAK 2/4 (sigma +68%, vr -18%)"
+    }
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_YCrCb",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "saturate_strengthen_YCrCb",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Compression ruled out on all 5 pairs (block_boundary 0.997-1.004; unique_G=256; dct_zero 0.015). Blur ruled out (spectral_slope_ratio 0.947-0.986 < 1.08; FFT anisotropy 0.00). Noise is chroma-dominant, YCrCb-space, severity 4 (pair0 sigma 33.85; sim 36.8; sev3 under-shoots to 29.9, sev5 over-shoots to 42.9). Global is luma-preserving YCrCb-space saturation strengthen sev1 (chroma x2): pair-level evidence is decisive — colorful images become vividly saturated with near-zero mean shift (pair1 mean -6.3 with chroma ratio 3.85; pair4 -19.2 with chroma 2.99), which rules out HSV-space saturation (tests darken -45.6/-45.9/-82.9) and flat brightness (constant shift ~-25 across pairs, contradicted by pair1/-6.3). Post-noise saturation reproduces pair0 chroma 11.89 (target 11.61), VR 2.623 (2.614), clip 0.4227 (0.403), mean -23.1 (-25.9), cross 0.30 (0.32); on pair1 it reproduces mean -6.6 (-6.3), VR 4.03 (4.34), chroma 3.73 (3.85), spread 1.83 (1.81), cross 0.38 (0.39). Residual uncertainty: verify_signals sigma over-shoots by 57-68% on supports 1/2/4 (target noise appears weaker on those contents than a homogeneous Gaussian model; possibly content-dependent clipping), and residual-intensity correlation (+0.18 on pair0) is better matched by poisson5+satYCrCb1 (+0.20) which otherwise under-shoots. Noise step can never be LIKELY (verify_signals MATCH/PARTIAL only -> UNCERTAIN per protocol). Support validation verdicts: pair0 PARTIAL, pair1 WEAK, pair2 WEAK, pair3 PARTIAL, pair4 WEAK.",
+    "alternatives": [
+      {
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:1",
+        "function_family": "poisson + YCrCb saturation",
+        "signal_evidence": "pair0 sigma/residual matched, ric +0.204 vs +0.182; VR 2.254 vs 2.614, mean -19.9 vs -25.9",
+        "psnr": null
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:5,brightness_darken_gamma_RGB:1",
+        "function_family": "YCrCb noise + gamma darken",
+        "signal_evidence": "pair0 sigma/VR/residual matched; mean -30.3 vs -25.9, clip 0.347 vs 0.403, chroma 11.11 vs 11.61",
+        "psnr": null
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:3,saturate_strengthen_YCrCb:1",
+        "function_family": "YCrCb noise (weaker) + YCrCb saturation",
+        "signal_evidence": "sigma 29.9 within 20%; VR 2.114, mean -16.0, chroma 9.83 (all under)",
+        "psnr": null
+      }
+    ],
+    "noise_6step_check_ref": "see noise_6step_check",
+    "budget": {
+      "test_candidate_calls": 22,
+      "hard_limit": 25,
+      "rounds": 4
+    }
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 overall verdict UNCERTAIN (Tier 3, SIGNAL mode); R0 support PSNR 19.11 dB (input degraded-vs-clean PSNR 10.30-10.95 dB); signal re-examination mandated",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "note": "sigma=33.85 > 10 -> noise presence unambiguous; Qwen/API unavailable in this environment, gate not needed"
+    },
+    "reanalysis": {
+      "full_analysis_rerun": "run_full_analysis.py rerun on all 5 support pairs -> full_analysis_R1.json / full_analysis_R1_p1..p4.json. Values reproduce R0 exactly (deterministic signals): block_boundary 0.9971-1.0044, unique_G=256 all pairs, dct_zero_ratio 0.0154-0.0240 -> NO_COMPRESSION; spectral_slope_ratio 0.9467-0.9856 (<1.08) -> no blur; noise_prior sigma [33.85, 25.70, 25.70, 32.62, 20.88].",
+      "step_vs_signal_checks": [
+        "Step4 verdict 'BRIGHTNESS_darken_sev2' (pairs 0/3/4) is contradicted by the mean-shift variability across pairs (-6.3 .. -25.9 levels) and by the FP checks (brightness_pure=false; contrast_from_clipping=true, contrast_from_saturation=true). The negative mean shift is clipping-induced (saturation + gamut clipping), not a brightness step. R0's saturation-only interpretation stands.",
+        "Step2 sigma=33.85 vs estimated_severity=2 is internally inconsistent (severity 2 corresponds to chroma sigma 22.2, not 33.9); the raw sigma estimator is content/clipping-biased, so severity must be judged by residual structure, not by the severity mapping.",
+        "Step1/Step3 verdicts (NO_COMPRESSION / BLUR_UNLIKELY) are consistent with all signals; no contradiction found."
+      ],
+      "second_order_stats": {
+        "channel_signature": "clean channel means are nearly equal on every pair (max/min = 1.07/1.16/1.12/1.05/1.07) but the target residual channel-std ratio is 1.57/1.70/1.59/1.54/2.07 with G always the lowest channel. This is the YCrCb-space chroma-dominant noise signature (R gets 1.402*sigmaCr, B gets 1.772*sigmaCb, G gets suppressed). Speckle and Poisson are per-RGB-channel intensity-proportional (equal channel scaling) and Gaussian_RGB is channel-equal; all three are contradicted. R0 noise type confirmed.",
+        "target_chroma_std": "sum std(Cr)+std(Cb) is nearly constant across pairs: 105.16 / 131.30 / 121.17 / 113.17 / 120.84, while clean chroma std varies 9.06 / 34.07 / 28.40 / 18.02 / 40.47. The chroma field is therefore dominated by a fixed additive chroma-noise field; the chroma_ratio spread (11.61/3.85/4.27/6.28/2.99) is driven by clean content, not by a variable saturation strength. Saturation sev1 (x2, luma-preserving) with noise sev4 reproduces pair0 chroma 11.89 and pair1 3.73.",
+        "residual_intensity_corr": "ric = +0.187/+0.022/+0.366/+0.197/+0.057 (all >= 0) whereas additive-Gaussian sims give ric ~ -0.05; target residual magnitude grows with intensity, so a Poisson-like component is plausible (retained as alternative).",
+        "sigma_content_dependence": "target sigma is inversely related to clean chroma content: low-chroma pairs 0/3 (clean chroma 9.1/18.0) have sigma 33.85/32.62, while colorful pairs 1/2/4 (chroma 34.1/28.4/40.5) have sigma 25.70/25.70/20.88 (pair4 also has clip 0.470). Gamut clipping of the chroma-noise field on colorful/bright content compresses the measured noise, which explains the sigma overshoot of any fixed-severity additive model on those pairs. This is a measurement/clipping effect, not evidence for a lower severity: sev3 makes VR/mean worse and still leaves sigma +33% on pair1."
+      },
+      "threshold_boundary_checks": "The control fails only the sigma check on pairs 1/2/4 (+57..+68%) while matching mean/VR/chroma/clip/spread/cross within a few percent. Because sigma was the sole discriminator, it was stress-tested with severity +/-1 (noise sev3, sat sev2) and type alternatives (poisson, gamma). R0's documented pair0/pair1 control verdicts were reproduced in-session (pair0 PARTIAL 3/4; pair1 WEAK 2/4 with identical sigma +62% and VR 9%), so the control baseline is seed-stable."
+    },
+    "hypotheses": [
+      {
+        "id": "C1",
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:1",
+        "role": "R0 control",
+        "signal_source": "YCrCb chroma signature (residual channel ratio, G lowest); chroma_ratio matched by sat x2 (pair0 11.89 vs 11.61; pair1 3.73 vs 3.85); VR/mean/clip matched",
+        "per_pair": "p0 PARTIAL 3/4 (mean 0.0110); p1 WEAK 2/4 (sigma +62%, VR 9%); p2 WEAK 2/4 (R0: sigma +57%, mean 0.0237); p3 PARTIAL 3/4 (R0: mean 0.0126); p4 WEAK 2/4 (R0: sigma +68%, VR -18%)",
+        "result": "BEST OVERALL; retained"
+      },
+      {
+        "id": "C2",
+        "pipeline": "saturate_strengthen_YCrCb:1,noise_gaussian_YCrCb:4",
+        "role": "order swap (saturation before noise), never tested by R0",
+        "signal_source": "sat-first removes the x2 chroma-noise amplification; target channel stds [71.9,55.2,86.6] (pair0) are close to sat-first prediction [70,43,87] and far from noise-first-clipped prediction [~85,51,106]",
+        "per_pair": "p0 WEAK 1/4 (sigma -27%, mean 0.0545, VR -54%); p1 WEAK 2/4 (sigma matched, mean 0.0136, VR -47%)",
+        "result": "REJECTED: sigma improves but VR/chroma collapse (deterministic saturation accounts for too little variance)"
+      },
+      {
+        "id": "C3",
+        "pipeline": "noise_gaussian_YCrCb:3,saturate_strengthen_YCrCb:1",
+        "role": "mandated severity -1 scan",
+        "signal_source": "sigma overshoot on pairs 1/2/4 -> test whether severity alone explains it",
+        "per_pair": "p1 WEAK 1/4 (sigma +33%, mean 0.0082, VR 30%); R0 pair0 sev3 was WEAK (VR 2.114 vs 2.614, mean -16.0 vs -25.9)",
+        "result": "REJECTED: lower severity worsens VR/mean/chroma and does not close sigma"
+      },
+      {
+        "id": "C5",
+        "pipeline": "noise_gaussian_YCrCb:4,saturate_strengthen_YCrCb:2",
+        "role": "saturation severity +1 scan",
+        "signal_source": "extra gamut clipping on colorful content could compress the sigma estimate toward target while raising VR/clip",
+        "per_pair": "p1 WEAK 1/4 (sigma +84%, mean 0.0103, VR 14%)",
+        "result": "REJECTED: saturation amplifies chroma noise (sigma up), not a clipping compression"
+      },
+      {
+        "id": "C4",
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:2",
+        "role": "Poisson family to explain positive ric and content-dependent sigma",
+        "signal_source": "ric +0.18..+0.37 (target) vs -0.05 (additive Gaussian); Poisson sigma ~ sqrt(I); R0 poisson5+sat1 matched ric (+0.204) but under-shot VR/chroma/mean, so saturation was raised to sev2",
+        "per_pair": "p0 WEAK 2/4 (sigma, residual; mean 0.0083, VR 15%); p1 WEAK 2/4 (residual, VR; sigma +49%, mean 0.0106); p2 PARTIAL 3/4 (residual, mean, VR; sigma +38%); p3 WEAK 2/4 (sigma, residual; mean 0.0072, VR 12%); p4 WEAK 2/4 (residual, VR; sigma +50%, mean 0.0138)",
+        "result": "REJECTED for CHANGE: improves pair2 (W->P) but regresses pair0 and pair3 (P->W); not >=4/5 improvement"
+      },
+      {
+        "id": "C7",
+        "pipeline": "noise_poisson:4,saturate_strengthen_YCrCb:2",
+        "role": "Poisson severity -1 scan (mandated for the PARTIAL C4 result)",
+        "signal_source": "C4 sigma +38% on pair2; poisson4 lowers sigma toward target while keeping the Poisson ric",
+        "per_pair": "p2 PARTIAL 3/4 (sigma, residual, mean; VR -16%); p1 WEAK 2/4 (residual, mean; sigma +27%, VR -17%)",
+        "result": "REJECTED: same middle ground as C4; still WEAK on the constraining pair1"
+      },
+      {
+        "id": "C6",
+        "pipeline": "noise_gaussian_YCrCb:5,brightness_darken_gamma_RGB:1",
+        "role": "R0 alternative #2 cross-pair validation (no-saturation family)",
+        "signal_source": "R0 pair0 PARTIAL without saturation (chroma boost potentially noise-only) -- needed cross-pair test",
+        "per_pair": "p1 WEAK 1/4 (sigma +46%, mean 0.0685, VR 27%)",
+        "result": "REJECTED: gamma darken over-darkens mid-brightness content (pair1 mean -6.3 target); the luma-preserving saturation family is required"
+      }
+    ],
+    "validation": {
+      "method": "test_candidate.py --mode signal (verify_signals check set: noise sigma <20% diff, residual FWHM <4px, mean_shift <0.005, variance_ratio <8%) on the 5 support pairs; 14 test runs, 7 distinct pipelines incl. control. Rich fingerprints (chroma ratio, clipped fraction, per-channel residual std, ric) additionally computed for finalists to guard against gaming the 4-check verifier.",
+      "control_baseline": "pair0 PARTIAL 3/4 (sigma, residual, VR matched; mean 0.0110); pair1 WEAK 2/4 (residual, mean; sigma +62%, VR 9%) -- reproduced R0 exactly, confirming seed stability; R0-documented: pair2 WEAK 2/4, pair3 PARTIAL 3/4, pair4 WEAK 2/4",
+      "candidate_summary_table": {
+        "C1 control": "P,W,W,P,W",
+        "C2 sat-first": "W,W,-,-,-",
+        "C3 noise3": "-,W,-,-,- (R0 pair0: W)",
+        "C5 noise4+sat2": "-,W,-,-,-",
+        "C4 poisson5+sat2": "W,W,P,W,W",
+        "C7 poisson4+sat2": "-,W,P,-,-",
+        "C6 noise5+gamma": "-,W,-,-,-"
+      },
+      "additional_fingerprints": {
+        "C1_pair0": "ric -0.047 vs target +0.181; chroma 11.894 vs 11.608; VR 2.623 vs 2.614; clip 0.418 vs 0.398; ch_std [79.3,51.9,95.0] vs [71.9,55.2,86.6]; mean -23.1 vs -25.9",
+        "C4_pair0": "ric +0.190 vs +0.181; chroma 12.495 vs 11.608; VR 2.856 vs 2.614; clip 0.442 vs 0.398; ch_std [80.1,66.6,89.3] vs [71.9,55.2,86.6]; mean -28.0 vs -25.9",
+        "C4_pair1": "VR 4.194 vs 4.339; chroma 3.821 vs 3.854; ch_std [91.0,69.6,81.7] vs [92.4,54.5,70.4]; clip 0.343 vs 0.369; mean -9.0 vs -6.3; ric 0.088 vs 0.025"
+      },
+      "decision_rule_applied": "REQUIRED for CHANGE (noise pipelines): verify_signals WEAK->PARTIAL/MATCH improvement on >=4/5 support pairs, or dominant §B statistical improvement. No candidate meets this: best alternative C4 improves only pair2 and regresses pair0/pair3. §B/rich-fingerprint improvement is real but partial (ric, chroma, channel balance) and does not dominate the aggregate verdicts."
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 4, "verdict": "UNCERTAIN"},
+        {"function": "saturate_strengthen_YCrCb", "severity": 1, "verdict": "UNCERTAIN"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "rationale": "The R0 control remains the best-supported pipeline. All deterministic steps (compression, blur, brightness/gamma-family, order swap) are ruled out or regress support pairs. The control matches pair0 and pair1 mean/VR/chroma/clip/spread/cross within a few percent and is PARTIAL 3/4 on pairs 0 and 3. Its only systematic deviation is the noise_prior sigma overshoot on pairs 1/2/4 (+57..+68%), which is explained by gamut-clipping compression of a fixed chroma-noise field on colorful/bright content (target clip fraction 0.37-0.47; clean chroma std 28-40 on those pairs), and which no tested severity/saturation/type variant closes without regressing the deterministic statistics. The positive residual-intensity correlation (ric +0.02..+0.37) indicates a possible Poisson component; the Poisson alternatives reproduce ric and pair2 but regress pair0/pair3 and do not reach >=4/5 pair improvement, so they do not warrant a CHANGE. R1 budget: 14 test_candidate.py runs (<=15).",
+      "next_round_condition": "If a future round is allowed, only test pipelines that keep control-level mean/VR/chroma on pairs 0/1/3 while reducing sigma on pairs 1/2/4; Poisson-family without saturation amplification (e.g. poisson5 + milder global) is the only remaining signal-consistent direction."
+    }
+  }
+}

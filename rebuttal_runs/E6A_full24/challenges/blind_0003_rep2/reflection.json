@@ -1,0 +1,610 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=1.0014 (<1.05), unique_G 256/256, unique_G_ratio=1.0 → JPEG unlikely",
+      "blur": "gm_ratio=0.5322 <0.85 → blur 可能存在; spectral_slope target=-1.3994 clean=-1.3087 ratio=1.0693 (<1.08); FFT anisotropy=0.00, pca=0.0 → 非 motion; glass_score 未触发 → 默认 gaussian",
+      "noise": "noise_prior sigma=1.11 (<2) → 噪声门限以下, 按 NO_NOISE 处理; spatial_corr=0.7126 疑为 blur 残差污染; cross_channel_corr=0.7309; residual_intensity_corr=0.1564",
+      "global": "variance_ratio=0.9539, mean_shift=-0.5, clipped_fraction=0.0027 → NO_GLOBAL"
+    },
+    "mode": "PSNR (sigma=1.1 < 2)"
+  },
+  "qwen_gate": {
+    "available": false,
+    "triggered": false,
+    "reason": "pair0 noise_prior sigma=1.11 < 2, 未进入 Step 0.5 边界噪声门 (Qwen/API 本环境不可用)"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 61.83,
+    "vm_slope": 1.7956,
+    "var_slope": -0.1079,
+    "spatial_corr": 0.9792,
+    "rgb_ratio": 1.1274,
+    "cross_ch_corr": 0.869,
+    "sigma_peeled": 1.98,
+    "sigma_noise_prior": 1.11,
+    "diagnosis": "最终管线不含 noise 步; 以上为 stripped 残差 (blur_gaussian:2 剥离, peeled_noise_check.py) 的 §B 数值, 用于排除噪声。extreme_pct=61.83% 属 SKILL 已知假阳性 (extreme_pct>50% 且 sigma<5 → JPEG/blur 伪影); spatial_corr=0.98 表明残差高度结构化 (核不匹配), 非白噪声; 且 x_distortion 最低噪声强度 noise_gaussian_RGB:1 的 σ≈12.75 (8-bit) 远大于残差 std 4.6, 若含噪声 PSNR 不可能达 32-36.6dB。glass:2 模拟后 CI 全指标差≈0.000 (含 overshoot/zero_crossing/impulse 统计), 证明无独立噪声步。"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "gm_ratio=0.5322 (<0.85) + spectral_slope_ratio=1.069 显示强平滑; FFT anisotropy=0.00 排除 motion, pca=0.0/无 glass 信号 → 默认 gaussian; gm_ratio 极低提示高 severity, 先测 sev=4"
+      },
+      "test_result": {
+        "psnr_rgb": 30.55,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "sev=4 得 PSNR 30.55 dB, 未达确定性阈值 → 按 severity 扫描规则先测 ±1; 先测 sev=5 (方向: 更强模糊)"
+      },
+      "test_result": {
+        "psnr_rgb": 28.76,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "sev=5 得 28.76dB 更差, sev=4 为当前最佳 30.55dB → 继续 ±1 扫描, 测 sev=3"
+      },
+      "test_result": {
+        "psnr_rgb": 32.89,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "sev=3 (32.89dB, CI7/10) 优于 sev=4/5, PSNR 随强度下降而上升 → 继续向下扫描测 sev=2, 确认最佳高斯核尺寸"
+      },
+      "test_result": {
+        "psnr_rgb": 34.83,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "sev=2 (34.83dB, CI8/10) 仍优于 sev=3, 趋势单调改善 → 测最低 sev=1; 若仍 <40dB 说明可能有第二退化(噪声)或被掩蔽的 JPEG"
+      },
+      "test_result": {
+        "psnr_rgb": 32.91,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_lens:3",
+        "thinking": "gaussian severity 扫描最优 34.83dB (sev=2) 仍 <40, 剥离后 residual std=4.6 且 spatial_corr=0.98 → 残差结构化, 提示核形状不匹配; MTF 无法区分 gaussian/lens (SKILL §C3) → 测 lens (disk radius=4)"
+      },
+      "test_result": {
+        "psnr_rgb": 34.6,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "lens:3 (radius 4) 得 34.60dB, CI 9/10 最高 → lens 族内 severity 扫描, 测 radius=3 (sev=2)"
+      },
+      "test_result": {
+        "psnr_rgb": 34.61,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:4",
+        "thinking": "pair1/pair4 的 glass_score=0.43/0.42>0.25 (pixel shuffle 高频残留), pair0 因 has_noise 分支提前返回未计算 glass_score; 且 gaussian/lens severity 扫描 PSNR 平台 34.6-34.8 无法到 40 (SKILL §C4: glass 非确定性模糊 PSNR 不会>40) → 测试 blur_glass (sev=4 对应 sigma=1.4,shift=3,iter=2)"
+      },
+      "test_result": {
+        "psnr_rgb": 30.47,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "glass:4 得 30.47dB (随机 shuffle 有方差), 继续 glass 族 severity 扫描; 测 sev=2 (sigma=0.9, shift=2, iter=1), 扰动更小"
+      },
+      "test_result": {
+        "psnr_rgb": 36.56,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "glass:2 得 36.56dB + CI 10/10 (全项 0.000 差异), 明显优于 gaussian:2 (34.83, CI8/10); glass 族内继续扫描测 sev=3 (sigma=1.2, shift=2, iter=2)"
+      },
+      "test_result": {
+        "psnr_rgb": 33.09,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "glass:3 (33.09) / glass:4 (30.47) 均劣于 glass:2 (36.56); 补测玻璃族最低强度 sev=1 (sigma=0.7, shift=1, iter=1) 完成族内扫描"
+      },
+      "test_result": {
+        "psnr_rgb": 35.77,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "support 复核 pair1 (glass_score=0.43 最强信号): 用 pair0 最优候选玻璃:2 检验跨图复现"
+      },
+      "test_result": {
+        "psnr_rgb": 32.4,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "support 复核 pair4 (glass_score=0.42): 用 pair0 最优候选玻璃:2 检验跨图复现"
+      },
+      "test_result": {
+        "psnr_rgb": 32.32,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "support 复核 pair2: 用玻璃:2 检验跨图复现"
+      },
+      "test_result": {
+        "psnr_rgb": 32.04,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "support 复核 pair3: 用玻璃:2 检验跨图复现"
+      },
+      "test_result": {
+        "psnr_rgb": 35.21,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "跨族对照 (Round2): pair1 上 gaussian:2 vs glass:2, 检验平滑子类型归属; pair1 glass_score=0.43 支持 glass"
+      },
+      "test_result": {
+        "psnr_rgb": 31.37,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "severity 交叉验证 (support pair2): glass:2 已得 32.04dB CI10/10; 测 glass:1 排除更低强度"
+      },
+      "test_result": {
+        "psnr_rgb": 30.81,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "重复 glass:2 (pair0) 评估随机 shuffle 方差, 确认 36.56dB 非偶然"
+      },
+      "test_result": {
+        "psnr_rgb": 36.57,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 36.57,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 36.56,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 35.77,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 35.21,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 34.83,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_lens:2",
+      "psnr_rgb": 34.61,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_lens:3",
+      "psnr_rgb": 34.6,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 33.09,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "psnr_rgb": 32.91,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 32.89,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 32.4,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 32.32,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 32.04,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 31.37,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 30.81,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 30.55,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_glass:4",
+      "psnr_rgb": 30.47,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 28.76,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_glass",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "alternatives": [
+      {
+        "pipeline": [{"function": "blur_glass", "severity": 1}],
+        "psnr_rgb": 35.77,
+        "note": "同族 severity-1"
+      },
+      {
+        "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+        "psnr_rgb": 34.83,
+        "note": "跨族对照"
+      }
+    ],
+    "rationale": "单步 glass blur, severity=2 (sigma=0.9, shift=2, iter=1)。信号链: gm_ratio 0.37-0.53 强梯度损失 + block_boundary≈1.0 排除 JPEG + unique_G=256 排除量化 + variance_ratio≈0.9/mean_shift<1 排除 global + pair1/pair4 glass_score=0.43/0.42>0.25 + anisotropy<2.2/PCA=1.0 非 motion。PSNR: glass:2 pair0 36.56/36.57 dB (CI 10/10, 重复两次方差≈0.01), 同族 sev1 35.77/30.81、sev3 33.09、sev4 30.47; 跨族 gaussian:2 34.83/31.37、lens:2/3 ≈34.6 均劣。support 5 对复核: glass:2 → pair0 36.57 (10/10), pair1 32.40 (10/10), pair2 32.04 (10/10), pair3 35.21 (10/10), pair4 32.32 (9/10, 仅 impulse_pct_255 相对差 40% 但绝对差 0.000); 全部 CI 指标绝对差 ≤0.003, 信号级完全匹配。PSNR 32-36.6 < 40 是 glass 随机 pixel-shuffle 的物理上限 (SKILL §C4: 非确定性 blur PSNR 不会>40), 非核误判 → verdict UNCERTAIN (不作 LIKELY)。",
+    "noise_conclusion": "无噪声步 (见 noise_6step_check)"
+  },
+  "reflection_R1": {
+    "trigger": "R0 verdict=UNCERTAIN (glass:2, PSNR 32-36.6 <40) + r0_result support_psnr=28.66 → 按 SKILL 训练后反思协议触发 R1 信号重释",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "5 对 noise_prior sigma 0.74-1.48 < 2, 未进入 Step 0.5 边界噪声门; Qwen/API 本环境不可用"
+    },
+    "reanalysis": {
+      "verdict_vs_signal_conflicts": [
+        "step3 blur: p0/p2/p3 verdict=BLUR_UNLIKELY 与 gm_ratio 0.4149-0.5322 (<<0.85) 矛盾 → 阈值边界误判: spectral_slope_ratio 1.0693/1.0781/1.0742 恰低于 1.08 阈值 (p1 1.0845 与 p4 1.0874 越过阈值→GLASS_BLUR)。5 对一致存在强模糊, 仅子类型判定被阈值截断",
+        "step3 glass_score: p0/p2/p3 因 has_noise 分支提前返回未计算 glass_score; 已计算两对 glass_score=0.4322/0.4152 >0.35, 超出校准区间上部 (Glass 2-4: 0.19-0.41), glass 族证据强但仅 2/5 对可用",
+        "step3 severity: run_full_analysis 的 gm_ratio→severity 映射给出 est_sev=3 (p0 gm=0.5322) / 4 (p1 0.3708, p4 0.4149), 与 PSNR 最优 sev=2 冲突。R1 检验: glass:2 模拟图 gm_ratio=0.5322 与目标 0.5322 完全相等 → gm_ratio 被 glass 自身平滑主导, 该映射对 glass 系统性高估, 应信任 PSNR/CI 仲裁",
+        "step2 noise: 5 对 verdict 均为 GAUSSIAN_YCrCb, sigma 0.74-1.48; raw-residual spatial_corr 0.60-0.71 / cross_ch_corr 0.68-0.93 是 blur 残差污染而非白噪声。R1 用正确核 glass:2 剥离 (§B): residual std=3.8, extreme_pct=65.74% (SKILL 已知假阳性: extreme>50% 且 sigma<5), spatial_corr=0.9499, var_slope=0.0152; 且 glass:2 模拟图与目标 noise_prior sigma 完全相等 (1.11/1.11) → 除 glass:2 外无独立噪声步",
+        "step2 gamma_suspect: residual_intensity_corr p0/p1=0.1554/0.1801 (正) 但 p2-p4=-0.0962~-0.003 (负), 跨对不一致 → 内容依赖, 非 GT 全局 gamma (5 对共享同一管线); 模拟图 ric=0.1638 与目标 0.1554 匹配 → 由 blur 解释",
+        "step1 compression: 4/5 对 MILD_COMPRESSION_POSSIBLE 但 block_boundary 0.9886-1.0063 << 1.1, unique_G 211-256 (阈值 200, p3 clean 本身仅 235); 模拟图 bb=1.0057/unique_G=256 与目标 1.0014/256 匹配 → 微弱 DCT 信号为 blur 诱导, 非 JPEG",
+        "step4 global: variance_ratio 0.8916-0.9620 / mean_shift -0.4~-0.5 (0-255) / chroma 0.9237-0.9869; glass:2 模拟图复现 variance_ratio 0.9543 (目标 0.9539)、chroma 0.9634 (目标 0.9634)、mean_shift -0.5 (目标 -0.5) → 方差/色度下降由 blur 解释, 无 contrast/saturation/brightness 步"
+      ],
+      "threshold_boundary_signals": [
+        "spectral_slope_ratio 1.0693/1.0845/1.0781/1.0742/1.0874 (5 对) — 3 对低于 1.08 但均 >1.069, 属阈值边界; 结合 gm_ratio ≤0.53 判定模糊存在, 不用 BLUR_UNLIKELY 的硬判决",
+        "gm_ratio→severity 的阈值映射 (0.35/0.50/0.65) 对 glass 不适用: glass:2 模拟即达 gm_ratio 0.5322, 与目标相同, 说明 gm 严重度估计被 glass 子类型混淆"
+      ],
+      "second_order_stats": [
+        "variance_ratio 目标 vs glass:2 模拟: 0.9539 vs 0.9543 (差 0.0004, <8% 阈值)",
+        "chrome_ratio 目标 vs 模拟: 0.9634 vs 0.9634 (完全相同)",
+        "mean_shift 目标 vs 模拟: -0.5 vs -0.5 (0-255 scale)",
+        "residual_intensity_corr: 目标 0.1554 vs 模拟 0.1638; 跨对符号不一致 → 内容效应",
+        "noise_prior sigma: 目标 1.11 vs 模拟 1.11 (相同), 模拟图无噪声 → 目标无额外噪声",
+        "block_boundary: 目标 1.0014 vs 模拟 1.0057 (均 <<1.1)",
+        "clipped_fraction: 目标 0.0027 vs 模拟 0.0028"
+      ],
+      "stochastic_floor_analysis": {
+        "method": "target=glass:2 模拟图A, 对 clean 重新施加 glass:2 得模拟图B (独立随机抽样); PSNR(A,B)=glass shuffle 随机底噪",
+        "floor_psnr": 36.62,
+        "floor_rms": 3.76,
+        "target_vs_sim_psnr": 36.64,
+        "target_vs_sim_rms": 3.75,
+        "md5_check": "degraded_0 / simA / simB 三个文件互不相同, 排除拷贝混淆",
+        "conclusion": "目标到 glass:2 抽样的距离 = 两次独立 glass:2 抽样之间的距离 (RMS 3.75 vs 3.76) → 目标与 glass:2 分布在像素级不可区分; 任何额外确定性/噪声成分都会使 target RMS 超出 floor RMS, 实测无此空间"
+      },
+      "simulated_signal_replication": {
+        "target_vs_sim_glass2_p0": {
+          "block_boundary": [1.0014, 1.0057],
+          "unique_G": [256, 256],
+          "noise_prior_sigma": [1.11, 1.11],
+          "spatial_corr": [0.7126, 0.7126],
+          "cross_channel_corr": [0.7309, 0.7299],
+          "residual_intensity_corr": [0.1554, 0.1638],
+          "gm_ratio": [0.5322, 0.5322],
+          "spectral_slope": [-1.3994, -1.3995],
+          "spectral_slope_ratio": [1.0693, 1.0694],
+          "variance_ratio": [0.9539, 0.9543],
+          "mean_shift": [-0.5, -0.5],
+          "clipped_fraction": [0.0027, 0.0028],
+          "contrast_spread_ratio": [0.9737, 0.9756],
+          "saturation_chroma_ratio": [0.9634, 0.9634],
+          "verdicts_identical": "MILD_COMPRESSION_POSSIBLE / GAUSSIAN_YCrCb / BLUR_UNLIKELY / NO_GLOBAL (目标与模拟完全一致)"
+        }
+      }
+    },
+    "hypotheses": [
+      {
+        "id": "C0",
+        "pipeline": "blur_glass:2",
+        "role": "R0 control",
+        "signal_source": "gm_ratio 0.37-0.53 (5/5) + glass_score 0.415-0.432 (p1/p4) + glass:2 模拟图逐项信号复现"
+      },
+      {
+        "id": "C1",
+        "pipeline": "blur_glass:1",
+        "role": "同族 severity 下边界",
+        "signal_source": "glass:1 shift=1 随机性更小, 底噪更高; 需检验 R0 p0 35.77 是否为其自身底噪"
+      },
+      {
+        "id": "C2",
+        "pipeline": "blur_glass:3",
+        "role": "同族 severity 上边界",
+        "signal_source": "gm_ratio→est_sev 给 3-4 (p0/p1/p4) 与 PSNR sev=2 冲突"
+      },
+      {
+        "id": "C3",
+        "pipeline": "blur_gaussian:2",
+        "role": "跨族确定性对照",
+        "signal_source": "确定性核若正确应 PSNR>40dB; R0 p0 34.83 已否定, 在 p4 复核内容效应"
+      },
+      {
+        "id": "C4",
+        "pipeline": "blur_lens:3",
+        "role": "跨族确定性对照",
+        "signal_source": "MTF 无法区分 gaussian/lens (SKILL §C3); R0 p0 lens:3 34.60 CI9/10"
+      }
+    ],
+    "validation": {
+      "mode": "PSNR (sigma<2); 含 stochastic-floor 对照",
+      "candidate_tests": 12,
+      "tests": [
+        {"id": "C0", "pair": 0, "pipeline": "blur_glass:2", "psnr": 36.64, "ci": "10/10", "note": "R0 control 复现 (R0 36.56/36.57)"},
+        {"id": "floor", "pair": 0, "pipeline": "blur_glass:2 (simA→simB)", "psnr": 36.62, "ci": "10/10", "note": "随机底噪; RMS 3.76 vs 目标 3.75"},
+        {"id": "C1", "pair": 0, "pipeline": "blur_glass:1", "psnr": 35.79, "ci": "8/10", "note": "fail: impulse_total_pct 21%, impulse_pct_zero 73%"},
+        {"id": "C2", "pair": 0, "pipeline": "blur_glass:3", "psnr": 33.01, "ci": "8/10", "note": "fail: impulse_pct_zero 41%, overshoot_ratio 27%"},
+        {"id": "C3", "pair": 0, "pipeline": "blur_gaussian:2", "psnr": 34.83, "ci": "8/10", "note": "fail: impulse_pct_zero 28%, overshoot_ratio 47%"},
+        {"id": "C4", "pair": 0, "pipeline": "blur_lens:3", "psnr": 34.60, "ci": "9/10", "note": "fail: overshoot_ratio 45%"},
+        {"id": "C0", "pair": 1, "pipeline": "blur_glass:2", "psnr": 32.39, "ci": "10/10", "note": "跨对复现 (R0 32.40)"},
+        {"id": "C0", "pair": 2, "pipeline": "blur_glass:2", "psnr": 32.03, "ci": "10/10", "note": "跨对复现 (R0 32.04)"},
+        {"id": "C0", "pair": 3, "pipeline": "blur_glass:2", "psnr": 35.23, "ci": "10/10", "note": "跨对复现 (R0 35.21)"},
+        {"id": "C0", "pair": 4, "pipeline": "blur_glass:2", "psnr": 32.35, "ci": "9/10", "note": "跨对复现 (R0 32.32); 仅 impulse_pct_255 相对差20%/绝对差0.000"},
+        {"id": "C2", "pair": 4, "pipeline": "blur_glass:3", "psnr": 29.31, "ci": "6/10", "note": "gm 建议 sev4 的配对检验: 越严重越差"},
+        {"id": "C3", "pair": 4, "pipeline": "blur_gaussian:2", "psnr": 31.17, "ci": "8/10", "note": "跨族第二对复核: 劣于 glass:2 1.18dB"}
+      ],
+      "deterministic_criterion": "候选需在 5 对 support 上 PSNR 复现且相对 R0 control 改善 (pair0 >2dB 或 >35dB, 其余对不明显变差)",
+      "criterion_result": "无候选通过: glass:1 p0 35.79 (Δ-0.85), glass:3 p0 33.01 (Δ-3.63), gaussian:2 34.83 (Δ-1.81)/p4 31.17 (Δ-1.18), lens:3 34.60 (Δ-2.04); glass:2 在 5 对均最优且 CI 最高 (10/10 x4, 9/10 x1)",
+      "noise_criterion": "未触发 (sigma<2, 模拟图 noise_prior sigma 与目标完全相同, 修正核剥离残差=shuffle 底噪)",
+      "support_psnr_r0": 28.66,
+      "note_on_support_psnr_gap": "R0 specialist support PSNR 28.66 低于模拟 PSNR 32.0-36.6, 但模拟 PSNR 已触及 glass:2 自身随机底噪上限 (36.62); 差距属训练预算/随机底噪问题, 非管线误识别 (R1 不接触 GT, 不作进一步推断)"
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "blur_glass", "severity": 2, "verdict": "UNCERTAIN"}
+      ],
+      "improvement_found": false,
+      "reason": "R1 信号重释未发现被忽略的独立退化: glass:2 模拟图复现目标全部一阶/二阶信号, 目标-模拟 PSNR 恰等于随机底噪, 且 5 对 support 上 glass:2 均优于 glass:1/3、gaussian:2、lens:3。R0 唯一实质误判是剥离噪声时使用了 gaussian:2 而非正确核 glass:2 (R1 已纠正, 结论不变)。UNCERTAIN 仅源于 glass shuffle 随机性使 PSNR 无法达 40dB, 属物理上限而非识别错误。"
+    }
+  }
+}

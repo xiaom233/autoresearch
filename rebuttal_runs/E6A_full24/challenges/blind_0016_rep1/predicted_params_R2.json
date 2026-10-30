@@ -1,0 +1,68 @@
+{
+  "challenge_id": "blind_0016_rep1",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r1_pipeline": [["blur_motion", 3], ["compression_jpeg", 2]],
+  "pipeline": [
+    {"function": "blur_motion", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [["blur_motion", 2], ["compression_jpeg", 2]],
+      "function_family": "blur_motion",
+      "status": "NOT_ACCEPTED (severity variant; not validated beyond pair0)",
+      "support_psnr_pair0_draws": [34.46, 25.67, 25.92],
+      "ci_pair0": "9/10",
+      "evidence": "mean 28.68 vs control 6-draw mean 27.75 — difference 0.94 dB with SE ~3.3 dB (angle-random), statistically indistinguishable; control draw matched target blur-strength signals exactly (gm 0.3603 vs 0.3596, spectral_slope -1.4771 vs -1.4733) at severity 3 -> severity 3 retained"
+    },
+    {
+      "pipeline": [["blur_gaussian", 4], ["compression_jpeg", 2]],
+      "function_family": "blur_gaussian",
+      "status": "R0 fallback only (gaussian family never exceeds 25.9 dB on any pair)",
+      "evidence": "R0 control; kept unchanged from R1 alternatives"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR (sigma 0.74-1.85 < 2 -> no noise; deterministic severity/order candidates) + SIGNAL mode for the noise candidate C4",
+    "qwen_gate": {"available": false, "triggered": false, "reason": "noise_prior sigma 0.74/1.24/0.74/1.85/0.74 < 2 in 5/5 pairs -> noise gate (2<sigma<10) not triggered; no API in environment"},
+    "decision_rationale": "R1 管线 (motion:3+jpeg:2) 的残差中没有可编码的结构成分。将 R1 管线仿真图在 3 对 support (pair0 匹配角 31.70 dB; pair1 随机角 19.11 dB; pair4 随机角 19.69 dB) 上与 target 做全信号对比: 14 项聚合信号 (block_boundary, dct_zero, unique_G, noise sigma, residual_intensity_corr, gm_ratio, spectral_slope, variance_ratio, mean_shift, clipped, chroma, glass_score) 全部在 ~1-4% 内匹配; 唯一随 motion 角度变化的量 (PCA=blur 方向性, anisotropy, 像素级 PSNR) 才是残余来源。x_distortion blur_motion 的 angle=uniform(-90,90) 无法编码进 pipeline (见 x_distortion/blur.py)，因此该残余不可修正。4 个候选全部未通过验证: jpeg:3 (pair0 30.64 dB CI 6/10, bb/dct 在 jpeg:2 已精确匹配), motion:2 (3 次抽样 34.46/25.67/25.92, mean 28.68 vs control 27.75, 角度方差内; gm/slope 支持 sev3), 顺序 jpeg->motion (38.35 dB 但 CI 4/10, 块边界被抹除, 与 bb=2.136/dctz=0.9655 矛盾, 且生成器约束 blur 先于 JPEG), noise R1 前置 (signal WEAK 2/3).",
+    "r1_control_validation_5pair_today": {
+      "pair0": {"psnr": 31.70, "ci": "9/10"},
+      "pair1": {"psnr": 19.11, "ci": "9/10"},
+      "pair2": {"psnr": 26.09, "ci": "10/10"},
+      "pair3": {"psnr": 26.09, "ci": "8/10"},
+      "pair4": {"psnr": 19.69, "ci": "10/10"},
+      "mean_psnr": 24.54,
+      "mean_ci": 9.2,
+      "note": "单次随机角度抽样; R1 记录的 draw-mean 为 24.22 (best-per-pair 均值 25.92) -> 分布级复现一致"
+    },
+    "residual_signal_analysis": {
+      "method": "R1 pipeline simulated image (test_candidate --output-sim) -> run_full_analysis on (simulated, clean), compared against full_analysis_R2_p*.json of target",
+      "pair0_matched_angle_31.70dB": {"bb": [2.136, 2.1069], "dctz": [0.9655, 0.9661], "sigma": [0.74, 0.74], "ric": [-0.2819, -0.2774], "gm": [0.3596, 0.3603], "slope": [-1.4733, -1.4771], "anis": [1.6587, 1.7018], "pca": [2.553, 2.776], "glass": [0.4821, 0.5021], "vr": [0.9645, 0.9648], "ms": [-0.3, -0.2], "clip": [0.0013, 0.0011], "chroma": [1.0269, 1.0276]},
+      "pair1_random_angle_19.11dB": {"bb": [1.9483, 1.9519], "dctz": [0.7921, 0.7953], "sigma": [1.24, 1.24], "ric": [0.1447, 0.1674], "gm": [0.4655, 0.4646], "slope": [-1.1737, -1.1867], "vr": [0.8106, 0.8065], "ms": [-0.5, -0.5], "clip": [0.0028, 0.0029], "chroma": [0.9236, 0.9219], "pca": [3.38, 2.365], "sim_blur_verdict": "GLASS_BLUR (PCA angle-dependent flip)"},
+      "pair4_random_angle_19.69dB": {"bb": [1.5914, 1.6183], "dctz": [0.7974, 0.7721], "sigma": [0.74, 0.74], "gm": [0.6565, 0.6805], "slope": [-1.21, -1.1717], "vr": [0.7791, 0.7854], "clip": [0.0445, 0.0485], "chroma": [0.9348, 0.9341], "ms": [-0.2, -0.2], "pca": [3.345, 3.246], "sim_blur_verdict": "MOTION_BLUR"},
+      "conclusion": "无遗漏全局步骤 (variance/mean_shift/chroma/mean clipped 全部被 R1 管线解释); 无可见噪声 (target 与无噪声仿真 sigma/ric 完全一致); JPEG 严重度与顺序由 dct_zero 0.9661 vs 0.9655 + bb 2.107 vs 2.136 同时匹配确认; blur 强度由 gm/slope 在 sev3 下精确匹配确认。仅 motion 随机角度不可编码。"
+    },
+    "peeled_residual_check_pair0": {"pipeline": "blur_motion:3,compression_jpeg:2", "residual_std": 14.5, "extreme_pct": 86.81, "vm_slope": 0.9318, "var_slope": -0.0261, "spatial_corr": 0.9938, "rgb_ratio": 1.0314, "cross_ch_corr": 0.9839, "noise_prior_sigma": 1.48, "diagnosis": "结构化残差 (spatial_corr 0.9938) 由角度失配主导; extreme_pct 86.8% 为 SKILL 已知结构残差假阳性; noise_prior 1.48 为 blur 衰减下界 -> NO_NOISE 维持"},
+    "candidates": [
+      {"id": "C0", "pipeline": "blur_motion:3,compression_jpeg:2", "role": "R1 control", "pair0_today": 31.70, "ci": "9/10", "result": "KEPT (control)"},
+      {"id": "C1", "pipeline": "blur_motion:3,compression_jpeg:3", "role": "JPEG severity +1", "pair0_today": 30.64, "ci": "6/10", "result": "REJECT: CI 6/10 < control 9/10; bb/dct_zero 在 jpeg:2 已精确匹配 (0.9661 vs 0.9655)"},
+      {"id": "C2", "pipeline": "blur_motion:2,compression_jpeg:2", "role": "motion severity -1 (R0/R1 未测)", "pair0_draws": [34.46, 25.67, 25.92], "ci": "9/10", "result": "NOT ACCEPTED: mean 28.68 vs control 27.75 (差 0.94 dB, SE ~3.3 dB, 角度方差内); 控制组匹配角仿真 gm 0.3603 vs target 0.3596 / slope -1.4771 vs -1.4733 确认 sev3"},
+      {"id": "C3", "pipeline": "compression_jpeg:2,blur_motion:3", "role": "order swap", "pair0_today": 38.35, "ci": "4/10", "result": "REJECT: CI 4/10 (块边界被抹除); 与 target bb=2.136/dctz=0.9655 矛盾; 38.35 为角度幸运抽样 (单次)"},
+      {"id": "C4", "pipeline": "noise_gaussian_RGB:1,blur_motion:3,compression_jpeg:2", "role": "hidden noise before blur (signal mode)", "result": "REJECT: verify_signals WEAK (2✓/3✗: blur:spectral_slope, noise:sigma 匹配; wiener_kernel 0.343, structured_residual FWHM 20px, block_boundary 23% 失配); 无任何信号优于无噪声 control"}
+    ],
+    "gate": "无候选通过: 确定性候选需 pair0 >2 dB 或 >35 dB 且其余 pair 不明显变差; C1/C3 CI 崩塌, C2 未超出角度方差, C4 信号 WEAK -> NO_CHANGE"
+  },
+  "signal_sources": [
+    "R2 run_full_analysis 5 对 support (full_analysis_R2_p0..p4.json) 与 R1 确定性信号完全一致: bb 1.591-2.428 (>1.1, 0% FP) -> JPEG LIKELY; PCA 2.341-3.380 + DT MOTION 5/5 -> motion blur",
+    "R1 管线仿真 vs target 全信号对比 (pair0 31.70 dB / pair1 19.11 dB / pair4 19.69 dB): 14 项聚合信号 (bb/dctz/sigma/ric/gm/slope/vr/ms/clip/chroma/glass/unique_G) 全部 ~1-4% 匹配 -> 残差中无 block/blur/色偏/噪声结构",
+    "x_distortion/blur.py blur_motion: angle=np.random.uniform(-90,90) 每样本随机, pipeline 规范无法编码角度 -> 像素级 PSNR 抽样方差 (17.1-34.5 dB) 为不可修正残余",
+    "pair1/pair4 随机角仿真仅 PCA/anisotropy (方向性) 偏离 (pair1 pca 3.38->2.365, 分析器甚至翻判 GLASS_BLUR) -> 方向是唯一残差成分",
+    "peeled §B (pair0, R1 管线): spatial_corr 0.9938 结构残差, noise_prior 1.48 下界, extreme_pct 86.8% 已知假阳性 -> NO_NOISE",
+    "顺序: blur->jpeg 仿真同时匹配 dct_zero 0.9661 vs 0.9655 与 bb 2.1069 vs 2.136; 反序 (C3) CI 4/10 + 生成器 blur priority < JPEG priority -> 顺序确认",
+    "C1-C4 候选测试 (test_candidate.py 11 次, 见 reflection.json iterations rounds 26-40)"
+  ]
+}

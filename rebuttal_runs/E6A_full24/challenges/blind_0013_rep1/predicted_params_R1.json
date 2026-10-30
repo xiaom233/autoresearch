@@ -1,0 +1,91 @@
+{
+  "challenge_id": "blind_0013_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "noise_speckle",
+      2
+    ],
+    [
+      "compression_jpeg",
+      1
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": "noise_gaussian_RGB:2,compression_jpeg:1",
+      "family": "additive gaussian RGB",
+      "status": "REJECTED",
+      "evidence": "R0 pair0 PARTIAL (noise:sigma diff 20%); residual_intensity_corr sim -0.03 vs target 0.48; additive noise cannot produce intensity-correlated residual."
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+      "family": "additive gaussian YCrCb",
+      "status": "REJECTED",
+      "evidence": "R0 pair0 PARTIAL; RIC 0.056 vs target 0.49; peeled residual rgb_ratio 1.028-1.076 (<1.4) in 5/5 pairs excludes chroma-weighted noise."
+    },
+    {
+      "pipeline": "noise_poisson:2,compression_jpeg:1",
+      "family": "poisson",
+      "status": "REJECTED",
+      "evidence": "R1 pair0 PARTIAL (noise:sigma diff 20%); fingerprint RIC 0.232 vs target 0.476, mean_shift -2.78 vs -6.93, variance_ratio 0.931 vs 0.843; zero-mean Poisson cannot reproduce the clipping-driven darkening/variance loss."
+    },
+    {
+      "pipeline": "noise_speckle:2,compression_jpeg:2",
+      "family": "jpeg severity boundary",
+      "status": "REJECTED",
+      "evidence": "R1 pair3 PARTIAL (noise:sigma diff 67%), pair0 PARTIAL (noise:sigma diff 27%); canonical sims: pair3 bb 1.6705 vs target 1.6400 (improves) but pair0 dct 0.6134 vs 0.5587 (+9.8%) and sigma 1.85 vs 2.59 (-29%) regress."
+    },
+    {
+      "pipeline": "noise_speckle:1,compression_jpeg:1",
+      "family": "speckle lower severity boundary",
+      "status": "REJECTED",
+      "evidence": "R1 pair3 PARTIAL (compression:block_boundary diff 10%); R0 pair0 PARTIAL (sigma diff 40%); pair3 fingerprint RIC 0.466 vs target 0.561, variance_ratio 0.9952 vs 0.9872 (sev2 0.5463/0.9943 closer)."
+    },
+    {
+      "pipeline": "noise_speckle:3,compression_jpeg:1",
+      "family": "speckle upper severity boundary",
+      "status": "REJECTED",
+      "evidence": "R0 pair0 WEAK (sigma 40%, bb 11%); canonical pair0 sim: sigma 3.34 (+29% vs 2.59), bb 1.1787 (-11%), dct 0.4924 (-12%) vs sev2 (2.22, 1.2196, 0.561); only clipping-derived global stats favor sev3."
+    },
+    {
+      "pipeline": "noise_speckle:2,blur_gaussian:1,compression_jpeg:1",
+      "family": "blur presence",
+      "status": "REJECTED",
+      "evidence": "R1 pair0 PARTIAL (noise:sigma diff 80%); spectral_slope_ratio 0.9696-0.9954 in 5/5 pairs (target never steeper than clean, noise-robust signal); blur smooths the noise spectrum away from target."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=2.59 pair0; noise-containing pipeline, PSNR not a decision criterion)",
+    "support_validation": "Control re-validated on all 5 support pairs: p0 MATCH, p1 MATCH, p2 MATCH, p3 PARTIAL (compression:block_boundary 11%), p4 PARTIAL (noise:sigma 25%); 0 WEAK/MISMATCH. No alternative improved >=4/5 pairs: best alternative noise_poisson:2 is PARTIAL on p0 only; noise_speckle:2+compression_jpeg:2 is PARTIAL on p0 and p3 with larger sigma gaps; speckle:1 and blur-inclusive candidates regress.",
+    "rationale": "R0 pipeline survives R1 reanalysis unchanged. (1) JPEG confirmed in 5/5 pairs by 0%-FP block_boundary 1.3257-1.7437; severity 1 beats severity 2 on canonical fingerprints across both audited pairs (pair0 dct 0.561 vs 0.613, sigma 2.22 vs 1.85; pair3 dct 0.7976 vs 0.8301, spatial_corr 0.3592 vs 0.4032) and on verify_signals (jpeg:2 sigma regressions 27%/67%), jpeg:2 only wins block_boundary. (2) Noise is multiplicative: target RIC 0.24-0.57 (positive in 5/5 pairs) matches speckle:2 sims 0.23-0.55; poisson:2 sim RIC 0.232/mean_shift -2.78/variance_ratio 0.931 misses target 0.476/-6.93/0.843; additive gaussian/YCrCb sims have RIC ~0 and peeled rgb_ratio 1.03-1.08 excludes YCrCb; impulse excluded by impulse_zero_ratio 0.075-0.166. (3) Speckle severity 2 is the best compromise: sev3 fixes clipping-derived stats but breaks block/noise-spectrum signals (sigma +29%, bb -11%, dct -12%); sev1 is too weak on pair0 (sigma 40%). (4) Blur absent: spectral_slope_ratio 0.9696-0.9954 in 5/5 pairs; adding blur:1 drives noise sigma 80% off. (5) Global absent: every x_distortion global function has a coarser minimum step than observed (brightness shift +-25.5 levels, darken gamma 1.4, contrast_weaken scale 0.75 -> variance ratio 0.56, saturation x2.0/x0.7); observed mean_shift -0.85..-9.07 and variance_ratio 0.811-0.987 track per-pair clipped_fraction 0.0021-0.0543 (speckle multiplicative clipping), not a uniform global step. UNCERTAIN per protocol: noise step can never be LIKELY under sigma>=2."
+  },
+  "signal_sources": [
+    "block_boundary 1.3257/1.7437/1.4004/1.6400/1.4301 across 5 pairs (>1.1, 0%FP) -> JPEG presence",
+    "dct_zero_ratio target vs sim: pair0 0.5587 vs 0.561 (jpeg:1) / 0.6134 (jpeg:2); pair3 0.8073 vs 0.7976 (jpeg:1) / 0.8301 (jpeg:2) -> JPEG severity 1",
+    "residual_intensity_corr 0.2490-0.5690 (5/5 positive) + speckle:2 sims 0.2329-0.5481 -> multiplicative speckle",
+    "poisson:2 sim pair0 RIC 0.2321, mean_shift -2.78, variance_ratio 0.9310 vs target 0.4755/-6.93/0.8426 -> reject poisson",
+    "peeled residual rgb_ratio 1.0279-1.0764 (<1.4) -> reject YCrCb",
+    "impulse_zero_ratio 0.0746-0.1656 -> reject impulse; peeled extreme_pct 57.28-64.93% is the documented signed-residual false positive",
+    "clipped_fraction 0.0205/0.0052/0.0532/0.0021/0.0543 and mean_shift -6.93/-3.50/-3.27/-0.85/-9.07 -> speckle clipping explains global stats",
+    "spectral_slope_ratio 0.9696-0.9954 (5/5 < 1.08) -> no blur; blur-inclusive sim noise sigma 80% mismatch",
+    "x_distortion global severity ranges (brightness shift min 0.1*255=25.5 levels, darken gamma min 1.4, contrast_weaken_scale sev1 0.75 -> variance ratio 0.5625, saturate min x2.0/x0.7) -> no global step can match -0.85..-9.07 mean shift with variance ratio 0.81-0.99",
+    "canonical speckle:3 sim pair0: sigma 3.34, bb 1.1787, dct 0.4924 vs sev2 2.22/1.2196/0.561 -> keep severity 2",
+    "verify_signals control 5 pairs: 3 MATCH + 2 PARTIAL (0 WEAK / 0 MISMATCH)"
+  ]
+}

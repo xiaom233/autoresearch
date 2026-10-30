@@ -1,0 +1,37 @@
+{
+  "challenge_id": "blind_0019_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_lens", 4], ["compression_jpeg", 4], ["saturate_weaken_HSV", 5]],
+  "pipeline": [
+    {"function": "blur_lens", "severity": 4, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"},
+    {"function": "saturate_weaken_HSV", "severity": 5, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:4,saturate_weaken_HSV:5",
+      "psnr_pair0": 35.01,
+      "ci_pass": "8/10",
+      "function_family": "blur_gaussian",
+      "note": "cross-family runner-up (fallback only); 35.01 dB vs control inf, 不等价"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR",
+    "support_validation": "control 管线在 5/5 support 对 PSNR=inf (bit-exact, MSE=0, CI 10/10, 全部 CI 指标 diff=0): pair0=inf, pair1=inf, pair2=inf, pair3=inf, pair4=inf。替代候选 (pair0): gaussian:4=35.01, sat:4=34.82, glass:4=30.28, jpeg:3=27.62, motion:4=25.69 dB — 全部远低于 inf, 无一通过 CHANGE 门槛",
+    "rationale": "R0 管线可 bit-exact 复现 5/5 对 support, 即精确等于支撑集退化管线; R1 重跑 run_full_analysis 信号与 R0 一致, 5 个信号驱动替代候选全部被否定。R0 support specialist PSNR=21.85 的瓶颈在训练侧 (架构/策略/epoch 预算), 不在盲识别管线, R1 保持管线不变。"
+  },
+  "signal_sources": [
+    "block_boundary=3.855/5.292/9.100/3.866/3.968 (>1.1, 0%FP) → compression_jpeg 5/5 对",
+    "unique_G=218-256 + dct_zero_ratio=0.921-0.962 → JPEG 量化纹理 (sev 边界: jpeg:3=27.62 dB 否定)",
+    "noise_prior_sigma=0.37-2.22; peeled residual std=0.0 (5/5 对 PSNR=inf ⇒ MSE=0) → NO_NOISE (pair4 sigma=2.22 边界被 bit-exact 否定; !B extreme_pct=100% 为零残差伪影)",
+    "gm_ratio=0.193-0.282 + spectral_slope_ratio=1.25-1.38 → blur 存在; analyzer verdict=LENS_BLUR 5/5",
+    "residual_anisotropy=1.35-2.36 (1.85/2.26/2.36 超 1.7 motion 分支但 §C 强规则需 >4.0) → motion:4=25.69 dB 否定 motion 分支",
+    "glass_score=1.16-1.60 (>0.25 glass 分支) → glass:4=30.28 dB 否定 glass",
+    "variance_ratio=0.826-1.049 + saturation_chroma_ratio=0.0 (5/5) + mean_shift=2.4-28.4 → saturate_weaken_HSV:5; sat:4=34.82 dB 确认 sev5",
+    "control (blur_lens:4,compression_jpeg:4,saturate_weaken_HSV:5) → PSNR=inf, CI 10/10 on 5/5 pairs"
+  ]
+}

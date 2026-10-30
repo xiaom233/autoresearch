@@ -1,0 +1,54 @@
+{
+  "challenge_id": "blind_0024_rep1",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r1_pipeline": [
+    ["noise_gaussian_RGB", 4],
+    ["blur_gaussian", 3],
+    ["saturate_strengthen_HSV", 2]
+  ],
+  "r2_pipeline": [
+    ["noise_gaussian_RGB", 4],
+    ["blur_gaussian", 3],
+    ["saturate_strengthen_HSV", 2]
+  ],
+  "support_psnr_r1": 24.95,
+  "candidates_tested": 3,
+  "best_validation": {
+    "candidate": "noise_gaussian_RGB:4,blur_gaussian:3,saturate_strengthen_HSV:2 (R1 control)",
+    "test_candidate_calls_r2": 15,
+    "verify_signals": {
+      "pair0": "PARTIAL (5 matched / 1 mismatched: FWHM=8.0px)",
+      "pair1": "PARTIAL (5 matched / 1 mismatched: FWHM=8.0px)",
+      "pair2": "PARTIAL (5 matched / 1 mismatched: FWHM=8.0px)",
+      "pair3": "PARTIAL (5 matched / 1 mismatched: FWHM=4.0px)",
+      "pair4": "PARTIAL (5 matched / 1 mismatched: FWHM=8.0px)",
+      "matched_checks_on_all_pairs": ["blur:spectral_slope", "blur:wiener_kernel", "noise:sigma", "global:mean_shift", "global:variance_ratio"]
+    },
+    "alternatives": {
+      "noise_gaussian_RGB:3": "PARTIAL 3/5 (pairs 1/3/4), WEAK 2/5 (pair0 mean_shift diff 0.0110 + vr diff 10%; pair2 mean_shift diff 0.0053 + vr diff 24%)",
+      "noise_gaussian_YCrCb:3": "PARTIAL 3/5 (pairs 2/3/4), WEAK 2/5 (pair0 vr diff 73%; pair1 noise:sigma diff 50%, mean_shift diff 0.0091, FWHM 10px)"
+    },
+    "residual_exhaustion": {
+      "seed_screen_control_vs_target": "5-seed controlled simulation reproduces target mean/pct0/max/p99.9/vr/chroma on 5/5 pairs (mean diff <=0.04 lv, pct0 <=0.07 pp, dvr_rel <=0.014, dchroma_rel <=0.018)",
+      "excess_variance_ratio": [1.21, 1.194, 1.191, 1.216, 1.213],
+      "excess_variance_theory": "1 + 1/5 = 1.20 for Var(target - mean of 5 independent sims) when the pipeline is statistically exact",
+      "fwhm_target_vs_sim_eq_seed_control": {"pair0": "8/8", "pair1": "8/8", "pair2": "8/8", "pair3": "4/4", "pair4": "8/8"},
+      "sb6_target_vs_sim_vs_seed_control": "extreme_pct 55.9/55.9, 66.6/66.6, 63.0/62.9, 66.8/66.6, 65.1/65.2; zero_ratio identical; spatial_corr 0.9504/0.9504, 0.9519/0.9514, 0.9375/0.9368, 0.8393/0.8388, 0.9425/0.9417; rgb_ratio 2.73/2.73, 2.79/2.75, 1.65/1.62, 1.29/1.27, 1.44/1.43; ccc 0.473/0.474, 0.207/0.203, 0.165/0.163, 0.225/0.219, 0.204/0.203; residual_std 30.9/30.8, 20.6/20.5, 22.1/22.0, 15.4/15.4, 20.5/20.4 (vm_slope/var_slope sign-unstable in both)",
+      "conditioned_bias": "mean residual vs clean brightness bins |<=0.5| lv; vs edge magnitude <=0.45 lv; vs chroma magnitude <=0.5 lv (scale ~180)",
+      "conditioned_variance_shape": "residual-variance ratio target:seed-control flat 2.0-2.2 across brightness and chroma bins -> additive homoscedastic; excludes Poisson/speckle families",
+      "channel_fingerprint": "normalized (R,G,B) residual std shape target-vs-sim matches RGB4 seed-control to 3 decimals on 5/5 (pair0 0.443/1.158/1.209 vs 0.441/1.167/1.202; pair1 0.528/1.471/0.746 vs 0.528/1.471/0.746; pair3 0.896/1.159/0.924 vs 0.902/1.159/0.918); YCrCb3 seed-control departs (pair0 0.771/0.860/1.291)"
+    }
+  },
+  "decision_rule": "Pipeline contains noise -> CHANGE requires verify_signals improvement (WEAK->PARTIAL->MATCH) on >=4/5 pairs or significant SB6 improvement. Control already PARTIAL 5/5 (R1 and R2); alternatives reach PARTIAL only 3/5; residual statistics equal the seed control exactly (no SB6 improvement available). Hence NO_CHANGE.",
+  "signal_sources": [
+    "full_analysis_R2*.json: 5-pair rerun reproduces R1 (compression NO: block_boundary 0.997-1.002; global darken+saturation; low wavelet sigma 0.7-1.2 is a post-blur HF suppression artifact)",
+    "peeled SB6 residual after R1 == seed-control residual on every stable statistic (extreme_pct/spatial_corr/rgb_ratio/ccc/ch_stds/residual_std) -> no unexplained structure; vm_slope/var_slope unstable in both",
+    "excess residual variance 1.19-1.22 == theoretical 1+1/5 for an exact pipeline; zero deterministic excess",
+    "low-frequency bias vs clean brightness/edges/chroma all below 0.5 lv -> no residual tonal, blur or saturation-curve mismatch",
+    "per-bin residual variance ratio flat 2.0-2.2 -> additive gaussian-like noise, excludes Poisson/speckle",
+    "channel fingerprint selects gaussian_RGB over YCrCb noise (RGB seed-control matches target residual shape to 3 decimals on 5/5; YCrCb deviates)",
+    "severity grid screen: only noiseRGB4+blur3+satHV2 reproduces all 5 pairs (dvr_rel <=0.014, dchroma_rel <=0.018); all neighbors deviate (noise 3/5, satHV 1/3, blur 4, YCrCb 2/3)",
+    "official test_candidate (15 calls): control PARTIAL 5/5, RGB3 PARTIAL 3/5+WEAK 2/5, YCrCb3 PARTIAL 3/5+WEAK 2/5"
+  ]
+}

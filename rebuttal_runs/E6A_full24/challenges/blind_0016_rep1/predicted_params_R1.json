@@ -1,0 +1,56 @@
+{
+  "challenge_id": "blind_0016_rep1",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [["blur_gaussian", 4], ["compression_jpeg", 2]],
+  "pipeline": [
+    {"function": "blur_motion", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [["blur_motion", 4], ["compression_jpeg", 2]],
+      "function_family": "blur_motion",
+      "support_psnr_pair0": [22.05, 26.87],
+      "support_psnr_pair1": 19.76,
+      "ci_pair0": "9/10",
+      "evidence": "severity counterpart; motion PSNR angle-random (pair0 22.05 R0 / 26.87 R1); below sev3 maxima (32.37/31.32)"
+    },
+    {
+      "pipeline": [["blur_gaussian", 4], ["compression_jpeg", 2]],
+      "function_family": "blur_gaussian",
+      "support_psnr": {"pair0": 25.83, "pair1": 23.72, "pair2": 22.74, "pair3": 24.98, "pair4": 19.23},
+      "ci_pair0": "8/10",
+      "evidence": "R0 control (deterministic, reproduced exactly 25.83 today); gaussian sev1-5 + lens:4 all flat 24.5-25.9 on pair0 -> no parameter of this family reproduces target; kept as fallback"
+    },
+    {
+      "pipeline": [["blur_glass", 4], ["compression_jpeg", 2]],
+      "function_family": "blur_glass",
+      "support_psnr_pair0": 22.89,
+      "ci_pair0": "9/10",
+      "signal_check": "WEAK (block_boundary match; spectral_slope diff=0.124 better than gaussian 0.295; wiener corr=0.298, glass non-linear so wiener not applicable)",
+      "evidence": "glass_score 0.48-1.04 > 0.25 in 5/5 pairs (above 0.19-0.41 glass-only band, expected to be inflated by JPEG block artifacts); PSNR 22.89 < control; secondary candidate"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR + signal/CI (noise_prior sigma 0.74-1.85 < 2 -> no noise)",
+    "support_validation": "blur_motion:3+jpeg:2 vs R0 control (simulation PSNR, pair values R1 / R0): pair0 32.37+27.72 / 25.83; pair1 22.72 / 23.72; pair2 19.01+31.32 / 22.74; pair3 26.08 / 24.98; pair4 17.09 / 19.23. Per-pair best: +6.54/-1.00/+8.58/+1.10/-2.14 dB; mean best 25.92 vs control 23.30 (+2.62); mean of draw-means 24.22 (+0.92). CI avg 8.4/10 vs 7.2/10, better on 3 pairs, equal on 2, never worse. Pair0 gate (>2 dB) satisfied (32.37, +6.54); pair2/pair3 better; pair1 -1.00 (small); pair4 -2.14 on a single angle draw (pair0 32.37 vs 27.72 and pair2 19.01 vs 31.32 prove motion PSNR draw spread up to 12 dB due to random angle).",
+    "rationale": "R0 rejected the analyzer's MOTION_BLUR verdict (5/5 pairs in R1 re-analysis) by comparing a single random-angle motion:4 draw (22.05) against gaussian:4 (25.83). R1 re-sampling shows that comparison was invalid: motion PSNR is angle-random (22.05-32.37 on pair0, 19.01-31.32 on pair2), and motion:3+jpeg:2 reaches >30 dB on two different images while the entire gaussian family (sev1-5) and lens:4 never exceed 25.9 dB on any pair. Supporting signals: PCA blur-kernel ratio 2.34-3.38 (4/5 >2.5, 0% FP / 41% recall) and residual_anisotropy 1.53-2.14 straddling the 1.7 motion threshold (the analyzer itself marks FFT anisotropy content-dominated, FP>80%, so values just below 1.7 do not argue against motion); gm_ratio 0.32-0.66 (very strong apparent blur) combined with spectral_slope_ratio only 1.15-1.31 is irreconcilable with isotropic gaussian/lens but expected for directional motion blur. glass_score is above the glass-only calibration band in all 5 pairs (expected inflation from JPEG 8x8 block artifacts), so it is not exclusion evidence; glass was directly re-tested at the correct jpeg:2 (22.89 dB, CI 9/10, spectral_slope diff 0.124) and remains a weaker secondary candidate. JPEG confirmed by block_boundary 1.59-2.43 (>1.1, 0% FP) in 5/5 pairs; jpeg:2 verified by signal block_boundary match (0% diff) and CI peak. NO_GLOBAL and NO_NOISE confirmed across all 5 pairs (variance_ratio 0.78-0.96 content-dependent, mean_shift -0.2..-0.5/255, chroma 0.91-1.03, clipped<=0.045; sigma 0.74-1.85<2, peeled residual structured spatial_corr 0.9945/0.9960, residual_intensity_corr sign flips across pairs -> gamma suspect rejected). Overall verdict stays UNCERTAIN because motion angle is random (PSNR not exactly reproducible) and pair4 shows a single-draw deficit.",
+    "caveats": "pair4 single draw -2.14 dB and pair1 -1.00 dB vs control; angle randomness means the 5-pair PSNR cannot be reproduced per-pair for any motion candidate. CI (angle-robust) improved or matched on all 5 pairs. If downstream retraining must be conservative, blur_gaussian:4+jpeg:2 (R0) is the fallback alternative."
+  },
+  "signal_sources": [
+    "full_analysis_R1*.json Step3 blur verdict=MOTION_BLUR on 5/5 support pairs (PCA ratio 2.341/2.527/2.553/3.345/3.38; residual_anisotropy 1.534/1.611/1.659/1.822/2.137 vs 1.7 threshold)",
+    "PCA>2.5 in 4/5 pairs (SKILL calibration: 0% FP, 41% recall for motion); R0 used it but overrode with one PSNR draw",
+    "residual_anisotropy near 1.7 boundary (1.659/1.611) plus analyzer note 'FFT anisotropy content-dominated FP>80%' -> not evidence against motion",
+    "gm_ratio 0.3196-0.6565 (strong blur) vs spectral_slope_ratio 1.151-1.306 (mild slope change) -> directional blur signature, contradicts isotropic gaussian/lens",
+    "gaussian sev1-5 + lens:4 PSNR flat 24.46-25.83 on pair0 (R0 rounds 3-5,8-12,15,17,19) -> no gaussian/lens parameter reproduces target",
+    "blur_motion:3+jpeg:2 PSNR 32.37 (pair0) and 31.32 (pair2), both >30 dB; only candidate family exceeding 30 dB anywhere",
+    "CI (content-independent) motion:3 avg 8.4/10 vs R0 control 7.2/10: pair0 9-10 vs 8, pair1 7=7, pair2 10 vs 7, pair3 7=7, pair4 9 vs 7 (never worse)",
+    "block_boundary 1.591-2.428 >1.1 in 5/5 pairs (0% FP) + verify_signals compression:block_boundary match at jpeg:2 -> compression_jpeg LIKELY",
+    "noise_prior sigma 0.74/1.24/0.74/1.85/0.74 <2; peeled residual (gaussian:4+jpeg:2 std=13.0 spatial_corr=0.9945; glass:4+jpeg:2 std=18.3 spatial_corr=0.9960) structured -> NO_NOISE; §B extreme_pct 86-87% is known JPEG/blur structured-residual FP",
+    "residual_intensity_corr -0.273/+0.151/+0.230/+0.271/-0.086 sign flips across pairs -> gamma/YCrCb failure risk rejected",
+    "variance_ratio 0.779-0.965 content-dependent with contrast_detected_raw=false; mean_shift -0.2..-0.5/255; chroma 0.911-1.027; clipped_fraction<=0.045 -> NO_GLOBAL"
+  ]
+}

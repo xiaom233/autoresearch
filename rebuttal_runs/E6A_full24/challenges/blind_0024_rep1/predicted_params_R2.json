@@ -1,0 +1,58 @@
+{
+  "challenge_id": "blind_0024_rep1",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r1_pipeline": [
+    ["noise_gaussian_RGB", 4],
+    ["blur_gaussian", 3],
+    ["saturate_strengthen_HSV", 2]
+  ],
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 4, "verdict": "UNCERTAIN"},
+    {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+    {"function": "saturate_strengthen_HSV", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "function_family": "one-step-lower RGB gaussian noise (severity boundary test)",
+      "evidence": "R2 grid screen (5 pairs, 2 seeds): deviates from target stats (mean +0.17/+2.77 lv, dmax 3.1/5.5 lv, dvr_rel 0.095/0.25, dchroma_rel 0.081/0.19) while control is near-zero. Official verify_signals: PARTIAL only 3/5 (pairs 1/3/4), WEAK 2/5 (pair0 mean_shift diff 0.0110 + vr diff 10%; pair2 mean_shift diff 0.0053 + vr diff 24%).",
+      "verdict": "REJECTED"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "function_family": "cross-family chroma-weighted gaussian noise (R1 documented alternative)",
+      "evidence": "R2 channel fingerprint resolves the noise family: normalized per-channel residual std shape (R,G,B) of target-vs-control-sim matches the RGB gaussian seed-control to 3 decimals on 5/5 pairs (pair0 0.443/1.158/1.209 vs 0.441/1.167/1.202; pair1 0.528/1.471/0.746 vs 0.528/1.471/0.746; pair3 0.896/1.159/0.924 vs 0.902/1.159/0.918), while YCrCb seed-control departs (pair0 0.771/0.860/1.291; pair1 0.596/1.365/0.884). Grid dvr_rel up to 0.73, dmax 6.5 lv. Official verify_signals: PARTIAL 3/5, WEAK 2/5 (pair0 vr diff 73%; pair1 noise:sigma diff 50%, mean_shift 0.0091, FWHM 10px).",
+      "verdict": "REJECTED"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (pipeline contains noise; PSNR seed-mismatch non-decisive)",
+    "support_validation": "R2 official verify_signals (15 test_candidate calls, signal mode): control = PARTIAL 5/5 (5 matches each: blur:spectral_slope, blur:wiener_kernel, noise:sigma, global:mean_shift, global:variance_ratio; only mismatch noise:structured_residual FWHM 8/8/8/4/8 px). Alternatives: noise3 PARTIAL 3/5 + WEAK 2/5; YCrCb3 PARTIAL 3/5 + WEAK 2/5. No candidate improves on control. Deterministic-PSNR branch not applicable (noise-bearing pipeline).",
+    "r2_residual_analysis": "R1 residual was tested for any remaining structure and is statistically exhausted on all 5 pairs: (1) controlled 5-seed screen reproduces target marginal stats on 5/5 (mean diff <=0.04 lv, pct0 <=0.07 pp, p99.9 diff <=1.0 lv, dvr_rel <=0.014, dchroma_rel <=0.018); (2) Var(target-mean_sim)/Var(seed field)=1.19-1.22 = theoretical 1+1/5 for an exact pipeline, i.e. zero excess deterministic variance; (3) residual FWHM of target-vs-sim equals the sim-vs-sim seed control on 5/5 (8/8, 8/8, 8/8, 4/4, 8/8 px), so the sole verify_signals mismatch is a seed artifact; (4) SB6 signature of target-vs-sim equals seed control (extreme_pct 55.9/55.9, 66.6/66.6, 63.0/62.9, 66.8/66.6, 65.1/65.2; spatial_corr 0.9504/0.9504 ... 0.9425/0.9417; rgb_ratio 2.73/2.73 ... 1.44/1.43; ccc 0.473/0.474 ... 0.204/0.203; residual_std 30.9/30.8 ... 20.5/20.4); vm_slope/var_slope flip sign in both residuals -> unreliable, not evidence; (5) no low-frequency bias vs clean brightness (|<0.5| lv per 25-level bin), edge magnitude (<=0.45 lv) or chroma magnitude (<=0.5 lv on a ~180 scale); (6) per-brightness and per-chroma-bin residual-variance ratio target:control is flat 2.0-2.2, excluding Poisson (var~mean) and speckle (var~mean^2) noise families; (7) channel-shape fingerprint identifies gaussian_RGB, not YCrCb (see alternative).",
+    "rationale": "R2 was asked to find residual signal left unexplained by R1. None survives statistical scrutiny: every deterministic-style statistic (marginal distributions and their seed variance, residual variance, FWHM, SB6 fingerprint, brightness/edge/chroma-conditioned bias and variance) of target-minus-R1-simulation is indistinguishable from two independent realizations of the R1 pipeline. The remaining uncertainty (noise type within the RGB family is still formally unidentifiable per SKILL noise-first 54.7%, hence UNCERTAIN and never LIKELY) is intrinsic, not addressable by another pipeline choice. The only new positive finding raises confidence in the declared pipeline: the per-channel residual-variance fingerprint uniquely selects RGB gaussian over YCrCb. Therefore R2 keeps the R1 pipeline unchanged.",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "Step 0.5 gate not triggered: target noise_prior sigma 0.7-1.2 < 2 (SKILL NO_NOISE branch); signal contradiction check unnecessary because R2 validation used assembled signal mode for a noise-bearing pipeline; no API call made"
+    }
+  },
+  "signal_sources": [
+    "full_analysis_R2.json + _p1.._p4 (rerun on 5 pairs, deterministic): reproduces R1 exactly; compression NO (block_boundary 0.997-1.002, unique_G ratio 0.93-0.99); blur DT flags unreliable under saturation clipping (gm_ratio 0.182-1.859, slope ratio 0.926-1.335); global darken + saturation only",
+    "peeled §B after R1 pipeline (peeled_noise_check, 5 pairs): residual std 15.5-30.8, extreme_pct 53-64%, spatial_corr 0.95-0.99, rgb_ratio 1.27-2.80 -> reinterpreted: identical to sim-vs-sim seed control on every stable statistic (extreme_pct within 0.2 pp, spatial_corr within 0.001, rgb_ratio within 0.03, residual_std within 0.1, ch_stds within 0.2); vm_slope/var_slope unstable in both",
+    "controlled 5-seed screen: R1 pipeline reproduces target mean/pct0/max/p99.9/vr/chroma on 5/5 pairs (dvr_rel <=0.014, dchroma_rel <=0.018), while all severity neighbors deviate (noise3: dmean 2.77, dvr_rel 0.25; noise5: dmean 4.09; satHV1: dmean 15.1, dpct0 18.4; satHV3: dmean 26.0, dvr_rel 2.56; blur4: dmax 11.0, dp999 13.0; YCrCb3: dvr_rel 0.73; YCrCb2: dmax 10.0)",
+    "residual structure beyond seed noise: excess variance ratio 1.19-1.22 vs theoretical 1.20; residual FWHM == seed control 5/5; tone/edge/chroma-conditioned bias < +/-0.5 lv; per-bin residual-variance ratio flat 2.0-2.2 (excludes Poisson/speckle); no block periodicity (target block_boundary 0.997-1.002 re-confirmed)",
+    "channel fingerprint: normalized residual channel std (R,G,B) target-vs-sim matches RGB4 seed control to 3 decimals on 5/5; YCrCb3 seed control departs -> noise family = gaussian_RGB",
+    "official verify_signals (test_candidate, 15 calls): control PARTIAL 5/5; RGB3 PARTIAL 3/5 + WEAK 2/5; YCrCb3 PARTIAL 3/5 + WEAK 2/5 -> no improvement over R1, CHANGE not justified"
+  ]
+}

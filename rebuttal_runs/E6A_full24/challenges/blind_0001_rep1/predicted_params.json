@@ -1,0 +1,64 @@
+{
+  "challenge_id": "blind_0001_rep1",
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "quantization_hist", "severity": 2, "verdict": "UNCERTAIN"},
+    {"function": "brightness_darken_gamma_RGB", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 4},
+        {"function": "quantization_hist", "severity": 2},
+        {"function": "brightness_darken_gamma_RGB", "severity": 2}
+      ],
+      "psnr": 12.97,
+      "ci_pass_rate": "7/10",
+      "stats": {"sigma": 15.32, "gm_ratio": 12.02, "clipped_fraction": 0.0813, "spatial_corr": 0.0882, "cross_channel_corr": 0.0702, "variance_ratio": 1.846, "saturation_chroma_ratio": 1.84, "mean_shift": -2.8},
+      "function_family": "noise-severity variant (sev4): sigma/gm 更贴目标(16.9/12.1), 但 clip 8.1% vs 目标 12.05%",
+      "verified": true
+    },
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 3},
+        {"function": "quantization_hist", "severity": 2},
+        {"function": "brightness_darken_gamma_RGB", "severity": 2}
+      ],
+      "psnr": 13.51,
+      "ci_pass_rate": "8/10",
+      "stats": {"sigma": 12.48, "gm_ratio": 10.02, "clipped_fraction": 0.0913, "spatial_corr": 0.173, "cross_channel_corr": 0.140, "variance_ratio": 1.825, "mean_shift": -0.9},
+      "function_family": "noise-severity variant (sev3)",
+      "verified": true
+    },
+    {
+      "pipeline": [
+        {"function": "quantization_hist", "severity": 2},
+        {"function": "brightness_darken_gamma_RGB", "severity": 2}
+      ],
+      "psnr": 14.61,
+      "ci_pass_rate": "4/10",
+      "stats": {"unique_per_channel": [16, 16, 16], "mean_shift": -0.9, "clip_pct_zero": 5.54, "clip_pct_255": 1.14},
+      "function_family": "deterministic core (无噪声对照组): 量化+gamma确定性部分, 缺噪声导致极端质量/sigma 不符",
+      "verified": true
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 4},
+        {"function": "quantization_hist", "severity": 2},
+        {"function": "brightness_darken_gamma_RGB", "severity": 2}
+      ],
+      "psnr": null,
+      "ci_pass_rate": null,
+      "stats": {"noise_prior_sigma": 20.76, "intensity_slope": -0.0217},
+      "function_family": "cross-family noise alternative (gaussian): 剥离残差 noise_prior 斜率平坦(-0.02)→Gaussian RGB; 未直接测试, 供训练仲裁",
+      "verified": false
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "10/10",
+    "mode": "SIGNAL (sigma=16.9, 噪声seed失配, PSNR不可用)",
+    "rationale": "unique_per_channel=[16,16,16] 与 quantization_hist:2 (c=16) 精确吻合(CI unique diff=0.000), block_boundary=0.998 排除JPEG → 量化器=hist:2。hist-equalize 输出均值恒≈127.5 (纯hist模拟 mean_shift=+31.4, 目标=-1.1) → 量化后必有压暗步; gamma1.7 是唯一逐通道单调、保0→0/255→255、保16级的映射, 命中均值(-3.3 vs -1.1)与 clipped_fraction(0.1206 vs 0.1205)。目标残差白且通道独立(spatial_corr=0.0075, cross_ch=0.0071, sigma=16.9, gm=12.1)→量化前强白噪声被量化掩蔽; Poisson:5 与 noise_prior 的 POISSON 判定一致, 且 CI=10/10 (impulse/zero/255/bb/unique/overshoot/zc/hf 全部<10%)。残余不符: variance_ratio 1.37 vs 1.91 (5对support系统性复现), sigma 19.3 vs 16.9, gm 14.4 vs 12.1, chroma 2.03 vs 1.71 → 噪声严重度/类型待训练PSNR仲裁。4对support: verify_signals 均 WEAK (noise:clean_residual 全匹配, sigma 2/4匹配, mean_shift 2/4接近, variance_ratio 系统性偏差)。"
+  }
+}

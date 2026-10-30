@@ -1,0 +1,32 @@
+{
+  "challenge_id": "blind_0001_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_poisson", 5]],
+  "pipeline": [
+    {
+      "function": "noise_poisson",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (sigma>2, PSNR 不可用; 判据 = 唯一值网格 + verify_signals + 分布统计)",
+    "support_validation": "5/5 对 support 复现: (a) target 每对每通道恰 16 个唯一值, 精确等于 17k 网格 [0,17,...,255]; 仿真 noise_poisson:5 在 5/5 对产生同一网格; (b) 17 网格上的 level 直方图 L1 距离 pair0-4 = 0.0010/0.0011/0.0025/0.0009/0.0017; (c) mean_shift target vs sim 一致到 4 位小数 (-0.0044/-0.0045, -0.0024/-0.0025, -0.0062/-0.0063, -0.0044/-0.0045, -0.0046/-0.0045); variance_ratio 误差 ≤0.0022 (1.3692/1.3689, 1.5544/1.5538, 1.6093/1.6114, 1.1671/1.1669, 1.0758/1.0765); (d) verify_signals MATCH 5/5 (noise:sigma + noise:clean_residual)。对照组 PSNR 12.27-16.44 dB 仅反映噪声 seed 失配, 不作判据。",
+    "rationale": "R1 重跑 run_full_analysis 与 R0 逐键一致 (88/88 signals 相同)。重释后确认 R0 结论, 并修正其证据权重: verify_signals 对纯噪声管线只检查 sigma 与 residual FWHM 两项, 单独 MATCH 不足以锁定类型/severity (实测 noise_poisson:4 与 noise_gaussian_RGB 也可通过 sigma 检查); 决定性判据是 16 值 17k 统一网格 = noise_poisson c=15 (sev5) 的确定性输出指纹, 其他 x_distortion 函数 (quantization_*/contrast/blur/jpeg/gaussian/speckle) 均无法产生该网格。R1 新验证了 R0 未测的隐藏前置步假设: blur_gaussian:1 前置 (细粒度统计劣于 control: histL1 0.0055 vs 0.0010, slope -1.3358 vs target -1.307)、brightness_darken_shfit_RGB:1 前置 (mean_shift 差 0.0925, histL1 0.3014)、compression_jpeg:1 前置 (bb 1.0179 vs 0.9984, histL1 0.0063, vr 1.3619 vs 1.3692) — 全部劣于 control 且无法提供可验证改善。另外 blind_challenge 生成器强制 noise(priority 0) 先于 blur(1)/contrast/saturation/quantization/JPEG(2), 任何这些步骤只会在 Poisson 之后并破坏 17 网格; 唯一可前置的 brightness 已被 mean/variance 定量排除。故 pipeline 数学锁定为单步 noise_poisson:5。",
+    "qwen_gate": {"available": false}
+  },
+  "signal_sources": [
+    "唯一值网格: 5/5 对 target 每通道恰 16 值 [0,17,...,255], = noise_poisson:5 (c=15) 输出网格; 仿真 5/5 逐对复现",
+    "17-grid level 直方图 L1 距离 ≤0.0025 (5 对 target vs 仿真)",
+    "mean_shift 与 variance_ratio 在 5 对上与仿真一致到 4 位小数/≤0.0022 误差",
+    "intensity_var_corr +0.73~+0.89 且 intensity_scaled_var_corr -0.49~-0.83 (var∝I) → Poisson 族, 排除 gaussian (corr≈0) 与 speckle (scaled corr>0)",
+    "block_boundary 0.998-1.010 + dct_zero_ratio≈0.02 → 无 JPEG; step1 的 COMPRESSION_DETECTED 由 unique_G=16 触发, 同一脚本对正确仿真也报同 verdict → unique_G 是 Poisson 网格, 非 compression 证据",
+    "spectral_slope_ratio 0.965-1.018 (5 对) → 无 blur; 前置 blur_gaussian:1 候选在 histL1/slope/variance 上均劣于 control",
+    "唯一可隐藏在 Poisson 前的 brightness 假设 (priority=0) 被 mean_shift (-25.5 灰阶偏移, histL1 0.3014) 排除",
+    "blind_challenge 顺序约束: noise(priority 0) 先于 blur(1)/contrast/saturation/quantization/JPEG(2) → 保持 17 网格完整 ⇒ Poisson 必为末步且其余步骤不存在"
+  ]
+}

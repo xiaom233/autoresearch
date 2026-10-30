@@ -1,0 +1,26 @@
+{
+  "challenge_id": "blind_0010_rep1",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [["blur_gaussian", 1], ["brightness_darken_shfit_HSV", 4]],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 1, "verdict": "LIKELY"},
+    {"function": "brightness_darken_gamma_HSV", "severity": 5, "verdict": "LIKELY"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR",
+    "support_validation": "5/5 support pairs pixel-exact: MSE=0, PSNR=inf, diffpix=0.00%, CI=10/10. pair0 vs R0 control 28.36 dB -> inf; pair1 18.70 -> inf; pair2 39.53 -> inf; pair3 17.52 -> inf; pair4 33.79 -> inf.",
+    "rationale": "信号重释发现 R0 的两处偏差: (1) 二阶色调曲线: 对 5 对 support 逐 V-bin 统计 target-V vs clean-V, 曲线为凸型 (暗部斜率~0.3, 亮部斜率 1.4-1.6), 拟合有效 gamma 从 3.42 (V=112) 升到 3.85 (V=211), 最接近 brightness_darken_gamma_HSV sev5 (gamma=3.5)。R0 只测了 gamma_HSV sev3 (2.2) / sev4 (2.7), 未测 sev5 —— 阈值边界遗漏。(2) R0 选择 shift-HSV sev4 是因为一阶统计巧合吻合 (mean_shift -69.1, variance_ratio 0.409, chroma_ratio 0.324), 但一阶统计无法区分 shift (线性-截距) 与 gamma (凸型) 的曲线形状。(3) V>192 高亮区 target 低于纯 gamma_HSV:5 (V224-256 bin: 149.6 vs 178.7), 且 bin 内 sd 达 17-37, 指示 blur 先行压高亮峰; blur_gaussian:1 -> gamma_HSV:5 在 5 对 support 上产生 MSE=0 的像素级复现, 反向顺序 (gamma->blur) 仅 26-41 dB, 证实物理顺序 blur(priority=1)->global(priority=2)。(4) 5 对 support 色调曲线一致 (±2 灰阶), sigma=0.74<2 (NO_NOISE), block_boundary<=1.016 (NO_COMPRESSION), 排除噪声/压缩/饱和度步骤。R0 报告 support 不一致 (18.7-39.5 dB) 的根因是全局函数族错误, 而非内容依赖。"
+  },
+  "signal_sources": [
+    "V-bin tone curve convexity (2nd-order): slope 0.3 (dark) -> 1.4-1.6 (bright); V-shift would be slope 1 with constant offset",
+    "effective gamma fit 3.42-3.85 -> gamma_HSV sev5 (gamma=3.5); R0 tested only sev3 (2.2) and sev4 (2.7)",
+    "highlight-bin deficit vs pure gamma5 + within-bin sd 17-37 -> blur_gaussian:1 precedes the gamma (blur->global physical order)",
+    "residual_intensity_corr +0.71/+0.76 (pairs 0/4) -> intensity-dependent (gamma-type) global mapping",
+    "5/5 support tone curves identical (<=2 gray levels per bin); sigma=0.74 NO_NOISE; block_boundary<=1.016 NO_COMPRESSION",
+    "test_candidate: 5/5 pairs PSNR=inf (MSE=0); reversed order only 26.2-41.4 dB"
+  ]
+}

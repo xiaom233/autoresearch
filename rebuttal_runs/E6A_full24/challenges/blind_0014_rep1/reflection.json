@@ -1,0 +1,442 @@
+{
+  "challenge_id": "blind_0014_rep1",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=1.582 (0% FP signal), dct_zero_ratio=0.8163, unique_G=256/256 -> JPEG likely",
+      "blur": "gm_ratio=0.8444 (mild), spectral_slope_ratio=1.0819, residual_anisotropy=1.6174 (<1.7, not motion), glass_score=1.4313 (>0.25 but note says pixel-shuffle high-freq JPEG artifact risk) -> blur present, subtype uncertain (glass vs gaussian)",
+      "noise": "noise_prior_sigma=0.99 < 2 -> NO_NOISE; spatial_corr=0.7177 and cross_channel_corr=0.283 likely inflated by JPEG artifacts; residual_intensity_corr=-0.3102 (gamma-suspect, but gamma not reproducible in x_distortion)",
+      "global": "variance_ratio=1.5108, mean_shift=41.8, saturation_chroma_ratio=1.3913, clipped_fraction=0.1579 (heavy clipping) -> global present; brightness-brighten vs saturation-strengthen ambiguous"
+    },
+    "mode": "PSNR (sigma=0.99)"
+  },
+  "qwen_gate": {
+    "available": false,
+    "reason": "Qwen/API unavailable in this environment; Step 0.5 gate not triggered anyway (sigma=0.99 < 2 -> NO_NOISE)"
+  },
+  "noise_6step_check": {
+    "note": "sigma=0.99 < 2 -> NO_NOISE path (Step 0.5 gate: skip Step 3). Values below are from peeled_noise_check.py run WITH the exact final pipeline (brightness_brighten_shfit_HSV:3,compression_jpeg:2); peeled residual std=0.0.",
+    "extreme_pct": 100.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "raw_residual_values_from_full_analysis": {
+      "spatial_corr": 0.7177,
+      "cross_ch_corr": 0.283,
+      "residual_intensity_corr": -0.3102
+    },
+    "diagnosis": "NO_NOISE. Peeled residual std=0.0 (target is pixel-identical to simulated exact pipeline), so §B statistics are degenerate: extreme_pct=100% is an all-zero-residual artifact (no actual outlier pixels exist), spatial_corr/cross_ch_corr=nan. Raw-residual spatial_corr=0.7177 attributed to JPEG block artifacts. No noise step in pipeline."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "Step1 JPEG sweep: block_boundary=1.582→JPEG confirmed; test sev1 (q=25)"
+      },
+      "test_result": {
+        "psnr_rgb": 14.13,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:3,compression_jpeg:1",
+        "thinking": "Global type test: mean_shift=41.8+clipping 15.8%→brightness brighten; RGB shift sev3=+0.20*255≈+51≈observed mean shift; HSV shift contrast test next"
+      },
+      "test_result": {
+        "psnr_rgb": 19.07,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:1",
+        "thinking": "Global type test: HSV V-shift sev3=+0.30 (max-channel shift) vs RGB shift; compare PSNR to RGB-shift 19.07dB"
+      },
+      "test_result": {
+        "psnr_rgb": 30.53,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:2,compression_jpeg:1",
+        "thinking": "Severity scan: HSV shift winner sev3 (PSNR 30.53) → scan sev-1=2"
+      },
+      "test_result": {
+        "psnr_rgb": 23.26,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:4,compression_jpeg:1",
+        "thinking": "Severity scan: HSV shift winner sev3 → scan sev+1=4"
+      },
+      "test_result": {
+        "psnr_rgb": 23.35,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "JPEG severity: global fixed at HSV-shift sev3 (30.53dB); target block_boundary=1.582 high -> test jpeg sev2 (q=18)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:1",
+      "psnr_rgb": 30.53,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:4,compression_jpeg:1",
+      "psnr_rgb": 23.35,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:2,compression_jpeg:1",
+      "psnr_rgb": 23.26,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:3,compression_jpeg:1",
+      "psnr_rgb": 19.07,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": 14.13,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "support_verification": {
+    "method": "test_candidate.py PSNR mode (deterministic pipeline, sigma=0.99<2) on each support pair with pair-0 winner, no reflection write",
+    "pairs": [
+      {
+        "pair": 0,
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10"
+      },
+      {
+        "pair": 1,
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10"
+      },
+      {
+        "pair": 2,
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10"
+      },
+      {
+        "pair": 3,
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10"
+      },
+      {
+        "pair": 4,
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10"
+      }
+    ],
+    "conclusion": "All 5 support pairs reproduced pixel-identically (PSNR=inf) -> exact pipeline confirmed"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "brightness_brighten_shfit_HSV",
+        "severity": 3,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 2,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "rationale": "Pair-0 pipeline brightness_brighten_shfit_HSV:3 -> compression_jpeg:2 reproduces the target with PSNR=inf (pixel-identical) and CI 10/10; all 4 support pairs also reproduce pixel-identically. Signal interpretation: mean_shift=41.8 + clipped_fraction=15.79% -> HSV V-channel +0.3 brightening (sev3); block_boundary=1.582 + dct_zero_ratio=0.8163 -> JPEG q=18 (sev2). No blur step (exact match without one; gm_ratio=0.8444 explained by highlight clipping from brightening). No noise (noise_prior sigma=0.99, peeled residual std=0). Physical order brightness(priority0) -> JPEG(storage, last) is consistent with blind_challenge constraints.",
+    "mode": "PSNR (sigma=0.99 < 2, NO_NOISE)"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=LIKELY but r0_result.support_psnr=28.66 dB (<35 dB) -> post-training reflection triggered; goal is to re-examine signals for better-matching candidates, not to correct a known error.",
+    "qwen_gate": {
+      "available": false,
+      "triggered": true,
+      "reason": "pair2 noise_prior sigma=2.22 lies in the boundary band (2<sigma<10), so the Step 0.5 gate triggers; Qwen/API unavailable in this environment -> gate skipped and deterministic PSNR arbitration used. Pairs 0/1/3/4 have sigma<2 (NO_NOISE path)."
+    },
+    "reanalysis": {
+      "full_analysis_rerun": "full_analysis_R1.json (pair0) + full_analysis_R1_p1.json..full_analysis_R1_p4.json; R0 full_analysis.json untouched. Pair-0 core signals reproduce R0 exactly except residual_intensity_corr (-0.3102 -> -0.3024).",
+      "step1_compression": {
+        "per_pair": {
+          "p0": {
+            "block_boundary": 1.582,
+            "dct_zero_ratio": 0.8163,
+            "unique_G": 256
+          },
+          "p1": {
+            "block_boundary": 1.5781,
+            "dct_zero_ratio": 0.7371,
+            "unique_G": 243
+          },
+          "p2": {
+            "block_boundary": 1.7421,
+            "dct_zero_ratio": 0.735,
+            "unique_G": 256
+          },
+          "p3": {
+            "block_boundary": 1.5265,
+            "dct_zero_ratio": 0.6377,
+            "unique_G": 256
+          },
+          "p4": {
+            "block_boundary": 3.0889,
+            "dct_zero_ratio": 0.8554,
+            "unique_G": 209
+          }
+        },
+        "reinterpretation": "block_boundary>1.1 on 5/5 pairs (0% FP signal) -> JPEG present in every support image. Severity is bracketed by PSNR: jpeg:1=30.53 dB (R0), jpeg:2=inf (control), jpeg:3=28.37 dB (R1) -> severity 2 is exact, not a boundary guess."
+      },
+      "step2_noise": {
+        "per_pair_sigma": [
+          0.99,
+          1.11,
+          2.22,
+          1.11,
+          0.37
+        ],
+        "per_pair_spatial_corr": [
+          0.7177,
+          0.8447,
+          0.819,
+          0.951,
+          0.8312
+        ],
+        "per_pair_residual_intensity_corr": [
+          -0.3024,
+          -0.5661,
+          -0.2294,
+          -0.3767,
+          -0.5412
+        ],
+        "reinterpretation": "Pair2 (sigma=2.22) crosses the sigma=2 gate, but the control reproduces pair2 pixel-identically (PSNR=inf) -> peeled residual is identically zero, so sigma is a noise_prior false positive from JPEG blocking + highlight clipping. The high spatial_corr (0.72-0.95) is JPEG 8x8 block structure; negative residual_intensity_corr is highlight-clipping correlation. NO_NOISE confirmed for all 5 pairs."
+      },
+      "step3_blur": {
+        "per_pair": {
+          "p0": {
+            "verdict": "GLASS_BLUR",
+            "gm_ratio": 0.8444,
+            "glass_score": 1.4313,
+            "spectral_slope_ratio": 1.0819,
+            "residual_anisotropy": 1.6174
+          },
+          "p1": {
+            "verdict": "BLUR_UNLIKELY",
+            "gm_ratio": 0.8619
+          },
+          "p2": {
+            "verdict": "BLUR_UNLIKELY",
+            "gm_ratio": 0.7003
+          },
+          "p3": {
+            "verdict": "BLUR_UNLIKELY",
+            "gm_ratio": 0.9691
+          },
+          "p4": {
+            "verdict": "BLUR_UNLIKELY",
+            "gm_ratio": 1.0759
+          }
+        },
+        "reinterpretation": "Blur is flagged only on pair0 (glass_score=1.4313); pairs1-4 have no blur signal. A pipeline step shared by all 5 pairs cannot be pair-0-only. The control reproduces pair0 pixel-identically with no blur step -> gm_ratio/glass_score drop is caused by V+0.3 highlight clipping (saturated regions lose gradient), not optical blur. R0's 'blur present, subtype uncertain' note is resolved as clipping artifact."
+      },
+      "step4_global": {
+        "per_pair_raw_verdict": [
+          "SATURATION_strengthen_sev5",
+          "SATURATION_strengthen_sev5",
+          "SATURATION_strengthen_sev5",
+          "SATURATION_strengthen_sev4",
+          "SATURATION_strengthen_sev5"
+        ],
+        "signals": {
+          "brightness_mean_shift": [
+            41.8,
+            66.1,
+            50.1,
+            45.2,
+            69.7
+          ],
+          "clipped_fraction": [
+            0.1579,
+            0.1913,
+            0.1651,
+            0.1646,
+            0.0107
+          ],
+          "variance_ratio": [
+            1.5108,
+            0.799,
+            1.1266,
+            1.0825,
+            0.961
+          ],
+          "saturation_chroma_ratio": [
+            1.3913,
+            1.3667,
+            1.462,
+            1.311,
+            1.7671
+          ]
+        },
+        "reinterpretation": "HSV V+0.3 raises the max channel, which inflates the chroma-spread proxy (max-min) -> saturation raw verdict is a proxy artifact; variance_ratio is content-dependent under clipping (0.799-1.5108). Direct PSNR disambiguation: brightness HSV:3+jpeg:2 = inf (control) vs saturate_strengthen_HSV:5+jpeg:2 = 11.90 dB vs contrast_strengthen_stretch:3+jpeg:2 = 12.38 dB. Brightness HSV shift is the only function reproducing the targets exactly."
+      },
+      "order": {
+        "test": "compression_jpeg:2 -> brightness_brighten_shfit_HSV:3 (reverse order) on pair0 = 26.82 dB, CI 8/10 (vs inf forward).",
+        "conclusion": "Brightness (environment light, priority=0) precedes JPEG storage (priority=2); R0 order confirmed."
+      }
+    },
+    "hypotheses": [
+      {
+        "id": "H1_control",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "signal_source": "All signals above; exact reproduction on 5/5 pairs",
+        "test_result": {
+          "pair0_psnr_rgb": "inf",
+          "pair1_psnr_rgb": "inf",
+          "pair2_psnr_rgb": "inf",
+          "pair3_psnr_rgb": "inf",
+          "pair4_psnr_rgb": "inf",
+          "ci_pass": "10/10"
+        },
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "H2_saturation",
+        "pipeline": "saturate_strengthen_HSV:5,compression_jpeg:2",
+        "signal_source": "step4 raw verdict SATURATION_strengthen_sev5 + saturation_chroma_ratio 1.39",
+        "test_result": {
+          "pair0_psnr_rgb": 11.9,
+          "ci_pass": "7/10"
+        },
+        "decision": "REJECT"
+      },
+      {
+        "id": "H3_jpeg_sev3",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:3",
+        "signal_source": "JPEG severity upper boundary (block_boundary 1.582 high); brackets sev2",
+        "test_result": {
+          "pair0_psnr_rgb": 28.37,
+          "ci_pass": "10/10"
+        },
+        "decision": "REJECT"
+      },
+      {
+        "id": "H4_order_swap",
+        "pipeline": "compression_jpeg:2,brightness_brighten_shfit_HSV:3",
+        "signal_source": "Step-order ambiguity between global and compression (ISP-after-storage edit hypothesis)",
+        "test_result": {
+          "pair0_psnr_rgb": 26.82,
+          "ci_pass": "8/10"
+        },
+        "decision": "REJECT"
+      },
+      {
+        "id": "H5_contrast",
+        "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:2",
+        "signal_source": "variance_ratio=1.5108 + contrast_spread_ratio=1.1513 (contrast alternative to brightness)",
+        "test_result": {
+          "pair0_psnr_rgb": 12.38,
+          "ci_pass": "7/10"
+        },
+        "decision": "REJECT"
+      }
+    ],
+    "validation": {
+      "mode": "PSNR (deterministic pipeline; noise ruled out by exact match)",
+      "criterion": "candidate must reproduce 5/5 support pairs and improve vs R0 control (pair0 >2 dB or >35 dB; other pairs not notably worse)",
+      "test_candidate_runs": 9,
+      "result": "Control = inf dB on 5/5 pairs (CI 10/10). Best rival = 28.37 dB (jpeg:3) -> 8.4 dB gap below 35 dB threshold and infinity below control. No candidate qualifies for CHANGE."
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        [
+          "brightness_brighten_shfit_HSV",
+          3
+        ],
+        [
+          "compression_jpeg",
+          2
+        ]
+      ],
+      "rationale": "R0 pipeline reproduces all 5 support targets pixel-identically; no candidate can exceed it. Signal reanalysis confirms brightness HSV V+0.3 -> JPEG q=18 (sev2) and resolves saturation/blur/noise raw verdicts as clipping and JPEG-block artifacts. support_psnr_r0=28.66 dB is a model-fit limitation (1.5 GPU-h), not a pipeline mismatch; R1 keeps the R0 pipeline.",
+      "candidates_tested": 5
+    }
+  }
+}

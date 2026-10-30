@@ -1,0 +1,67 @@
+{
+  "challenge_id": "blind_0017_rep2",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_gaussian",
+      3
+    ],
+    [
+      "compression_jpeg",
+      4
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR (sigma<2 per pair in Step0.5; noise ruled out by peeled structure)",
+    "candidates_tested": 5,
+    "candidate_tests": 9,
+    "support_validation": "5 对 support 复现: pair0 28.35 / pair1 27.89 / pair2 26.62 / pair3 27.73 / pair4 26.75 dB (与 R0 完全一致, CI 8/7/7/7/8/10, spread 1.73 dB)。确定性复现 PASS，但无候选达到 CHANGE 阈值 (pair0 >30.35 dB 或 >35 dB)；最佳仍为 R0 control 28.35 dB。",
+    "rationale": "R1 信号重释发现 R0 未量化的二阶结构: 5 对 support 上 target 与 g3j4 仿真呈高度一致仿射关系 target ≈ 0.887*sim + 14.2 (k=0.879-0.894, b=13.4-15.0, 等效 pivot≈125)，说明 GT 在 blur_gaussian+jpeg 之外还有一个全局仿射对比度弱化 (alpha≈0.89, beta≈+14)。x_distortion 的对比度族无 alpha≈0.89 档（最弱 0.75），实测 0.75 在 pair0/pair4 均使 PSNR 下降 (28.13 vs 28.35; 26.27 vs 26.75)；即使理想仿射也只能达到 29.0-30.0 dB (pair4 36.6)，低于 CHANGE 阈值。blur 子类型: glass DT (glass_score 1.26-1.57) 在自仿真 gaussian sim 上同样触发 (1.478/1.562)，为假阳性；glass:4+jpeg:4 27.20 dB、仿射残差更大，gaussian:3 仍最优 (gaussian:4 28.35 并列)。noise: sigma 跨图 0-4.08 波动，仿射校正后高频 MAD sigma 0.12-0.64，残差集中在 8x8 块边界 (12-17x)，排除噪声。JPEG 量化偏粗的残差无法用二次 JPEG 解释 (jpeg:4 幂等, 像素级一致)。故 x_distortion 能力内无更优候选，保持 R0 pipeline (BEYOND_CAPABILITY)。",
+    "affine_ceiling_psnr": {
+      "0": 29.78,
+      "1": 29.83,
+      "2": 29.02,
+      "3": 30.0,
+      "4": 36.65
+    },
+    "ideal_affine_psnr_k089_pivot128": {
+      "0": 29.72,
+      "1": 29.81,
+      "2": 28.98,
+      "3": 29.98,
+      "4": 36.58
+    }
+  },
+  "signal_sources": [
+    "block_boundary 6.4605/6.3777/4.4447/7.5227/5.1664 (5 对全部 >1.1, 0%FP) → JPEG 存在，子类型 JPEG 确认",
+    "unique_G 195/254/243/255/219 → 颜色量化信号跨图不一致 (仅 pair0<200)，不足以支持 quantization",
+    "gm_ratio 0.126-0.570 + spectral_slope -1.285~-1.690 → 强模糊存在；residual_anisotropy 1.21-1.61 <1.7 → 排除 motion",
+    "glass_score 1.26-1.57 与自仿真 gaussian:3+jpeg:4 的 1.478 / gaussian:4+jpeg:4 的 1.562 完全重叠 → glass DT 为假阳性，不具判别力",
+    "noise_prior sigma 0.00/0.74/1.11/4.08/0.00 (同一管线跨图差异极大) + peeled §B extreme_pct 53.6-74.1% (SKILL 已知 JPEG/blur FP) → NO_NOISE；仿射校正后 HF MAD sigma 仅 0.12 (pair0)/0.64 (pair2)",
+    "variance_ratio 0.60-0.78 (阈值 0.55 边界)、contrast_spread_ratio 0.79-0.87 (阈值 0.80 边界)、saturation_chroma_ratio 0.81-1.12 (跨图反向) → 全局信号在阈值边界且 chroma 方向不一致",
+    "5 对 support 的一致仿射关系 target ≈ 0.887*(g3j4_sim) + 14.2 (k=0.879/0.889/0.886/0.894/0.891, 截距 b=13.4-15.0, 等效 pivot P=120-129) → 存在全局仿射对比度弱化 alpha≈0.89, beta≈+14",
+    "仿射校正残差 |diff| 在 8x8 块边界为块内 12-17 倍，FWHM 5-9px → 残差为量化块结构而非白噪声；目标 block_boundary 高于 jpeg:4 仿真 (6.46 vs 4.73) 提示目标量化相对更粗",
+    "x_distortion 对比度族仅有 contrast_weaken_scale 0.75/0.6/0.45/0.3/0.2 与 stretch c=1.0/0.9/0.8/0.6/0.4 → 无 alpha≈0.89 档；contrast_weaken_scale:1 (0.75) 实测 pair0 28.13 / pair4 26.27 dB，均不如 control"
+  ],
+  "qwen_gate": {
+    "available": false,
+    "triggered": true,
+    "reason": "pair2 sigma=4.08 落入 2<sigma<10 边界区; API 不可用，跳过 (Step0.5)。后续 peeled §B + 仿射残差结构确认 sigma 为结构化残差误估"
+  }
+}

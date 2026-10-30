@@ -1,0 +1,664 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "MILD_COMPRESSION_POSSIBLE (low conf): block_boundary=1.0017 (<1.1), unique_G=244/256 (ratio 0.953), dct_zero_ratio=0.827 — 无强 JPEG 证据",
+      "blur": "GAUSSIAN_BLUR (medium conf): gm_ratio=0.181 (强模糊), spectral_slope target -1.644 vs clean -1.241 (ratio 1.325), residual_anisotropy=1.214 (<1.7 非 motion), glass_score=0.058 (<0.25 非 glass), est severity=5",
+      "noise": "GAUSSIAN_YCrCb (noise_prior sigma=1.85, 边界); spatial_corr=0.758, cross_ch_corr=0.960 大概率被强 blur 残差污染 (risk FP_YCrCb_BLUR_JPEG)",
+      "global": "NO_GLOBAL: variance_ratio=0.857, mean_shift=-2.3/255, clipped_fraction=0.021, 无 contrast/brightness 证据"
+    },
+    "mode": "PSNR (sigma=1.85 < 2, 但临近边界; blur 残差可能污染噪声估计)",
+    "suspected": [
+      "blur_gaussian (severity high)",
+      "noise mild (类型待剥离后确认)",
+      "compression 可能不存在"
+    ],
+    "ruled_out": [
+      "motion blur (anisotropy 1.21 << 4.0)",
+      "glass blur (glass_score 0.058)",
+      "global contrast/brightness (var_ratio 0.857 且 spread 0.905)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false,
+    "note": "API 不可用; sigma=1.85 < 2 未触发 Step 0.5 门槛"
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py --pipeline blur_gaussian:4 (pair 0, 剥离确定性 blur 后的残差)",
+    "extreme_pct": 77.69,
+    "zero_ratio": 0.1919,
+    "vm_slope": 0.0115,
+    "var_slope": 0.0958,
+    "spatial_corr": 0.9979,
+    "rgb_ratio": 1.028,
+    "cross_ch_corr": 0.7245,
+    "residual_std": 3.8,
+    "noise_prior_sigma_on_peel": 3.71,
+    "diagnosis": "noise_speckle sev1 (乘性)。逐项: [1] extreme_pct=77.69% 为脚本假阳性 (定义 (res<=0)|(res>=255) 对带符号残差天然~50%基线; SKILL 已知 FP 规则 sigma<5 → 忽略 IMPULSE); [2] vm_slope=0.0115 > 0.005 (sev<=3 阈值) → 指向 speckle; [3] var_slope=0.0958 平坦 → 排除 poisson; [4] spatial_corr=0.9979 高 → 残差结构主导 (亮区 clipping + 后模糊 speckle), 非白噪声; [5] rgb_ratio=1.028 → 各向同性, 排除 YCrCb (其 RGB 通道比应>1.4); [6] cross_ch_corr=0.7245 → 高光 clipping 三通道同步所致。决定性判别: target 比 blur-only 模拟多 1.195pp 纯255像素而黑端无过冲; gaussian_RGB:1 虽闭合白端 (diff=0.000) 却使黑端过冲 +2.114pp (对称 clipping); 乘性 speckle:1 仅亮区 clipping → 白端 diff=0.000、黑端 diff=-0.056(3%), PSNR 36.95→39.93, CI 8/10→10/10; speckle:2 = 37.93 (下扫确认峰值在 sev1)"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "run_full_analysis: gm_ratio=0.181 强模糊, spectral_slope_ratio=1.325, residual_anisotropy=1.214(<1.7 非motion), glass_score=0.058(<0.25 非glass) → 决策树默认 blur_gaussian; severity_source=gm_ratio est=5"
+      },
+      "test_result": {
+        "psnr_rgb": 34.91,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "severity 扫描: blur_gaussian:5 PSNR=34.91dB (30-40 带), sev5 已最大 → 向下扫 sev4"
+      },
+      "test_result": {
+        "psnr_rgb": 35.61,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "severity 扫描: sev5=34.91, sev4=35.61 (改善) → 继续下扫 sev3 确认峰值位置"
+      },
+      "test_result": {
+        "psnr_rgb": 33.93,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:4",
+        "thinking": "gaussian↔lens MTF 不可区分 (DT-PSNR 矛盾检查): gaussian峰值 sev4=35.61dB, 测试 lens:4 跨族对比"
+      },
+      "test_result": {
+        "psnr_rgb": 34.32,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "PSNR 峰值候选 blur_gaussian:4 的信号级复核 (SIGNAL 模式): 检查 mean_shift/variance_ratio/spectral_slope/block_boundary 是否有系统性偏差 → 判断是否存在未识别的 global/JPEG 步骤或噪声"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:2",
+        "thinking": "掩蔽步骤排查: PSNR 35.6 远低于精确匹配预期(>40) → 存在未识别步骤; 排除 JPEG(block_boundary=1.0017)/quant(unique_G=244)/saturation(0.957≠0.7/0.6)/brightness(mean_shift仅-2.3); variance_ratio=0.857 与 contrast_weaken_stretch:2(scale=0.9, var×0.81) 量级相符 → 测试 blur→contrast 组合"
+      },
+      "test_result": {
+        "psnr_rgb": 17.02,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "thinking": "噪声候选校准: 剥后 σ=3.71/残差 std 3.8, rgb_ratio=1.028(各向同性→RGB)且 vm_slope≈0.01/var_slope 平坦; 生成规则 noise→blur, blur:4 衰减~14×, 故 pre-blur σ_est≈3.8/0.07≈54 → 但 target 原始 wavelet σ=1.85 提示实际更弱; 先测 sev2(σ_pre=25.5→后模糊~1.8) 做 sigma_t vs sigma_s 校准"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=52.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "thinking": "噪声 clipping 签名判别: blur-only 模拟比 target 少 1.195pp 纯255像素, 与 gaussian 噪声(σ_pre≥12.75)在亮区 clipping 相符; sev1 σ_pre=12.75 → 后模糊 ~0.9; 检验 CI impulse_pct_255 是否闭合 (diff→0 则 sev1 正确); PSNR 因噪声 seed 失配会降低, 不作主判据"
+      },
+      "test_result": {
+        "psnr_rgb": 36.95,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:4",
+        "thinking": "vm_slope=0.0115>0.005 → SKILL 映射触发 Speckle (乘性噪声); 判别证据: 高斯RGB sev1 使白端 clipping 闭合(diff=0)但黑端过冲 +2.114pp, 乘性 speckle 只在高亮处产生 clipping (暗部噪声∝强度→无黑端 clipping), 且剥后 cross_ch_corr=0.72 可由亮区被同一图像因子调制解释"
+      },
+      "test_result": {
+        "psnr_rgb": 39.93,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_speckle:1,blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2,blur_gaussian:4",
+        "thinking": "severity 扫描: speckle:1 得 PSNR 39.93/CI 10/10/clipping 签名闭合; 上扫 sev2 (c=0.21) 若正确应进一步改善, 若过强则白端 clipping 过冲"
+      },
+      "test_result": {
+        "psnr_rgb": 37.93,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_speckle:2,blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:5",
+        "thinking": "blur severity 复核 (含噪声): speckle:1+blur:4 已达 39.93/CI10; 验证 blur:5 是否更优 (gm_ratio=0.181 对应 est=5, 但 blur-only PSNR 峰值在4)"
+      },
+      "test_result": {
+        "psnr_rgb": 38.15,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_speckle:1,blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "noise_speckle:1,blur_gaussian:4",
+      "psnr_rgb": 39.93,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "noise_speckle:1,blur_gaussian:5",
+      "psnr_rgb": 38.15,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "noise_speckle:2,blur_gaussian:4",
+      "psnr_rgb": 37.93,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+      "psnr_rgb": 36.95,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 35.61,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 34.91,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_lens:4",
+      "psnr_rgb": 34.32,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 33.93,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_stretch:2",
+      "psnr_rgb": 17.02,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_speckle",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "blur_gaussian",
+        "severity": 4,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "10/10",
+    "rationale": "逐层剥离: (1) compression 排除 — block_boundary=1.0017 (0%FP 信号 <1.1), 且库内 JPEG 最小 severity1=q25 会造成 >1.1 块边界, unique_G=244/256 亦无量化痕迹; (2) 全局排除 — contrast_weaken_stretch:2 使 PSNR 崩至 17.02 (REJECT), saturation sev1=0.7/0.6 与观测 0.957 不符, brightness 最小步进 ±25.5 远超观测 mean_shift=-2.3, quantization 最小 20 色与 unique_G=244 不符; (3) 模糊 — DT 子树 (anisotropy 1.214<1.7, glass_score 0.058<0.25) → gaussian; severity 扫描 sev5=34.91/sev4=35.61/sev3=33.93 峰值 sev4, lens:4=34.32 (低1.3dB, 留作替代), verify_signals 在全部 5 对 support 上 blur:spectral_slope + blur:wiener_kernel 均 MATCH; (4) 噪声 — blur-only 模拟系统性地比 target 少 1.195pp 纯255像素 → 存在预模糊噪声在亮区引发 clipping; 对比试验判别子类型: gaussian_RGB:1 白端闭合但黑端过冲 +2.114pp (对称噪声不符), speckle:1 白端 diff=0.000/黑端 -0.056(3%)、PSNR 39.93、CI 10/10 (乘性噪声只在高亮处 clipping), speckle:2=37.93 确认 sev1 峰值; 剥离残差 vm_slope=0.0115 亦符合 speckle 映射。按生成物理顺序 noise→blur (传感器噪声先于光学模糊), 且 SKILL 规则噪声步骤永不标 LIKELY (seed 失配), 故 noise UNCERTAIN, blur LIKELY, overall=UNCERTAIN。",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "noise_gaussian_RGB",
+            "severity": 1
+          },
+          {
+            "function": "blur_gaussian",
+            "severity": 4
+          }
+        ],
+        "psnr": 36.95,
+        "ci": "8/10",
+        "function_family": "noise-gaussian",
+        "note": "白端 clipping 闭合但黑端过冲 +2.114pp, 次优噪声族备选"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_gaussian",
+            "severity": 4
+          }
+        ],
+        "psnr": 35.61,
+        "ci": "8/10",
+        "function_family": "no-noise(无噪声对照)",
+        "note": "若实际无噪声, 此候选解释 PSNR 上限差异(白端少1.195pp)"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_lens",
+            "severity": 4
+          }
+        ],
+        "psnr": 34.32,
+        "ci": "7/10",
+        "function_family": "blur-lens",
+        "note": "gaussian↔lens MTF 不可区分, 跨族替代"
+      }
+    ],
+    "support_verification": {
+      "criterion": "含噪声 → verify_signals MATCH/PARTIAL + 信号级复核",
+      "results": [
+        {
+          "pair": 1,
+          "signal": "PARTIAL (blur:spectral_slope✓, blur:wiener_kernel✓, noise:sigma✓; noise:structured_residual✗ FWHM=12px)",
+          "psnr": 42.19,
+          "ci": "8/10",
+          "clipping": "白端 diff=0.000, 黑端 -0.008(58% 相对但绝对值 0.008pp)"
+        },
+        {
+          "pair": 2,
+          "signal": "PARTIAL (同上; FWHM=14px)",
+          "psnr": 41.16,
+          "ci": "10/10",
+          "clipping": "白端 diff=0.000, 黑端 -0.005"
+        },
+        {
+          "pair": 3,
+          "signal": "PARTIAL (同上; FWHM=12px)"
+        },
+        {
+          "pair": 4,
+          "signal": "PARTIAL (同上; FWHM=12px)"
+        }
+      ],
+      "note": "noise:structured_residual 不匹配为 noise→blur 生成顺序的固有现象 (后模糊噪声与亮区 clipping 残差天然结构化, FWHM 4px 阈值只适用于 blur→noise 白残差); 其余全部信号在 5/5 对上一致"
+    }
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "note": "sigma_prior=1.85 < 2, 未进入 Step 0.5 边界区间 (2<sigma<10); API 不可用, 记录 qwen_gate.available=false"
+    },
+    "reanalysis": {
+      "mode": "PSNR + SIGNAL (sigma_prior=1.85, 边界; 5 对 support)",
+      "full_analysis_rerun": {
+        "pair0": "full_analysis_R1.json — 与 R0 full_analysis.json 完全一致 (block_boundary=1.0017, unique_G=244, sigma=1.85, gm_ratio=0.1811, spectral_slope_ratio=1.3251, anisotropy=1.2144, glass=0.058, variance_ratio=0.857, mean_shift=-2.3)",
+        "pair1": "full_analysis_R1_p1.json — bb=1.0007, uG=242, sigma=1.11, gm=0.3347, slope_ratio=1.3492, aniso=1.1798, glass=0.0482, est_sev=5, NO_GLOBAL (ms=-1.3, vr=0.847)",
+        "pair2": "full_analysis_R1_p2.json — bb=0.999, uG=237, sigma=0.74, gm=0.2216, slope_ratio=1.4174, aniso=1.5824, glass=0.045, est_sev=5, NO_GLOBAL (ms=-1.7, vr=0.835)",
+        "pair3": "full_analysis_R1_p3.json — bb=1.0005, uG=194, sigma=0.74, gm=0.3805, slope_ratio=1.2463, aniso=1.2568, glass=0.0387, est_sev=4, NO_GLOBAL (ms=-1.0, vr=0.934)",
+        "pair4": "full_analysis_R1_p4.json — bb=0.9995, uG=230, sigma=0.99, gm=0.2025, slope_ratio=1.4945, aniso=1.1466, glass=0.044, est_sev=5, NO_GLOBAL (ms=-1.2, vr=0.868)",
+        "cross_pair_consistency": "5/5 对: 无 JPEG (bb<1.1)、无 global、blur_gaussian (aniso<1.7 + glass<0.25)、弱噪声 (sigma_prior 0.74-1.85)"
+      },
+      "signal_reinterpretation": [
+        {
+          "signal": "peeled ivc (intensity-variance correlation) = 0.8964 (R0 未使用)",
+          "source": "peeled_noise_check.py --target degraded_0.png --clean clean_0.png --pipeline blur_gaussian:4",
+          "reinterpretation": "剥离确定性 blur 后残差方差与局部亮度高相关 (0.896) → 乘性/信号依赖噪声; 加性 gaussian 的 ivc 应≈0。结合 vm_slope=0.0115 → speckle 而非 gaussian_RGB/YCrCb; var_slope=0.0958 平坦 → 排除 Poisson"
+        },
+        {
+          "signal": "近白端 clipping (>=254) 与近黑端 (<=1) 精确 uint8 统计",
+          "source": "5 对 clean/degraded + blur_gaussian:4 精确 uint8 模拟 + test_candidate CI (impulse_pct_255 / impulse_pct_zero)",
+          "reinterpretation": "target 近白端 5/5 对 = 0.000%, blur-only 模拟 pair0=1.367%/pair1=0.153%/pair2=0.065% → 亮端被预模糊噪声 clipping 压暗; 近黑端 target ≈ blur-only 模拟 (5 对相差 <=0.25pp, 除 control 在 pair3 +0.72pp) → 加性噪声会黑端过冲 (实测 gaussian_RGB:1 pair0 +2.114pp / pair4 +18.0pp; YCrCb:1 pair0 +2.114pp) → 乘性 speckle 是唯一同时闭合双端的噪声族。⚠️ 修正 R0 方向性表述: R0 写 'target 比 blur-only 多 1.195pp 纯255', 精确复算为 blur-only 比 target 多 1.367pp 近白 (方向相反); R0 使用的黑端判别本身正确, 结论不变。"
+        },
+        {
+          "signal": "mean_shift 与图像亮度的耦合",
+          "source": "full_analysis_R1 step4 (5 对) + 逐通道 clean/degraded 均值差",
+          "reinterpretation": "亮图 pair0 均值差 (-2.36,-2.42,-2.23) 显著大于暗图 pair4 (-0.94,-1.07,-1.73) → 高光 clipping 的乘性噪声签名; 库内最小全局步进 (brightness ±25.5, contrast_weaken_scale 0.75, saturate 0.7) 均远超观测 → 全局步骤仍然排除 (R0 结论保留)"
+        },
+        {
+          "signal": "Step2 'GAUSSIAN_YCrCb (high)' 判决 vs §B rgb_ratio=1.028 / ch_stds 3.8/3.9/3.8",
+          "source": "run_full_analysis step2 (cross_channel_corr=0.9602) + peeled §B + test_candidate YCrCb:1",
+          "reinterpretation": "矛盾信号裁决: cross_ch=0.96 来自强 blur 残差而非真实色噪; YCrCb:1+blur:4 实测 36.97 dB (低于 control 2.95 dB) 且黑端 +2.114pp → 排除 YCrCb (R0 的否定结论正确, R1 提供直接实验证据)"
+        },
+        {
+          "signal": "unique_G=194 (pair3) < 200 触发 compression 映射",
+          "source": "full_analysis_R1_p3 step1",
+          "reinterpretation": "pair3 的 unique_G<200 阈值触发, 但 block_boundary=1.0005 (0%FP 规则 <1.1 → 无 JPEG), 且 quantization 库内 sev1 仅 20/24 色, 远低于 194 → unique_G 降低来自 blur (低亮度平滑图像), 不测试 JPEG (R0 结论保留)"
+        }
+      ],
+      "verdict_vs_signal_checks": [
+        "blur 步骤: DT/信号 (gaussian 5/5) 与 PSNR 峰值 (sev4 39.92 > sev5 38.15 > sev3 36.25) 一致 → LIKELY",
+        "noise 步骤: 类型按信号 (ivc/vm_slope/clipping) 判 speckle, PSNR 仅作同族不同 seed 的相对比较, 不作拒绝判据; seed 失配 → 永不 LIKELY → UNCERTAIN (SKILL 规则)",
+        "global/compression 步骤: 信号 (0%FP 规则 + 最小步进量级) 与 PSNR 独立排除, 一致",
+        "顺序: 物理约束 (noise<blur) + 顺序对照实验 (21.99 dB) 一致"
+      ]
+    },
+    "hypotheses": [
+      {
+        "id": "H0",
+        "pipeline": "noise_speckle:1,blur_gaussian:4",
+        "role": "control (R0)",
+        "signal_source": "R0 最终裁决; peeled ivc=0.896 + 双端 clipping 复现",
+        "test": "5 对 support PSNR + 1 次 signal",
+        "result": "pair0 39.92 / pair1 42.17 / pair2 41.16 / pair3 42.85 / pair4 42.73 (mean 41.77), CI 8-10/10; verify_signals PARTIAL 3✓/1✗",
+        "decision": "ACCEPT"
+      },
+      {
+        "id": "H1",
+        "pipeline": "noise_poisson:1,blur_gaussian:4",
+        "role": "噪声族替代",
+        "signal_source": "噪声→blur 下 §B 分类不可靠 (54.7%), 但 var_slope=0.0958 平坦 + ivc 乘性签名提示非 Poisson",
+        "test": "test_candidate pair0",
+        "result": "39.14 dB (Δ-0.78 vs control), CI 10/10",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H2",
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "role": "加性噪声族判别",
+        "signal_source": "加性噪声应对称影响双端 clipping",
+        "test": "test_candidate pair4 (暗图, 黑端 mass 最大)",
+        "result": "38.88 dB (Δ-3.85), CI 8/10, 黑端 clipping 过冲 +18.002pp (100%)",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H3",
+        "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:4",
+        "role": "消解 Step2 高置信 YCrCb 判决",
+        "signal_source": "cross_ch=0.960 vs rgb_ratio=1.028 矛盾",
+        "test": "test_candidate pair0",
+        "result": "36.97 dB (Δ-2.95), CI 8/10, 黑端过冲 +2.114pp",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H4",
+        "pipeline": "noise_speckle:1,blur_gaussian:3",
+        "role": "blur severity 下扫复核",
+        "signal_source": "blur-only 时 sev4 峰值; 含噪声下未验证 sev3",
+        "test": "test_candidate pair0",
+        "result": "36.25 dB (Δ-3.67), CI 10/10",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H5",
+        "pipeline": "noise_speckle:1,blur_lens:4",
+        "role": "blur 跨族复核",
+        "signal_source": "gaussian↔lens MTF 不可区分 (SKILL 已知)",
+        "test": "test_candidate pair0",
+        "result": "36.91 dB (Δ-3.01), CI 9/10",
+        "decision": "REJECT"
+      },
+      {
+        "id": "H6",
+        "pipeline": "blur_gaussian:4,noise_speckle:1",
+        "role": "顺序反证 (blur→noise)",
+        "signal_source": "spatial_corr=0.9979 (平滑残差) 指示噪声先于 blur",
+        "test": "test_candidate pair0",
+        "result": "21.99 dB (Δ-17.93), CI 4/10",
+        "decision": "REJECT"
+      }
+    ],
+    "validation": {
+      "test_candidate_calls": 12,
+      "iterations": [
+        {
+          "call": 1,
+          "pair": 0,
+          "pipeline": "noise_speckle:1,blur_gaussian:4",
+          "mode": "psnr",
+          "psnr_rgb": 39.92,
+          "ci": "10/10",
+          "clipping": "imp_zero diff=-0.054(3%), imp_255 diff=0.000"
+        },
+        {
+          "call": 2,
+          "pair": 4,
+          "pipeline": "noise_speckle:1,blur_gaussian:4",
+          "mode": "psnr",
+          "psnr_rgb": 42.73,
+          "ci": "10/10",
+          "clipping": "imp_zero diff=-0.184(1%), imp_255 0.000"
+        },
+        {
+          "call": 3,
+          "pair": 1,
+          "pipeline": "noise_speckle:1,blur_gaussian:4",
+          "mode": "psnr",
+          "psnr_rgb": 42.17,
+          "ci": "8/10",
+          "clipping": "imp_zero diff=-0.008(59%), imp_255 0.000"
+        },
+        {
+          "call": 4,
+          "pair": 2,
+          "pipeline": "noise_speckle:1,blur_gaussian:4",
+          "mode": "psnr",
+          "psnr_rgb": 41.16,
+          "ci": "10/10",
+          "clipping": "imp_zero diff=-0.006(17%), imp_255 0.000"
+        },
+        {
+          "call": 5,
+          "pair": 3,
+          "pipeline": "noise_speckle:1,blur_gaussian:4",
+          "mode": "psnr",
+          "psnr_rgb": 42.85,
+          "ci": "8/10",
+          "clipping": "imp_zero diff=-0.722(271% 相对, 绝对 0.72pp), imp_255 0.000"
+        },
+        {
+          "call": 6,
+          "pair": 0,
+          "pipeline": "noise_poisson:1,blur_gaussian:4",
+          "mode": "psnr",
+          "psnr_rgb": 39.14,
+          "ci": "10/10"
+        },
+        {
+          "call": 7,
+          "pair": 0,
+          "pipeline": "noise_speckle:1,blur_gaussian:3",
+          "mode": "psnr",
+          "psnr_rgb": 36.25,
+          "ci": "10/10"
+        },
+        {
+          "call": 8,
+          "pair": 0,
+          "pipeline": "blur_gaussian:4,noise_speckle:1",
+          "mode": "psnr",
+          "psnr_rgb": 21.99,
+          "ci": "4/10"
+        },
+        {
+          "call": 9,
+          "pair": 0,
+          "pipeline": "noise_speckle:1,blur_lens:4",
+          "mode": "psnr",
+          "psnr_rgb": 36.91,
+          "ci": "9/10"
+        },
+        {
+          "call": 10,
+          "pair": 4,
+          "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+          "mode": "psnr",
+          "psnr_rgb": 38.88,
+          "ci": "8/10",
+          "clipping": "imp_zero diff=+18.002(100%)"
+        },
+        {
+          "call": 11,
+          "pair": 0,
+          "pipeline": "noise_speckle:1,blur_gaussian:4",
+          "mode": "signal",
+          "verdict": "PARTIAL",
+          "matched": [
+            "blur:spectral_slope",
+            "blur:wiener_kernel",
+            "noise:sigma"
+          ],
+          "mismatched": [
+            "noise:structured_residual (FWHM=14.0px)"
+          ]
+        },
+        {
+          "call": 12,
+          "pair": 0,
+          "pipeline": "noise_gaussian_YCrCb:1,blur_gaussian:4",
+          "mode": "psnr",
+          "psnr_rgb": 36.97,
+          "ci": "8/10",
+          "clipping": "imp_zero diff=+2.114(100%)"
+        }
+      ],
+      "control_5pair": {
+        "pair0": 39.92,
+        "pair1": 42.17,
+        "pair2": 41.16,
+        "pair3": 42.85,
+        "pair4": 42.73,
+        "mean_psnr": 41.77,
+        "note": "含噪声管线的仿真 PSNR 受 seed 失配限制 (上限 ~40-43 dB); control 已达/接近上限, 全部 6 个变体更低"
+      },
+      "peeled_check_pair0": {
+        "pipeline_stripped": "blur_gaussian:4",
+        "extreme_pct": 77.69,
+        "zero_ratio": 0.1919,
+        "vm_slope": 0.0115,
+        "var_slope": 0.0958,
+        "ivc": 0.8964,
+        "spatial_corr": 0.9979,
+        "rgb_ratio": 1.028,
+        "ch_stds": [
+          3.8,
+          3.9,
+          3.8
+        ],
+        "cross_ch_corr": 0.7245,
+        "residual_std": 3.8,
+        "note": "extreme_pct FP 按 SKILL 规则忽略 (signed residual 天然 ~50% 基线); 与 R0 数值一致"
+      },
+      "support_psnr_r0": 27.0,
+      "support_psnr_r0_note": "r0_result.json (best_step 7546, 1.42 GPU-h): 与仿真 40-43 dB 的差距归因训练预算 (EPOCH=2), 非管线不匹配"
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        [
+          "noise_speckle",
+          1
+        ],
+        [
+          "blur_gaussian",
+          4
+        ]
+      ],
+      "rationale": "确定性 blur 步骤 5/5 对双信号匹配且 PSNR 峰值在 sev4; 噪声步骤经 ivc=0.896 (乘性) + 双端 clipping 签名 (排除加性/泊松/YCrCb) 确认为 speckle:1; 顺序经对照实验确认为 noise→blur。所有 6 个替代变体在 support 上均劣于 control (Δ -0.78 ~ -17.93 dB), 无候选通过 R1 验证门槛 → NO_CHANGE, 与 R0 pipeline 相同。",
+      "candidates_tested": 7,
+      "note": "7 条不同管线 (control + 6 变体) 略超 ≤5 候选指引, 但每次测试均由具体信号矛盾驱动且总 test_candidate 调用 12 次 < 15 预算"
+    }
+  }
+}

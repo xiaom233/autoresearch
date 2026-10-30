@@ -1,0 +1,334 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=1.0074 (<1.05), unique_G 244 vs 243, dct_zero_ratio=0.0124 → 无 JPEG/quantization",
+      "blur": "BLUR_UNLIKELY: spectral_slope_ratio=0.990 (<1.08), gm_ratio=2.356 被稀疏噪声破坏 → 无模糊",
+      "noise": "IMPULSE: 残差 zero_ratio=0.9138 (>0.85), noise_prior sigma=0.0 (稀疏残差使 MAD=0), 通道独立 cross_ch_corr=0.014",
+      "global": "BRIGHTNESS_brighten_sev1 + SATURATION_strengthen_sev5 (variance_ratio=1.479, mean_shift=8.0, chroma_ratio=2.55) — 疑似 impulse 盐噪声抬高均值/色度方差的 FP"
+    },
+    "mode": "SIGNAL (sigma≈17.5 by noise_prior on raw residual; impulse 稀疏残差导致 run_full_analysis sigma=0.0 失真; 噪声判据用 §B/统计匹配, 不用 PSNR 做类型判定)",
+    "key_reasoning": "残差 91% 元素 |diff|<1.1 灰度级, 仅 9% 稀疏大跳变; cross_channel_corr=0.014 (各通道独立) → 脉冲噪声指纹。任何全局变换/模糊/JPEG 都会改变几乎全部像素, 与 91% 未变矛盾 → 全局 brightness/saturation 判定为 impulse 引起的统计假阳性 (盐像素抬高均值 +8 和色度方差)。"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 95.9,
+    "zero_ratio": 0.9089,
+    "vm_slope": 5.867,
+    "var_slope": -4.7949,
+    "intensity_var_corr": 0.5821,
+    "spatial_corr": 0.3702,
+    "rgb_ratio": 1.1978,
+    "cross_channel_corr": 0.0142,
+    "ch_stds": {
+      "R": 54.5,
+      "G": 51.6,
+      "B": 45.5
+    },
+    "residual_std": 50.7,
+    "diagnosis": "zero_ratio=0.909 → 稀疏跳变占 ~9%; ch_stds 三通道接近 (rgb_ratio=1.20<1.4) 且 cross_ch_corr=0.014 → 通道独立 (RGB 逐元素 s&p), 非 YCrCb/speckle/poisson。extreme_pct 对 pepper 负残差天然高 (≤0), 不是 JPEG 证据。vm_slope/ivc 被稀疏大跳变放大, 不构成 speckle/poisson 证据 (residual_std=50.7 远超 poisson 理论 σ≤4)。结论: IMPULSE (salt&pepper), 改变像素比例 ~9% → 对应 severity 4-5 区间的 amount。"
+  },
+  "qwen_gate": {
+    "available": false
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1: §B zero_ratio=0.909, cross_ch_corr=0.014, rgb_ratio=1.20 → 脉冲噪声; 改变比例约9% 对应 amount≈0.10 (sev5); PSNR 仅记录, 判据用 CI 边际统计(impulse_pct_zero/255)"
+      },
+      "test_result": {
+        "psnr_rgb": 11.09,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_impulse:4",
+        "thinking": "R1 severity 扫描: impulse sev4 (amount=0.07) vs sev5 (0.10)。用 CI 边际统计 impulse_pct_zero/255 的原始 diff 判别: 若 target amount=0.10, sev4 模拟的 diff 应 ~ -0.75pp; 若 target=0.07 则 diff≈0"
+      },
+      "test_result": {
+        "psnr_rgb": 11.75,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R2 signal 模式复核 sev5: 边际统计已确认 amount=0.10 (sev4 的 pct_zero/255 diff=+0.73/+1.44pp 排除, sev5 diff≈0); 现在用 verify_signals 检验 sigma 与残差结构"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:1,saturate_strengthen_HSV:5",
+        "thinking": "R2 跨族对照: run_full_analysis 报 BRIGHTNESS+S aturation; 但残差 91% 像素不变排除任何全局变换。用全局候选作对照, 预期 CI 失败(impulse/unique 指标)"
+      },
+      "test_result": {
+        "psnr_rgb": 12.21,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:1,saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:5",
+        "thinking": "R2 跨族噪声对照: §B 已被 impulse 解释, 但按 Round1 覆盖规则测 gaussian_RGB sev5 (若 target 是 gaussian, 残差不应 91% 精确为 0)"
+      },
+      "test_result": {
+        "psnr_rgb": 11.33,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "Support pair 1 复核: 该 pair 的 zero_ratio≈0.90, block_boundary≈1.00, IMPULSE; 用同管线 noise_impulse:5 做 verify_signals 复核"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "Support pair 2 复核: 该 pair 的 zero_ratio≈0.90, block_boundary≈1.00, IMPULSE; 用同管线 noise_impulse:5 做 verify_signals 复核"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "Support pair 3 复核: 该 pair 的 zero_ratio≈0.90, block_boundary≈1.00, IMPULSE; 用同管线 noise_impulse:5 做 verify_signals 复核"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "Support pair 4 复核: 该 pair 的 zero_ratio≈0.90, block_boundary≈1.00, IMPULSE; 用同管线 noise_impulse:5 做 verify_signals 复核"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:1,saturate_strengthen_HSV:5",
+      "psnr_rgb": 12.21,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "noise_impulse:4",
+      "psnr_rgb": 11.75,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:5",
+      "psnr_rgb": 11.33,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "noise_impulse:5",
+      "psnr_rgb": 11.09,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_impulse",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "ci_pass_rate": "10/10",
+    "rationale": "稀疏残差指纹 (91% 像素精确不变, 9% 通道独立 0/255 跳变) 排除确定性退化与所有全局变换; noise_impulse:5 (amount=0.10) 通过 CI 边际统计自洽解 (target amount=0.0999, z_c=0.257, w_c=0.0177, clipped_fraction 0.35 自洽) 与 verify_signals MATCH (pair0 + 4 support pairs)。PSNR 因噪声随机 seed 不可用于判定 (全局 FP 候选 PSNR 12.21 反而略高于正确候选 11.09, 印证噪声下 PSNR 无效)。噪声步骤按 SKILL 永不 LIKELY → UNCERTAIN。",
+    "support_validation": {
+      "pair_0": "verify_signals MATCH (sigma+clean_residual), CI 10/10, zero_ratio=0.9138",
+      "pair_1": "verify_signals MATCH, zero_ratio=0.9000, block_boundary=1.0031",
+      "pair_2": "verify_signals MATCH, zero_ratio=0.9002, block_boundary=0.9973",
+      "pair_3": "verify_signals MATCH, zero_ratio=0.9011, block_boundary=1.0014",
+      "pair_4": "verify_signals MATCH, zero_ratio=0.8999, block_boundary=0.9981"
+    },
+    "severity_derivation": "设 target impulse amount=p_t, 干净图元素 ≤1 / ≥254 比例为 z_c/w_c。target z_t=0.5p_t+(1-p_t)z_c, w_t 同理。sev5 模拟 diff(zero/255)=-0.003pp/+0.002pp; sev4 模拟 diff=+0.726pp/+1.442pp。解方程得 p_t=0.0999 (amount=0.10, severity 5), z_c=0.257, w_c=0.0177; 与 target clipped_fraction=0.35≈0.10+0.9*(z_c+w_c)=0.347 独立自洽。support pair 1-4 干净图无 clipped 像素 (clipped_fraction(target)=0.10-0.12≈amount), zero_ratio≈0.900 → amount 一致为 0.10。",
+    "alternatives": [],
+    "rejected_alternatives": [
+      "noise_impulse:4 (marginal diffs +0.726/+1.442pp, amount 偏低)",
+      "noise_gaussian_RGB:5 (impulse_pct_255 58% 偏差; 稀疏残差矛盾)",
+      "brightness_brighten_shfit_HSV:1,saturate_strengthen_HSV:5 (CI 7/10; 稀疏残差矛盾)"
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (噪声步骤) + run_full_analysis 的 estimated_severity=3 与全局低置信度判决; 按协议重跑信号分析并复核被忽略/误判/边界信号",
+    "data_sources": [
+      "challenges/blind_0005_rep1 的 5 对 support (clean_0..4 / degraded_0..4), 未读取任何 GT/训练/测试结果",
+      "R0 输出: predicted_params.json, reflection.json, full_analysis.json, r0_result.json (support PSNR=42.77, 无 GT)",
+      "Skill 脚本: run_full_analysis.py (R1 重跑 5 对), test_candidate.py (9 次候选测试)"
+    ],
+    "reanalysis": {
+      "run_full_analysis_R1": {
+        "pair0": {"noise": "IMPULSE est_sev=3", "zero_ratio": 0.9138, "global": "BRIGHTNESS_brighten_sev1; SATURATION_strengthen_sev5", "variance_ratio": 1.4787, "mean_shift": 8.0, "chroma_ratio": 2.5503, "block_boundary": 1.0074, "slope_ratio": 0.990},
+        "pair1": {"noise": "IMPULSE est_sev=3", "zero_ratio": 0.9000, "global": "CONTRAST_strengthen_sev5; SATURATION_strengthen_sev5", "variance_ratio": 1.4595, "mean_shift": 0.3, "chroma_ratio": 2.173, "block_boundary": 1.0031, "slope_ratio": 0.984},
+        "pair2": {"noise": "IMPULSE est_sev=3", "zero_ratio": 0.9002, "global": "SATURATION_strengthen_sev5", "variance_ratio": 1.2766, "mean_shift": 0.2, "chroma_ratio": 2.2962, "block_boundary": 0.9973, "slope_ratio": 0.989},
+        "pair3": {"noise": "IMPULSE est_sev=3", "zero_ratio": 0.9011, "global": "BRIGHTNESS_brighten_sev1; SATURATION_strengthen_sev5", "variance_ratio": 1.1884, "mean_shift": 6.2, "chroma_ratio": 5.0924, "block_boundary": 1.0014, "slope_ratio": 0.983},
+        "pair4": {"noise": "IMPULSE est_sev=3", "zero_ratio": 0.8999, "global": "CONTRAST_strengthen_sev5; SATURATION_strengthen_sev5", "variance_ratio": 1.6082, "mean_shift": -1.5, "chroma_ratio": 2.3864, "block_boundary": 0.9981, "slope_ratio": 0.968}
+      },
+      "verdict_vs_signals": [
+        {
+          "step": "step2_noise",
+          "verdict": "IMPULSE (estimated_severity=3)",
+          "signal_check": "zero_ratio 0.8999-0.9138; 该估计器对 impulse 的 severity 分档为 >0.98→1, >0.94→2, else→3 (上限 3), 无法输出 4/5",
+          "reinterpretation": "阈值边界误判: 精确 amount 反解 (zero 边际方程, 5 对) = 0.0999-0.1002 → severity=5。估计器上限导致 est_sev=3, R0 已纠正, R1 用 5 对独立反解再确认"
+        },
+        {
+          "step": "step4_global",
+          "verdict": "BRIGHTNESS/CONTRAST/SATURATION (5 对间判决不一致翻转)",
+          "signal_check": "mean_shift = +8.0/+0.3/+0.2/+6.2/-1.5; chroma_ratio=2.17-5.09; variance_ratio=1.19-1.61",
+          "reinterpretation": "全部为 impulse 截断几何的 FP: mean_shift 在 5 对均精确等于 0.1*(127.5-μ_clean) (±0.03 灰度级, pair0 +7.95 vs +7.94, pair3 +6.18 vs +6.19, pair4 -1.49 vs -1.49); impulse:5 仿真将 chroma_ratio 与 variance_ratio 复现至 3 位小数 (2.550/2.548, 2.173/2.173, 2.296/2.292, 5.092/5.093, 2.386/2.383; 1.479/1.477, 1.460/1.459, 1.277/1.276, 1.188/1.188, 1.608/1.606)"
+        },
+        {
+          "step": "step1_compression",
+          "verdict": "NO_COMPRESSION (should_still_test; block_boundary=1.0074 距阈值 1.05 较近)",
+          "signal_check": "block_boundary 0.997-1.007; unique_G 244≈243; dct_zero 0.0124",
+          "reinterpretation": "JPEG-after 被构造性排除: 变更元素 100% 精确为 0/255 (other=0.00000, 5 对全部), JPEG 会扰动极值; JPEG-before: jpeg:1+impulse:5 仿真 changed=0.8725 且 83% 变更值非 0/255, 与 target changed=0.0911/other=0 矛盾"
+        },
+        {
+          "step": "step3_blur",
+          "verdict": "BLUR_UNLIKELY",
+          "signal_check": "spectral_slope_ratio 0.968-0.990 (<1.08); gm_ratio 2.36-6.33 (被稀疏噪声破坏, 不可用)",
+          "reinterpretation": "维持排除: 任何 blur 都会改变全部像素, 与 91% 元素精确不变矛盾"
+        }
+      ],
+      "missed_second_order_stats": [
+        "变更像素的值分布: 5 对 support 的变更元素 100% 为精确 0/255 (other=0.00000) — R0 未显式量化, 该统计同时排除 JPEG-after 与其他噪声类型",
+        "salt/pepper 分解: 0.459-0.541 且三通道 0.496-0.504 → 排除单侧 impulse (如仅 salt), 与 skimage salt_vs_pepper=0.5 一致",
+        "mean_shift 的截断几何预测: 0.1*(127.5-μ_clean) 在 5 对精确命中 — 将 BRIGHTNESS 判决定量归因为 FP (R0 仅定性论证)",
+        "impulse:5 仿真对 chroma_ratio/variance_ratio 的 3 位小数复现 — 将 SATURATION/CONTRAST 判决定量归因为 FP",
+        "逐 pair amount 反解: 0.0999-0.1002 (跨越不同内容/亮度的 5 张图), 强于 R0 仅 pair0 的解方程"
+      ],
+      "tool_limitations": [
+        "verify_signals 对 impulse 判别力弱: sigma 由 wavelet MAD 估计, target 稀疏残差使 σ_t≈0, 相对差 (σ_s-σ_t)/max(σ_t,0.1) 对仿真的微小绝对差极敏感 (jpeg1+imp5 出现 67% 'mismatch' 但绝对 σ 差仅 ~0.07)",
+        "run_full_analysis Step2 的 impulse severity 估计器上限为 3, 不能用于 amount>0.05 的判别"
+      ]
+    },
+    "hypotheses": [
+      {"id": "C1", "pipeline": "noise_impulse:5 (R0 control)", "signal_source": "变更值 100% 精确 0/255 + salt/pepper 50/50 + amount 反解 0.10", "validation": "verify_signals MATCH 5/5; 仿真 vs target 变更率 0.0910-0.1000 vs 0.0911-0.1001; zero/255 边际差 ≤0.019pp", "outcome": "ACCEPT (与 R0 相同, 无改善空间 — 已是最大 severity 且统计一致)"},
+      {"id": "C2", "pipeline": "noise_impulse:4", "signal_source": "severity 边界检查 (amount=0.07 vs 0.10)", "validation": "仿真 changed=0.0638 (target 0.0911); CI 边际 zero/255 diff=+0.723pp/+1.443pp", "outcome": "REJECT"},
+      {"id": "C3", "pipeline": "noise_impulse:3", "signal_source": "run_full_analysis 的 est_sev=3 边界重检", "validation": "仿真 changed=0.0455; CI 边际 zero/255 diff=+1.191pp/+2.421pp", "outcome": "REJECT"},
+      {"id": "C4", "pipeline": "compression_jpeg:1,noise_impulse:5", "signal_source": "block_boundary=1.0074 处于 1.05 阈值边界, run_full_analysis 建议仍测 JPEG", "validation": "仿真 changed=0.8725, 83% 变更值非 0/255; verify_signals PARTIAL (block_boundary 近似但 sigma 67% 失配)", "outcome": "REJECT"},
+      {"id": "C5", "pipeline": "noise_gaussian_RGB:5", "signal_source": "跨族噪声对照 (防止把全图噪声误判为稀疏脉冲)", "validation": "仿真 changed=0.9041, 73% 变更值非 0/255; verify_signals WEAK (sigma 1147% 失配)", "outcome": "REJECT"}
+    ],
+    "validation": {
+      "candidate_tests": 9,
+      "support_pairs": 5,
+      "control_verify_signals": "MATCH 5/5 (noise:sigma + noise:clean_residual)",
+      "control_exact_stats": {
+        "changed_frac_sim": [0.0910, 0.1000, 0.0998, 0.0994, 0.0998],
+        "changed_frac_target": [0.0911, 0.1000, 0.0999, 0.0993, 0.1001],
+        "zero_marginal_diff_pp": [-0.007, -0.001, -0.003, -0.018, 0.015],
+        "w255_marginal_diff_pp": [0.010, 0.003, 0.005, 0.001, 0.019]
+      },
+      "severity_scan": "sev5 最优; sev4/sev3 的变更率与边际统计均显著偏离 (见 C2/C3)",
+      "cross_family": "gaussian WEAK, jpeg+impulse PARTIAL → 排除"
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [["noise_impulse", 5]],
+      "rationale": "R1 未找到比 R0 更匹配的候选; R0 管线在 5 对 support 的 verify_signals 与 §B 边际统计上均为最优 (MATCH, 边际差 <0.02pp), amount 反解 0.10 与 severity 网格唯一对应 sev5。R1 新增的二阶统计证据 (变更值分布、salt/pepper 分解、mean_shift 截断几何、chroma/variance 复现) 进一步排除全局/压缩/blur 任何第二退化。故保持 pipeline 不变。"
+    },
+    "qwen_gate": {"available": false, "triggered": false, "reason": "run_full_analysis sigma=0.0 (<2) 不满足 Step 0.5 门控 (2<sigma<10); Qwen API 不可用, 亦无需调用"}
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "challenge_id": "blind_0020_rep2",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [["blur_gaussian", 4], ["brightness_darken_gamma_RGB", 1], ["contrast_weaken_stretch", 5]],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 4, "verdict": "LIKELY"},
+    {"function": "contrast_weaken_stretch", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": "blur_gaussian:3,contrast_weaken_stretch:4",
+      "function_family": "blur severity -1",
+      "support_psnr": {"pair0": 37.30, "pair1": 32.89, "pair4": 28.94},
+      "note": "pair0/pair1/pair4 均略低于 g4 (37.73/33.33/29.09)"
+    },
+    {
+      "pipeline": "blur_lens:4,contrast_weaken_stretch:4",
+      "function_family": "blur_lens cross-family (SKILL: gaussian↔lens MTF 不可区分)",
+      "support_psnr": {"pair0": 37.40},
+      "note": "仅弱 0.33dB, 保留为跨族备份"
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4",
+      "function_family": "blur severity +1",
+      "support_psnr": {"pair0": 36.96}
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (sigma=0.74-2.84, 无噪声; 确定性步骤)",
+    "support_validation": "pair0 37.73 / pair1 33.33 / pair2 40.01 / pair3 35.33 / pair4 29.09 dB (mean 35.10); R0 同口径 [36.95, 32.24, 39.03, 32.58, 22.93] (mean 32.75); 5 对全部提升, CI 6-8/10, unique_R/G/B 与 target 误差 0-3%",
+    "rationale": "R1 信号重释定位 R0 的主要错误: 对比度严重度被高估。R0 由 variance_ratio=0.1008 直接按 c≈0.32 判 contrast_weaken_stretch:5(c=0.4), 忽略 (a) blur 自身的方差削减, (b) stretch 局部斜率 c/(4m) 随内容/通道均值 m 变化。按 5 对 support 的 per-channel 均值线性化: pair0 m≈0.45-0.55 → slope≈0.27-0.33 → c≈0.6(sev4); pair1 m≈0.28-0.42 → slope≈0.36-0.54 → c≈0.6; pair4 暗部 m≈0.08-0.24 → 高斜率, 与 variance_ratio=0.61 一致。改用 stretch:4 后模拟 unique_R/G/B 与 target 误差 0-3% (stretch:5 时 pair4 误差 22-23%), pair0 PSNR 31.36→37.73 (+6.4dB)。mean_shift 随内容翻转 (-29.1~+64.3) 是 stretch 向 per-channel 均值 0.5 拉齐的固有特征, 不需要独立 brightness 步骤; R0 的 brightness_darken_gamma_RGB:1 是在过强 stretch:5 之上拟合 pair0 的补偿项, 修正对比度后反而使 pair0 -7.43dB、pair4 -8.40dB。blur 由 PSNR 仲裁: gaussian:4(37.73) > lens:4(37.40) > gaussian:3(37.30) > gaussian:5(36.96) > 先 contrast 后 blur(35.66); support 上 g4 亦优于 g3 (pair1 33.33 vs 32.89, pair4 29.09 vs 28.94)。JPEG 被 block_boundary 0.997-1.010 (<1.1, 0% FP) 排除; noise 被 peeled σ=1.98、残差结构化 (spatial_corr 0.85-0.95) 及最小噪声档 gaussian_RGB sev1 σ=12.75 级排除。最终 2 步管线, 5 对 support 均值 +2.35dB 且无任何一对退化; 残余风险为 pair4(暗场景) 29.09dB 与 blur 核粒度 (gaussian↔lens 仅差 0.33dB)。"
+  },
+  "signal_sources": [
+    "variance_ratio 0.1008/0.1817/0.1370/0.1516/0.6141 + per-channel 均值 → stretch 斜率 c/(4m) → c≈0.6 (stretch:4), 非 R0 的 c=0.4",
+    "chroma_ratio 0.4417/0.3900/0.3049/0.4959/0.4898 与 c≈0.6 的斜率一致, 无需独立 saturation 步",
+    "mean_shift -7.5/+26.8/+9.4/-29.1/+64.3 符号随内容翻转 → 末级为 contrast_weaken_stretch (per-channel 均值 pivot), 非独立 brightness",
+    "unique_R/G/B: stretch:4 模拟与 target 误差 0-3%; stretch:5 时 pair4 unique 多 21-25 级 (22-23%)",
+    "block_boundary 0.9966-1.0098 (<1.1) → 无 JPEG",
+    "noise_prior σ 0.74-2.84; peeled σ=1.98, 残差 spatial_corr 0.8457-0.9533 结构化; gaussian_RGB sev1 σ=12.75 级与 PSNR 29-40dB 不相容 → NO_NOISE",
+    "blur PSNR 仲裁: g4 峰值 (g3/g5/lens4/反序均更低), support 复核一致"
+  ]
+}

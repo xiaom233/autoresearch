@@ -1,0 +1,58 @@
+{
+  "challenge_id": "blind_0016_rep2",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 4],
+    ["compression_jpeg", 1]
+  ],
+  "r1_pipeline": [
+    ["blur_motion", 4],
+    ["compression_jpeg", 2]
+  ],
+  "support_psnr_r0": 25.01,
+  "candidates_tested": 5,
+  "best_validation": {
+    "candidate": "blur_motion:4,compression_jpeg:2",
+    "mode": "SIGNAL-primary (blur_motion angle re-sampling makes PSNR non-reproducible; identical-pipeline spread 10.52 dB) + PSNR descriptive",
+    "per_pair": {
+      "pair0": {"r0_control": "WEAK (bb match; slope 0.166; wiener 0.247)", "c2": "WEAK (bb match; slope 0.135; wiener 0.326)", "psnr_control": 26.32, "psnr_c2": 27.35},
+      "pair1": {"r0_control": "WEAK (slope match; bb 13%, repeat 15%)", "c2": "MATCH (slope+bb+wiener); repeat PARTIAL (slope+bb match)"},
+      "pair2": {"r0_control": "WEAK (slope match; bb 10%)", "c2": "PARTIAL (slope+bb match; wiener 0.236)"},
+      "pair3": {"r0_control": "MISMATCH (slope 0.121; bb 12%)", "c2": "PARTIAL (slope+bb match; wiener 0.371)"},
+      "pair4": {"r0_control": "PARTIAL (slope+bb match; wiener 0.207)", "c2": "PARTIAL (slope+bb match; wiener 0.196)"}
+    },
+    "compression_block_boundary_matched": {"r0_control": "2/5", "c2": "5/5"},
+    "spectral_slope_matched": {"r0_control": "4/5", "c2": "4/5", "note": "pair3 0.121->match, pair0 0.166->0.135"},
+    "verdict_transition": {"improved": 3, "unchanged": 2, "worse": 0},
+    "jpeg_severity_bracket_pair1": {
+      "jpeg:1_q25": {"bb_diff_runs": ["13%", "15%"], "verdict": "mismatch x2"},
+      "jpeg:2_q18": {"bb_diff_runs": ["<8%", "<8%"], "verdict": "match x2"},
+      "jpeg:3_q12": {"bb_diff_runs": ["32%"], "verdict": "overshoot"},
+      "conclusion": "target JPEG quality lies between q25 and q12, closest to q18 -> severity 2"
+    },
+    "psnr_pair0": {"control": 26.32, "c2": 27.35, "delta_db": 1.03, "ci_control": "7/10", "ci_c2": "9/10", "r0_c2_sample": 26.86},
+    "deterministic_ceiling_pair0": {"blur_gaussian:5,compression_jpeg:1": 25.58, "blur_lens:5,compression_jpeg:1": 25.60},
+    "motion_severity": {"c1_blur_motion:5,compression_jpeg:1_pair0_psnr": 21.49, "r0_sample": 29.2, "pair0_slope_diff_sev4": 0.166, "pair0_slope_diff_sev5": 0.183, "decision": "keep severity 4"}
+  },
+  "candidate_test_count": 14,
+  "candidates": [
+    {"id": "C0", "pipeline": [["blur_motion", 4], ["compression_jpeg", 1]], "role": "control", "outcome": "bb 2/5, slope 4/5, pair0 PSNR 26.32 (CI 7/10)"},
+    {"id": "C1", "pipeline": [["blur_motion", 5], ["compression_jpeg", 1]], "role": "blur severity boundary", "outcome": "pair0 PSNR 21.49, slope 0.183 worse than sev4 0.166 -> rejected"},
+    {"id": "C2", "pipeline": [["blur_motion", 4], ["compression_jpeg", 2]], "role": "JPEG severity boundary", "outcome": "bb 5/5, slope 4/5, pair0 PSNR 27.35 (CI 9/10), verdict improved 3/5 no regressions -> ACCEPTED"},
+    {"id": "C3", "pipeline": [["blur_gaussian", 5], ["compression_jpeg", 1]], "role": "isotropic family max severity (untested in R0)", "outcome": "pair0 PSNR 25.58 -> rejected"},
+    {"id": "C4", "pipeline": [["blur_lens", 5], ["compression_jpeg", 1]], "role": "isotropic family max severity (untested in R0)", "outcome": "pair0 PSNR 25.60 -> rejected"}
+  ],
+  "signal_sources": [
+    "block_boundary 0%-FP compression signal: jpeg:1 fails 3/5 supports (10-15%), jpeg:2 matches 5/5",
+    "pair1 JPEG bracket with two angles per level: q25 13%/15% fail, q18 match/match, q12 32% overshoot",
+    "PCA motion 5/5 (2.341-3.380) + identify_blur_type MOTION_BLUR 5/5",
+    "spectral_slope ratio 1.151-1.306, sev4 slope diff 0.166 < sev5 0.183",
+    "gaussian:5 / lens:5 deterministic ceilings 25.58/25.60 dB below control 26.32 dB",
+    "noise sigma 0.74-1.85 vs >=12.75 implied by any noise severity 1 -> NO_NOISE",
+    "contrast_spread_ratio 0.885-0.975, mean_shift -0.2..-0.5 -> NO_GLOBAL 5/5",
+    "glass_score 0.48-1.04 above calibrated glass range (JPEG-inflated); glass:3 22.76 dB -> glass rejected",
+    "PSNR non-reproducibility: identical pipeline repeats 22.02/26.32/32.54 dB on pair0"
+  ],
+  "notes": "R0 model support PSNR 25.01 dB was trained on the R0 pipeline (jpeg:1). R1 does not retrain; the change targets the training degradation for a future R1 specialist. Budget: 14/15 test_candidate calls, 5 run_full_analysis runs (pair0 + p1-p4), no Qwen/API (qwen_gate available=false)."
+}

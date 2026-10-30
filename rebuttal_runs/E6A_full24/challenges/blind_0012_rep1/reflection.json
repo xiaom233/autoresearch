@@ -1,0 +1,564 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED high confidence: block_boundary=2.9022 (>1.1, 0% FP), dct_zero_ratio=0.8989, subtype=JPEG",
+      "blur": "MOTION_BLUR high confidence: gm_ratio=0.2579, spectral_slope_ratio=1.2667, residual_anisotropy=1.7022 (>1.7), blur_pca_ratio=4.625 (>2.5, 41% recall 0% FP), estimated_severity=5",
+      "noise": "GAUSSIAN_YCrCb high confidence (suspect FP): noise_prior_sigma=2.22, spatial_corr=0.8462, cross_channel_corr=0.8285, residual_intensity_corr=0.0913; failure_risk=FP_YCrCb_BLUR_JPEG",
+      "global": "NO_GLOBAL: mean_shift=-0.6/255, variance_ratio=0.8825, contrast_spread_ratio=0.9662, clipped_fraction=0.0252"
+    },
+    "mode": "SIGNAL (sigma=2.22)",
+    "suspected": [
+      "compression_jpeg (block_boundary=2.90, 0% FP)",
+      "blur_motion (anisotropy=1.70 + PCA=4.63)",
+      "noise gaussian (type uncertain; YCrCb may be FP from blur+JPEG coupling)"
+    ],
+    "ruled_out": [
+      "brightness (mean_shift -0.6/255 negligible)",
+      "contrast (contrast_spread_ratio 0.966, variance_ratio 0.88 explained by blur+JPEG)",
+      "saturation (chroma_ratio 0.956)",
+      "glass blur (glass_score=1.1674 high but PCA points to motion; will keep gaussian as alternative)",
+      "quantization (unique_G=256, no color quantization)"
+    ],
+    "physical_order_constraint": "blind_challenge priority: noise(0) → blur(1) → compression(2); simulation pipeline must follow noise→blur→jpeg"
+  },
+  "qwen_gate": {
+    "available": false,
+    "note": "Step 0.5 noise gate would trigger (2 < sigma=2.22 < 10, YCrCb claim contradicted by failure_risk=FP_YCrCb_BLUR_JPEG) but Qwen/API is unavailable in this environment; proceeded with SKILL signal analysis only."
+  },
+  "noise_6step_check": {
+    "note": "peeled_noise_check.py on residual target - simulate(clean, blur_motion:5,compression_jpeg:3); residual std=11.3. Motion-blur angle is re-drawn randomly per simulation call, so all structure-type §B metrics are contaminated by blur-angle mismatch (known FP path).",
+    "extreme_pct": 75.85,
+    "zero_ratio": 0.5075,
+    "vm_slope": 1.4891,
+    "var_slope": -0.0276,
+    "spatial_corr": 0.9617,
+    "rgb_ratio": 1.0647,
+    "cross_ch_corr": 0.8077,
+    "noise_prior_sigma": 4.45,
+    "noise_prior_slope": -0.0008,
+    "noise_prior_type": "noise_gaussian_RGB",
+    "diagnosis": "IMPULSE verdict auto-fires on extreme_pct>0.3% but extreme_pct here counts any negative residual (75.85%) and is the documented FP when extreme_pct>50% AND wavelet sigma<5 → ignore IMPULSE (SKILL exp17/18 rule). spatial_corr=0.96 and vm_slope=1.49 are inflated by residual structure from random motion angle, not by speckle. rgb_ratio=1.0647 (R=11.4/G=10.9/B=11.6) → equal channel stds, no YCrCb chroma excess → gaussian_RGB over YCrCb. var_slope=-0.028 (flat) → not Poisson. noise_prior flat slope (-0.0008) → Gaussian RGB. Because noise precedes blur in the generation order (priority 0→1), the §B subtype decision tree is only 54.7% accurate (SKILL signal_reliability) → noise TYPE kept UNCERTAIN; gaussian_RGB:1 chosen as primary (sigma matches target on all 5 pairs), impulse:1 kept as cross-family alternative."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "R1-compression: block_boundary=2.90 (>1.1, 0% FP) + dct_zero_ratio=0.899 → JPEG confirmed; agent_instructions suggests jpeg:4, quality=8. Test sev4 as primary candidate in signal mode (block_boundary diff <8%)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=10%)"
+        ],
+        "pipeline": "compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "R1-compression severity scan: sev4 gave block_boundary diff=10% (>8%). Target's noise+blur precede JPEG and typically attenuate the block-boundary ratio, so JPEG-on-clean at same sev overestimates; test one step weaker (q=12)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=27%)"
+        ],
+        "pipeline": "compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "R1-compression severity scan: sev3 diff=27%, sev4 diff=10% — block_boundary increases with JPEG strength, target lies closer to sev4 side; test sev5 (q=5) to bracket from above."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=18%)"
+        ],
+        "pipeline": "compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "thinking": "R2-blur: DT=blur_motion (residual_anisotropy=1.7022>1.7, 94% recall; PCA=4.625>2.5, 0% FP), gm_ratio=0.2579 with est sev=5. Test motion:5 + jpeg:4 (best bb bracket) in target physical order blur→jpeg. Verify via spectral_slope (<0.08), Wiener kernel (>0.85), block_boundary (<8%)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.591)",
+          "compression:block_boundary (diff=37%)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "thinking": "R2-blur severity scan: motion:5 spectral_slope MATCH but bb diff=37% (blur+jpeg context); Wiener corr 0.591 confounded by random motion angle. Sweep motion:4 (radius15/sigma9) to test if weaker blur restores bb match."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.100)",
+          "compression:block_boundary (diff=25%)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:4",
+        "thinking": "R3-noise: peeled §B extreme=53.6% is known JPEG/blur FP (>50% + sigma<5); noise_prior on residual says gaussian_RGB (flat slope), rgb_ratio=1.05. Noise is priority-0 (before blur), so original sigma is attenuated by motion blur; est original ~12-15 → gaussian_RGB:1 (sigma=12.75/255). Full pipeline in physical order noise→blur→jpeg; verify sigma<20%, residual should lose structure if deterministic part matches."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.189)",
+          "noise:structured_residual (FWHM=22.0px)",
+          "compression:block_boundary (diff=39%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "thinking": "R3-blur cross-family: motion candidate leaves structured residual (FWHM=22px) but that may be random-angle mismatch; DT anisotropy=1.7022 only marginally >1.7 and PCA could be inflated by JPEG grid+noise. Test gaussian:5 (sigma=5, max) — if residual FWHM collapses (<4px) and Wiener rises, gaussian is the true family."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.176)",
+          "blur:wiener_kernel (corr=0.455)",
+          "noise:structured_residual (FWHM=20.0px)",
+          "compression:block_boundary (diff=52%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:5",
+        "thinking": "R3-compression severity scan in full context: jpeg4+motion5 gives bb diff 39% (reproducible 37-39%). Compare jpeg5 (q=5) in identical context to learn which direction moves toward target bb=2.90."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.830)",
+          "noise:structured_residual (FWHM=10.0px)",
+          "compression:block_boundary (diff=105%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+        "thinking": "R3-compression severity scan: jpeg5 full-context bb diff=105% vs jpeg4 39% → bb increases with JPEG severity and target is weaker than sev4. Test jpeg3 (q=12)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.187)",
+          "noise:structured_residual (FWHM=22.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,blur_motion:5,compression_jpeg:3",
+        "thinking": "R3-noise cross-type coverage: peeled §B flagged IMPULSE (53.6%) but that is the documented FP (>50% + sigma<5 with JPEG/blur residual). Sanity-test impulse:1 in the now-matched deterministic context (motion5+jpeg3). If sigma diverges (target 2.22) or residual stats degrade vs gaussian_RGB:1, gaussian_RGB stands."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.283)",
+          "noise:structured_residual (FWHM=18.0px)"
+        ],
+        "pipeline": "noise_impulse:1,blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": null,
+      "signal_verdict": "WEAK 3/5 on pair0 (spectral_slope + noise:sigma + compression:block_boundary matched)",
+      "mode": "signal",
+      "note": "ACCEPTED primary. PSNR not computed (sigma=2.22 → PSNR invalid). Ranked by signal agreement."
+    },
+    {
+      "pipeline": "noise_impulse:1,blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": null,
+      "signal_verdict": "WEAK 3/5 on pair0 (same matched set as primary)",
+      "mode": "signal",
+      "note": "cross-family noise alternative, indistinguishable on sigma"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:4",
+      "psnr_rgb": null,
+      "signal_verdict": "WEAK 2/5 (bb diff 39%)",
+      "mode": "signal",
+      "note": "rejected: JPEG severity 4 too strong in full context"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:5",
+      "psnr_rgb": null,
+      "signal_verdict": "WEAK 2/5 (bb diff 105%)",
+      "mode": "signal",
+      "note": "rejected: JPEG severity 5 far too strong"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": null,
+      "signal_verdict": "WEAK 1/5 (slope diff 0.176, bb 52%)",
+      "mode": "signal",
+      "note": "rejected: gaussian blur family does not reproduce target blur strength/spectral slope"
+    }
+  ],
+  "support_verification": {
+    "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+    "pair_0_main": {
+      "verdict": "WEAK 3/5",
+      "matched": [
+        "blur:spectral_slope",
+        "noise:sigma",
+        "compression:block_boundary"
+      ],
+      "mismatched": [
+        "blur:wiener_kernel (corr=0.187)",
+        "noise:structured_residual (FWHM=22.0px)"
+      ]
+    },
+    "pair_1": {
+      "verdict": "WEAK 2/5",
+      "matched": [
+        "blur:spectral_slope",
+        "noise:sigma"
+      ],
+      "mismatched": [
+        "blur:wiener_kernel (0.190)",
+        "noise:structured_residual (18.0px)",
+        "compression:block_boundary (14%)"
+      ]
+    },
+    "pair_2": {
+      "verdict": "WEAK 2/5",
+      "matched": [
+        "noise:sigma",
+        "compression:block_boundary"
+      ],
+      "mismatched": [
+        "blur:spectral_slope (0.146)",
+        "blur:wiener_kernel (0.167)",
+        "noise:structured_residual (20.0px)"
+      ]
+    },
+    "pair_3": {
+      "verdict": "WEAK 1/5",
+      "matched": [
+        "noise:sigma"
+      ],
+      "mismatched": [
+        "blur:spectral_slope (0.106)",
+        "blur:wiener_kernel (0.221)",
+        "noise:structured_residual (24.0px)",
+        "compression:block_boundary (18%)"
+      ]
+    },
+    "pair_4": {
+      "verdict": "MATCH 5/5",
+      "matched": [
+        "blur:spectral_slope",
+        "blur:wiener_kernel",
+        "noise:sigma",
+        "noise:clean_residual",
+        "compression:block_boundary"
+      ],
+      "mismatched": []
+    },
+    "interpretation": "noise:sigma matches 5/5 pairs (severity 1 confirmed). blur:spectral_slope matches 3/5 (0.100-0.146 near-miss on others). compression:block_boundary matches 3/5. pair_4 full MATCH including Wiener-kernel and clean-residual proves the pipeline can reproduce all target signals exactly when the motion-blur random angle happens to align; residual mismatches are dominated by the re-drawn random motion angle (x_distortion blur_motion draws angle uniform(-90,90) per call, uncontrollable) plus seed mismatch of pre-blur noise."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_RGB",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "blur_motion",
+        "severity": 5,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 3,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Physical order from blind_challenge (noise p0 → blur p1 → jpeg p2). Compression: block_boundary=2.9022 (0% FP) → JPEG exists; full-context severity scan 3→4→5 gave bb diffs 27%(alone)/8%→39%→105% in context → sev3 (q=12) is the only full-context match, and sev3 matches bb on support pairs 0/2/4. Blur: DT residual_anisotropy=1.7022>1.7 and blur_pca_ratio=4.625>2.5 → motion; motion:5 reproduces spectral_slope on pair0 and support pairs 1/4, while motion:4 (diff 0.100) and gaussian:5 (0.176) fail; pair_4 achieves full MATCH including Wiener-kernel corr. Noise: sigma=2.22 target; gaussian_RGB:1 reproduces wavelet sigma within 20% on all 5 pairs; type cannot be discriminated because noise precedes blur (SKILL: 54.7% accuracy) — noise_prior flat slope and rgb_ratio≈1.06 favor gaussian_RGB, impulse:1 is indistinguishable on sigma and kept as alternative. Overall UNCERTAIN is mandated (noise step present, sigma>=2).",
+    "agent_note": "iterations[9] (round 9) shows auto-decision TRY_ALTERNATIVE due to remaining Wiener/FWHM structural mismatches; those two checks cannot pass while the motion-blur angle is re-drawn randomly, so round 9 pipeline was accepted manually. Hard stop after 3 rounds: pair0 rounds 1-3 (compression), 4-5 (blur), 6-8 (noise/severity), 9-10 (final confirmations); support verification followed."
+  },
+  "reflection_R1": {
+    "qwen_gate": {
+      "available": false,
+      "note": "Step 0.5 gate would trigger (2 < sigma=2.22 < 10) but Qwen/API is unavailable in this environment; proceeded with SKILL signal analysis only."
+    },
+    "reanalysis": {
+      "method": "Re-ran run_full_analysis.py on all 5 support pairs (full_analysis_R1.json = pair0, full_analysis_R1_p1..p4.json). Pair0 output reproduces R0's full_analysis.json except residual_intensity_corr (0.0856 vs 0.0913, sampling noise). Then 15 test_candidate.py runs in SIGNAL mode (noise present, PSNR invalid).",
+      "per_pair_signals": {
+        "pair0": {
+          "block_boundary": 2.902,
+          "dct_zero_ratio": 0.899,
+          "noise_prior_sigma": 2.22,
+          "gm_ratio": 0.258,
+          "spectral_slope_target": -1.702,
+          "residual_anisotropy": 1.702,
+          "blur_pca_ratio": 4.625,
+          "glass_score": 1.167,
+          "est_severity": 5,
+          "global": "NO_GLOBAL",
+          "variance_ratio": 0.8825
+        },
+        "pair1": {
+          "block_boundary": 2.518,
+          "dct_zero_ratio": 0.97,
+          "noise_prior_sigma": 0.74,
+          "gm_ratio": 0.321,
+          "spectral_slope_target": -1.692,
+          "residual_anisotropy": 1.602,
+          "blur_pca_ratio": 3.871,
+          "glass_score": 0.703,
+          "est_severity": 5,
+          "global": "SATURATION_strengthen_sev3 (chroma_ratio 1.160) - rejected",
+          "variance_ratio": 0.9338
+        },
+        "pair2": {
+          "block_boundary": 2.659,
+          "dct_zero_ratio": 0.871,
+          "noise_prior_sigma": 3.71,
+          "gm_ratio": 0.229,
+          "spectral_slope_target": -1.219,
+          "residual_anisotropy": 1.713,
+          "blur_pca_ratio": 4.801,
+          "glass_score": 1.204,
+          "est_severity": 5,
+          "global": "NO_GLOBAL",
+          "variance_ratio": 0.6843
+        },
+        "pair3": {
+          "block_boundary": 2.212,
+          "dct_zero_ratio": 0.932,
+          "noise_prior_sigma": 2.1,
+          "gm_ratio": 0.287,
+          "spectral_slope_target": -1.429,
+          "residual_anisotropy": 2.277,
+          "blur_pca_ratio": 5.505,
+          "glass_score": 1.215,
+          "est_severity": 5,
+          "global": "NO_GLOBAL",
+          "variance_ratio": 0.8961
+        },
+        "pair4": {
+          "block_boundary": 2.654,
+          "dct_zero_ratio": 0.911,
+          "noise_prior_sigma": 0.74,
+          "gm_ratio": 0.385,
+          "spectral_slope_target": -1.452,
+          "residual_anisotropy": 2.803,
+          "blur_pca_ratio": 5.162,
+          "glass_score": 1.197,
+          "est_severity": 4,
+          "global": "NO_GLOBAL",
+          "variance_ratio": 0.856
+        }
+      },
+      "signal_reinterpretation": [
+        "Compression: block_boundary 2.212-2.902 >1.1 on 5/5 pairs (0% FP) and unique_G=256 -> JPEG confirmed on every support pair; dct_zero_ratio 0.871-0.970 consistent. Severity 3 retained: jpeg:4 on pair1 gives bb diff 29% vs 12% for jpeg:3 on the same pair.",
+        "Blur family: PCA 3.871-5.505 >2.5 on 5/5 pairs (0% FP) -> motion. Pair1 residual_anisotropy=1.602 falls BELOW the 1.7 decision threshold - a threshold-boundary case - but PCA is the primary 0% FP signal, so motion stands. glass_score 0.703-1.215 (>0.25 on all pairs) is a previously under-examined signal; rejected because glass is shuffle-based and cannot produce radial spectral_slope -1.219..-1.702 or directional PCA; the deterministic lens:5 probe fails slope (diff 0.090) and wiener (0.392) on pair0.",
+        "Blur severity: gm_ratio -> est severities 5/5/5/5/4 (pair4 boundary). motion:4 in the correct jpeg:3 context is mixed (pair0 slope diff 0.090 fail; pair4 slope+bb match) -> keep motion:5.",
+        "Noise: the full_analysis 'GAUSSIAN_YCrCb high-confidence' verdict is driven by cross_channel_corr 0.83-0.97, a documented blur+JPEG false-positive path (failure_risk FP_YCrCb_BLUR_JPEG). Re-derived the expected residual channel-std ratio for noise_gaussian_YCrCb:1 through the inverse YCrCb transform: Var(R):Var(G):Var(B) = 2.97:1.63:4.14 -> ratio ~2.54. Measured residual rgb_ratio=1.065 -> YCrCb ruled out; gaussian_RGB retained.",
+        "Noise presence and order: noise:sigma (wavelet HH MAD of target vs simulated image) matches within 20% with noise_gaussian_RGB:1 on 5/5 fresh control draws (and 5/5 in R0). The noise-last probe (blur_motion:5,compression_jpeg:3,noise_gaussian_RGB:1) gives sigma diff 6054% and bb diff 54% -> noise must precede blur and JPEG (attenuated by blur), consistent with the generator priority and R0. No direct signal supports deleting the noise step; the target's residual noise_prior_sigma 0.74-3.71 is content/JPEG dependent and near the sigma=2 gate only on pair0.",
+        "Global: 4/5 pairs NO_GLOBAL. Pair1 alone fires SATURATION_strengthen_sev3 (chroma_ratio 1.160) while other pairs show 0.865-0.956 (JPEG chroma-subsampling direction is weakening); a shared pipeline cannot be present in only 1/5 pairs and the saturation signal is a documented mixed-degradation FP (~33%) -> rejected. Contrast/brightness ruled out by variance_ratio 0.684-0.934 (contrast_weaken_scale:1 would give ~0.56) and mean_shift -0.3..-1.3/255.",
+        "Verification check-set asymmetry (key methodological finding): verify_signals computes noise:sigma and noise:structured_residual(FWHM) only when the pipeline contains noise_*. The control therefore has 5 checks and the no-noise ablation only 3. FWHM is the structural-residual check that the random motion-blur angle (x_distortion blur_motion draws np.random.uniform(-90,90) per call) almost always violates; omitting it automatically upgrades WEAK to PARTIAL/MATCH."
+      ]
+    },
+    "hypotheses": [
+      {
+        "id": "C0",
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:3",
+        "source": "R0 control; block_boundary>2.2 5/5, PCA>2.5 5/5, sigma match 5/5",
+        "tests": "fresh draws on pairs 0-4"
+      },
+      {
+        "id": "C1",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "source": "full_analysis recommended_reflection 'test removing noise entirely' + sigma=2.22 just above the 2.0 gate",
+        "tests": "pairs 0-4"
+      },
+      {
+        "id": "C2",
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:4,compression_jpeg:3",
+        "source": "pair4 gm_ratio=0.385 -> est severity 4 at the boundary; motion:4 had only been tested in the confounded jpeg:4 context in R0",
+        "tests": "pairs 0 and 4"
+      },
+      {
+        "id": "C3",
+        "pipeline": "noise_gaussian_RGB:1,blur_lens:5,compression_jpeg:3",
+        "source": "glass_score>0.25 on all pairs + pair1 anisotropy=1.602 below the 1.7 threshold; lens is a deterministic kernel (no angle lottery)",
+        "tests": "pair 0"
+      },
+      {
+        "id": "C4",
+        "pipeline": "noise_gaussian_RGB:1,blur_motion:5,compression_jpeg:4",
+        "source": "compression severity boundary: pair1 bb diff 12% at jpeg:3",
+        "tests": "pair 1"
+      },
+      {
+        "id": "C5-order-probe",
+        "pipeline": "blur_motion:5,compression_jpeg:3,noise_gaussian_RGB:1",
+        "source": "SKILL physical order constraint + sigma-check sensitivity probe",
+        "tests": "pair 0",
+        "role": "control probe, not a candidate"
+      }
+    ],
+    "validation": {
+      "mode": "SIGNAL (noise present; PSNR invalid due to noise seed and random motion-blur angle)",
+      "control_fresh_draws": {
+        "pair0": "WEAK 3/5",
+        "pair1": "WEAK 3/5",
+        "pair2": "WEAK 3/5",
+        "pair3": "PARTIAL 4/5",
+        "pair4": "WEAK 1/5"
+      },
+      "control_r0_draws": {
+        "pair0": "WEAK 3/5",
+        "pair1": "WEAK 2/5",
+        "pair2": "WEAK 2/5",
+        "pair3": "WEAK 1/5",
+        "pair4": "MATCH 5/5"
+      },
+      "c1_no_noise": {
+        "pair0": "PARTIAL 2/3",
+        "pair1": "MATCH 3/3",
+        "pair2": "MATCH 3/3",
+        "pair3": "MATCH 3/3",
+        "pair4": "PARTIAL 2/3"
+      },
+      "normalized_comparison": "Re-normalizing fresh control draws to the no-noise 3-check set (slope, wiener, block_boundary): pair0 2/3 PARTIAL, pair1 2/3 PARTIAL, pair2 2/3 PARTIAL, pair3 3/3 MATCH, pair4 0/3 MISMATCH -> control 4/5 PARTIAL+ vs C1 5/5 PARTIAL+; combined control 6/10 vs C1 5/5 (Fisher exact p~0.16). Not a significant or attributable improvement; C1's surface gain is the omitted FWHM check plus angle lottery.",
+      "c2_motion4": {
+        "pair0": "WEAK 2/5 (slope diff 0.090, wiener 0.193)",
+        "pair4": "WEAK 3/5 (slope/sigma/bb match; wiener 0.485, FWHM 4.0)"
+      },
+      "c3_lens5": {
+        "pair0": "WEAK 2/5 (slope diff 0.090, wiener 0.392)"
+      },
+      "c4_jpeg4": {
+        "pair1": "WEAK 2/5 (bb diff 29% vs 12% at jpeg:3 on the same pair)"
+      },
+      "c5_order_probe": {
+        "pair0": "WEAK 2/5 (sigma diff 6054%, bb diff 54%)"
+      },
+      "candidates_tested": 5,
+      "candidate_test_runs": 15
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 1,
+          "verdict": "UNCERTAIN"
+        },
+        {
+          "function": "blur_motion",
+          "severity": 5,
+          "verdict": "LIKELY"
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 3,
+          "verdict": "LIKELY"
+        }
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "rationale": "No candidate passes a valid improvement test. The deterministic core beats every alternative (jpeg:4 bb diff 29-39%; motion:4 mixed with a slope failure; lens:5 slope diff 0.090 + wiener 0.392), and no global step is supported (pair1 saturation is a 1/5 content artifact). The noise step remains UNCERTAIN in type but is not contradicted: gaussian_RGB:1 reproduces the sigma signal on 10/10 paired observations, YCrCb is ruled out by rgb_ratio (expected ~2.54 vs measured 1.065), and post-blur noise is ruled out by the 6054% sigma mismatch. The no-noise ablation's PARTIAL/MATCH sweep is a check-set artifact (FWHM check omitted) rather than a real gain, so R0's pipeline is retained unchanged.",
+      "limitations": "Per-call random motion angle in x_distortion blur_motion makes residual-structure checks (Wiener kernel, FWHM) draw-dependent; single-draw comparisons therefore cannot fully separate candidates. Only integer severities exist. Without GT we cannot arbitrate C0 vs C1 by PSNR; the R1 decision relies on signal symmetry and the controlled same-pair normalization."
+    }
+  }
+}

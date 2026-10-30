@@ -1,0 +1,52 @@
+{
+  "challenge_id": "blind_0005_rep1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_impulse", 5]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_impulse",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "rejected_candidates": [
+    {
+      "pipeline": "noise_impulse:4",
+      "reason": "amount=0.07: pair0 仿真变更元素 0.0638 vs target 0.0911; CI 边际 impulse_pct_zero/255 diff=+0.723pp/+1.443pp (22% 相对偏差), 显著劣于 sev5 (-0.007pp/+0.010pp)"
+    },
+    {
+      "pipeline": "noise_impulse:3",
+      "reason": "amount=0.05 (run_full_analysis est_sev=3): 仿真变更元素 0.0455 vs target 0.0911; CI 边际 zero/255 diff=+1.191pp/+2.421pp (38%)"
+    },
+    {
+      "pipeline": "compression_jpeg:1,noise_impulse:5",
+      "reason": "JPEG 前置: 仿真 87% 元素变化且 83% 变更值非 0/255 (与 target other=0.00000 矛盾); verify_signals PARTIAL + sigma 67% 失配"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:5",
+      "reason": "gaussian 改变全部像素 (仿真 changed=0.9041) 且 73% 变更值非 0/255; verify_signals WEAK (sigma 1147% 失配)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (§B 边际统计 + verify_signals; 噪声步骤按 SKILL 永不 LIKELY)",
+    "support_validation": "noise_impulse:5 的 verify_signals 在 5/5 support pair MATCH (noise:sigma + noise:clean_residual); 更强的内容无关 §B 统计: 仿真 vs target 的变更元素比例 0.0910/0.1000/0.0998/0.0994/0.0998 vs 0.0911/0.1000/0.0999/0.0993/0.1001, zero 边际差 -0.007~+0.015pp, 255 边际差 +0.001~+0.019pp, 变更值 100% 为精确 0/255, salt/pepper=0.496~0.504",
+    "rationale": "R1 复核确认 R0 管线 noise_impulse:5 为最优候选，未发现更匹配的替代。新证据: (1) 5 对 support 变更元素 100% 为精确 0/255 (other=0.00000), salt/pepper≈50/50 → skimage s&p 对称; 精确 amount 反解 0.0999-0.1002 → severity 5。(2) run_full_analysis Step2 estimated_severity=3 是阈值边界误判 (估计器 zero_ratio 分档上限 3)，被精确反解纠正为 5。(3) 全部全局判决为 FP: mean_shift 在 5 对均精确等于 0.1*(127.5-μ_clean)±0.03, impulse:5 仿真将 chroma_ratio (2.17-5.09) 与 variance_ratio (1.19-1.61) 复现至 3 位小数。(4) 无第二退化: JPEG-after 被 other=0 构造性排除, JPEG-before 仿真 changed=87%/other=83% 排除; blur 被 91% 精确不变像素排除; block_boundary=0.997-1.007<1.05。由于 R0 控制候选在所有指标上已是 MATCH/最优且无候选带来改善, 按协议 NO_CHANGE。",
+    "r0_support_psnr": 42.77,
+    "r0_support_psnr_note": "R0 specialist 在 support 上 42.77 dB, 与该退化可被脉冲去除模型高效修复一致 (非 R1 判据)"
+  },
+  "signal_sources": [
+    "support 5 对变更元素比例 0.0911-0.1001 + 变更值 100% 精确 0/255 (other=0.00000) + salt/pepper 0.496-0.504 → noise_impulse (skimage random_noise s&p, salt_vs_pepper=0.5)",
+    "amount 反解方程 (逐 pair): 0.0999-0.1002, severity 网格 amount=[0.01,0.03,0.05,0.07,0.10] → severity=5",
+    "run_full_analysis Step2 estimated_severity=3 为阈值边界误判: zero_ratio 分档 (>0.98→1, >0.94→2, else→3) 上限 3, 与精确反解 0.10 矛盾 → 采纳反解",
+    "全局 FP 定量归因: mean_shift = 0.1*(127.5-μ_clean) 在 5 对精确命中 (pair0 +7.95/+7.94, pair3 +6.18/+6.19, pair4 -1.49/-1.49); impulse:5 仿真复现 chroma_ratio 与 variance_ratio 至 3 位小数 → BRIGHTNESS/CONTRAST/SATURATION 均为 impulse 截断几何的 FP",
+    "block_boundary 0.997-1.007 (<1.05, 0%FP 阈值); jpeg:1-before-impulse 仿真 changed=87%, 变更值 83% 非 0/255 → compression 排除; JPEG-after 被 other=0 构造性排除",
+    "spectral_slope_ratio 0.968-0.990 (<1.08) + 91% 像素精确不变 → blur 排除",
+    "verify_signals MATCH 5/5 提供残差无结构证据, 但该工具对 impulse 判别力弱 (σ_t≈0 使相对差退化), §B 边际统计为主判据"
+  ]
+}
