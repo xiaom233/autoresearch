@@ -197,6 +197,15 @@ R1 CHANGE 明细（9 条；按 support PSNR 判定，未用 test）：
 
 产物：`rebuttal_runs/E6A_full24/fixed_lq_sensitivity.json/.md`、`test_metrics_fixed_{best,last,final}_gpu*.jsonl`、`rebuttal_runs/scripts/eval_e6a_full24_fixed_lq.py`、`aggregate_e6a_full24_fixed_lq.py`。
 
+### 6.7 泄露与口径审计（2026-10-30）
+
+详见 `rebuttal_runs/E6A_full24/AUDIT.md`。要点：
+
+- **support/test 重叠**：E6-A full24 的 support 全部复制自 exp41，像素 hash 全部匹配 **DIV2K_valid_HR（test）**（74/100 唯一 test 图）；E1/AutoIR 使用同一 support，属共用协议。排除本场景 5 张 support 后：R0 26.817→**26.819**，final 27.654→**27.659**（≤0.005 dB），重叠不解释高 PSNR。
+- **Agent 禁读审计**：E6-B 98 个 Agent 0 次违规；E6-A 100 个 Agent 中仅 `blind_0001_rep2` 用 grep 读了 `rebuttal_plan/`，看到其他场景（0006/0011/0013/0017/0024）的 GT/失败提示，**未看到 0001 自身 GT**；剔除该 run 后 macro 约 −0.06 dB。
+- **与 rule/LLM 的差异**：E6-A vs AutoIR mean +1.85 / **median −0.08 dB**；vs rule mean +2.54 / median +0.65 dB。增益集中在规则/AutoIR 灾难性 DC 错误场景（0008 +19.4、0010 +9.4、0015 +7.8、0024 +7.5、0009 +5.7、0021 +5.3 等）；E6-A rep2 GT 整链 15/24 vs 规则 5/24。26.8 是 DC 准确率与重尾，不是均匀抬高。
+- **E6-B 三组对比 confound**：exp41 support 来自 DIV2K_valid，setA/setB 来自 DIV2K_train；三组表将同时报告 full test 与排除 exp41 5 张 support 的 common-test sensitivity。
+
 ## 7. 产物
 
 ```text

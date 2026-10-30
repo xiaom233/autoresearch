@@ -26,7 +26,10 @@
 | E1 R1 | ✅ 19/19 完成；无 NaN；R1 support 有明显提升（如 0004 +9.6、0005 +8.0） | `E1/stage.log` |
 | E1 R2 | ✅ 9/9 完成（GPU0 两个任务）；R2 无 NaN | `E1/stage.log` |
 | E1 修正 | ✅ 7/7 完成：0002 R0/R1、0009/0012/0013/0021 R0、0018 回退；无 NaN | `E1_fix/logs/`、`E1/logs/blind_0018_R1.log` |
-| E1 最终 | 规则 24.272/22.132 vs AutoIR 24.968/22.956；Δ rule−AutoIR −0.697/−0.825 dB，CI 跨 0，规则胜 8/24 | `E1/e1_final_summary.json` |
+| E1 最终（旧 AutoIR） | 规则 24.272/22.132 vs **旧 AutoIR（A0/exp41 六月链）** 24.968/22.956；Δ rule−旧AutoIR −0.697/−0.825 dB，CI 跨 0，规则胜 8/24 | `E1/e1_final_summary.json` |
+| **E1 新 LLM（2026-10-30）** | 用 **E6-A full24 final checkpoints**（新 Skill agents，R0/R1）替换 LLM 侧：DIV2K **28.030 / 27.277 / 27.654**（rep1/rep2/mean），LSDIR **25.554 / 24.928 / 25.241**；vs rule **+3.758 [+1.624,+6.257] / +3.006 [+1.274,+5.134] / +3.382 [+1.520,+5.619]**（18/24 胜），LSDIR +3.422 / +2.796 / +3.109（19/24） | `E1/e1_newllm_summary.json`、`e1_newllm_summary.md` |
+| E1 结论 | **旧 A0/exp41 链**下 LLM 无统计显著独立优势（CI 跨 0）；**新 LLM（E6-A full24 final）** 显著优于规则（DIV2K +3.382，18/24；LSDIR +3.109，19/24），但新 LLM 用固定 Direct、规则用规则架构+R0–R2，不是单一架构变量；场景互补仍然存在（0005 规则 +23.0；0008 AutoIR +20.5 等旧链现象需按版本区分） | T2/逐条回应 |
+| PSNR 口径 | 全部对比使用 **RGB joint-MSE PSNR**（`psnr_rgb`，非 YCbCr、非逐通道平均）；E1/E6-A/E6-B/SIDD 逐图字段均无 `psnr_y`；`train.py` 的 checkpoint 选择与 `val_psnr_db` 也用 `psnr_rgb` | `E1/PSNR_PROTOCOL.md` |
 | E1 结论 | LLM 无统计显著独立优势；场景互补（0005 规则 +23.0；0008 AutoIR +20.5） | T2/逐条回应 |
 | E1 成本 | 训练 59 次 / 83.99 GPU-h；support+test 评估 ~2.6 GPU-h | `E1/manifest.jsonl` |
 | E1 0018 NaN 回退 | ✅ 完成；support 17.10，最终选中 R1 | `E1/logs/blind_0018_R1.log` |
@@ -93,6 +96,8 @@
 8. **API model ID/版本/费用 UNKNOWN**；文档中的 DeepSeek/Qwen 只是声明。
 9. **E1-oneshot 的 NaN 失败必须如实报告**：E1-oneshot（无反思规则）为 **23/24 有效、1/24 NaN**（`blind_0020` 的 GCM R0 训练 NaN）。主表是 23 个有效场景 macro，不做 0 dB 插补/静默删除；E1-full 通过 R1 fallback 恢复到 15.98，AutoIR-oneshot 15.78、AutoIR-full 18.09。Swin+SG 稳定重训只作可选 sensitivity（fixed-LQ 0020 = 14.05，仍低于 AutoIR-oneshot 15.78 / E1-full 15.98），不冒充原始 one-shot。
 10. **RS 规则来源与 24 场景独立性**：核心映射 contrast→GCM / motion→OCAB 来自 exp10/38/39 的 GT-known 合成实验，不使用 24 个盲场景；但盲场景门控/回退规则来自 exp37 的 24 挑战消融（与 exp40/41 的 24 个 `degraded.png`/GT **24/24 相同**）和 exp40 的 4 个案例，因此 **24 个场景全部参与过 RS 规则开发**，不是 RS 泛化的独立测试集。GT 校准侧：校准脚本早于 24 个 GT 生成，GT 由随机生成器产生，无按性能挑选记录；但 **3/24 GT 链是校准配置集成员**（0006/0011/0013）、10/100 DIV2K test 图为校准图、3840 manifest 缺失，不能声称严格独立。723+ 训练去重清单缺失（raw 日志 1,137 条；组数相加 724）。详见 `rebuttal_plan/RS_rule_provenance_audit.md`、`03` 2026-10-28 补充。
+
+12. **E6-A full24 泄露/口径审计（2026-10-30）**：E6-A support 全部来自 exp41（DIV2K_valid test；74/100 唯一图），E1/AutoIR 同源；排除本场景 5 张 support 后 R0 26.817→26.819、final 27.654→27.659，重叠不抬高 test。E6-B 98 个 Agent 0 次禁读；E6-A 100 个中仅 blind_0001_rep2 读到其他场景 GT 提示（非自身 GT），剔除影响约 −0.06 dB。E6-A 高于 rule 的 mean +2.54 但 median +0.65，增益集中在规则 DC 灾难场景；rep2 GT 整链 15/24 vs 规则 5/24。详见 `E6A_full24/AUDIT.md`。
 
 11. **端到端成本与 timing（Weakness 4）**：5 GPU-h/场景只是 R0–R2 训练预算的近似；实测训练 4.248 GPU-h/场景（71 次/101.95 GPU-h），support eval ~9.4 min。现有 exp41 日志缺 R1/R2 反思时刻、DC 候选评估计时、策略选择时间、API token/费用、最终 test start/end；只能恢复训练与部分评测，其余标 UNKNOWN，不回溯编造。离线开发（723+ 规则/校准/DFPIR 预训练）必须单列，不能摊入 5h。E7 起强制 `timing.json`（DC/RS/CLR 每轮），模板 `E7/timing_schema.json`、wrapper `scripts/timing_wrapper.sh`；规范见 `13_end_to_end_cost_and_timing.md`。
 
