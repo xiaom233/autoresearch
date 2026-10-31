@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": true,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "full_analysis step4: variance_ratio=0.1184 (≠1.0, Tier A), contrast_from_variance=true, contrast_pure=true, contrast_spread_ratio=0.3757 → contrast_weaken 存在性置信高 → 启用 ColorPre (§七: variance_ratio≠1.0 Tier A → ColorPre, 预期 +0.62~；L2 contrast+noise 实测 +0.81)",
+    "reflection R1/R8 方向校准: contrast sev1 vr_sim≈0.285 → sev5 ≈0.198 (R1 9% 差, R8 19% 差), sev5 最强 → 仅严重度幅度不确定 (目标 0.118 偏低 9-22%), 类型可信",
+    "step1: block_boundary=0.9899 < 1.1 (Tier S 无 JPEG); unique_G=105≈256×0.41 可由 contrast α≈0.34 解释; R9/R10/R13 quantization 实测无改善(MISMATCH/无效果) → 无结构化 JPEG/quant 证据",
+    "step3: residual_anisotropy=1.7602>1.7, 但 motion wiener corr=0.268 被直接排除 (gaussian:3 为 0.808-0.849); 且管线含 contrast, OCAB 在 contrast 场景不如 Swin (exp9 L2: Swin 28.70 vs OCAB 18.32) → 不启用 OCAB, attention=swin",
+    "无 motion/JPEG 结构化局部退化 → FiLM-GCM 门控 (variance_ratio≠1.0 + 结构化) 不满足 → use_gcm=false",
+    "step2: sigma=2.22, noise→blur 顺序下类型不可诊断 (SKILL 54.7%), 仅 noise:sigma 5/5 pair 匹配 → Tier B/C, 不加组件",
+    "管线含 contrast_weaken → Direct (RandomCurric 不推荐); SimpleGate 默认常开 (exp39 8/9 安全, -32K)"
+  ],
+  "rationale": "三步骤均标 UNCERTAIN, 但 contrast 的存在性有 Tier A 硬信号支撑: variance_ratio=0.1184 + contrast_pure=true, 且 sev 方向经合成校准确认 (sev1→5 单调变强, sev5 最强), 不确定的只是幅度 (vr_sim≈0.20 vs 目标 0.118, 差 9-22%)。按 finetune_strategy.md §七 信号门控规则, UNCERTAIN 不阻挡 Tier A 触发, 故启用 ColorPre (低风险 +0.8K, contrast 场景预期 +0.62~, L2 contrast+noise +0.81), 且 contrast+noise 正是 ColorPre 的强项组合。FiLM-GCM 需要 contrast+结构化(motion/jpeg): motion 被 wiener 核相关 0.268 排除, JPEG 块信号 0.9899<1.1 且 quantization 实测无效, 无结构化局部 → 不启用。OCAB 虽有 anisotropy 1.76 但对应运动退化已被排除, 且 contrast 场景 OCAB 显著劣于 Swin → 保持 Swin(dim=64, 窗口 8)。噪声与模糊均仅 Tier B/C 信号, 不加组件。训练策略选 Direct (含 contrast_weaken 时保守), lr=5e-4 避免 GCM/发散风险, EPOCH_BUDGET=2 保持与基线公平, batch=16。"
+}

@@ -1,0 +1,31 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "noise_speckle sev1 (UNCERTAIN, Tier 2): noise_prior_sigma=4.45, intensity_var_corr=0.8975, intensity_scaled_var_corr=0.3941 (multiplicative), cross_channel_corr=0.0008 (YCrCb excluded), zero_ratio=0.2591 (not impulse); verify_signals MATCH on 5/5 pairs (p0 + p1-p4 support) -> noise-only pipeline, per SKILL noise steps never LIKELY",
+    "No contrast: variance_ratio=1.0438 ~= 1.0 fully explained by added noise (contrast_from_variance=false), mean_shift=-0.6/255; Tier A variance_ratio signal for ColorPre/FiLM-GCM NOT triggered",
+    "No blur: spectral_slope_ratio=0.9983 (target -1.0383 vs clean -1.0401), FFT anisotropy=0; gm_ratio=2.2978 matches noise-only simulation exactly (blur_gaussian:1 sim would collapse gm to 0.52) -> anisotropy>1.7 OCAB signal NOT triggered",
+    "No compression: block_boundary=1.0027 < 1.1 across all 5 pairs, unique_G=256, dct_zero_ratio unchanged; jpeg:1 control MISMATCH -> no JPEG component",
+    "Single-step local noise (Step 1: Direct or RandomCurric both valid; no gradient interference with 1 step) -> Direct"
+  ],
+  "rationale": "Single-step speckle noise severity 1, all structural/global signals negative (no compression/blur/contrast). Per finetune_strategy.md §七 no Tier S/A component signal is present: variance_ratio≈1.0 is noise-explained so ColorPre/FiLM-GCM are not triggered; anisotropy=0 rules out OCAB; block_boundary<1.1 rules out JPEG specialization. Noise steps are Tier B/C -> pure Swin baseline. SimpleGate stays on as default (-32K params, 8/9 safe; the only negative case S5 motion×3 is inapplicable to single-step noise). DualBranch recommended by full_analysis is overridden per exp37 (0/24 wins in blind scenarios) and finetune_strategy.md §七. Direct from scratch with LR=5e-4, EPOCH_BUDGET=2, batch 16 (exp37/38: True Ft ≈ Direct in 2-epoch budget)."
+}

@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "block_boundary=7.073 (Tier S, 0% FP) + dct_zero_ratio=0.926 → JPEG 确认 (sev4, jpeg3 block_boundary 偏差 22%, jpeg5 CI 降至 5/10)",
+    "anisotropy_ratio=1.249 < 1.7 → motion 排除, 不启用 OCAB (finetune_strategy §七: anisotropy>1.7 才触发)",
+    "variance_ratio=0.698 但 contrast_from_variance=false, mean_shift=2.1 原始判定 false, clipped_fraction=0; 且 contrast_weaken_scale:2 测试 21.81dB (CI 3/10)、saturate_weaken_YCrCb:2 22.57dB (CI 6/10) 均恶化 → NO_GLOBAL, 不启用 FiLM-GCM/ColorPre (需 contrast Tier A)",
+    "noise_prior sigma=0.37 (peeled 0.74) < 2 → 无 noise 步骤 (extreme_pct 58% 为 blur/JPEG 已知假阳性)",
+    "blur: gm_ratio=0.407, spectral_slope_ratio=1.265, glass_score=1.415, 但 glass vs gaussian PSNR 24.62 vs 24.58 打平 → blur 步骤 UNCERTAIN, 按 §七 Tier C 不加组件",
+    "两步均 UNCERTAIN → 纯 Swin + SimpleGate(常开, exp39 8/9 安全) + Direct"
+  ],
+  "rationale": "确定性两步 blur+JPEG: JPEG 由 0%FP 的 block_boundary=7.073 确认; blur 存在但 glass/gaussian 子类型打平致 verdict UNCERTAIN; 全局与噪声均被信号及 PSNR 测试排除, 故无 Tier A contrast 信号 (FiLM-GCM/ColorPre 不触发), anisotropy<1.7 无 motion (OCAB 不触发)。按 finetune_strategy §七 信号门控, 采用默认纯 Swin + SimpleGate + Direct, lr=5e-4, 2 epoch, batch=16。"
+}

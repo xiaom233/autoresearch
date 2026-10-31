@@ -1,0 +1,40 @@
+{
+  "challenge_id": "blind_0024_setB",
+  "pipeline": [
+    {"function": "noise_impulse", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "saturate_strengthen_HSV", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "saturate_strengthen_HSV", "severity": 2}],
+      "psnr": 24.89,
+      "ci": "5/10",
+      "stats": {"chroma_ratio": 3.06, "variance_ratio": 0.683, "mean_shift": -23.9},
+      "function_family": "global_saturation",
+      "note": "pair0 PSNR 最高; 但纯确定性管线不能解释 24.89dB 的 PSNR 上限与颗粒"
+    },
+    {
+      "pipeline": [{"function": "noise_impulse", "severity": 2}, {"function": "saturate_strengthen_HSV", "severity": 2}],
+      "psnr": 17.63,
+      "ci": "4/10",
+      "stats": {"chroma_ratio": 3.88, "variance_ratio": 0.877, "mean_shift": -20.6, "zero_crossing_diff": 0.099},
+      "function_family": "noise + global_saturation",
+      "note": "信号侧 zero_crossing 与 unique 色数匹配最好; PSNR 因噪声 seed 失配无意义"
+    },
+    {
+      "pipeline": [{"function": "contrast_weaken_scale", "severity": 1}, {"function": "saturate_strengthen_HSV", "severity": 2}],
+      "psnr": 24.29,
+      "ci": "7/10",
+      "stats": {"chroma_ratio": 2.605, "variance_ratio": 0.446, "mean_shift": -25.2},
+      "function_family": "global_contrast + global_saturation",
+      "note": "pair0 CI 最高 (7/10, impulse/clip 指标匹配); 但 mean/variance 偏差更大"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "5/10 (最佳 7/10: contrast_weaken_scale:1,saturate_strengthen_HSV:2)",
+    "mode": "SIGNAL (noise_prior sigma 0.74-2.10; PSNR 对含噪先验不可靠)",
+    "rationale": "饱和增强为核心确定性退化: pair0 saturation_chroma_ratio=3.11 与 saturate_strengthen_HSV:2 模拟(3.06)精确吻合, YCrCb 族被否(PSNR 12.5-15.0 且 unique 色数崩), 5 对 support 全部 chroma>1.4 / mean 强负 / block_boundary≈1.0(无 JPEG). 纯确定性组合 PSNR 封顶 24.89dB(单函数确定性应为∞) 且视觉存在彩色细颗粒、谱斜率更平(0.783 vs 0.914)、zero-crossing +0.17 → 判定存在稀疏彩色脉冲噪声(skimage s&p 逐通道独立产生彩色点; 鲁棒 wavelet sigma 保持 0.74). 4 对 support 复核均 WEAK 且模拟过噪(sigma 差 600-1150%), 故噪声严重度取最低 sev1 (外推). 饱和度 sev2-5 数值不可分辨(24.89/24.84/24.80), 取 sev2. 详细推理与全量 PSNR 排名见 reflection.json."
+  }
+}

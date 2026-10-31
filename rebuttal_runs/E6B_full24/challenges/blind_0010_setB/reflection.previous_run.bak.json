@@ -1,0 +1,523 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "MILD_COMPRESSION_POSSIBLE (block_boundary=0.987<1.1, unique_G=242>200, dct_zero=0.735) → JPEG likely absent",
+      "blur": "STRONG blur (gm_ratio=0.301, spectral_slope_ratio=1.105); anisotropy=1.889>1.7 → motion rule; glass_score=0.427>0.25 → glass rule (conflict)",
+      "noise": "noise_prior sigma=1.11 (<2) → NO_NOISE per Step 0.5; spatial_corr=0.958 dominated by blur structure",
+      "global": "brightness mean_shift=-49.0 (darken), saturated_chroma_ratio=0.483 (weaken), variance_ratio=0.484; clipped_fraction=0.577"
+    },
+    "mode": "PSNR (sigma=1.11)"
+  },
+  "qwen_gate": {
+    "triggered": false,
+    "reason": "sigma=1.11 not in boundary (2<sigma<10); Qwen/API unavailable per task constraints"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,saturate_weaken_HSV:5",
+        "thinking": "R1-global: run_full_analysis mean_shift=-49.0+chroma_ratio=0.483 -> brightness darken + saturation weaken, est sev3/sev5; test global-only baseline"
+      },
+      "test_result": {
+        "psnr_rgb": 20.95,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,saturate_weaken_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_motion:3,saturate_weaken_HSV:5",
+        "thinking": "R1-blur: residual_anisotropy=1.889>1.7 (motion rule, 94% recall 0% FP) + gm_ratio=0.301 strong blur -> motion blur sev3 with global fixed"
+      },
+      "test_result": {
+        "psnr_rgb": 20.31,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_motion:3,saturate_weaken_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:3,saturate_weaken_HSV:5",
+        "thinking": "R1-blur: glass_score=0.427>0.25 (pixel-shuffle high-freq residue) competes with motion rule -> test glass sev3 with global fixed"
+      },
+      "test_result": {
+        "psnr_rgb": 21.23,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:3,saturate_weaken_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_motion:3,saturate_weaken_HSV:3",
+        "thinking": "R2-sat-scan: visual sim too grayscale vs target -> saturate sev5 overshoot; scan sat sev3 with fixed brightness3+motion3"
+      },
+      "test_result": {
+        "psnr_rgb": 21.65,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_motion:3,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_motion:3,saturate_weaken_HSV:3",
+        "thinking": "R2-brightness-family: HSV vs RGB shift control; mean_shift=-49 may come from RGB additive shift; fixed motion3+sat3"
+      },
+      "test_result": {
+        "psnr_rgb": 18.33,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_motion:3,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_motion:4,saturate_weaken_HSV:3",
+        "thinking": "R3-blur-sev-scan: gm_ratio=0.301 very low -> strong blur, analytic est sev5; scan motion sev4 (+1) with best global"
+      },
+      "test_result": {
+        "psnr_rgb": 21.16,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_motion:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:3,saturate_weaken_HSV:3",
+        "thinking": "R2-blur-type: glass_score=0.427>0.25 cross-check under best global (sat3); compare with motion3=21.65"
+      },
+      "test_result": {
+        "psnr_rgb": 22.56,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:3,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:4,saturate_weaken_HSV:3",
+        "thinking": "R3-blur-sev-scan: glass wins type comparison (22.56 vs motion 21.65); gm_ratio=0.301 strong -> scan glass sev4"
+      },
+      "test_result": {
+        "psnr_rgb": 22.38,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:2,saturate_weaken_HSV:3",
+        "thinking": "R3-blur-sev-scan: glass3=22.56 > glass4=22.38; scan glass sev2 (-1)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.96,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:2,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:1,saturate_weaken_HSV:3",
+        "thinking": "R3-blur-sev-scan: trend favors milder blur (glass2=22.96 > glass3=22.56); scan glass sev1 (-1)"
+      },
+      "test_result": {
+        "psnr_rgb": 23.03,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:1,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_gaussian:2,saturate_weaken_HSV:3",
+        "thinking": "R2-blur-family: required gaussian control (MTF known indistinguishable from lens); gm_ratio drop may be from darkening; test gaussian sev2"
+      },
+      "test_result": {
+        "psnr_rgb": 23.32,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_gaussian:2,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_lens:2,saturate_weaken_HSV:3",
+        "thinking": "R2-blur-family: lens control required by protocol (radial_ratio content-dependent); gaussian2=23.32 baseline"
+      },
+      "test_result": {
+        "psnr_rgb": 23.28,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3,blur_lens:2,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:3",
+        "thinking": "R3-global-sev-scan: brightness est sev3 from mean_shift -49; scan bri sev4 (+1) with gaussian2+sat3"
+      },
+      "test_result": {
+        "psnr_rgb": 25.66,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:5,blur_gaussian:2,saturate_weaken_HSV:3",
+        "thinking": "R3-global-sev-scan: bri4=25.66 (jump +2.3 over bri3) -> darkening underestimated; scan bri sev5 (+1)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.65,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:5,blur_gaussian:2,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:4",
+        "thinking": "R3-global-sev-scan: bri4 fixed (25.66); test sat sev4 (+1) since sat5 too gray visually, sat3 baseline"
+      },
+      "test_result": {
+        "psnr_rgb": 25.36,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:2",
+        "thinking": "R3-global-sev-scan: sat4=25.36 < sat3=25.66; scan sat sev2 (-1)"
+      },
+      "test_result": {
+        "psnr_rgb": 25.78,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:1",
+        "thinking": "R3-global-sev-scan: sat2=25.78 best, trend favors weaker saturation; scan sat sev1 (-1) lower bound"
+      },
+      "test_result": {
+        "psnr_rgb": 25.81,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_motion:2,saturate_weaken_HSV:1",
+        "thinking": "R4-blur-DT: anisotropy=1.889>1.7 -> motion per decision tree; retest motion at sev2 with corrected global (bri4,sat1), gaussian2 baseline=25.81"
+      },
+      "test_result": {
+        "psnr_rgb": 23.86,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:4,blur_motion:2,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:3,blur_gaussian:2,saturate_weaken_HSV:1",
+        "thinking": "R4-global-family: target unique_G=242 close to clean(256) but shift sims lose ~100 levels -> gamma darken (smooth, no clipping) may explain mean_shift -49 + variance_ratio 0.484; replacing additive shift"
+      },
+      "test_result": {
+        "psnr_rgb": 21.89,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:3,blur_gaussian:2,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:4,blur_gaussian:2,saturate_weaken_HSV:1",
+        "thinking": "R4-global-sev-scan: gamma3 preserves target unique levels (diff~2) but PSNR 21.89 low; shift trend favored darker (sev4>sev3) -> scan gamma sev4"
+      },
+      "test_result": {
+        "psnr_rgb": 26.11,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:4,blur_gaussian:2,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:2,saturate_weaken_HSV:1",
+        "thinking": "R4-global-sev-scan: gamma4=26.11 best; visual sim slightly brighter than target (mean_shift -49) -> scan gamma sev5 upper bound"
+      },
+      "test_result": {
+        "psnr_rgb": 32.9,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:2,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:2,saturate_weaken_HSV:1",
+      "psnr_rgb": 32.9,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:4,blur_gaussian:2,saturate_weaken_HSV:1",
+      "psnr_rgb": 26.11,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:1",
+      "psnr_rgb": 25.81,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:2",
+      "psnr_rgb": 25.78,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:3",
+      "psnr_rgb": 25.66,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:4,blur_gaussian:2,saturate_weaken_HSV:4",
+      "psnr_rgb": 25.36,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:4,blur_motion:2,saturate_weaken_HSV:1",
+      "psnr_rgb": 23.86,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_gaussian:2,saturate_weaken_HSV:3",
+      "psnr_rgb": 23.32,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_lens:2,saturate_weaken_HSV:3",
+      "psnr_rgb": 23.28,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:1,saturate_weaken_HSV:3",
+      "psnr_rgb": 23.03,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:2,saturate_weaken_HSV:3",
+      "psnr_rgb": 22.96,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:5,blur_gaussian:2,saturate_weaken_HSV:3",
+      "psnr_rgb": 22.65,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:3,saturate_weaken_HSV:3",
+      "psnr_rgb": 22.56,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 22.38,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:3,blur_gaussian:2,saturate_weaken_HSV:1",
+      "psnr_rgb": 21.89,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_motion:3,saturate_weaken_HSV:3",
+      "psnr_rgb": 21.65,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_glass:3,saturate_weaken_HSV:5",
+      "psnr_rgb": 21.23,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_motion:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 21.16,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,saturate_weaken_HSV:5",
+      "psnr_rgb": 20.95,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3,blur_motion:3,saturate_weaken_HSV:5",
+      "psnr_rgb": 20.31,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_motion:3,saturate_weaken_HSV:3",
+      "psnr_rgb": 18.33,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    }
+  ]
+}

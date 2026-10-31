@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted pipeline = 单步 noise_poisson:5（predicted_params.json），per-step verdict=UNCERTAIN（SKILL 规则：噪声种子失配，MATCH 也不能 LIKELY）；无 deterministic 步骤需剥离",
+    "噪声证据：noise_prior_sigma=17.79，intensity_var_corr=0.7955，intensity_scaled_var_corr=-0.7402，spatial_corr=0.0137，cross_channel_corr=0.0149；5/5 support 对 verify_signals=MATCH（sigma 17.79/19.15/10.5/19.52/12.73 逐位一致）→ 纯加性/泊松噪声，无空间结构",
+    "无 blur：spectral_slope_ratio=0.9928（p0），p1-p4 为 0.9734/0.9881/0.9779/0.9774，均低于阈值 1.08；FFT anisotropy=0.00 → motion 不成立 → OCAB 不触发（需 anisotropy_ratio>1.7）",
+    "无 JPEG：block_boundary=1.0031（p0），p1-p4 为 1.0008/0.9944/0.9913/0.9979，均 < 1.1（Tier S 0%FP 阈值）；unique_G=16 由 poisson:5 输出量化到 k/15（k=0..15）解释，非 compression",
+    "无 contrast Tier A 步骤：variance_ratio=1.1964（p0），但 contrast_from_variance=false、contrast_detected_raw=false，p1-p4 全部 NO_GLOBAL（p4 saturation_strengthen 属 Tier C，且 saturation_from_noise 假阳性检查存在）；variance_ratio 由 poisson 噪声+14.77% clipping 解释 → ColorPre（仅 contrast Tier A 启用）与 FiLM-GCM（需 contrast+结构化 motion/jpeg 的 Tier A variance_ratio，本挑战无结构化局部）均不触发",
+    "SimpleGate 默认常开：exp39 -32K 参数，8/9 退化安全，唯一负例为 S5 三退化 motion（本挑战无 motion）"
+  ],
+  "rationale": "单步纯噪声（noise_poisson:5），verdict=UNCERTAIN，且全部 Tier S/A 组件门控信号均为阴性：anisotropy=0（OCAB 不触发）、block_boundary<1.1（无 JPEG）、contrast_from_variance=false 且无结构化局部（ColorPre/FiLM-GCM 不触发）。按 finetune_strategy.md §七 Tier B/C 兜底与 §五「noise 不关心注意力类型」，选纯 Swin + SimpleGate + Direct 从零训练；DualBranch/CSN/SCA/FPro 在盲识别场景无依据（exp37 DualBranch 0/24 胜），不启用。True Ft 与 Direct 在 1.5h/2-epoch 预算下无差异（exp37/38），直接用 Direct。lr=5e-4、EPOCH=2、BATCH=16 与基线公平对齐（CLAUDE.md 规则 9）。"
+}

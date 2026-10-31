@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": true,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "contrast_strengthen_stretch sev5: variance_ratio=2.3402 (Tier A, 落在 contrast_strengthen 校准区间 1.84-2.74), contrast_detected_raw=true; 反射中 stretch:5 相对 jpeg-only +7.4dB, 为全候选最大增益来源",
+    "compression_jpeg sev5 LIKELY: block_boundary=1.7589 (>1.1, Tier S 0%FP), 5 对 support 复现误差 0-3% → 存在结构化局部退化, 与 contrast Tier A 共同满足 FiLM-GCM 门控",
+    "brightness_brighten_shfit_RGB sev1 UNCERTAIN: mean_shift=+16.4 (加性 shift, 非 HSV/gamma; RGB-shift 26.80 vs HSV-shift 23.92 vs gamma 20.08) → 全局加性变换, 无专用组件需求",
+    "noise ruled out: raw sigma=0.74, peeled sigma=1.73 (均<2); extreme_pct=88.7 为 JPEG/contrast 结构化残差已知假阳性",
+    "no motion: gm_ratio=1.4479 被噪声/结构污染, spectral_slope_ratio=0.9333 (<1.08), FFT_anisotropy=0 → anisotropy 未>1.7, 不启用 OCAB",
+    "整体 PSNR 26.8dB (support 25.94-27.63), CI 10/10; 三 step 全确定性, 因 <30dB 记 UNCERTAIN"
+  ],
+  "rationale": "管线含 contrast_strengthen_stretch → 按 finetune_strategy.md §六 Step 1 选 Direct(而非 RandomCurric); contrast 全局退化 → Swin (MDTA/OCAB 在 contrast 上崩溃), window=8。FiLM-GCM 触发: contrast 步骤 Tier A variance_ratio=2.3402 + JPEG 结构化 (block_boundary=1.7589, Tier S) 同时存在, 符合 §七 'variance_ratio≠1.0 + 结构化 → FiLM-GCM' (exp10 L5 +3.52, exp39 9/9 全胜), lr=5e-4 避免 NaN 风险; 本挑战 brightness 为 RGB shift 而非 HSV, exp38 已确认 FiLM 在 brightness_shift 上安全 (≈0, 无 NaN)。ColorPre 不启用 (FiLM-GCM 已覆盖同一 Tier A 信号且更强, ColorPre 跨退化泛化最差); 无 noise/blur 不需要 CSN, brightness 非 HSV 高置信不加 ColorMLP; DualBranch/SCA/FPro 按规则不使用。SimpleGate 默认常开 (-32K, exp39 8/9 安全, 本管线无 motion)。"
+}

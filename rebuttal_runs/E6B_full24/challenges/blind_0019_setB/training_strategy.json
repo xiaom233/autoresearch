@@ -1,0 +1,31 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression: block_boundary=4.3884 (Tier S, 0% FP) + dct_zero_ratio=0.9021 → JPEG sev4 confirmed; 无对应架构组件映射，仅需 Swin 基线",
+    "blur: residual_anisotropy=1.3021 < 1.7 → 排除 motion，OCAB 不启用 (anisotropy>1.7 + motion 才触发)；glass_score=1.4658、gm_ratio=0.154 → glass/lens blur 属 Tier B，Swin 即可",
+    "global: verdict=SATURATION_weaken_sev5 (saturation_chroma_ratio=0.0, contrast_from_variance=false, contrast_detected_raw=false)，非 contrast 步骤 → ColorPre (saturation 有害 -0.34) 与 FiLM-GCM (需 contrast+结构化 Tier A variance_ratio) 均不启用；variance_ratio=0.814 的下降归因于完全灰度化而非 contrast",
+    "SimpleGate: exp39 -32K 参数，8/9 退化安全 (仅 S5 motion×3 -0.86，本挑战非 motion 三退化) → 默认常开",
+    "多步管线含全局 saturation 退化，RandomCurric 在 saturation 上未验证；True Ft 与 Direct 在 1.5h/2-epoch 预算下 ≈ 持平 (exp37/38) → Direct 最安全"
+  ],
+  "rationale": "管线 blur_glass:4 + compression_jpeg:4 + saturate_weaken_HSV:5，三步骤均无 Tier S/A 组件触发条件：无 contrast (global 为 saturation)、无 motion (anisotropy 1.30<1.7)。按 finetune_strategy.md §七，Tier B/C 兜底为纯 Swin + Direct，SimpleGate 常开。盲识别 verdict 虽为 LIKELY，但 component 门控以原始信号为准，故不冒险加 ColorPre/FiLM-GCM/OCAB，采用 direct + swin(ws=8) + simple_gate，lr=5e-4, 2 epoch。"
+}

@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "noise: IMPULSE, 单一噪声步。zero_ratio=0.9001 精确等于 1-amount(0.10) (skimage s&p sev5), clipped_fraction=0.1006 独立吻合 10% 元素替换, extreme_pct=95%, cross_ch_corr=0.0032 表明逐通道独立 s&p; noise_impulse:5 在 5 对 support 上 CI 10/10 (zero_ratio 0.9000-0.9117)。按 SKILL exp37 规则噪声步 verdict=UNCERTAIN, 不触发任何架构组件。",
+    "compression: NO_COMPRESSION。block_boundary=0.9964 (< Tier S 阈值 1.1), unique_G_target=unique_G_clean=256, dct_zero_ratio=0.016 → 无 JPEG, Tier S 未触发。",
+    "blur: BLUR_UNLIKELY。spectral_slope_ratio=0.8976 << 1.08 阈值, gm_ratio=5.327 被噪声破坏; 无 anisotropy_ratio>1.7 的 motion 证据 → OCAB (需 anisotropy>1.7 + motion) 不启用。",
+    "global: variance_ratio=2.1835 / contrast_spread_ratio=2.7978 / saturation_chroma_ratio=3.251 被判定为 impulse 噪声的假阳性: 90% 像素逐位不变 (zero_ratio=0.9001) 与任何改动全图的 contrast/saturation/brightness 步互斥; 5 对 support 上 flag 不稳定 (vr 1.23-2.18, chroma 1.83-13.8, mean_shift -3.7~+8.5)。因此该 variance_ratio≠1.0 不是 Tier A contrast 信号, ColorPre 不启用; 且无结构化局部退化 (无 jpeg/motion) → FiLM-GCM 的 contrast+结构化 Tier A 条件不成立, 不启用。",
+    "无任何 Tier S/A 组件信号 → 纯 Swin + SimpleGate + Direct 兜底 (exp37/exp39: 盲识别场景组件 0/24 胜, SimpleGate -32K 参数 8/9 退化安全; 本挑战为纯噪声, 不在 SimpleGate S5 负收益场景)。",
+    "策略: 单步纯局部退化, finetune_strategy.md §六 Step 1 → Direct (多步无 contrast 才用 RandomCurric); True Ft 与 Direct 无差异, 不加载 ckpt。"
+  ],
+  "rationale": "盲识别确认为单步 noise_impulse sev5 (zero_ratio=0.9001 与 amount=0.10 精确对应, 5 对 support CI 全 10/10), verdict 按噪声规则为 UNCERTAIN但指纹一致。其余步骤信号均为阴性或噪声导致的假阳性: 无 JPEG (block_boundary=0.996, unique_G=256), 无 blur (spectral_slope_ratio=0.898), variance_ratio=2.183 由 10% 稀疏 impulse 的方差膨胀造成 (90% 像素不变, support 间不稳定), 非真实 contrast 退化。因此无 Tier S/A 信号可触发 OCAB/ColorPre/FiLM-GCM, 按 finetune_strategy.md §七 采用纯 Swin + SimpleGate (默认常开, -32K 参数, 纯噪声场景安全) + Direct 训练, lr=5e-4, EPOCH=2, batch=16, 不加任何其余组件。"
+}

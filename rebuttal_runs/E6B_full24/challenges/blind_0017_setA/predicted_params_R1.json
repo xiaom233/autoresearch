@@ -1,0 +1,79 @@
+{
+  "challenge_id": "blind_0017_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_gaussian", 3], ["contrast_weaken_scale", 1], ["compression_jpeg", 3]],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "LIKELY"
+    },
+    {
+      "function": "contrast_weaken_scale",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 3,
+      "verdict": "LIKELY"
+    }
+  ],
+  "pipeline_order_note": "NO_CHANGE: pipeline 与 R0 逐项相同 (blur → contrast → JPEG)，decision 记为 NO_CHANGE。",
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "support_psnr_pairs": {"pair0": 26.39, "pair1": 27.35, "pair2": 26.47, "pair3": 27.75, "pair4": 28.18},
+      "support_psnr_mean": 27.23,
+      "delta_vs_r0_mean_db": 1.11,
+      "function_family": "2-step (no global), JPEG q=8",
+      "note": "5/5 对均优于 R0 (per-pair Δ +1.33/+1.28/+1.01/+1.80/+0.12 dB)，但平均 +1.11 dB < +2 dB 门槛，按协议未 CHANGE。信号更自洽: unique_G 256 (target 255; R0 sim 221), gm_ratio 0.219 (target 0.217; R0 sim 0.165)。保留为训练 PSNR 仲裁的首选备选。"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "support_psnr_pairs": {"pair0": 26.21},
+      "support_psnr_mean": null,
+      "function_family": "2-step (no global), JPEG q=12",
+      "note": "pair0 26.21，低于 jpeg4 版 (26.39)；block_boundary 2.416 明显低于 target 3.100。"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 5}
+      ],
+      "support_psnr_pairs": {"pair0": 24.87},
+      "support_psnr_mean": null,
+      "function_family": "2-step (no global), JPEG q=5",
+      "note": "block_boundary 3.370 略高于 target 3.100，但像素级 PSNR 明显劣于 jpeg4 (24.87 vs 26.39)。"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "support_psnr_pairs": {"pair0": 24.76},
+      "support_psnr_mean": null,
+      "function_family": "lens blur (跨族备选)",
+      "note": "同尺度跨族对比落败于 gaussian3 (24.76 vs 26.39)，确认 gaussian 模糊族。"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "verification_mode": "PSNR (sigma=1.73 < 2, NO_NOISE)",
+    "support_psnr_r0": 21.94,
+    "best_r1_candidate": "blur_gaussian:3 + compression_jpeg:4",
+    "best_r1_support_psnr_mean": 27.23,
+    "best_r1_delta_db": 1.11,
+    "change_threshold": ">40 dB 或相对上一轮 +2 dB",
+    "threshold_met": false,
+    "rationale": "信号重释结论: R0 的 contrast_weaken_scale:1 证据不足且过度。target unique_G=255 (clean 256) 而 R0 含 contrast 仿真=221；target gm_ratio=0.2169 与无 contrast 仿真 0.2194 匹配，R0 仿真因 contrast 压梯度仅 0.1649；target variance_ratio=0.683 落在无 contrast (0.831) 与 contrast sev1 (0.475) 之间，对应等效全局缩放 s≈0.91，但 x_distortion 最温和的 contrast_weaken_scale:1 即为 c=0.75 (过强)，库内无更温和档位，无法精确复现 target 的轻度色调压缩 (vr=0.683 / mean=-2.5 / chroma=0.904 / 无高光 clip 四项同源)。JPEG: block_boundary target=3.100 介于 sev4 (2.538) 与 sev5 (3.370) 之间，像素级 PSNR 明确选 sev4。blur: gm_ratio 与 spectral_slope 双匹配 sev3，lens3 落败。最优可表达候选 (blur_gaussian:3+compression_jpeg:4) 在 5 对 support 上 5/5 优于 R0 但平均仅 +1.11 dB，未达 +2 dB 门槛，故 NO_CHANGE。"
+  }
+}

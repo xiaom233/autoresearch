@@ -1,0 +1,30 @@
+{
+  "challenge_id": "blind_0005_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_impulse", 5]],
+  "r1_pipeline": [["noise_impulse", 5]],
+  "support_psnr_r0": 41.96,
+  "candidates_tested": [
+    {"pipeline": "noise_impulse:5", "method": "signal", "pairs": [0, 1, 2, 3, 4], "result": "MATCH 5/5"},
+    {"pipeline": "noise_impulse:4", "method": "empty-pipeline peel amount fingerprint", "pairs": [0, 1, 2, 3, 4], "result": "REJECT: measured changed fraction 9.76-9.97% > sev4 amount cap 0.07"},
+    {"pipeline": "noise_gaussian_RGB:2", "method": "signal", "pairs": [0], "result": "WEAK: noise:sigma diff=183%"}
+  ],
+  "test_candidate_calls": 6,
+  "best_validation": {
+    "pipeline": "noise_impulse:5",
+    "verify_signals": "MATCH on 5/5 support pairs (noise:sigma + noise:clean_residual)",
+    "amount_fingerprint": "empty-pipeline peel zero_ratio 0.9003-0.9024 → changed 9.76-9.97% → amount≈0.10 = severity 5 (x_distortion amount 表)",
+    "signature_check_pair0": "simulated impulse:5 vs target: variance_ratio 1.3416/1.3404, chroma_ratio 2.9665/2.961, contrast_spread_ratio 1.2366/1.2334, clipped_fraction 0.1070/0.1067, mean_shift -2.6/-2.6, gm_ratio 3.221/3.2144, spectral_slope_ratio 0.9558/0.9547, block_boundary 0.9973/0.9926, impulse_zero_ratio 0.9003/0.9006"
+  },
+  "signal_sources": [
+    "impulse_zero_ratio=0.9006 (pair0, full_analysis_R1) → 9.94% channel samples changed",
+    "x_distortion/noise.py noise_impulse amount=[0.01,0.03,0.05,0.07,0.10] for sev1-5 → amount=0.10 ⇒ sev5 (step2 estimated_severity=3 为启发式误判, 已修正)",
+    "noise_prior_sigma=0.0 是 90% 精确零残差导致的 wavelet MAD 退化假象 (不是无噪声证据)",
+    "step4 SATURATION_strengthen 为假阳性: impulse 0/255 极端样本抬高 variance_ratio(1.3404)/chroma_ratio(2.961)/gm_ratio(3.2144); 模拟 impulse:5 完整复现 (见 signature_check_pair0); 且 zero_ratio=0.90 排除任何改变>1.1/255 的全局确定性步骤",
+    "block_boundary=0.9926, unique_G=256/256, dct_zero_ratio=0.0147 → 无 compression",
+    "spectral_slope_ratio=0.9547 (<1.08), FFT anisotropy=0.00, pca=0.0, gm_ratio=3.2144 方向与 blur 相反 → 无 blur",
+    "support peel zero_ratio: p0 0.9004, p1 0.9004, p2 0.9024, p3 0.9021, p4 0.9003 → amount≈0.10 逐对一致"
+  ],
+  "reason": "R1 信号重释 + 5 对 support 验证均支持 R0 的 noise_impulse:5: 强度由 seed 无关的 changed-fraction 指纹唯一确定 (amount=0.10), 全信号签名 (含被误判的 saturation) 由单步 impulse 精确复现, 跨族 gaussian 对照 WEAK。无候选优于 R0, 故 NO_CHANGE; 噪声 seed 失配规则下步骤 verdict 保持 UNCERTAIN。"
+}

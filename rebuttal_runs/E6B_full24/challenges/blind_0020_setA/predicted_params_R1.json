@@ -1,0 +1,67 @@
+{
+  "challenge_id": "blind_0020_setA",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["noise_gaussian_RGB", 1],
+    ["blur_gaussian", 3],
+    ["contrast_weaken_scale", 5]
+  ],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 3, "verdict": "LIKELY"},
+    {"function": "contrast_weaken_stretch", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": "blur_gaussian:3,contrast_weaken_stretch:4",
+      "psnr": 34.57,
+      "stats": "pair0 PSNR=34.57 (CI 7/10); spectral_slope 更接近但 overshoot_ratio 偏差 23% (gaussian ringing 不符), 次选跨族 blur 备份",
+      "function_family": "gaussian blur (cross-family backup)"
+    },
+    {
+      "pipeline": "blur_glass:3,contrast_weaken_stretch:5",
+      "psnr": 31.2,
+      "stats": "pair0 PSNR=31.20 (CI 5/10); unique_G 比目标少 25 (过量化/目视偏白), stretch severity 过强",
+      "function_family": "contrast_weaken_stretch stronger severity backup"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_glass:3,contrast_weaken_stretch:4",
+      "psnr": null,
+      "stats": "signal 模式 WEAK: noise:sigma diff=124% (模拟 sigma 远高于目标 2.22; sev1 已是最小档仍过强), 不采纳, 仅记录",
+      "function_family": "noise variant (rejected)"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (确定性候选; noise_prior sigma=2.22 但噪声经信号检验被排除)",
+    "support_psnr_r0": 13.61,
+    "support_pair_psnr_r1": {
+      "pair0": 35.25,
+      "pair1": 42.55,
+      "pair2": 33.58,
+      "pair3": 39.42,
+      "pair4": 37.31,
+      "mean": 37.42,
+      "ci_pass": ["8/10", "9/10", "8/10", "9/10", "8/10"]
+    },
+    "change_criterion": "pair1 PSNR=42.55 dB > 40 dB; pair0 相对 R0 确定性部分基线 (blur_gaussian:3+contrast_weaken_scale:5 = 23.17 dB) +12.08 dB; 5/5 对 >= 33.58 dB",
+    "key_signals": {
+      "contrast_spread_ratio": 0.3757,
+      "variance_ratio": 0.1184,
+      "mean_shift": 0.0518,
+      "saturation_chroma_ratio": 0.5281,
+      "unique_G_target": 105,
+      "block_boundary": 0.9899,
+      "glass_score": 0.2854,
+      "mtf_roughness": 2.6964,
+      "spectral_slope_target": -1.1909,
+      "spectral_slope_clean": -0.9287,
+      "noise_prior_sigma": 2.22,
+      "peeled_residual_std": 4.4,
+      "peeled_spatial_corr": 0.9889
+    },
+    "rationale": "R1 信号重释发现 R0 两处误判: (1) variance diff 方向读反 — R0 认为 contrast:5 的 vr_sim≈0.20 偏高, 实际 vr≈0.04 (|0.118-vr|/0.882=9%), contrast_weaken_scale:5 方差压缩过度且其通道缩放 c=0.2 与 chroma_ratio=0.528 直接矛盾 (scale 对比度的 chroma 比例=c); (2) 黑场信号被忽略 — CI impulse_pct_zero 显示目标比线性 contrast 模拟多约 1% 纯黑, contrast_weaken_scale 会抬升黑场而 contrast_weaken_stretch 满足 0->0 且把中间调拉向 0.5 (雾状提亮), 同时解释 mean_shift=+0.052、spread=0.376、variance=0.118 与黑场保留. 实测 stretch:4 (c=0.6) 在 signal 模式令 global:mean_shift 与 global:variance_ratio 同时匹配, CI 的 unique_R/G/B 误差 1-2%, hf_lf 0-2%, overshoot 1-6%. Blur: glass:3 优于 gaussian:3 (PSNR 35.25 vs 34.57, overshoot 1% vs 23%; wiener kernel corr>0.85 匹配; glass_score=0.285, mtf_roughness=2.70), R0 只测过 glass:5 未扫 severity. 噪声: noise_gaussian_RGB:1 被排除 (signal noise:sigma diff=124%, 目标 sigma=2.22 低于 sev1 噪声强度; peeled residual std=4.4 且 spatial_corr=0.989 结构化; §B extreme_pct=56.95% 为 sigma<5 的已知假阳性) → NO_NOISE. JPEG: block_boundary=0.9899<1.1, unique_G=105 由 stretch 量化解释, 无压缩步. 饱和度: chroma_ratio=0.528 由 stretch 的非线性通道压缩解释, 无需独立 saturation 步.",
+    "caveats": "pair 间 PSNR 波动 33.58-42.55 dB; 残余 spectral_slope diff=0.126 (>0.08 阈值), wiener/CI/global 信号均匹配; pair0 的 glass shuffle 实现差异可能解释其相对 pair1 (42.55 dB) 的 7 dB 差距"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "ocab",
+    "window_size": 16,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 30
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "residual_anisotropy=1.7823 > 1.7 (Tier A, 0% FP) + step3 verdict MOTION_BLUR (subtype_confidence=high) -> OCAB 触发 (finetune_strategy.md §七 全组件启用条件)",
+    "blur_pca_ratio=4.061 > 2.5 (motion 0% FP) + gm_ratio=0.5351 佐证 motion; 跨族对照 PSNR: gaussian 20.52 / glass 18.75, 均劣于 motion:3 的 4 个 support 对 (20.42-25.19, 均值~22.96)",
+    "block_boundary=2.792 > 1.1 (Tier S, 0% FP) -> JPEG 确认; unique_G=256 排除量化; dct_zero_ratio=0.8968 支持强压缩; 无对应架构组件, 仅用于确认退化类型 (jpeg sev4, sev3/sev5 PSNR 均更差)",
+    "global: NO_GLOBAL (contrast_detected_raw=false, contrast_spread_ratio=0.9583, locked variance_ratio=0.8796 归因于 blur 而非 contrast) -> FiLM-GCM / ColorPre 不触发; §七 要求 contrast Tier A 才启用",
+    "noise: noise_prior_sigma=0.74 < 2 -> NO_NOISE (reflection 已剥离复核 sigma=0.99), §B 信号为 JPEG/blur 伪影, 不触发任何噪声相关处理",
+    "参数公平 (§五): OCAB 必须 AR_EMBED_DIM=30 (约467K, +2.9% vs Swin dim64 454K, 满足 <=1.05x); window_size=16 对应 motion (CLAUDE.md + full_analysis recommended_architecture)"
+  ],
+  "rationale": "退化管线为 blur_motion(3) + compression_jpeg(4), 两步局部退化, 无 contrast 全局退化、无噪声。§七 门控: anisotropy=1.7823>1.7 (0% FP) 且 motion 子类型高置信 (PCA=4.06, gaussian/glass 对照排除), Tier A 信号明确 -> 即便总体 verdict=UNCERTAIN 仍启用 OCAB (窗口16, dim=30 参数对齐 +2.9%); SimpleGate 按 exp39 默认常开 (-32K, 8/9 退化安全); 无 contrast 故 FiLM-GCM/ColorPre 一律不加 (variance_ratio=0.88 归因 blur, 非 contrast)。策略选 Direct (E6B 批次默认; 多步无 contrast 时 RandomCurric 理论可选, 但为保持批次一致与安全性不启用)。风险: motion 严重度由 gm_ratio 估计为 3, 存在 sev4 替代 (PSNR 22.54); 若实际严重度更高, OCAB 收益方向不变 (sev 越高 motion 结构化建模越有利)。"
+}

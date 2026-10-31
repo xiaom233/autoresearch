@@ -1,0 +1,52 @@
+{
+  "challenge_id": "blind_0024_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_impulse", 1],
+    ["saturate_strengthen_HSV", 2]
+  ],
+  "pipeline": [
+    {"function": "noise_impulse", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "saturate_strengthen_HSV", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "saturate_strengthen_HSV", "severity": 2}],
+      "support_psnr_rgb": {"pair0": 24.89, "pair1": 27.64, "pair2": 19.32, "pair3": 21.51, "pair4": 22.63},
+      "support_psnr_mean": 23.20,
+      "ci": "4-7/10",
+      "function_family": "global_saturation",
+      "note": "R0 确定性核心, 本次在 5 对 support 上完成 PSNR 验证: 均值 23.20 dB (max 27.64), 全部 < 40 dB → 确定性并不完整; 相对 R0 support PSNR 21.36 仅 +1.84 dB, 未达 +2 dB CHANGE 门槛"
+    },
+    {
+      "pipeline": [{"function": "contrast_weaken_scale", "severity": 1}, {"function": "saturate_strengthen_HSV", "severity": 2}],
+      "psnr": 24.29,
+      "ci": "7/10",
+      "function_family": "global_contrast + global_saturation",
+      "note": "R0 pair0 CI 最高 (7/10) 的备选; R1 未改变其定位, 但 PSNR 低于 sat2 单独 (24.89)"
+    },
+    {
+      "pipeline": [{"function": "noise_impulse", "severity": 2}, {"function": "saturate_strengthen_HSV", "severity": 2}],
+      "psnr": 17.63,
+      "ci": "4/10",
+      "function_family": "noise + global_saturation",
+      "note": "R0 信号侧备选; R1 实测 impulse:1 (最小强度) 在 5 对 support 上仍 0/5 达 PARTIAL/MATCH → 更高强度更差"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "MIXED (确定性候选 PSNR; 含噪候选 verify_signals)",
+    "ci_pass_rate": "5/10 (R0 pair0 最佳 7/10: contrast_weaken_scale:1,saturate_strengthen_HSV:2)",
+    "r1_summary": "R1 信号重释复核了 R0 忽略的 unique_G<200 0%FP 判据 (JPEG/量化) 与 gamma 残差-强度相关信号, 并做了逐区域对照 (target 在 clean 纯黑区出现 5-15px 低频彩色斑块 + 面部 1-2px 细颗粒, 而 sat2 模拟背景纯黑/面部平滑). 5 个新候选全部未达标: brightness_brighten_gamma_HSV:1+sat2 23.06dB / contrast_weaken_stretch:2+sat2 11.35dB / compression_jpeg:1+sat2 24.56dB / quantization_median:1+sat2 24.39dB (均低于 sat2 单独 24.89dB, 且 JPEG 模拟呈 8x8 块状与 target 细颗粒不符); noise_impulse:1+sat2 在 5 对 support 上 0/5 PARTIAL/MATCH (WEAK×4 + MISMATCH×1, sigma 超 124-550%). sat2 单独 5 对均值 23.20 dB (24.89/27.64/19.32/21.51/22.63), 均 <40 dB 且较 R0 support PSNR +1.84 dB (<+2). 无候选满足 CHANGE 条件 → 维持 R0 管线 (NO_CHANGE).",
+    "rationale": "确定性饱和核在 5 对 support 上稳定复现 (chroma 放大 + 均值下降), 但 PSNR 上限 27.64 dB 说明仍有未建模成分; 库内可用的噪声/压缩/量化/亮度/对比候选均无法改善. 噪声严重度已到库内下限 (impulse sev1), 无法再降; 保持 R0 最小强度脉冲 + HSV 饱和 sev2 作为当前最佳近似, 交由训练 PSNR 仲裁.",
+    "verification": {
+      "test_candidate_calls_R1": 14,
+      "new_candidates_tested": 5,
+      "deterministic_core_support_psnr": {"pair0": 24.89, "pair1": 27.64, "pair2": 19.32, "pair3": 21.51, "pair4": 22.63, "mean": 23.20},
+      "impulse1_sat2_signal_verdicts": ["WEAK", "WEAK", "WEAK", "MISMATCH", "WEAK"],
+      "weak_to_partial_match": "0/5"
+    }
+  }
+}

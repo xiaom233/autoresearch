@@ -1,0 +1,31 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "full_analysis step4_global: brightness_mean_shift=-36.3, clipped_fraction=0.4943 (heavy_clipping), variance_ratio=0.6574 但 contrast_from_variance=false 且 brightness_clip_explains_variance=true —— 方差下降由暗化+零截断解释，不是 contrast；ColorPre/FiLM-GCM 的 'contrast Tier A variance_ratio' 门控不成立",
+    "block_boundary=0.9935 (<1.05, 远低于 1.1) 且 unique_G=203；reflection 中加 compression_jpeg:1 降至 34.17/35.54 dB —— 无 JPEG 结构化伪影，FiLM-GCM 的 '结构化(motion/jpeg)' 条件不满足",
+    "FFT anisotropy=0.0，motion/glass 已排除；blur 为 mild blur_gaussian:2（PSNR 36.80 dB，sev1 36.50 / sev3 36.18），anisotropy>1.7 的 OCAB 门控不成立",
+    "noise: noise_prior sigma=0.74 (<2)，peeled extreme_pct=75.5%+sigma<5 判定为已知 JPEG/blur 伪影假阳性 —— 无噪声步骤",
+    "predicted_params.analysis: overall verdict=UNCERTAIN，blur 子类型 gaussian/lens 统计并列（36.80 vs 36.63 dB，CI 8/10 vs 9/10），pair1 内容敏感异常（19.96 dB）—— 信号无 Tier S/A 组件置信度，保守纯 Swin + SimpleGate"
+  ],
+  "rationale": "管线 = mild blur_gaussian:2 + brightness_darken_shfit_RGB:3，全局退化为加性 shift（非 contrast），§六 Step1 'brightness → Direct 即可'；2-epoch 预算下 True Ft≈Direct，故 Direct。所有组件门控均未满足：variance_ratio 由 clipping 解释而非 contrast（FiLM-GCM/ColorPre 禁用）、block_boundary<1.05 无结构化伪影、anisotropy=0 无 motion（OCAB 禁用）、UNCERTAIN+DualBranch 盲识别 0/24 胜（禁用）。仅保留默认常开的 SimpleGate（-32K，exp39 8/9 安全），纯 Swin dim=64 + LR 5e-4 + 2 epoch。"
+}

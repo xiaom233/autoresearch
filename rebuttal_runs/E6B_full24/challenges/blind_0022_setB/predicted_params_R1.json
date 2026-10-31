@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0022_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 3], ["compression_jpeg", 1]],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 3, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 1, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 4}, {"function": "compression_jpeg", "severity": 1}],
+      "function_family": "blur_glass",
+      "support_psnr": {"pair0": 27.56, "pair1": 29.83, "pair2": 27.92, "pair3": 29.09, "pair4": 31.53},
+      "support_psnr_mean": 29.19,
+      "stats": "severity +1 候选: 5 对 support 全部低于 glass:3 基线 (Δ = -1.15/-1.41/-1.00/-1.22/-0.70 dB, mean -1.10 dB)",
+      "note": "severity backup only; rejected by 5-pair PSNR"
+    },
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}, {"function": "compression_jpeg", "severity": 1}],
+      "function_family": "blur_gaussian",
+      "support_psnr": {"pair0": 25.43, "pair1": 27.77},
+      "stats": "severity-matched gaussian 竞争族 (有效 sigma~2 = glass:3 的 gaussian 1.2 两次); 两内容上分别 -3.28 / -3.47 dB",
+      "note": "cross-family backup rejected (deterministic fit far below stochastic glass floor)"
+    },
+    {
+      "pipeline": [{"function": "noise_gaussian_RGB", "severity": 1}, {"function": "blur_glass", "severity": 3}, {"function": "compression_jpeg", "severity": 1}],
+      "function_family": "noise_gaussian_RGB",
+      "support_psnr": null,
+      "stats": "peeled noise_prior sigma=3.95 远低于 x_distortion 最小可表示噪声 sev1 sigma=12.75; 无噪声管线已 verify_signals MATCH 5/5, 加噪声无法优于 MATCH 且 noise:sigma 在 glass 随机洗牌残差下必然平凡匹配 (非判别性)",
+      "note": "only if training PSNR arbitration contradicts; no positive signal evidence"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=2.22) for R0 identification; deterministic PSNR on 5 supports for R1 stepwise validation",
+    "rationale": "R1 信号重释与 5 对 support 验证支持 R0 pipeline 不变 (blur_glass:3 + compression_jpeg:1)。(1) 子类型: R0 仅用 peeled residual 与 gaussian:3 (过强, sigma=3) 对比; R1 首次测试强度匹配的确定性竞争者 gaussian:2 和从未测过的 lens:3, 在 2 个不同内容上均比 glass:3 低 3.0-3.5 dB, 而 glass:3 基线 5 对 support 达到 28.71-32.23 dB (mean 30.28), 说明 target 的残余高频来自随机像素洗牌而非确定性模糊。(2) 严重度: gm_ratio=0.2543 给出的 est sev5 与 residual-std 最小化选 sev3 均受 glass 机制偏置 (更高 severity 的 shift/iteration 更大, 机械性增加洗牌噪声并重新注入高频); 直接同图 PSNR ±1 扫描: glass2 pair0 26.20 (-2.51), glass4 5 对 mean 29.19 (-1.10, 5/5 更差), 确认 sev3 最优。(3) global: variance_ratio=0.7802 不在 contrast_weaken 校准区 0.08-0.40, 亦高于 contrast_from_variance 阈值 0.55, spread_ratio=0.9343>0.80, mean_shift=-0.2/255, clipped_fraction=0.0 → NO_GLOBAL, 方差下降由强模糊解释。(4) JPEG: block_boundary=1.6491 (Tier S, 0% FP) 确认压缩; jpeg:1 在 R0 已 5/5 MATCH (bb CI diff 4-5% 在 R1 复测再现), 保持。(5) noise: 窗内 sigma 2.22 低于库内最小 sev1 12.75, §B extreme_pct>50%+sigma<5 为已知 FP, 残差结构化 (spatial_corr=0.96) 来自 glass 洗牌; 无独立噪声步骤。整体 UNCERTAIN 保留: glass 随机洗牌造成的固有 PSNR 地板 (不可达 40 dB) 与潜在低 sigma 噪声不可判别性, 但无任何信号或 support PSNR 证据支持修改。",
+    "r1_signal_reinterpretation": [
+      {"signal": "variance_ratio=0.7802, contrast_spread_ratio=0.9343, mean_shift=-0.2(255), clipped_fraction=0.0", "conclusion": "NO_GLOBAL 维持", "evidence": "contrast_weaken 校准区 0.08-0.40; contrast_from_variance 需 <0.55; spread 0.934>0.80; 方差下降与 gm_ratio=0.2543 的强模糊一致"},
+      {"signal": "gm_ratio=0.2543 (severity_source→est sev5) vs spectral_slope=-1.2159", "conclusion": "sev5 估计被否定, sev3 维持", "evidence": "glass 更高 severity 的 shift/iteration 更大 → 洗牌重注入高频, 混淆 gm_ratio 与 residual-std; 同图 PSNR: glass2 26.20, glass3 28.71, glass4 27.56; glass4 5-pair mean Δ -1.10 dB (5/5 更差)"},
+      {"signal": "glass_score=0.6153 (高于 glass(2-4) 校准 0.19-0.41) + glass-vs-gaussian MTF 歧义", "conclusion": "glass 族确认, 确定性族否定", "evidence": "强度匹配 gaussian:2 = 25.43/27.77 dB (-3.28/-3.47); lens:3 = 25.67/27.92 dB (-3.04/-3.32); 确定性模糊无法解释共享的随机洗牌残差地板"},
+      {"signal": "block_boundary=1.6491 (0% FP), unique_G=234/252=0.93, dct_zero_ratio=0.8457", "conclusion": "JPEG 确认, sev1 维持", "evidence": "R0 jpeg1 5/5 MATCH; jpeg2 pair1 bb diff 13%; R1 基线复测 bb CI diff 4-5%"},
+      {"signal": "noise_prior sigma=2.22; peeled sigma=3.95, extreme_pct=55.2, vm_slope=1.11, spatial_corr=0.96, rgb_ratio=1.06", "conclusion": "无噪声步骤 (且不可表示)", "evidence": "x_distortion 最小噪声 sev1=sigma 12.75; extreme>50% + sigma<5 为已知 FP; 残差结构化来自 glass 洗牌; 无噪声管线已 MATCH 5/5"}
+    ],
+    "support_validation": {
+      "baseline_pipeline": "blur_glass:3,compression_jpeg:1",
+      "baseline_psnr_by_pair": [28.71, 31.24, 28.92, 30.31, 32.23],
+      "baseline_mean": 30.28,
+      "glass4_delta_by_pair": [-1.15, -1.41, -1.00, -1.22, -0.70],
+      "glass4_mean_delta": -1.10,
+      "glass2_delta_pair0": -2.51,
+      "gaussian2_delta": [-3.28, -3.47],
+      "lens3_delta": [-3.04, -3.32],
+      "change_criterion": "纯确定性候选 PSNR 5 对 support: >40 dB 或同对 +2 dB; glass 的 shuffle_pixels_njit 为未播种随机洗牌, 40 dB 不可达, 故用同对 +2 dB 规则",
+      "no_candidate_passed": true
+    }
+  }
+}

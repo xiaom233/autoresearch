@@ -1,0 +1,40 @@
+{
+  "challenge_id": "blind_0004_setB",
+  "pipeline": [
+    {"function": "blur_motion", "severity": 1}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_motion", "severity": 2}],
+      "function_family": "blur_motion",
+      "psnr": 26.19,
+      "stats": {"best_draw_psnr": 26.19, "ci_pass": "8/10", "zero_crossing_diff_pct": "9-11", "unique_G_diff_pct": "0-7"},
+      "reason": "severity+1 scan; systematically over-blurs (zero_crossing_density 9-11% below target vs 0-2% for motion:1)"
+    },
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+      "function_family": "blur_gaussian",
+      "psnr": 24.01,
+      "stats": {"best_draw_psnr": 24.01, "ci_pass": "4/10", "hf_lf_diff_pct": 22, "overshoot_diff_pct": 60},
+      "reason": "cross-family backup (MTF gaussian/lens/motion indistinguishable in principle); angle-independent PSNR caps ~24dB < motion:1 28.84/37.66"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "8/10 (pair0 best draw; 10/10 on repeat draws); supports: 8/10, 6/10, 10/10, 9/10",
+    "mode": "PSNR",
+    "psnr": 28.84,
+    "psnr_note": "pair0 primary; motion angle stochastic in x_distortion, draws gave 22.32/28.84/20.62; support pair3 near-exact 37.66",
+    "psnr_support_best": 37.66,
+    "psnr_gap": 2.65,
+    "rationale": "Single-step motion blur severity 1. Blur proven by gm_ratio=0.629 + spectral_slope_ratio=1.101; motion supported by residual_anisotropy=1.661 (near the 1.7 threshold) and by PSNR ceiling: motion:1 reaches 28.84dB on pair0 and 37.66dB on support pair3 (radius-5 kernel, lucky angle), whereas gaussian/glass variants are angle-independent and cap at ~24dB; angle-robust texture signals (zero_crossing_density 0-2%, hf_lf_ratio 0-1%, unique_RGB 0-3%) match target across all 5 pairs. Severity=1 vs 2: motion:2 best draw 26.19dB and systematically over-blurs (zcd 9-11% low), versus pair3 37.66dB near-exact for radius-5. Glass DT (glass_score=0.70) is the documented FP; gaussian alternative retained. Noise excluded: peeled residual structured (spatial_corr=0.984) and x_distortion minimum noise sigma=12.75 >> measured 1.24; §B extreme_pct=58% falls under the >50%+sigma<5 false-positive rule. Compression excluded: block_boundary=1.016 (<1.1), dct_zero stable. Global excluded: variance_ratio=0.694/chroma=0.794 explained by blur smoothing; adding saturate_weaken_HSV/YCrCb, contrast_weaken_scale/stretch each reduced PSNR (23.7->19.0->10.9) and broke unique-color match (up to +113). Brightness excluded: mean_shift=-0.4/255 vs >=25.5 minimum shift. Verdict UNCERTAIN rather than LIKELY because PSNR 30-40dB (motion angle is random at generation; >40dB unattainable without angle luck).",
+    "support_validation": {
+      "pair0": {"psnr": 28.84, "psnr_draws": [22.32, 28.84, 20.62], "ci": "8-10/10"},
+      "pair1": {"psnr": 24.46, "ci": "8/10"},
+      "pair2": {"psnr": 29.11, "ci": "6/10", "note": "block_boundary -25% single mismatch; others 4-15%"},
+      "pair3": {"psnr": 37.66, "ci": "10/10"},
+      "pair4": {"psnr": 17.62, "ci": "9/10", "note": "unfavourable random angle draw"}
+    }
+  }
+}

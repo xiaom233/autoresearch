@@ -1,0 +1,62 @@
+{
+  "challenge_id": "blind_0011_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_gaussian_RGB", 3], ["blur_gaussian", 4]],
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "blur_gaussian", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 4}],
+      "function_family": "blur-only (deterministic simplification)",
+      "stats": {
+        "support_psnr": {"pair0": 39.29, "pair1": 34.13, "pair2": 45.92, "pair3": 41.28, "pair4": 40.21},
+        "mean_psnr_db": 40.17,
+        "pooled_psnr_db": 38.54,
+        "pairs_above_40db": "3/5",
+        "residual_pooled_rmse": 3.02
+      },
+      "evidence": "R1 5-pair deterministic validation; best severity/subtype on every pair (sev3 32.79, sev5 34.66/33.62, lens:4 33.86, motion:4 21.73, jpeg:1 35.95 all worse). Not adopted: 2/5 pairs <40 dB (pair1 34.13), pooled PSNR 38.5 dB, and peeled residual (RMSE 1.29-5.01, mean 3.0) remains a real unexplained component; dropping the noise step on PSNR alone is disallowed for a noise-containing target."
+    },
+    {
+      "pipeline": [{"function": "noise_gaussian_RGB", "severity": 2}, {"function": "blur_gaussian", "severity": 4}],
+      "function_family": "noise_gaussian_RGB (severity alternative)",
+      "stats": {"verdict": "PARTIAL", "matched": ["blur:spectral_slope", "blur:wiener_kernel", "noise:sigma"], "mismatched": ["noise:structured_residual"]},
+      "evidence": "R0 pair0 + R1 cross-check: sev2 and sev3 give identical signal verdicts (PARTIAL, same matched set); no signal-mode discrimination possible under noise->blur coupling. 5-pair residual RMSE spread 1.29-5.01 is inconsistent with any single fixed white-noise sigma (sev1~1.0, sev2~2.1, sev3~3.1 after blur:4)."
+    },
+    {
+      "pipeline": [{"function": "noise_speckle", "severity": 1}, {"function": "blur_gaussian", "severity": 4}],
+      "function_family": "noise_speckle (content-dependent noise, low confidence)",
+      "stats": {"verdict": "PARTIAL", "pair": "pair1", "matched": ["blur:spectral_slope", "blur:wiener_kernel", "noise:sigma"], "mismatched": ["noise:structured_residual (FWHM=18.0px)"]},
+      "evidence": "Peeled pair1 residual is content-structured (vm_slope=0.0156, ivc=0.9493, cross_ch=0.8604) and pair0/pair1 residual magnitudes differ 1.8x, so speckle sev1 was tested per SKILL severity-scan; verdict identical to RGB:3 (PARTIAL, same matched set). rgb_ratio 1.06-1.14 stays below YCrCb signature (1.35-1.57) and speckle:3 sim cross_ch 0.62 > target 0.27 -> no basis to switch."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "not used as arbiter (noise->blur coupling)",
+    "mode": "SIGNAL for noise step (noise-before-blur, SKILL 54.7% type accuracy); PSNR only for deterministic steps",
+    "r1_signal_reinterpretation": [
+      "variance_ratio=0.6514 + contrast_spread_ratio=0.7378 + residual_intensity_corr=-0.5945 initially read as CONTRAST_weaken_sev4; R0's only scale:1 test used the inferior blur:5 base. R1 tested the correct base: blur_gaussian:4,contrast_weaken_scale:1 = 27.25 dB vs 39.29 blur-only => any available contrast severity (scale sev1 = 0.75) is far too strong; variance reduction is blur-driven.",
+      "mean_shift=-1.7 + clipped_fraction=0 excludes brightness (sev1 shift=0.1*255=25.5 levels), all 8 brightness variants incl. gamma; saturation_chroma_ratio=0.9387 excludes saturate_weaken sev1 (0.70 HSV / 0.60 YCrCb); unique_G=223 excludes quantization (median/hist produce <=20-24 levels per channel).",
+      "block_boundary=0.9976 (<1.1) + JPEG q25(sev1) on blur:4 = 35.95 dB < 39.29 -> compression excluded.",
+      "Noise: raw-residual cross_channel_corr=0.982 -> analyzer GAUSSIAN_YCrCb is a blur artifact; peeled residual channel-uniform R2.4/G2.6/B2.5 (pair0 rgb_ratio 1.06; pair1 1.14) stays below YCrCb signature 1.35-1.57 => additive RGB-family noise, not YCrCb.",
+      "Peeled residual after blur:4 NOT fixed-variance white noise: pair RMSE 2.77/5.01/1.29/2.20/2.49 (pair0 std 2.5 -> sigma_white~31; pair2 1.29 < sev1; pair1 5.01 > sev3). Constant-sigma white noise predicts constant RMSE across pairs => per-pair/content-dependent component present.",
+      "Pair1 peeled residual is content-structured (cross_ch=0.8604, ivc=0.9493, spatial_corr=0.9986, vm_slope=0.0156) while pair0 is channel-independent (cross_ch=0.2744) => mixed structured + independent-noise residual; per SKILL noise->blur order classification is 54.7%, so type/severity stay UNCERTAIN.",
+      "§B extreme_pct 76-82% is a structural artifact of signed residual (target-simulated <=0 for ~half the pixels) + noise_prior sigma<5, not impulse."
+    ],
+    "support_validation": {
+      "blur_gaussian:4 5-pair PSNR": {"pair0": 39.29, "pair1": 34.13, "pair2": 45.92, "pair3": 41.28, "pair4": 40.21},
+      "mean_of_db": 40.17,
+      "pooled_psnr_db": 38.54,
+      "blur_gaussian:5 pair1": 33.62,
+      "blur_gaussian:4,contrast_weaken_scale:1 pair0": 27.25,
+      "noise_speckle:1,blur_gaussian:4 pair1": "PARTIAL (same matched set as RGB:3)"
+    },
+    "rationale": "blur_gaussian:4 remains the only well-supported step: best severity/subtype in every tested pair (pair0/1/2/3/4), gm_ratio=0.2236 + spectral_slope_ratio=1.543, all alternatives (sev3/sev5/lens:4/motion:4/jpeg:1/contrast:1/stretch:1) measurably worse. The noise step is retained at R0's noise_gaussian_RGB:3 with verdict UNCERTAIN: the peeled residual proves a non-zero random component (std 2.5-4.4, channel-uniform, spatially smooth) but its type/severity cannot be discriminated under noise-before-blur (RGB:2, RGB:3, speckle:3, speckle:1 all yield PARTIAL with identical matched signals). The deterministic simplification blur:4 alone reaches mean 40.17 dB but only 3/5 pairs >40 dB (pair1 34.13), pooled PSNR 38.5 dB, and leaves the residual unmodeled; per SKILL/reflection rules a noise step cannot be dropped on PSNR evidence alone. Therefore NO_CHANGE.",
+    "test_candidate_calls": 6,
+    "rounds_of_signal_reinterpretation": 3
+  }
+}

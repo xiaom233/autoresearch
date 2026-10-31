@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0009_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_poisson", 1],
+    ["saturate_strengthen_YCrCb", 3]
+  ],
+  "r1_pipeline": [
+    ["noise_poisson", 1],
+    ["saturate_strengthen_YCrCb", 3]
+  ],
+  "support_psnr_r0": 32.71,
+  "candidates_tested": [
+    {"candidate": "noise_poisson:1,saturate_strengthen_YCrCb:3", "role": "retained-pipeline re-validation", "support": "pairs 0-4", "result": "MATCH 4/4 on all 5 pairs (fresh noise seeds)"},
+    {"candidate": "noise_poisson:1,saturate_strengthen_YCrCb:4", "role": "new candidate 1: saturation severity +1", "support": "pair2 (R0's worst pair for sat4)", "result": "PARTIAL (global:mean_shift MATCH, variance_ratio 22% off)"},
+    {"candidate": "noise_poisson:2,saturate_strengthen_YCrCb:3", "role": "new candidate 2: noise severity +1", "support": "pair0", "result": "MATCH 4/4 (sigma not discriminative under saturation-dominated HF; no gain over sev1)"},
+    {"candidate": "noise_poisson:1,saturate_strengthen_YCrCb:2", "role": "new candidate 3: saturation severity -1", "support": "pair0", "result": "WEAK (variance_ratio 16% off, noise:sigma 70% off)"},
+    {"candidate": "noise_poisson:1,saturate_strengthen_YCrCb:3,compression_jpeg:1", "role": "new candidate 4: compression masking probe", "support": "pair0", "result": "WEAK (block_boundary 100% off, noise:sigma 90% off, variance_ratio 25% off)"},
+    {"candidate": "noise_poisson:1,blur_gaussian:1,saturate_strengthen_YCrCb:3", "role": "new candidate 5: blur masking probe", "support": "pair0", "result": "PARTIAL (5/6; noise:sigma 93% off)"}
+  ],
+  "test_candidate_calls": 10,
+  "best_validation": {
+    "pipeline": "noise_poisson:1,saturate_strengthen_YCrCb:3",
+    "pair0": "MATCH 4/4",
+    "pair1": "MATCH 4/4",
+    "pair2": "MATCH 4/4",
+    "pair3": "MATCH 4/4",
+    "pair4": "MATCH 4/4",
+    "matched_signals": ["noise:sigma", "noise:clean_residual", "global:mean_shift", "global:variance_ratio"]
+  },
+  "signal_sources": [
+    "full_analysis_R1 pair0 re-run: block_boundary=1.0017, unique_G=256x3, dct_zero_ratio=0.0495 -> no compression; spectral_slope_ratio=0.9996, gm_ratio=7.259 (unusable under noise) -> no blur",
+    "mean_shift=+16.1/255=0.063 with mixed per-channel signs (brightness_detected_raw=false) -> brightness/gamma excluded, chroma-only amplification supported",
+    "contrast_spread_ratio=1.2643 in boundary band but contrast_saturation_corrected=true; pure contrast would give mean_shift~0 and chroma_ratio~spread_ratio (observed 2.16 vs 1.26)",
+    "variance_ratio=2.0279 + saturation_chroma_ratio=2.1609 -> saturation strengthen, YCrCb family (HSV rejected in R0: ms off 0.15+, vr 78-92% off)",
+    "clipped_fraction=0.5264 + heavy_clipping -> blue-sky/blue-channel clipping after YCrCb chroma x5 (visual check degraded vs clean confirms vivid saturated blue)",
+    "residual_intensity_corr=0.4744 (gamma_suspect) re-interpreted as intensity-dependent poisson noise + saturation clipping; gamma contradicted by mixed-sign mean shift",
+    "peeled §B after satY:3 (extreme_pct=73.67, zero_ratio=0.4431, vm_slope=15.71, var_slope=10.08, spatial_corr=0.5124, sigma=8.4) -> clipping-inflated structure FP, not impulse (raw impulse_zero_ratio=0.0728 << 0.85); §B type invalid, full-pipeline verify used instead",
+    "noise severity: sigma_initial=5.56 is saturation-structure-inflated; poisson sev1 and sev2 both MATCH -> keep minimal sev1 (no evidence to change)",
+    "saturation severity scan: sev2 WEAK (vr 16% off), sev3 MATCH 5/5 pairs, sev4 PARTIAL pair2 (vr 22% off), sev5 WEAK/MISMATCH (R0)"
+  ],
+  "reason": "Signal re-interpretation reproduced R0's decisive signals with no threshold flips and found no ignored signal contradicting the prediction. Masking probes exclude compression (block_boundary 100% off) and blur (noise:sigma 93% off). The saturation severity neighborhood is bracketed (sev2 WEAK / sev3 MATCH / sev4 PARTIAL / sev5 WEAK-MISMATCH). Poisson sev2 is indistinguishable from sev1 but offers no improvement, so minimal sev1 is kept. Retained pipeline MATCHes 4/4 signals on all 5 support pairs with fresh noise seeds; no candidate improves on this -> NO_CHANGE."
+}

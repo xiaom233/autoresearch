@@ -1,0 +1,75 @@
+{
+  "challenge_id": "blind_0023_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_glass", 5],
+    ["compression_jpeg", 4]
+  ],
+  "r1_pipeline": [
+    ["blur_glass", 5],
+    ["compression_jpeg", 4]
+  ],
+  "support_psnr_r0": 20.66,
+  "support_psnr_r0_sim_mean": 24.71,
+  "support_psnr_r1_sim_mean": 24.72,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_lens:5,compression_jpeg:4",
+      "role": "deterministic lens-family completeness (lens5 untested in R0)",
+      "pair0_psnr": 24.35,
+      "pair0_ci": "7/10",
+      "outcome": "REJECTED (< +2 dB; deterministic lens truth would exceed 35 dB)"
+    },
+    {
+      "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+      "role": "threshold-boundary global (contrast_spread_ratio=0.8161 vs 0.80; variance_ratio=0.698)",
+      "support_psnr": [25.27, 26.06, 26.99, 24.90, 25.17],
+      "support_ci": ["7/10", "7/10", "9/10", "7/10", "7/10"],
+      "mean_psnr": 25.68,
+      "delta_vs_r0_sim": 0.96,
+      "outcome": "BELOW_CHANGE_BAR (below +2 dB, CI not improved) -> kept as primary alternative"
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+      "role": "priority-2 order variant (generator shuffles global vs JPEG order)",
+      "pair0_psnr": 25.83,
+      "pair0_ci": "5/10",
+      "outcome": "REJECTED (PSNR +1.21 but CI dropped 7->5; order evidence inconsistent)"
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4",
+      "role": "retained pipeline, R1 independent 5-pair validation + determinism replicate",
+      "support_psnr": [24.64, 24.15, 27.06, 24.31, 23.42],
+      "support_ci": ["7/10", "7/10", "7/10", "7/10", "7/10"],
+      "mean_psnr": 24.72,
+      "delta_vs_r0_sim": 0.01,
+      "outcome": "RETAINED (reproduces R0 within 0.02 dB; njit RNG near-deterministic)"
+    }
+  ],
+  "test_candidate_calls": 12,
+  "best_validation": {
+    "retained": {
+      "pipeline": "blur_glass:5,compression_jpeg:4",
+      "r1_support_psnr": [24.64, 24.15, 27.06, 24.31, 23.42],
+      "r1_support_ci": ["7/10", "7/10", "7/10", "7/10", "7/10"],
+      "mean": 24.72
+    },
+    "alternative": {
+      "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+      "support_psnr": [25.27, 26.06, 26.99, 24.90, 25.17],
+      "mean": 25.68,
+      "delta_vs_retained": 0.96,
+      "note": "4/5 pairs improved, but gain below +2 dB CHANGE bar; CI unchanged on average"
+    }
+  },
+  "signal_sources": [
+    "full_analysis_R1 rerun on pair0 identical to R0: block_boundary=7.073, unique_G_ratio=0.9609, dct_zero_ratio=0.9255, gm_ratio=0.4072, spectral_slope_ratio=1.2646, anisotropy=1.249, glass_score=1.4146, noise_prior sigma=0.37, variance_ratio=0.698, contrast_spread_ratio=0.8161, saturation_chroma_ratio=0.8658, mean_shift=2.1/255, clipped_fraction=0",
+    "JPEG: block_boundary 0% FP signal -> compression_jpeg confirmed; sev4 retained (sev3 block_boundary mismatch 22%, sev5 CI 5/10 in R0)",
+    "Blur: gm_ratio=0.4072 + spectral_slope_ratio=1.2646 -> strong blur; anisotropy=1.249 rules out motion; glass_score=1.4146 selects glass; blur_glass njit shuffle uses fixed numba RNG -> replicate delta 0.02 dB, so ~24.7 dB is an information-loss floor",
+    "Noise: sigma=0.37/peeled 0.74 << 2; weakest noise_gaussian_RGB:1 = sigma~12.75/255 -> NO_NOISE",
+    "Global: contrast_spread_ratio=0.8161 only 0.016 above 0.80 threshold and variance_ratio=0.698 above 0.55 -> mild contrast weaken is the only boundary signal; saturate_weaken sev1 would give chroma ~0.6 << observed 0.8658 -> ruled out; brightness mean_shift 0.0082 < 0.014 and ric=-0.009 -> ruled out",
+    "Deterministic completeness: lens5+jpeg4=24.35; gaussian3/4/5=23.92/24.33/24.58; glass4/5=24.31/24.62 -> no deterministic combination reproduces target"
+  ],
+  "reason": "R0 pipeline confirmed by all refreshed signals: JPEG sev4 (block_boundary=7.073, dct_zero_ratio=0.926) + heavy blur (gm_ratio=0.407, spectral_slope_ratio=1.265, glass_score=1.415, anisotropy<1.7). No deterministic family reaches high PSNR and glass blur's pixel shuffle is near-deterministic under numba's fixed RNG, so the 24.7 dB ceiling is irreducible information loss rather than a wrong parameter. R1's only new evidence is a threshold-boundary mild contrast weaken; its candidate improved 5-pair support mean by +0.96 dB (4/5 pairs) but stayed below the +2 dB CHANGE bar and did not raise CI, and the post-JPEG order variant hurt CI (5/10). Per protocol: NO_CHANGE, pipeline identical to R0, contrast1 variant recorded as alternative."
+}

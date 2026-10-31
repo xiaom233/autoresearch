@@ -1,0 +1,67 @@
+{
+  "challenge_id": "blind_0012_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_motion", 5], ["compression_jpeg", 3]],
+  "pipeline": [
+    {"function": "blur_motion", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_motion", "severity": 4},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "function_family": "blur_motion",
+      "support_signal": "R1 5-pair signal: slope pass 3/5 (pair0 diff 0.109, pair3 diff 0.097 fail), block_boundary pass 3/5 (pair1 8%, pair2 9%, pair3 12% fail), pair3 overall MISMATCH; sev5 for comparison passes slope 5/5 and block 5/5",
+      "note": "R0 alternative retained; R1 multi-pair arbitration rejects sev4 in favor of sev5"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "function_family": "blur_glass",
+      "support_signal": "pair0 signal PARTIAL (slope pass, block_boundary pass, wiener 0.231); glass_score=0.9848 is 2.4x above tool calibration glass(2-4)=0.19-0.41 -> out-of-range/contaminated",
+      "note": "boundary control only; ruled out by blur_pca_ratio=4.199>2.5 (0% FP motion) and R0's one m5 Wiener MATCH 3/3; kept as cross-family backup"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "ci_pass_rate": "R1 signal: blur_motion:5+compression_jpeg:3 PARTIAL on all 5 support pairs (slope+block matched every pair; Wiener only by angle lottery)",
+    "mode": "SIGNAL for blur subtype/severity (motion angle random, PSNR measures angle lottery); PSNR valid for JPEG/global (sigma=0.74<2)",
+    "psnr": 19.28,
+    "support_psnr_r0": 24.93,
+    "psnr_gap": null,
+    "signal_sources": [
+      "block_boundary=3.2358 >>1.1 (0% FP) -> JPEG confirmed; dct_zero_ratio=0.9366, unique_G=256 -> no color quantization",
+      "noise_prior_sigma=0.74 (<2) -> NO_NOISE; GAUSSIAN_YCrCb is the documented FP_YCrCb_BLUR_JPEG (spatial_corr=0.941, cross_ch_corr=0.8661, residual_intensity_corr=-0.104)",
+      "blur_pca_ratio=4.199 >2.5 (0% FP, 2880-case) -> motion subtype",
+      "residual_anisotropy=1.7123 only 0.7% above old 1.7 threshold -> boundary signal, not decisive",
+      "glass_score=0.9848 outside tool glass calibration 0.19-0.41 -> contaminated by JPEG+strong blur",
+      "variance_ratio=0.8964, contrast_spread_ratio=0.9653, mean_shift=-0.4/255, clipped=0.0037 -> NO_GLOBAL"
+    ],
+    "support_validation": {
+      "blur_motion:5+compression_jpeg:3": {
+        "pair0": "PARTIAL (slope pass, block pass, wiener 0.140)",
+        "pair1": "PARTIAL (slope pass, block pass, wiener 0.337)",
+        "pair2": "PARTIAL (slope pass, block pass, wiener 0.545)",
+        "pair3": "PARTIAL (slope pass, block pass, wiener 0.238)",
+        "pair4": "PARTIAL (slope pass, block pass, wiener 0.664)"
+      },
+      "blur_motion:4+compression_jpeg:3": {
+        "pair0": "WEAK (slope diff 0.109 fail; block pass)",
+        "pair1": "WEAK (slope pass; block 8% fail)",
+        "pair2": "PARTIAL (lucky Wiener, block 9% fail)",
+        "pair3": "MISMATCH (slope 0.097, wiener 0.256, block 12%)",
+        "pair4": "PARTIAL (slope pass, block pass, wiener 0.206)"
+      },
+      "blur_glass:5+compression_jpeg:3": {
+        "pair0": "PARTIAL (slope pass, block pass, wiener 0.231)"
+      }
+    },
+    "rationale": "R1 signal re-reading confirms R0: JPEG:3 LIKELY and motion:5 UNCERTAIN. Rotation-invariant spectral_slope matched 5/5 pairs at sev5 vs 3/5 at sev4; block_boundary passed 5/5 at sev5 vs 3/5 at sev4 (8/9/12% failures). The table-based sev4 estimates (gm_ratio 0.405, slope_ratio 1.330) are contradicted by direct multi-pair simulation, so severity 5 stands. Glass:5 matches slope/block on pair0, but glass_score is out of calibration and PCA (0% FP) plus R0's one 3/3 Wiener MATCH (corr>0.85) keep motion as subtype. Motion angle is unrecoverable with allowed tooling, capping pixel PSNR regardless of correct params -> UNCERTAIN; no evidence to CHANGE."
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "challenge_id": "blind_0020_setA",
+  "round": "R2",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 1},
+    {"function": "blur_gaussian", "severity": 3},
+    {"function": "contrast_weaken_scale", "severity": 5}
+  ],
+  "r1_pipeline": [
+    {"function": "blur_glass", "severity": 3},
+    {"function": "contrast_weaken_stretch", "severity": 4}
+  ],
+  "r2_pipeline": [
+    {"function": "blur_glass", "severity": 4},
+    {"function": "contrast_weaken_stretch", "severity": 4}
+  ],
+  "support_psnr_r0": 13.61,
+  "support_psnr_r1": 20.07,
+  "candidates_tested": [
+    "blur_glass:3,contrast_weaken_stretch:4 (R2 control 复跑, pair0=35.24)",
+    "blur_glass:2,contrast_weaken_stretch:4 (31.89)",
+    "blur_glass:4,contrast_weaken_stretch:4 (36.78, selected)",
+    "blur_glass:5,contrast_weaken_stretch:4 (35.67)",
+    "blur_glass:4,contrast_weaken_stretch:3 (30.97)"
+  ],
+  "test_candidate_calls": 10,
+  "best_validation": {
+    "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+    "mode": "PSNR (5 对 support) + SIGNAL (pair0)",
+    "pair_psnr": {
+      "pair0": 36.78,
+      "pair1": 43.51,
+      "pair2": 34.97,
+      "pair3": 40.74,
+      "pair4": 38.28
+    },
+    "mean_psnr": 38.86,
+    "ci_pass": {
+      "pair0": "8/10",
+      "pair1": "9/10",
+      "pair2": "10/10",
+      "pair3": "9/10",
+      "pair4": "8/10"
+    },
+    "signal_verdict_pair0": "MATCH (4/4)",
+    "signal_matches_pair0": [
+      "blur:spectral_slope",
+      "blur:wiener_kernel",
+      "global:mean_shift",
+      "global:variance_ratio"
+    ],
+    "signal_mismatches_pair0": [],
+    "baseline_comparison": "R1 仿真 5 对 mean 37.42 -> 38.86 (+1.44 dB), 每对 +0.96~+1.53 dB; pair1 43.51 dB 与 pair3 40.74 dB >40 dB (R1 仅 pair1 42.55); R1 pair0 signal=WEAK (spectral_slope diff=0.126) -> R2 MATCH 4/4"
+  },
+  "signal_sources": [
+    "gm_ratio=0.0833 + blur_density=0.7455 + mtf_roughness=2.6964 + glass_score=0.2854>0.25 + sigma<3 -> glass 族; run_full_analysis severity_source=gm_ratio 估计 sev5, 但 R1 只测了 glass:3 / glass:5, 未做 ±1 扫描",
+    "spectral_slope target=-1.1909 (clean=-0.9287): R1 glass:3 模拟 diff=0.126 未达 0.08 阈值 (signal WEAK). pair0 单调 severity 校准: glass:2=31.89 / glass:3=35.24 / glass:4=36.78 / glass:5=35.67 -> sev4; glass:4 时 verify_signals MATCH 4/4",
+    "variance_ratio=0.1184 + contrast_spread_ratio=0.3757 + mean_shift=+0.0518 + saturation_chroma_ratio=0.5281 -> 非线性 tone 压缩 contrast_weaken_stretch:4 (c=0.6); stretch:3=30.97 (unique_G 比目标少 22, 欠压缩) 与 stretch:5 (R1=31.2, 过压缩) 均更差",
+    "CI impulse_pct_zero: target-sim 偏差在 ±0.6-0.9% 间波动 (glass:3 -0.7%, glass:4 +0.6%), 方向不一致; 增加 brightness/quantization 会破坏已匹配的 mean_shift 或 unique_G -> 无额外全局步",
+    "block_boundary=0.9899<1.1, unique_G target=105 与 stretch:4 模拟差 1-2 -> 无 JPEG/quantization",
+    "peeled residual (glass:4+stretch:4): std=3.7 (R1 4.4), spatial_corr=0.9883 结构化, extreme_pct=58.89% 属 sigma<5 已知假阳性, noise_prior sigma=4.45 为 blur 下界; R1 已证 noise_gaussian_RGB:1 sigma diff=124% -> NO_NOISE",
+    "residual_intensity_corr_R2=0.0389 (R1 重跑 0.051) 仍低 -> 无 gamma; mean_shift 由 stretch 解释"
+  ],
+  "reason": "R1 的 glass:3 选择未完成 SKILL 强制的 ±1 severity 扫描, 且其最终 signal 结果 WEAK 的唯一失配正是 blur:spectral_slope (diff=0.126). R2 扫描发现 glass:4+stretch:4 在 pair0 上 +1.54 dB (36.78 vs 35.24) 且 verify_signals 4/4 MATCH (斜率失配消除); 5 对 support 全部优于 R1 (+0.96~+1.53, mean 37.42->38.86), pair1=43.51 与 pair3=40.74 >40 dB, CI 8-10/10 (pair2 达 10/10). glass:2/glass:5 与 stretch:3 均更差, 确认 sev4+stretch:4 为局部最优. 依据 REFLECT 判据 (>40 dB 且 5/5 对一致提升) 判定 CHANGE; 噪声维持 NO_NOISE (residual_std 3.7, 结构化, noise:1 过强), JPEG 维持排除.",
+  "notes": "R2 test_candidate 调用 10 次 (<=15), 新候选 4 个 (<=5); control 复跑 pair0=35.24 与 R1 记录 35.25 一致, glass 施加在本环境可复现. 未修改 predicted_params.json 与 predicted_params_R1.json. 未读取任何禁读路径."
+}

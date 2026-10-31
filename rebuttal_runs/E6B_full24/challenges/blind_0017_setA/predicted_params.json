@@ -1,0 +1,70 @@
+{
+  "challenge_id": "blind_0017_setA",
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "LIKELY"
+    },
+    {
+      "function": "contrast_weaken_scale",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 3,
+      "verdict": "LIKELY"
+    }
+  ],
+  "pipeline_order_note": "blur → contrast → JPEG (ISP: 光学模糊 → ISP 对比度 → 存储). contrast 与 JPEG 同 priority=2, blur 前/后顺序对 PSNR 几乎无差 (24.57 vs 24.59)",
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 25.74,
+      "psnr_pair": "pair1 (pair0=24.59)",
+      "function_family": "JPEG severity ±1 备选",
+      "note": "block_boundary 匹配更佳 (2% err), 但 PSNR 略低于 jpeg3 (pair0 24.59 vs 25.06; pair1 25.74 vs 26.07)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 2},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 24.04,
+      "psnr_pair": "pair0",
+      "function_family": "lens blur (跨族备选)",
+      "note": "gaussian 优于 lens (24.59 vs 24.04 @jpeg4); MTF 不可区分, 保留为跨族备份"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 2},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 23.56,
+      "psnr_pair": "pair0",
+      "function_family": "glass blur (跨族备选)",
+      "note": "glass_score=1.043 曾提示 glass, 但 sev2/sev5 均劣于 gaussian"
+    }
+  ],
+  "verification_pairs": {
+    "pair0": {"psnr": 25.06, "ci": "7/10"},
+    "pair1": {"psnr": 26.07, "ci": "6/10"},
+    "pair2": {"psnr": 25.46, "ci": "7/10"},
+    "pair3": {"psnr": 25.95, "ci": "8/10"},
+    "pair4": {"psnr": 28.06, "ci": "6/10"}
+  },
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "7/10 (pair0, 最优轮); 5 对复核 6-8/10",
+    "mode": "PSNR (sigma=1.73 < 2, NO_NOISE); 终检 SIGNAL WEAK",
+    "rationale": "3 步退化: (1) JPEG 存在高置信 — block_boundary=3.1003 (>1.1, 0%FP) + dct_zero_ratio=0.9066, severity 3 (跨 5 对 PSNR 一致优于 4/5); (2) gaussian blur sev3 — signal 模式 Wiener 核自洽 + spectral_slope 双匹配 (噪声鲁棒 >90% 信号), severity 扫描峰值: sev1=22.76 / sev2=24.47 / sev3=24.59~25.06 / sev4=23.82, 跨族 lens2=24.04、glass2=23.56、glass5=22.96 均劣; (3) contrast_weaken_scale sev1 — 必需: target pct_255=0.118% vs 无 contrast 模拟 4.5% (雪花高光全被压缩), pct_zero 同步塌缩; stretch 变体 REJECT (14.07dB), sev2 REJECT (19.84dB), 加性 brightness_darken_shift REJECT (19.59dB, pct_zero 爆炸); 无噪声: raw noise_prior sigma=1.73<2, peeled §B IMPULSE 按 SKILL 触发规则判定为 JPEG/blur 残差伪影, CI 的 zero_crossing/hf_lf 在无噪声模拟下与 target 匹配 (1-4%). 5 对 PSNR 25.06/26.07/25.46/25.95/28.06 一致但 <30dB, signal 终检 WEAK (variance_ratio 差 65%, block_boundary 差 22%) → severity/全局强度仍可能偏差, 标 UNCERTAIN, 建议训练 PSNR 仲裁."
+  }
+}

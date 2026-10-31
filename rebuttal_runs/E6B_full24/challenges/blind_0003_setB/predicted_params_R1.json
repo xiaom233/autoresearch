@@ -1,0 +1,77 @@
+{
+  "challenge_id": "blind_0003_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 2]],
+  "pipeline": [
+    {
+      "function": "blur_glass",
+      "severity": 2,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 1}],
+      "psnr": 32.71,
+      "stats": {
+        "support_psnr": [28.94, 38.26, 34.33, 31.35, 30.65],
+        "mean_psnr_db": 32.71,
+        "support_ci": ["10/10", "6/10", "7/10", "7/10", "8/10"],
+        "delta_vs_glass2_db": -1.50
+      },
+      "function_family": "glass (same-family lower severity)",
+      "note": "R1 5-pair validation: worse than glass:2 on all 5 pairs (mean -1.50 dB); overshoot/impulse CI diffs turn systematically negative (blur too weak)."
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 3}],
+      "psnr": 31.58,
+      "stats": {
+        "support_psnr": [27.27, 37.23, 32.87, 30.85, 29.67],
+        "mean_psnr_db": 31.58,
+        "support_ci": ["9/10", "7/10", "7/10", "8/10", "7/10"],
+        "delta_vs_glass2_db": -2.63
+      },
+      "function_family": "glass (same-family higher severity)",
+      "note": "R1 5-pair validation: worse than glass:2 on all 5 pairs (mean -2.63 dB); overshoot CI errors +25~31% (blur too strong). Rejects full_analysis heuristic estimated_severity=3."
+    },
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+      "psnr": 29.19,
+      "stats": {"pair0_psnr_db": 29.19, "ci_pass": "8/10"},
+      "function_family": "gaussian",
+      "note": "Cross-family backup. A correct deterministic gaussian:2 would reproduce the target pixel-exactly (>40 dB) on pair0; 29.19 dB rules it out."
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (sigma=1.85<2) + direct signal-profile matching",
+    "psnr": 30.27,
+    "psnr_gap": 1.08,
+    "support_psnr_r0_model": 27.66,
+    "support_psnr_mean_glass2_sim": 34.21,
+    "signal_profile_match_target_vs_glass2_sim": {
+      "gm_ratio": [0.5039, 0.5038],
+      "spectral_slope": [-0.825, -0.8249],
+      "spectral_slope_ratio": [1.1073, 1.1072],
+      "residual_anisotropy": [2.1744, 2.1625],
+      "glass_score": [0.4684, 0.4702],
+      "blur_pca_ratio": [1.078, 1.016],
+      "variance_ratio": [0.8346, 0.8338],
+      "contrast_spread_ratio": [0.8745, 0.8745],
+      "mean_shift": [-0.6, -0.5],
+      "clipped_fraction": [0.0, 0.0],
+      "saturation_chroma_ratio": [0.9318, 0.9316],
+      "residual_intensity_corr": [-0.5243, -0.5284],
+      "noise_prior_sigma": [1.85, 1.85],
+      "spatial_corr": [0.7338, 0.7339],
+      "cross_channel_corr": [0.9875, 0.9875],
+      "block_boundary": [1.0026, 1.0021],
+      "unique_G_ratio": [0.9553, 0.9512],
+      "dct_zero_ratio": [0.449, 0.4492]
+    },
+    "rationale": "R1 signal reinterpretation: a blur_glass:2 simulation on the same clean image reproduces every target signal to near-identical values (variance_ratio 0.8338 vs 0.8346, contrast_spread 0.8745 vs 0.8745, residual_intensity_corr -0.5284 vs -0.5243, gm_ratio 0.5038 vs 0.5039, glass_score 0.470 vs 0.468, sigma 1.85 vs 1.85, block_boundary 1.0021 vs 1.0026). The 'gamma suspect' and low-confidence YCrCb noise signals are therefore glass-shuffle/blur-residual signatures, not missing degradations: brightness gamma/shift sev1 would move the mean by >=25/255 (observed -0.6/255), and contrast_weaken_scale:1 would scale variance by 0.5625 (observed 0.835, no discrete global severity fits with mean unchanged). Severity: R1 5-pair scan shows glass:1 mean 32.71 dB (CI 10/6/7/7/8) and glass:3 mean 31.58 dB (CI 9/7/7/8/7), both below R0's glass:2 5-pair mean 34.21 dB (CI 10/10 on 5/5); R1 pair0 re-check of glass:2 reproduced 30.27 dB with CI 10/10 and all metric diffs 0.000. No candidate approaches >40 dB or +2 dB over the previous round, so decision is NO_CHANGE. The low trained support PSNR (27.66 dB) is expected for glass:2 rather than evidence of misidentification: x_distortion glass performs random local pixel transpositions (shuffle_pixels_njit), which destroy local pixel order irreversibly, capping restoration PSNR.",
+    "qwen_gate": {"available": false, "triggered": false, "reason": "sigma=1.85 not in 2<sigma<10 boundary band; no API available"}
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "full_analysis step1: block_boundary=1.8024 (Tier S, 0% FP) + dct_zero_ratio=0.7346 -> structured local JPEG confirmed (jpeg:5, LIKELY)",
+    "predicted_params step4 / full_analysis: variance_ratio=1.9833 (Tier A, !=1.0), contrast_spread_ratio=1.1143, clipped_fraction=0.0802 -> contrast step present",
+    "reflection R14: sim contrast_strengthen_scale:4+jpeg:5 variance_ratio 1.9815 vs target 1.9833 (near-exact), best PSNR 23.62 / CI 9/10; contrast verdict UNCERTAIN only because JPEG re-encode caps deterministic PSNR <30",
+    "saturation ambiguity rejected: saturation_chroma_ratio=1.3077 << luma variance_ratio 1.9833, saturate_strengthen candidates PSNR 9.52-14.18 -> contrast interpretation holds",
+    "full_analysis step3: BLUR_UNLIKELY, FFT anisotropy=0.00, spectral_slope_ratio=0.9967 -> no motion blur -> no OCAB",
+    "full_analysis step2: noise_prior sigma=1.36 < 2 -> NO_NOISE, no noise step in pipeline"
+  ],
+  "rationale": "对比度(contrast_strengthen_scale, 签名 variance_ratio=1.9833 近精确匹配) + 结构化局部退化(JPEG, block_boundary=1.8024, Tier S 0%FP)同时满足 finetune_strategy.md §七 FiLM-GCM 门控(Tier A variance_ratio + 结构化局部), 对应 exp10 L5(+3.52) 同类场景; 但本 Agent 严格按指令 gate 评估后采用保守默认纯 Swin+SimpleGate+Direct: 对比度步骤 verdict 为 UNCERTAIN(PSNR 23.62<30, 仅因 JPEG 重编码无法达到 >40dB 确认), 且 step4 存在 contrast_from_saturation FP 标记与亮度混淆风险(mean_shift -2.5 未解释), 信号虽 A 级但场景为盲识别; 按 '默认纯 Swin + SimpleGate + Direct, 仅 Tier S/A 明确才启用组件' 及 exp37 盲识别场景组件风险, 不启用 FiLM-GCM/ColorPre, 避免错误退化上的反效果。含 contrast 管线按 §六 Step 1 用 Direct(不用 RandomCurric)。SimpleGate 默认常开(exp39 8/9 安全, 本挑战无 motion 故无 S5 -0.86 风险)。blur 排除(anisotropy=0.00)故不用 OCAB; lr=5e-4, EPOCH=2 保持公平。"
+}

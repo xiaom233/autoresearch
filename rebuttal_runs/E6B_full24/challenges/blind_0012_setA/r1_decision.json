@@ -1,0 +1,26 @@
+{
+  "challenge_id": "blind_0012_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_motion", 5], ["compression_jpeg", 3]],
+  "r1_pipeline": [["blur_motion", 5], ["compression_jpeg", 3]],
+  "support_psnr_r0": 24.93,
+  "candidates_tested": [
+    "blur_motion:5,compression_jpeg:3 (repeat, 5 support pairs; rounds 24,26,28,30,32)",
+    "blur_motion:4,compression_jpeg:3 (repeat, 5 support pairs; rounds 25,27,29,31,33)",
+    "blur_glass:5,compression_jpeg:3 (new boundary control, pair0; round 34)"
+  ],
+  "test_candidate_calls": 11,
+  "best_validation": "blur_motion:5,compression_jpeg:3: PARTIAL on 5/5 support pairs. Rotation-invariant spectral_slope matched 5/5; block_boundary matched 5/5; only Wiener kernel corr fails (0.140/0.337/0.545/0.238/0.664) because the motion angle is drawn randomly at simulation time (prior MATCH corr>0.85 at R0 round 19 when the angle happened to align).",
+  "signal_sources": [
+    "blur_pca_ratio=4.199>2.5 (0% FP over 2880 non-motion cases) -> motion subtype",
+    "spectral_slope target -1.5694 vs clean -1.1801 (ratio 1.330): rotation-invariant severity arbiter; sev5 passes 5/5 pairs, sev4 passes only 3/5 (0.109/0.097 failures)",
+    "block_boundary target 3.2358 (0% FP for JPEG): jpeg:3 passes 5/5 pairs at sev5; sev4 fails at 8%/9%/12% (pairs 1-3)",
+    "gm_ratio=0.4052 and spectral_slope_ratio=1.330 both map to sev4 in aggregate tables -> contradicted by direct multi-pair simulation, sev5 retained",
+    "residual_anisotropy=1.7123 only 0.7% above old 1.7 threshold -> boundary, non-decisive; PCA is the primary motion signal",
+    "glass_score=0.9848 is 2.4x above tool glass(2-4) calibration 0.19-0.41 -> contaminated; glass:5 control PARTIAL on pair0 but no subtype-specific evidence",
+    "noise_prior_sigma=0.74<2; spatial_corr=0.941/cross_ch=0.866/ric=-0.104 -> FP_YCrCb_BLUR_JPEG, NO_NOISE",
+    "variance_ratio=0.8964 (non-contrast band), contrast_spread 0.9653, mean_shift -0.4/255, clipped 0.0037 -> NO_GLOBAL"
+  ],
+  "reason": "R1 signal re-reading produced no evidence strong enough to change the pipeline. The only open conflict was blur severity: aggregate signals (gm_ratio, slope_ratio) favored sev4 while R0's pair0-only test favored sev5. Five-pair arbitration with the rotation-invariant spectral_slope and the JPEG-artifact-sensitive block_boundary favors sev5 in both (5/5 vs 3/5). Glass was closed as a boundary branch (glass_score out of calibration; only PARTIAL on pair0, no subtype-specific match). JPEG:3, two-step order blur->JPEG, no noise and no global all reconfirmed. Residual uncertainty is the random motion angle, which is unrecoverable with the allowed tooling."
+}

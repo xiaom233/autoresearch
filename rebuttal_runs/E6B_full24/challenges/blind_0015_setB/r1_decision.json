@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0015_setB",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 2],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "r1_pipeline": [
+    ["blur_motion", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "support_psnr_r0": 16.91,
+  "support_psnr_r0_source": "r0_result.json (trained R0 model on support pairs)",
+  "r0_simulation_psnr": {"pair0": 36.8, "pair1": 19.96, "pair2": 30.07, "pair3": 28.34, "pair4": 25.65},
+  "candidates_tested": [
+    {
+      "rank": 1,
+      "pipeline": "blur_motion:1,brightness_darken_shfit_RGB:3",
+      "mode": "psnr",
+      "result": "ACCEPT: pair0 43.01 / pair1 58.91 / pair2 inf (bit-exact) / pair3 36.66 / pair4 37.56 dB, CI 10/10 on all 5 pairs; improves every pair by +6.21..+38.95 dB over R0 simulation"
+    },
+    {
+      "rank": 2,
+      "pipeline": "blur_gaussian:1,brightness_darken_shfit_RGB:3",
+      "mode": "psnr",
+      "result": "pair1 20.15 dB CI 8/10 (vs R0 19.96 CI 5/10): weak-blur probe, no material gain -> rejected"
+    },
+    {
+      "rank": 3,
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+      "mode": "psnr",
+      "result": "pair1 19.89 dB CI 5/10 (order swap of R0 pipeline) -> no gain, order ruled out"
+    },
+    {
+      "rank": 4,
+      "pipeline": "blur_gaussian:2,brightness_darken_gamma_RGB:2",
+      "mode": "psnr",
+      "result": "pair0 26.32 dB CI 5/10 (gamma tone-curve alternative) -> clearly rejected vs 36.80 dB additive shift"
+    }
+  ],
+  "test_candidate_calls": 9,
+  "test_candidate_rounds": [26, 27, 28, 29, 30, 31, 32, 33, 34],
+  "best_validation": {
+    "pipeline": "blur_motion:1,brightness_darken_shfit_RGB:3",
+    "per_pair_psnr": {"pair0": 43.01, "pair1": 58.91, "pair2": null, "pair3": 36.66, "pair4": 37.56},
+    "per_pair_ci": {"pair0": "10/10", "pair1": "10/10", "pair2": "10/10", "pair3": "10/10", "pair4": "10/10"},
+    "pair2_note": "PSNR=inf dB (MSE=0, bit-exact)",
+    "criterion": ">40 dB met on 3/5 pairs (43.01, 58.91, inf); +2 dB over previous round met on 5/5 pairs (min +6.21 dB)"
+  },
+  "signal_sources": [
+    "residual_anisotropy=2.198 on pair1 residual after peeling brightness_darken_shfit_RGB:3 (residual_pair1_after_b3.json); SKILL: anisotropy>1.7 => motion blur (94% recall, 0% FP); the residual's own full analysis returned verdict=MOTION_BLUR, estimated_severity=3 (gm_ratio source)",
+    "gm_ratio=0.637 and spectral_slope_ratio=1.0891 on the same residual (mild-to-moderate directional blur; motion sev1 radius=5, sigma=3)",
+    "global step: brightness_mean_shift monotonic with clipped_fraction across the 5 pairs (0.494->-36.3, 0.357->-43.9, 0.242->-46.1, 0.132->-49.0, 0.103->-49.3) and unique_G=202-203 in every pair/channel => additive RGB shift sev3 (c=0.2=51/255)",
+    "gamma alternative refuted: brightness_darken_gamma_RGB:2 scored 26.32 dB on pair0 with impulse_pct_255 diff -0.723% (sim has 255s, target none), inconsistent with preserved highlights",
+    "pair1 dark-clipping discrepancy under gaussian (target 10.3% zeros vs sim 4.5%) disappears when the kernel is motion:1 (CI 10/10)"
+  ],
+  "reason": "R0 left blur subtype/severity unresolved (gaussian:2; pair1 only 19.96 dB; verdict UNCERTAIN). Signal reinterpretation found R0 violated the SKILL motion rule: the post-brightness residual on pair1 has residual_anisotropy=2.198 and was itself classified MOTION_BLUR, yet R0 tested glass:3 and never motion. Testing blur_motion:1 + brightness_darken_shfit_RGB:3 reproduced the support pairs almost exactly (pair1 58.91 dB, pair0 43.01, pair2 bit-exact, pair3 36.66, pair4 37.56; CI 10/10 all pairs), while every alternative (gamma, gaussian1, order swap) stayed near or below R0. Decision is CHANGE per the >40 dB / +2 dB criteria; caveat: motion angle is randomly drawn per simulation (one repeat drew a bad angle: R30 17.64 dB), so the evidence rests on the CI-10/10 / bit-exact reproductions."
+}

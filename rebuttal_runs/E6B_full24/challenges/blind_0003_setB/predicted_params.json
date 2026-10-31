@@ -1,0 +1,54 @@
+{
+  "challenge_id": "blind_0003_setB",
+  "pipeline": [
+    {
+      "function": "blur_glass",
+      "severity": 2,
+      "verdict": "LIKELY",
+      "evidence": {
+        "glass_score": 0.4684,
+        "gm_ratio": 0.5039,
+        "spectral_slope_ratio": 1.1073,
+        "pca_ratio": 1.078,
+        "fft_anisotropy": 2.1744,
+        "pair0_psnr_db": 30.25,
+        "pair0_ci": "10/10",
+        "support_psnr_db": [30.25, 39.76, 35.63, 33.19, 32.20],
+        "support_ci": ["10/10", "10/10", "10/10", "10/10", "10/10"]
+      }
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+      "psnr": 29.19,
+      "stats": {"ci_pass": "8/10", "zero_crossing_pct_err": 26, "overshoot_pct_err": 45},
+      "function_family": "gaussian",
+      "note": "2nd best; below 30dB threshold but kept as cross-family backup (gap 1.06dB). CI mismatch on zero_crossing/hf_lf indicates different high-frequency signature than target."
+    },
+    {
+      "pipeline": [{"function": "blur_lens", "severity": 2}],
+      "psnr": 28.90,
+      "stats": {"ci_pass": "9/10", "overshoot_pct_err": 33},
+      "function_family": "lens",
+      "note": "lens sev2; MTF-indistinguishable from gaussian (SKILL C3), deterministic. Close PSNR to gaussian."
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 1}],
+      "psnr": 28.93,
+      "stats": {"ci_pass": "10/10", "block_boundary_pct_err": 12, "overshoot_pct_err": 12},
+      "function_family": "glass (severity alternative)",
+      "note": "Same family lower severity; CI passes but non-zero diffs (block_boundary 12%, overshoot 12%, hf_lf 6%) vs glass:2 all diffs <=0.001 -> sev2 favored."
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR (sigma=1.85<2; peeled/control checks -> NO_NOISE)",
+    "psnr": 30.25,
+    "psnr_gap": 1.06,
+    "rationale": "Single-step glass blur. run_full_analysis: block_boundary=1.003 (no JPEG), unique_G=235 (no quantization), glass_score=0.468>0.25 with gm_ratio=0.504; PCA=1.078<2.5 and FFT=2.174<2.2 exclude motion. Pair0 test_candidate: glass:2 PSNR=30.25dB CI=10/10 with all CI metric diffs ~0.000 (overshoot/zero-crossing/hf-lf exact match, the pixel-shuffle glass fingerprint); severity scan brackets optimum (glass:1=28.93, glass:2=30.25, glass:3=27.27). Cross-family tests gaussian:2=29.19 (CI 8/10), lens:2=28.90 (CI 9/10), motion:3=21.75 all worse. JPEG control (glass:2+jpeg:1) drops PSNR to 29.46 and CI to 7/10 (block_boundary err 66%) -> NO_COMPRESSION. Noise control (glass:2+noise_gaussian_RGB:1) collapses PSNR to 24.63 and CI to 3/10 -> NO_NOISE. All 4 support pairs re-tested with blur_glass:2: PSNR 39.76/35.63/33.19/32.20 dB, CI 10/10 each (all metric diffs <=0.001). Glass uses a random pixel shuffle (non-deterministic realization) so PSNR cannot exceed ~40dB even when correct (SKILL C.4); per SKILL D.4 the 5/5 identical statistical fingerprint (CI 10/10) constitutes sufficient indicator evidence, hence LIKELY.",
+    "qwen_gate": {"available": false, "triggered": false, "reason": "sigma=1.85 not in 2<sigma<10 boundary; no API available"}
+  }
+}

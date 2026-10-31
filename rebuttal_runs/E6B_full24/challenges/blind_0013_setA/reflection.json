@@ -1,0 +1,617 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=1.2081 (>1.1, 0%FP); unique_G=256 (no quantization); dct_zero_ratio=0.4272",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.124, spectral_slope_ratio=0.984, FFT_anisotropy=0.00, pca=0.0; should_still_test=true",
+      "noise": "noise_prior_sigma=4.82 (raw, low-confidence type guess GAUSSIAN_YCrCb); spatial_corr=0.2291, cross_channel_corr=0.8058, residual_intensity_corr=0.3267, gamma_suspect=true; peeled §B (jpeg:2 stripped): vm_slope=2.60 → speckle, rgb_ratio=1.027 → not YCrCb, var_slope=-0.004 → not poisson",
+      "global": "NO_GLOBAL (low confidence): mean_shift=-4.1/255=-0.016, variance_ratio=0.8936, contrast_spread_ratio=0.9875, clipped_fraction=0.0631, saturation_chroma_ratio=0.9117"
+    },
+    "mode": "SIGNAL (sigma=4.8)",
+    "qwen_noise_gate": {
+      "triggered": true,
+      "reason": "sigma=4.8 in boundary range (2<sigma<10)",
+      "action": "skipped — Qwen/API unavailable; recorded per instructions"
+    },
+    "suspected": [
+      "compression_jpeg (sev unknown)",
+      "noise (speckle vs gaussian_RGB to discriminate)"
+    ],
+    "ruled_out": [
+      "quantization (unique_G=256)",
+      "motion blur (anisotropy=0.00)",
+      "contrast/brightness (spread_ratio~1, mean_shift small, low confidence)",
+      "gaussian_YCrCb (peeled rgb_ratio=1.027 < 1.4)",
+      "poisson (peeled var_slope=-0.004, not >1.0)",
+      "blur (slope_ratio=0.984 < 1.08; adding blur_gaussian:1 worsened sigma by 87% and bb by 15%)"
+    ]
+  },
+  "noise_6step_check": {
+    "residual_source": "peeled residual = target - simulate(clean, compression_jpeg:2), residual_std=23.3 (JPEG artifacts remain)",
+    "extreme_pct": 61.02,
+    "vm_slope": 2.6031,
+    "var_slope": -0.0036,
+    "spatial_corr": 0.5638,
+    "rgb_ratio": 1.0274,
+    "cross_ch_corr": 0.8969,
+    "noise_prior_sigma_peeled": 9.64,
+    "diagnosis": "extreme_pct=61% is the known JPEG-artifact false positive (reflection rule: extreme_pct>50% + sigma<5 → ignore IMPULSE); vm_slope=2.60 → speckle; rgb_ratio=1.03 → not YCrCb; var_slope≈0 → not poisson. Type confirmed by full signal-profile comparison: noise_speckle:3+compression_jpeg:2 reproduces ric=0.3276/σ=4.82/mean_shift=-4.1/dct_zero=0.4275 vs target 0.3267/4.82/-4.1/0.4272, while gaussian_RGB:3 gives ric=0.009/mean_shift=0.0."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "R1: block_boundary=1.208 (0%FP JPEG confirmed, 14400-case). 确定 JPEG severity, 信号报告建议 sev=2; SIGNAL 模式比较 block_boundary 与 dct_zero_ratio (sigma=4.8 PSNR 不可用)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,compression_jpeg:2",
+        "thinking": "R2: 目标残差相对 jpeg:2 模拟 sigma 高出 sqrt(4.82^2-3.34^2)=3.5, dct_zero 显著更低(0.427 vs 0.601) 表明噪声先于 JPEG; 测 gaussian_RGB 基线对照 (sigma/inFWHM/bb 信号)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "thinking": "R2 severity 扫描: gaussian_RGB sev2 残差sigma=3.71<目标4.82, 上调 sev3; 目标 dct_zero=0.427 vs sev2模拟0.491 需更强噪声压低"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_poisson:1,compression_jpeg:2",
+        "thinking": "R2 噪声类型全覆盖: 5对图像 ric=0.21-0.60 (残差幅度∝亮度) 且 gaussian_RGB 模拟 ric=0.02, 提示信号依赖噪声; 目标 sigma 4.82 对应 poisson sev_map 的 sev1; 验 sigma/残差/FWHM/bb"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)"
+        ],
+        "pipeline": "noise_poisson:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,compression_jpeg:2",
+        "thinking": "R2 severity 扫描 (PARTIAL): poisson:1 残差sigma=3.58<4.82, ric=0.111<0.318, clip/chroma 已吻合; 上调 sev2 观察 sigma/ric/dct"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)"
+        ],
+        "pipeline": "noise_poisson:2,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,brightness_darken_gamma_RGB:1,compression_jpeg:2",
+        "thinking": "R2 全局候选: 5对图像 mean 一致为负(-0.5~-4.3)且 ric 0.21-0.60 (确定性强度依赖残差), gaussian模拟 ric=0.02 → 假设 brightness_darken_gamma 变暗步骤; 3步=noise+global+jpeg"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0576)",
+          "global:variance_ratio (diff=35%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,brightness_darken_gamma_RGB:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "独立复核 R: block_boundary=1.208 (0%FP, JPEG 确认, 14400-case); SIGNAL 模式比对 bb/dct_zero 定 JPEG severity (sigma=4.8, PSNR 不可用)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "thinking": "独立复核 R: §B 剥离后 rgb_ratio=1.027(<1.4, 非YCrCb) → gaussian_RGB 基线; noise_prior sigma=4.8 → sev3; 比对 sigma/FWHM/残差/bb"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,compression_jpeg:2",
+        "thinking": "Round1 噪声全覆盖: 剥离残差 vm_slope=2.60 触发 speckle 候选; 检验 speckle 是否优于 gaussian_RGB 的 sigma/残差匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)"
+        ],
+        "pipeline": "noise_speckle:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2,compression_jpeg:2",
+        "thinking": "Round1 severity 扫描 (PARTIAL): speckle:1 残差sigma差62%偏低 → 上调 sev2 重检 sigma/残差/bb"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=37%)"
+        ],
+        "pipeline": "noise_speckle:2,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "Round1 severity 扫描续: sev1 差62%→sev2 差37% 持续改善, 按协议继续 sev+1 直至 MATCH 或恶化"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,blur_gaussian:1,compression_jpeg:2",
+        "thinking": "Blur 控制测试 (BLUR_UNLIKELY, should_still_test): 目标 slope_ratio=0.984(<1.08), gm_ratio 与 speckle+jpeg 模拟完全一致(1.124 vs 1.123) → 预期无 blur; 加入 blur_gaussian:1 验证 blur 信号是否恶化"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=87%)",
+          "compression:block_boundary (diff=15%)"
+        ],
+        "pipeline": "noise_speckle:3,blur_gaussian:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "跨 pair 复核(1): 最终候选 noise_speckle:3+jpeg:2 在 pair1 上复验 sigma/残差/bb"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "跨 pair 复核(2): 最终候选 noise_speckle:3+jpeg:2 在 pair2 上复验 sigma/残差/bb"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "跨 pair 复核(3): 最终候选 noise_speckle:3+jpeg:2 在 pair3 上复验 sigma/残差/bb"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "跨 pair 复核(4): 最终候选 noise_speckle:3+jpeg:2 在 pair4 上复验 sigma/残差/bb"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R1 基线复核: 重跑 pair0 信号报告与 R0 完全一致 (bb=1.208, sigma=4.82, ric=0.32, var_ratio=0.894)。R0 profile 10 项统计吻合; 本轮重测确认当前候选并输出模拟图供 profile 对比 (chroma_ratio/clipped 边界检查)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,compression_jpeg:2",
+        "thinking": "R1 信号重释: R0 对 poisson 只扫到 sev2(diff=50%) 就终止, 违反强制 severity 扫描; 由 sev1/2 的 sigma 差(62%/50%)外推 sigma∝1/sqrt(c), sev5(c=15) 的 wavelet sigma 可能落在 4.8 附近。测 poisson:5 补全被漏掉的候选, 用 sigma/残差/bb + 完整 profile(ric/mean_shift/variance) 区分"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=21%)"
+        ],
+        "pipeline": "noise_poisson:5,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R1 5-pair 验证 (pair1): 最终候选复验。信号来源: pair0 完整 profile 12 项统计吻合(sigma/ric/mean_shift/var_ratio/dct_zero/bb/chroma/clipped); poisson:5 补测被 dct_zero 0.369 vs 0.427 与 ric 0.264 vs 0.321 严格劣于 speckle:3 而排除"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R1 5-pair 验证 (pair2): 最终候选复验。信号来源: pair0 完整 profile 12 项统计吻合(sigma/ric/mean_shift/var_ratio/dct_zero/bb/chroma/clipped); poisson:5 补测被 dct_zero 0.369 vs 0.427 与 ric 0.264 vs 0.321 严格劣于 speckle:3 而排除"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R1 5-pair 验证 (pair3): 最终候选复验。信号来源: pair0 完整 profile 12 项统计吻合(sigma/ric/mean_shift/var_ratio/dct_zero/bb/chroma/clipped); poisson:5 补测被 dct_zero 0.369 vs 0.427 与 ric 0.264 vs 0.321 严格劣于 speckle:3 而排除"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R1 5-pair 验证 (pair4): 最终候选复验。信号来源: pair0 完整 profile 12 项统计吻合(sigma/ric/mean_shift/var_ratio/dct_zero/bb/chroma/clipped); poisson:5 补测被 dct_zero 0.369 vs 0.427 与 ric 0.264 vs 0.321 严格劣于 speckle:3 而排除"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_speckle",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "mode": "SIGNAL (sigma=4.82 > 2, PSNR unusable)",
+    "tier": 3,
+    "rationale": "JPEG: block_boundary=1.2081 (>1.1, 0%FP) and jpeg:2 alone matches bb; noise must precede JPEG because dct_zero_ratio=0.4272 only reproduces when noise is applied before compression (0.4275), vs 0.3996 for gaussian-only panel. Noise type: peeled §B vm_slope=2.603 points to speckle; full-profile comparison shows noise_speckle:3+compression_jpeg:2 matches target on essentially every statistic (sigma 4.82/4.82, ric 0.3276/0.3267, spatial_corr 0.2287/0.2291, cross_ch 0.8055/0.8058, bb 1.2115/1.2081, dct_zero 0.4275/0.4272, variance_ratio 0.8937/0.8936, mean_shift -4.1/-4.1, gm_ratio 1.123/1.124, slope_ratio 0.984/0.984). gaussian_RGB:3 passed verify_signals (sigma/clean_residual/bb) but fails the profile check (ric 0.009 vs 0.327, mean_shift 0.0 vs -4.1) → rejected. Blur absent; no global step. Because sigma>2 forbids PSNR, and noise steps can never be LIKELY, overall verdict = UNCERTAIN.",
+    "signal_profile_match": {
+      "noise_speckle:3,compression_jpeg:2": {
+        "sigma": 4.82,
+        "ric": 0.3276,
+        "spatial_corr": 0.2287,
+        "cross_ch": 0.8055,
+        "block_boundary": 1.2115,
+        "dct_zero": 0.4275,
+        "variance_ratio": 0.8937,
+        "mean_shift": -4.1,
+        "gm_ratio": 1.123,
+        "slope_ratio": 0.984
+      },
+      "noise_gaussian_RGB:3,compression_jpeg:2": {
+        "sigma": 4.45,
+        "ric": 0.0093,
+        "spatial_corr": 0.2229,
+        "cross_ch": 0.8071,
+        "block_boundary": 1.2274,
+        "dct_zero": 0.3996,
+        "variance_ratio": 0.8954,
+        "mean_shift": 0.0,
+        "gm_ratio": 1.115,
+        "slope_ratio": 0.975
+      },
+      "target": {
+        "sigma": 4.82,
+        "ric": 0.3267,
+        "spatial_corr": 0.2291,
+        "cross_ch": 0.8058,
+        "block_boundary": 1.2081,
+        "dct_zero": 0.4272,
+        "variance_ratio": 0.8936,
+        "mean_shift": -4.1,
+        "gm_ratio": 1.124,
+        "slope_ratio": 0.984
+      }
+    },
+    "cross_pair_validation": {
+      "pair1": "MATCH (noise:sigma, noise:clean_residual, compression:block_boundary)",
+      "pair2": "MATCH (noise:sigma, noise:clean_residual, compression:block_boundary)",
+      "pair3": "MATCH (noise:sigma, noise:clean_residual, compression:block_boundary)",
+      "pair4": "MATCH (noise:sigma, noise:clean_residual, compression:block_boundary)"
+    },
+    "qwen_noise_gate": "triggered (2<sigma<10) but Qwen/API unavailable — skipped and recorded"
+  },
+  "psnr_ranking": [],
+  "reflection_R1": {
+    "trigger": "R0 verdict=UNCERTAIN (support PSNR 27.78 dB); R1 required",
+    "mode": "SIGNAL (sigma=4.82 > 2, PSNR disabled)",
+    "signal_reinterpretation": [
+      {
+        "signal": "brightness_mean_shift=-4.1 raw (=-0.0161 in 0-1 scale) with brightness_detected_raw=true and all_same_dir",
+        "misjudgment": "Auto-suppressed by step4 JPEG cross-validation: block_uniformity=1.208 > 0.1 is effectively always true, so any brightness flag is dropped whenever JPEG is present",
+        "evidence": "R1 simulation noise_speckle:3,compression_jpeg:2 reproduces mean_shift=-4.1 exactly with no brightness step; R0 round 6 showed adding brightness_darken_gamma_RGB:1 over-darkens (mean_shift diff 0.0576, variance_ratio diff 35%)",
+        "conclusion": "no brightness step"
+      },
+      {
+        "signal": "clipped_fraction=0.0631 (heavy_clipping=true); saturation_chroma_ratio=0.9117 (borderline, threshold 0.85)",
+        "evidence": "speckle:3+jpeg:2 simulation gives clipped_fraction=0.0641 and chroma_ratio=0.9106; clipping is content+speckle+JPEG effect",
+        "conclusion": "no saturation and no global step"
+      },
+      {
+        "signal": "R0 poisson severity scan stopped at sev2 (sigma diff 50%, decision ADJUST_SEVERITY) — mandatory severity scan incomplete",
+        "evidence": "extrapolation sigma~1/sqrt(c) suggested sev5 could reach target 4.82; R1 tested noise_poisson:5,compression_jpeg:2: verify_signals PARTIAL (sigma diff 21%), full profile sigma 5.19 vs 4.82, dct_zero 0.3686 vs 0.4272, ric 0.2644 vs 0.3211, gm_ratio 1.201 vs 1.1243 — strictly worse than speckle:3 (0.4261/0.3234/1.1242/4.82)",
+        "conclusion": "poisson rejected; R0 conclusion robust"
+      },
+      {
+        "signal": "residual_intensity_corr=0.3211 + gamma_suspect_from_noise=true",
+        "evidence": "speckle:3+jpeg:2 sim ric=0.3234 (multiplicative noise, std proportional to intensity); gaussian_RGB:3+jpeg:2 sim ric=0.0093",
+        "conclusion": "intensity-dependent residual explained by speckle; no gamma/intensity transform step"
+      },
+      {
+        "signal": "step2 verdict label GAUSSIAN_YCrCb (low confidence)",
+        "misjudgment": "Label is a fallback of the ric>0.15 branch, not a channel-ratio signal; the speckle simulation itself receives the same label under this heuristic",
+        "evidence": "peeled §B rgb_ratio=1.0274 < 1.4 excludes YCrCb",
+        "conclusion": "label artifact; not a missed step"
+      },
+      {
+        "signal": "blur: gm_ratio=1.1243, spectral_slope_ratio=0.9843",
+        "evidence": "sim gm_ratio=1.1242, slope_ratio=0.9864; R0 round 12 control with blur_gaussian:1 worsened sigma by 87% and bb by 15%",
+        "conclusion": "no blur step"
+      }
+    ],
+    "candidate_ranking": [
+      {"pipeline": "noise_speckle:3,compression_jpeg:2", "verdict": "MATCH on 5/5 pairs; pair0 profile 12/12 stats match", "status": "BEST"},
+      {"pipeline": "noise_poisson:5,compression_jpeg:2", "verdict": "PARTIAL (sigma 21%), profile worse on dct_zero/ric/gm", "status": "REJECTED"},
+      {"pipeline": "noise_gaussian_RGB:3,compression_jpeg:2", "verdict": "verify_signals MATCH but profile ric=0.009/mean_shift=0.0 vs target 0.3211/-4.1", "status": "REJECTED (carried from R0)"}
+    ],
+    "support_validation_R1": {
+      "pair0": "MATCH — noise:sigma, noise:clean_residual, compression:block_boundary (round 17)",
+      "pair1": "MATCH (round 19)",
+      "pair2": "MATCH (round 20)",
+      "pair3": "MATCH (round 21)",
+      "pair4": "MATCH (round 22)"
+    },
+    "pair0_profile_check": {
+      "target": {"sigma": 4.82, "ric": 0.3211, "spatial_corr": 0.2291, "cross_ch": 0.8058, "block_boundary": 1.2081, "dct_zero": 0.4272, "variance_ratio": 0.8936, "mean_shift": -4.1, "gm_ratio": 1.1243, "slope_ratio": 0.9843, "chroma_ratio": 0.9117, "clipped_fraction": 0.0631},
+      "speckle3_jpeg2_sim": {"sigma": 4.82, "ric": 0.3234, "spatial_corr": 0.2286, "cross_ch": 0.8054, "block_boundary": 1.2113, "dct_zero": 0.4261, "variance_ratio": 0.8938, "mean_shift": -4.1, "gm_ratio": 1.1242, "slope_ratio": 0.9864, "chroma_ratio": 0.9106, "clipped_fraction": 0.0641}
+    },
+    "test_candidate_calls": 6,
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 3, "verdict": "UNCERTAIN"},
+        {"function": "compression_jpeg", "severity": 2, "verdict": "UNCERTAIN"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "rationale": "No contradicting evidence found; all borderline signals are reproduced by the R0 pipeline itself, and the one R0 protocol gap (poisson severity scan) was closed with poisson:5 losing to speckle:3 on every profile statistic."
+    }
+  }
+}

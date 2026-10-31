@@ -1,0 +1,38 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "ocab",
+    "window_size": 16,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 30
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "full_analysis.step3_blur: residual_anisotropy=1.7123 > 1.7 (Tier A 信号, 0% FP) + blur_pca_ratio=4.199 > 2.5 (41% recall/0% FP) → blur_motion, subtype_confidence=high",
+    "predicted_params/final_decision: blur_motion:5 是唯一两次通过旋转不变 spectral_slope 的候选 (sev4 两次失败 diff=0.105/0.141), 并 1 次信号 MATCH 3/3 (slope+wiener+block); overall UNCERTAIN 仅因 motion 角度不可恢复导致像素 PSNR 受限, 非子类型存疑",
+    "full_analysis.step1_compression: block_boundary=3.2358 >> 1.1 (Tier S, 0% FP), dct_zero_ratio=0.9366 → compression_jpeg:3 LIKELY; §七 表中 JPEG 无对应门控组件, 不额外加组件",
+    "full_analysis.step4_global: variance_ratio=0.896 落在非 contrast 区间 [0.55,1.80], contrast_from_variance=false, mean_shift=-0.4/255, saturation_chroma_ratio=0.9849 → NO_GLOBAL → FiLM-GCM/ColorPre 的 Tier A 门控未触发, 均不启用",
+    "noise: noise_prior_sigma raw=0.74 / peeled=1.24 < 2, extreme_pct=62.48>50% 且 sigma<5 属已知 JPEG/blur 假阳性规则 (peeled residual std=27.7 由 blur 角度失配主导) → NO_NOISE, step2 GAUSSIAN_YCrCb 判定为 FP_YCrCb_BLUR_JPEG",
+    "finetune_strategy.md §五/§七 + CLAUDE.md 规则 10: 严重 motion blur → OCAB + window_size=16 (exp10 motion +1.19 dB vs Swin); anisotropy 为 0% FP 信号, 依 §七 'Tier S/A 信号触发即启用组件' 启用",
+    "finetune_strategy.md §五 参数公平性: OCAB dim=64 膨胀至 2.1M (4.7x), 必须 AR_EMBED_DIM=30 → 467K ≈ Swin 454K (+2.9%)",
+    "SimpleGate 默认常开: -32K 参数, exp39 8/9 退化安全 (仅 S5 -0.86), 本挑战为 blur+jpeg 两步非三退化"
+  ],
+  "rationale": "核心信号: 两个 0% FP 的模糊子类型信号 (residual_anisotropy=1.7123, blur_pca_ratio=4.199) 一致指向 motion blur (sev5), 触发 §七 Tier A 的 OCAB 门控, 且 CLAUDE.md 规则 10 对严重 motion 明确推荐 OCAB+ws16; JPEG:3 虽为 Tier S 确认 (block_boundary=3.24) 但无门控组件。无全局退化 (variance_ratio=0.896 在非 contrast 区间) 故 FiLM-GCM/ColorPre 一律不启用, 噪声为已知 blur/JPEG 假阳性, 不加降噪组件。策略用 Direct 从零训练 (Finetune_strategy §六: True Ft ≈ Direct), lr=5e-4, EPOCH=2, batch=16; embed_dim 取 30 以满足 OCAB 参数对齐强制规则 (467K vs Swin 454K)。风险备注: anisotropy 仅 1.7123 略高于阈值 1.7, 若 motion 子类型误判则 OCAB 的唯一劣势场景是 contrast 全局退化 (OCAB 崩溃), 而本挑战 NO_GLOBAL 已排除 contrast, 故 OCAB 的下行风险有限。",
+  "risk_notes": [
+    "residual_anisotropy=1.7123 仅略高于 1.7 阈值, 需依赖第二信号 blur_pca_ratio=4.199 共同支撑 motion 判定",
+    "motion sev5 在 2-epoch 预算内学习难度高 (§三), 但 Direct 策略下不影响收敛路径"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "noise 步骤 verdict=UNCERTAIN (noise_gaussian_YCrCb sev1, sigma=14.7, tier3, CI 1/4) → 该步骤按 finetune_strategy.md §七 不加组件",
+    "global 步骤 verdict=UNCERTAIN (saturate_strengthen_YCrCb sev4, alternate satY5)：variance_ratio=1.579 属 Tier A，但 full_analysis contrast_detected_raw=false，全局判定为 saturation 而非 contrast",
+    "ColorPre 禁用依据：satYCrCb 属 saturation 型全局退化，finetune_strategy.md §七 明确 saturation 不触发 ColorPre（有害 -0.34，仅 contrast Tier A 才启用）",
+    "FiLM-GCM 禁用依据：门控要求 contrast + 结构化(motion/jpeg)，本挑战结构化局部信号全无 — block_boundary=1.0034、unique_G=256、spectral_slope_ratio=0.993、FFT anisotropy=0.00，故不满足 FiLM-GCM 的 Tier A 组合条件",
+    "OCAB 禁用依据：anisotropy_ratio 未达 >1.7（FFT anisotropy=0.00，BLUR_UNLIKELY），无 motion blur，不满足 OCAB 的 0%FP 门控",
+    "SimpleGate 默认常开：exp39 8/9 退化安全（L2 +0.78），-32K 参数",
+    "策略=Direct：管线含全局 saturation（非 contrast 型），两步 verdict 均 UNCERTAIN，§六 Step 1 取保守 Direct；不是 true Ft（exp37/38 与 Direct 无差异），不用 RandomCurric（全局退化下无收益证据）"
+  ],
+  "rationale": "盲识别输出为 UNCERTAIN 的两步管线（YCrCb gaussian noise sev1 + YCrCb saturation sev4），无压缩、无模糊、无结构化局部退化。按 finetune_strategy.md §七 信号置信度门控：所有组件触发条件（anisotropy>1.7、contrast+结构化 variance_ratio、contrast Tier A ColorPre）均不满足，DualBranch/CSN/SCA/FPro 按指令禁用。采用默认纯 Swin + SimpleGate + Direct 从零训练，lr=5e-4、2 epoch、batch=16，纯 Swin 在盲识别不确定场景最鲁棒（exp37 23/24 胜）。"
+}

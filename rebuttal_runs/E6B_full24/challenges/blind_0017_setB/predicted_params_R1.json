@@ -1,0 +1,54 @@
+{
+  "challenge_id": "blind_0017_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 5], ["compression_jpeg", 4]],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr_pair0": 26.81,
+      "support_psnr_5pairs": [26.81, 26.51, 26.95, 26.72, 26.89],
+      "support_psnr_mean": 26.78,
+      "delta_vs_r0_mean_db": 1.67,
+      "note": "R1 最佳 PSNR 候选: 5/5 对均优于 R0 (Δ +0.50/+2.00/+1.61/+1.92/+2.30), 但均值 +1.67dB < +2dB CHANGE 阈值; 且平台 ~26.8dB << 40dB, 说明它不是真实确定性退化, 只是比本进程 glass5 draw 更平滑的近似. glass 在 harness 内同一调用可复现 (round1/round26 均 26.31dB), 但挑战图中的 glass draw 与本进程 draw 不同 (target gm=0.1817/slope=-1.459 vs sim 0.1309/-1.704), 故 PSNR 差异反映 draw 近似程度而非类型判别",
+      "function_family": "gaussian+jpeg"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "compression_jpeg", "severity": 5}
+      ],
+      "psnr_pair0": 26.33,
+      "note": "R1 信号层 PARTIAL (spectral_slope+wiener MATCH), 但全信号重测: block_boundary=12.81 vs target 9.127 (+40%), dct_zero_ratio=0.9762 vs 0.9629, saturation_chroma_ratio=1.058 vs 0.896 (更强 JPEG 反而抬 chroma), clipped=0.0027 vs 0.0003; 不如主管线的 bb/dct/chroma 匹配",
+      "function_family": "glass+jpeg"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "6/10 (pair0 R0); R1 gaussian4 5 对均 7/10",
+    "mode": "PSNR (peeled noise sigma=0.99 < 2, NO_NOISE)",
+    "support_psnr_r0": 21.66,
+    "signal_reexamination": {
+      "noise": "peeled_noise_check(blur_glass:5,compression_jpeg:4): noise_prior sigma=0.99 (<2, NO_NOISE). §B 表面 IMPULSE(extreme_pct=33.86%) 但 residual std=9.8, var_slope=0.0247, vm_slope=-0.2524, spatial_corr=0.9747, cross_ch_corr=0.7893 → 残差高度结构化 (glass 纹理失配+JPEG), 符合 SKILL 中 sigma<5 时 extreme_pct 假阳性规则; 不添加 noise 步",
+      "compression": "block_boundary=9.127 (0%FP 强信号) + dct_zero_ratio=0.9629 (sim glass5+jpeg4=0.9699, 差 0.7%) + unique_G_ratio=0.9844 (sim 0.9961) → JPEG sev4 维持; R0 5 对 bb 偏差 6/2/0/3/4% 均 <8%",
+      "blur": "glass_score=1.6199 ≈ sim 1.5724; residual_anisotropy=1.3915 ≈ sim 1.3702 (<1.7 排除 motion); 目视像素打乱/旋涡纹理; gm_ratio=0.1817 vs sim 0.1309、spectral_slope=-1.459 vs -1.704 表明 target 的 glass draw 比本进程 draw 高频更多 (draw 差异), 但类型仍为 glass; 所有确定性候选 (gaussian3/4/5, lens4, motion4 + jpeg) 均停在 25.2-26.8dB, 无一 >40dB → 真退化含随机 glass 分量",
+      "global": "target mean_shift=+8.3/variance_ratio=0.7638/chroma=0.8957/spread=0.9332 vs sim glass5+jpeg4 +0.8/0.9204/0.9835/0.9391 → 存在未解释全局指纹; 但 R1 实测三种单全局步均不匹配: contrast_weaken_scale:1 (var 0.514, chroma 0.755, mean 仅+1.5 — 过压且对 mean 不敏感, 说明 clean 均值≈128), saturate_weaken_HSV:1 (chroma 0.715 过冲, var 反升至 0.99), brightness_brighten_gamma_RGB:1 (mean +9.2 匹配但 var 1.126/spread 1.022 方向相反); 无任何单一库内全局函数能同时复现 mean↑/var↓/chroma↓/spread 不变 → 不加 global 步, 该指纹归因于挑战图 glass draw 差异 + blur/JPEG 暗区交互"
+    },
+    "r1_candidates_tested": [
+      {"pipeline": "blur_gaussian:4,compression_jpeg:4", "psnr_pair0": 26.81, "delta_pair0": 0.50, "support_5pair_mean": 26.78, "delta_mean": 1.67, "verdict": "REJECT (未达 >40dB, 未达 +2dB)"},
+      {"pipeline": "blur_glass:4,compression_jpeg:5", "psnr_pair0": 26.33, "delta_pair0": 0.02, "verdict": "REJECT (bb +40%, dct/chroma/clip 更差)"},
+      {"pipeline": "blur_glass:5,saturate_weaken_HSV:1,compression_jpeg:4", "psnr_pair0": 25.52, "delta_pair0": -0.79, "verdict": "REJECT (chroma 0.715 过冲, var 0.99 反向)"},
+      {"pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4", "psnr_pair0": 24.89, "delta_pair0": -1.42, "verdict": "REJECT (var 0.514/chroma 0.755 过冲, mean 仅+1.5)"},
+      {"pipeline": "blur_glass:5,brightness_brighten_gamma_RGB:1,compression_jpeg:4", "psnr_pair0": 24.25, "delta_pair0": -2.06, "verdict": "REJECT (mean 匹配但 var 1.126/spread 1.022 反向)"}
+    ],
+    "rationale": "R1 信号重释后无候选满足 CHANGE 判据: 确定性候选需 >40dB 或 5 对均值 +2dB. 最佳替代 gaussian4+jpeg4 在 5 对上稳定 +1.67dB (5/5 为正), 但仍处于 ~26.8dB 平台 (远低于确定性精确匹配应有的 >40dB), 说明它只是对本进程 glass draw 的平滑近似, 并非真实退化; 而 glass 特异信号 (glass_score 1.62≈sim 1.57, anisotropy 1.39≈sim 1.37, 旋涡纹理) 与 R0 5 对 bb 匹配支持 glass5+jpeg4 类型. 全局指纹 (+8.3/0.764/0.896) 无法被任何单一全局函数复现 (contrast 过压 var/chroma 且不动 mean, saturate 过冲 chroma 且抬 var, gamma 抬 mean 但抬 var/spread), 故不加入 global 步. 噪声由 peeled sigma=0.99 与结构化残差排除. 维持 R0 pipeline, verdict 仍为 UNCERTAIN, 供训练 PSNR 仲裁 (gaussian4 作为最强 alternative)."
+  }
+}

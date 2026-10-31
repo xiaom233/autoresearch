@@ -1,0 +1,54 @@
+{
+  "challenge_id": "blind_0013_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_speckle", 3],
+    ["compression_jpeg", 2]
+  ],
+  "pipeline": [
+    {"function": "noise_speckle", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": null,
+      "signal_match": "verify_signals 3/3 MATCH on pair0 (sigma, clean_residual, block_boundary)",
+      "rejection_reason": "full-profile mismatch: ric=0.0093 vs target 0.3211, mean_shift=0.0 vs -4.1, dct_zero=0.3996 vs 0.4272",
+      "function_family": "gaussian"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 5},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": null,
+      "signal_match": "PARTIAL on pair0 (sigma diff=21%, just over 20% threshold)",
+      "rejection_reason": "R1 closure of R0 incomplete poisson severity scan: best-case sev5 still worse than speckle:3 on every profile stat: dct_zero 0.3686 vs target 0.4272 (speckle sim 0.4261); ric 0.2644 vs 0.3211 (0.3234); gm_ratio 1.201 vs 1.1243 (1.1242); sigma 5.19 vs 4.82 (4.82)",
+      "function_family": "poisson"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode)",
+    "mode": "SIGNAL (sigma=4.82 > 2, PSNR disabled)",
+    "rationale": "R1 signal re-interpretation found no missed/misjudged step that changes the pipeline. (1) brightness_detected_raw=true (mean_shift=-4.1/255=-0.0161 > 0.014, all channels negative) was auto-suppressed by JPEG cross-validation (block_uniformity=1.208 > 0.1, condition effectively always true); the R1 simulation reproduces mean_shift=-4.1 exactly with no brightness step, and R0 round 6 showed brightness_darken_gamma:1 over-darkens (mean_shift diff 0.0576, variance_ratio diff 35%). (2) Borderline clipped_fraction=0.0631 (heavy_clipping) and saturation_chroma_ratio=0.9117 are reproduced by the speckle:3+jpeg:2 simulation (0.0641 and 0.9106) - content/speckle/JPEG artifacts, no saturation step. (3) R0's poisson severity scan stopped at sev2; R1 tested the best-case poisson:5 (sigma proportional to 1/sqrt(c) extrapolation) and it is strictly worse than speckle:3 on dct_zero, residual_intensity_corr, gm_ratio and sigma -> poisson rejected. (4) gamma_suspect_from_noise (ric=0.3211) is explained by speckle's multiplicative intensity-dependent noise (sim ric=0.3234; gaussian_RGB sim 0.0093) -> no gamma/intensity transform. (5) The step2 label GAUSSIAN_YCrCb is a fallback of the ric>0.15 branch (low confidence), excluded by peeled rgb_ratio=1.0274; the speckle simulation receives the same label under this heuristic, confirming it is an artifact. Final candidate noise_speckle:3+compression_jpeg:2: verify_signals 3/3 MATCH on all 5 support pairs; pair0 full profile matches on 12 statistics. sigma>2 forbids PSNR and noise steps can never be LIKELY -> UNCERTAIN, NO_CHANGE.",
+    "signal_profile_match": {
+      "noise_speckle:3,compression_jpeg:2": {"sigma": 4.82, "ric": 0.3234, "spatial_corr": 0.2286, "cross_ch": 0.8054, "block_boundary": 1.2113, "dct_zero": 0.4261, "variance_ratio": 0.8938, "mean_shift": -4.1, "gm_ratio": 1.1242, "slope_ratio": 0.9864, "chroma_ratio": 0.9106, "clipped_fraction": 0.0641},
+      "noise_poisson:5,compression_jpeg:2": {"sigma": 5.19, "ric": 0.2644, "spatial_corr": 0.2399, "cross_ch": 0.8197, "block_boundary": 1.2081, "dct_zero": 0.3686, "variance_ratio": 0.9071, "mean_shift": -3.8, "gm_ratio": 1.201, "slope_ratio": 0.9841, "chroma_ratio": 0.9165, "clipped_fraction": 0.0693},
+      "target": {"sigma": 4.82, "ric": 0.3211, "spatial_corr": 0.2291, "cross_ch": 0.8058, "block_boundary": 1.2081, "dct_zero": 0.4272, "variance_ratio": 0.8936, "mean_shift": -4.1, "gm_ratio": 1.1243, "slope_ratio": 0.9843, "chroma_ratio": 0.9117, "clipped_fraction": 0.0631}
+    },
+    "support_validation_R1": {
+      "pair0": "MATCH (noise:sigma, noise:clean_residual, compression:block_boundary)",
+      "pair1": "MATCH (noise:sigma, noise:clean_residual, compression:block_boundary)",
+      "pair2": "MATCH (noise:sigma, noise:clean_residual, compression:block_boundary)",
+      "pair3": "MATCH (noise:sigma, noise:clean_residual, compression:block_boundary)",
+      "pair4": "MATCH (noise:sigma, noise:clean_residual, compression:block_boundary)"
+    }
+  }
+}

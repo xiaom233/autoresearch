@@ -1,0 +1,51 @@
+{
+  "challenge_id": "blind_0023_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_glass", 5],
+    ["compression_jpeg", 4]
+  ],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 25.68,
+      "function_family": "contrast_weaken_scale",
+      "reason": "R1 5-pair support mean 25.68 dB vs retained 24.72 dB (+0.96 dB, 4/5 pairs up: +0.63/+1.91/-0.07/+0.59/+1.75). Signal: contrast_spread_ratio=0.8161 sits only 0.016 above the 0.80 detection threshold; variance_ratio=0.698. Below the +2 dB CHANGE bar and CI not improved (7/10, pair2 9/10), so kept as alternative not main pipeline."
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 24.58,
+      "function_family": "blur_gaussian",
+      "reason": "cross-family tie retained from R0 (pair0 24.58 vs glass 24.62; pair1 24.05 vs 24.15). MTF/PSNR cannot separate gaussian vs glass; glass_score=1.4146 favors glass per DT."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "PSNR (sigma=0.37, no noise; glass shuffle is njit/numba RNG -> near-deterministic, replicate delta 0.02 dB)",
+    "support_psnr_r1_mean": 24.72,
+    "support_psnr_r0_mean": 24.71,
+    "r0_training_support_psnr": 20.66,
+    "signal_sources": [
+      "block_boundary=7.073 (0% FP) + dct_zero_ratio=0.9255 -> JPEG confirmed, severity 4 retained (jpeg3 22% block_boundary mismatch, jpeg5 CI 5/10)",
+      "gm_ratio=0.4072 + spectral_slope_ratio=1.2646 -> strong blur; anisotropy=1.249 << 1.7 -> motion ruled out; glass_score=1.4146 > 0.25 -> glass (DT depth4)",
+      "sigma=0.37, peeled residual sigma=0.74 << 2; weakest noise_gaussian_RGB:1 would be sigma~12.75/255 -> NO_NOISE",
+      "contrast_spread_ratio=0.8161 (threshold 0.80) and variance_ratio=0.698 (threshold 0.55) -> only threshold-boundary global hint; contrast1 candidate +0.96 dB but below +2 dB bar",
+      "chroma_ratio=0.8658 (threshold 0.85) -> weakest saturate_weaken would be ~0.6 -> saturation ruled out; mean_shift=0.0082 (<0.014) + ric=-0.009 -> brightness ruled out",
+      "lens5+jpeg4=24.35 dB (new R1 test) + gaussian3/4/5 + glass4/5 all ~24.0-24.6 -> no deterministic family reproduces target; ~24.7 dB ceiling is irreducible glass+JPEG information loss"
+    ],
+    "rationale": "R1 signal re-analysis reproduces R0 exactly. No deterministic family/severity reaches high PSNR, and blur_glass is an njit pixel-shuffle whose RNG state is fixed (pair0 replicate 24.62 -> 24.64), so the ~24.7 dB ceiling is an information-loss floor, not a parameter error. Only remaining threshold-boundary signal is mild contrast weaken (spread_ratio 0.8161 vs 0.80). The contrast1 variant improved 5-pair support mean by +0.96 dB (4/5 pairs) but is below the +2 dB CHANGE bar and did not improve CI; a post-JPEG order variant scored 25.83 dB on pair0 but CI dropped to 5/10. Therefore NO_CHANGE, UNCERTAIN retained."
+  }
+}

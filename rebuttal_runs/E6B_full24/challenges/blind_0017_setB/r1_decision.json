@@ -1,0 +1,34 @@
+{
+  "challenge_id": "blind_0017_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 5], ["compression_jpeg", 4]],
+  "r1_pipeline": [["blur_glass", 5], ["compression_jpeg", 4]],
+  "support_psnr_r0": 21.66,
+  "candidates_tested": [
+    {"id": "C1", "pipeline": "blur_gaussian:4,compression_jpeg:4", "mode": "psnr", "pair0_psnr": 26.81, "pairs_1_4_psnr": [26.51, 26.95, 26.72, 26.89], "five_pair_mean": 26.776, "delta_vs_r0_five_pair_mean": 1.666, "per_pair_delta": [0.50, 2.00, 1.61, 1.92, 2.30], "outcome": "REJECT: 未 >40dB 且均值 +1.67dB < +2dB"},
+    {"id": "C2", "pipeline": "blur_glass:4,compression_jpeg:5", "mode": "psnr", "pair0_psnr": 26.33, "outcome": "REJECT: 信号 PARTIAL 但 bb 12.81 vs 9.13 (+40%), dct0 0.976 vs 0.963, chroma 1.058 vs 0.896, clip 0.0027 vs 0.0003"},
+    {"id": "C3", "pipeline": "blur_glass:5,saturate_weaken_HSV:1,compression_jpeg:4", "mode": "psnr", "pair0_psnr": 25.52, "outcome": "REJECT: chroma 0.715 vs target 0.896 过冲, var 0.99 vs 0.764 反向"},
+    {"id": "C4", "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4", "mode": "psnr", "pair0_psnr": 24.89, "outcome": "REJECT: var 0.514/chroma 0.755 过冲, mean 仅 +1.5 (target +8.3)"},
+    {"id": "C5", "pipeline": "blur_glass:5,brightness_brighten_gamma_RGB:1,compression_jpeg:4", "mode": "psnr", "pair0_psnr": 24.25, "outcome": "REJECT: mean +9.2 匹配但 var 1.126/spread 1.022 方向相反"}
+  ],
+  "test_candidate_calls": 10,
+  "best_validation": {
+    "candidate": "blur_gaussian:4,compression_jpeg:4",
+    "support_psnr_5pairs": [26.81, 26.51, 26.95, 26.72, 26.89],
+    "mean": 26.78,
+    "r0_pipeline_support_psnr_5pairs": [26.31, 24.51, 25.34, 24.80, 24.59],
+    "r0_mean": 25.11,
+    "mean_delta_db": 1.67,
+    "change_bar": ">40 dB (确定性精确匹配) 或 5 对均值 +2 dB",
+    "met": false,
+    "note": "5/5 对均为正提升但均值未过 +2dB; 且 ~26.8dB 平台远低于 40dB, 说明并非真实确定性退化; R0 pipeline pair0 复测 26.31dB 与本轮一致 (harness 内 glass 调用可复现), 但挑战图 glass draw 与本进程不同 (target gm 0.1817/slope -1.459 vs sim 0.1309/-1.704)"
+  },
+  "signal_sources": [
+    "noise: peeled_noise_check(blur_glass:5,compression_jpeg:4) → noise_prior sigma=0.99 (<2), residual std=9.8, var_slope=0.0247, vm_slope=-0.2524, spatial_corr=0.9747, cross_ch_corr=0.7893 → 结构化残差, §B extreme_pct=33.86% 按 sigma<5 假阳性规则忽略 → NO_NOISE",
+    "compression: block_boundary=9.127 (0%FP) + dct_zero_ratio=0.9629 vs sim 0.9699 (0.7%) + unique_G_ratio 0.9844 vs 0.9961; R0 5 对 bb 偏差 0-6% → JPEG sev4",
+    "blur: glass_score=1.6199≈sim 1.5724, residual_anisotropy=1.3915≈sim 1.3702 (<1.7), 目视旋涡/像素打乱纹理; 确定性族全部停在 25.2-26.8dB 无 >40dB → 真模糊含随机 glass 分量; gm_ratio 0.1817 vs sim 0.1309 与 slope -1.459 vs -1.704 归因于挑战图 glass draw 差异",
+    "global: target mean_shift=8.3/var=0.7638/chroma=0.8957/spread=0.9332 vs 主管线 sim 0.8/0.9204/0.9835/0.9391; 实测 contrast_weaken_scale:1→(1.5/0.514/0.755/0.705), saturate_weaken_HSV:1→(4.1/0.99/0.715/0.988), gamma_RGB:1→(9.2/1.126/0.958/1.022), 均无法同时复现 mean↑/var↓/chroma↓/spread 不变 → 不加入 global 步"
+  ],
+  "reason": "R1 重新审视全部信号并实测 5 个新候选: 噪声被 peeled §B 排除; 压缩 JPEG4 由 0%FP block_boundary 与 dct_zero 匹配确认; 模糊类型 glass 由 glass_score/anisotropy 与确定性族 40dB 缺失支持. 未解释的全局指纹无法由任何单一全局函数复现. 最佳 PSNR 替代 gaussian4+jpeg4 在 5 对上均值 +1.67dB (<+2dB 阈值) 且仍处 ~26.8dB 平台 (非精确匹配), 属于对 glass draw 的平滑近似而非真实退化, 不足以 CHANGE. 维持 blur_glass:5 + compression_jpeg:4 (overall UNCERTAIN), gaussian4+jpeg4 作为 strongest alternative 供训练 PSNR 仲裁."
+}

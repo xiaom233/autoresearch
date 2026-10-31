@@ -1,0 +1,67 @@
+{
+  "challenge_id": "blind_0009_setA",
+  "pipeline": [
+    {"step": 1, "function": "noise_poisson", "severity": 1, "category": "noise", "verdict": "UNCERTAIN"},
+    {"step": 2, "function": "saturate_strengthen_YCrCb", "severity": 3, "category": "global", "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"step": 1, "function": "noise_gaussian_YCrCb", "severity": 1, "category": "noise"},
+        {"step": 2, "function": "saturate_strengthen_YCrCb", "severity": 3, "category": "global"}
+      ],
+      "function_family": "noise_gaussian_YCrCb",
+      "verdict": "UNCERTAIN",
+      "signal_evidence": {
+        "noise:sigma": "MATCH on all 5 pairs (<20%)",
+        "noise:clean_residual": "MATCH on all 5 pairs (FWHM<4px)",
+        "global:variance_ratio": "MATCH on 4/5 (pair1 12% off)",
+        "global:mean_shift": "MISMATCH 0.0080-0.0153 on 4/5 pairs"
+      },
+      "note": "Same image-level HF magnitude as poisson sev1, but misses mean_shift systematically; keep as noise-family backup."
+    },
+    {
+      "pipeline": [
+        {"step": 1, "function": "noise_poisson", "severity": 1, "category": "noise"},
+        {"step": 2, "function": "saturate_strengthen_YCrCb", "severity": 4, "category": "global"}
+      ],
+      "function_family": "saturate_strengthen_YCrCb (severity +/-1)",
+      "verdict": "UNCERTAIN",
+      "signal_evidence": {
+        "pair0_no_noise": "sat4 alone MATCH ms+vr; sat4+noiseY1 vr MATCH, ms 0.0109 off",
+        "pair2_no_noise": "sat4 vr 22% off, ms 0.0237 off; sat3 vr MATCH"
+      },
+      "note": "Severity escalation alternative; sat3 preferred for cross-pair consistency."
+    },
+    {
+      "pipeline": [
+        {"step": 1, "function": "noise_gaussian_RGB", "severity": 1, "category": "noise"},
+        {"step": 2, "function": "saturate_strengthen_YCrCb", "severity": 3, "category": "global"}
+      ],
+      "function_family": "noise_gaussian_RGB",
+      "verdict": "UNCERTAIN",
+      "signal_evidence": {
+        "noise:sigma": "MISMATCH 33% (pair0) -> target HF higher than RGB-independent noise",
+        "global:variance_ratio": "MATCH",
+        "global:mean_shift": "0.0075 off"
+      },
+      "note": "Weakest noise alternative; included for cross-family coverage only."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode; verify_signals 4/4 signals on 5/5 pairs)",
+    "mode": "SIGNAL",
+    "sigma_initial": 5.56,
+    "rationale": "Two steps only: (a) noise_poisson sev1 - sole noise type giving 4/4 verify_signals match (image wavelet sigma, residual FWHM<4px, mean_shift, variance_ratio) on all 5 pairs; speckle sigma 40% off, gaussian_RGB 33% off, gaussian_YCrCb misses mean_shift. (b) saturate_strengthen_YCrCb sev3 (c=5) - HSV family rejected (mean_shift off 0.15+, vr 78-92%); YCrCb sev3 best cross-pair moment consistency (sev4 matched pair0 but vr 22% off pair2). Compression ruled out (block_boundary=1.0017, unique_G=256x3) and blur ruled out (spectral_slope_ratio=0.9996, anisotropy 0). Noise step cannot be LIKELY (seed mismatch); deterministic severity not PSNR-confirmable at sigma>2 -> UNCERTAIN. Pair verification: MATCH 4/4 on pairs 0-4.",
+    "pair_verification": {
+      "pair0": "MATCH 4/4",
+      "pair1": "MATCH 4/4",
+      "pair2": "MATCH 4/4",
+      "pair3": "MATCH 4/4",
+      "pair4": "MATCH 4/4"
+    },
+    "qwen_gate": "triggered (2<sigma<10) but Qwen/API unavailable -> skipped and logged"
+  }
+}

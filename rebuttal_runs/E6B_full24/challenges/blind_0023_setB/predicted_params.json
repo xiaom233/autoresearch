@@ -1,0 +1,79 @@
+{
+  "challenge_id": "blind_0023_setB",
+  "pipeline": [
+    {
+      "function": "blur_glass",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "contrast_weaken_scale",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 24.09,
+      "stats": {
+        "support_psnr": [25.25, 24.18, 23.71, 24.90, 22.42],
+        "support_ci": ["7/10", "7/10", "7/10", "7/10", "7/10"],
+        "signal_verification": "bb 5-13% MATCH, gm/aniso/flatness MATCH; variance_ratio 0.87-0.94 vs target 0.59-0.70 (gap) ; 5-pair mean PSNR 24.09"
+      },
+      "function_family": "blur(glass)+jpeg (无全局步骤)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "quantization_median", "severity": 4},
+        {"function": "compression_jpeg", "severity": 5}
+      ],
+      "psnr": 22.62,
+      "stats": {
+        "support_psnr": [23.20, null, 22.03, null, null],
+        "signal_verification": "pair0 bb 6.886 vs 6.875(EXACT), unique_G 222 vs 221(EXACT), chroma 1.043 vs 1.016; pair2 unique_G 198 vs 244 MISMATCH, variance 0.814 vs 0.590"
+      },
+      "function_family": "quantization_median (结构替代)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 24.66,
+      "stats": {
+        "support_psnr": [24.94, null, null, null, null],
+        "signal_verification": "gaussian5 gm_ratio 0.166 vs target 0.189; flatness 0.407 vs 0.395; glass_score 1.675 vs 1.449 (glass 更优)"
+      },
+      "function_family": "blur(gaussian)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 25.12,
+      "stats": {
+        "support_psnr": [25.81, null, 24.42, null, null],
+        "signal_verification": "block_boundary 4.28 vs target 6.87 (偏弱), unique_G 235 vs 221"
+      },
+      "function_family": "compression(jpeg 轻)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "8/10 (5-pair: 9/10, 9/10, 6/10, 7/10, 7/10)",
+    "mode": "PSNR + 信号交叉验证 (sigma 1.61-2.35, 无独立噪声)",
+    "rationale": "信号链: (1) compression: block_boundary=6.875 (pair0)/6.165 (pair2), unique_G=221/244, dct_zero=0.92/0.905 -> JPEG 确认; jpeg4 的 bb=5.93/5.95 (5%内) 最优 (jpeg3 4.28 偏弱, jpeg5 9.01 偏强). (2) blur: gm_ratio=0.189/0.136, spectral_slope_ratio=1.334/1.336, anisotropy=1.339/1.643, glass_score=1.45/1.57 -> glass5 模拟 gm=0.188/0.133, flatness 0.394/0.394 逐项吻合; gaussian5/lens5 flatness 0.41-0.56 偏离, motion 被 anisotropy<1.7 排除. (3) global: target variance_ratio=0.590-0.705, spread=0.722-0.843, 均值≈0, 色度 -11%~+2% -> 均值保持的轻度对比度压缩; contrast_weaken_scale:1 单独解释方差略强 (0.505 vs 0.705) 但方向一致, 且 5 对 PSNR 消融显示加入后全部提升 (+0.19~+2.43 dB, 均值 +1.26); quantization_median:4 在 pair2 unique_G 不匹配, saturation/hist 均使 PSNR 下降 -> 选 contrast_weaken_scale:1 (可能是介于 sev1 与无之间的等效强度, 无中间档可用). (4) noise: noise_prior sigma 在目标与无噪模拟上完全相同 (1.61=1.61, 2.35=2.35), peeled 残差 spatial_corr=0.98 为确定性错配结构 -> NO_NOISE. PSNR 上限 24.9-25.8 dB 由 glass 随机 pixel-shuffle realization 决定 (SKILL §C4: glass 不必追求 >40dB). 5 对 support 全部复核: 主候选 PSNR 24.85/25.49/25.53/25.82/25.09, CI 6-9/10. 由于存在不可复现的随机 shuffle 与不确定的全局档位, 整体 UNCERTAIN, 由训练 PSNR 最终仲裁."
+  }
+}

@@ -1,0 +1,471 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=1.0027, unique_G=256/256, dct_zero_ratio=0.0618)",
+      "blur": "BLUR_UNLIKELY (gm_ratio=2.298 noise-destroyed; spectral_slope target=-1.0383 vs clean=-1.0401, ratio=0.9983; FFT anisotropy=0.00, pca=0.0)",
+      "noise": "SPECKLE (noise_prior_sigma=4.45 = est/2 convention -> sigma~8.9; corr_mean_var=0.8975; corr_scaled=0.3941; cross_channel_corr=0.0008; impulse_zero_ratio=0.2591)",
+      "global": "NO_GLOBAL (mean_shift=-0.6/255=-0.0024; variance_ratio=1.0438 consistent with pure additive noise variance; clipped_fraction=0.1083 on target itself)"
+    },
+    "mode": "SIGNAL (sigma=4.45>2; peeled noise_prior sigma=7.41; PSNR unreliable with noise seed mismatch)",
+    "signal_interpretation": [
+      "variance-ratio fingerprint: corr_mean_var=0.8975 (var rises with intensity) and corr_scaled=0.3941>=0.3 -> multiplicative-like (SPECKLE) rather than Poisson (corr_scaled~0) or Gaussian RGB (corr_mean_var~0)",
+      "cross_channel_corr=0.0008 << 0.12 rules out YCrCb noise (YCrCb->RGB mixing creates inter-channel correlation); channel std ratio 1.72 in peeled residual is explained by per-channel intensity means under speckle",
+      "spectral_slope essentially unchanged (0.9983) -> no blur; block_boundary=1.0027 + unique_G=256 -> no JPEG",
+      "variance_ratio 1.0438 + mean_shift -0.6/255: no contrast/brightness/gamma; the small variance inflation matches added noise"
+    ]
+  },
+  "noise_6step_check": {
+    "extreme_pct": 60.92,
+    "extreme_pct_note": "peeled_noise_check on signed residual; extreme=(res<=0)|(res>=255) counts negative residuals -> inflated (known FP). Real impulse check: zero_ratio=0.2591 (<0.85) from run_full_analysis -> NOT impulse",
+    "zero_ratio": 0.2591,
+    "vm_slope": 17.8041,
+    "var_slope": -3.2977,
+    "spatial_corr": 0.3419,
+    "spatial_corr_note": "signed-residual neighbor corr elevated likely by clipping in bright regions (target has 10.8% clipped pixels); run_full_analysis Green-channel spatial_corr=0.0005",
+    "rgb_ratio": 1.7178,
+    "cross_ch_corr": 0.001,
+    "diagnosis": "Not impulse (zero_ratio 0.2591). Intensity-dependent variance: corr_mean_var=0.8975, corr_scaled=0.3941 -> SPECKLE preferred over POISSON (0.394>0.3 threshold) and over Gaussian RGB. YCrCb excluded by cross_ch_corr=0.001. noise_prior peeled sigma=7.41; run_full_analysis sigma est=4.45."
+  },
+  "qwen_gate": {
+    "available": false
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "R1: run_full_analysis 指纹 corr_mean_var=0.8975 + corr_scaled=0.3941 -> 乘性噪声(speckle); cross_ch_corr=0.0008 排除 YCrCb; zero_ratio=0.2591 排除 impulse; sigma est=4.45(=>sigma~8.9) 对应 speckle sev1(c=0.14)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1",
+        "thinking": "R1 对照: 恒定强度高斯噪声(sigma=12.75 8-bit)。若 target sigma est=4.45 对应 sigma~8.9, gaussian sev1 est~6.4 预期 sigma 不匹配; 且 corr_mean_var~0 与 target 0.8975 不符"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=21%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_poisson:1",
+        "thinking": "R1 备选: corr_mean_var=0.8975 也可由 Poisson(var∝I) 解释; 但 corr_scaled=0.3941>=0.3 偏向 speckle(var∝I²)。测试 Poisson sev1(c=80) 的 sigma 匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=31%)"
+        ],
+        "pipeline": "noise_poisson:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 should_still_test: block_boundary=1.0027 + unique_G=256 + dct_zero=0.0618 均无 JPEG 信号; 用信号验证确认 mild JPEG 不存在"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=47%)"
+        ],
+        "pipeline": "compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "R1 should_still_test: spectral_slope target=-1.0383 vs clean=-1.0401 (ratio 0.9983), FFT anisotropy=0 → 无模糊; 用信号验证确认 blur 不存在"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_gaussian:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "Support p1 复核: 同一候选 noise_speckle:1; p1 指纹 ivc=0.917 scaled=0.651 cc=0.0018, 无压缩/无模糊/无全局"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "Support p2 复核: 同一候选 noise_speckle:1; p2 指纹 ivc=0.806 scaled=0.216 cc=0.0022, 无压缩/无模糊/无全局"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "Support p3 复核: 同一候选 noise_speckle:1; p3 指纹 ivc=0.929 scaled=0.434 cc=0.0029, 无压缩/无模糊/无全局"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "Support p4 复核: 同一候选 noise_speckle:1; p4 指纹 ivc=0.783 scaled=0.115 cc=0.0006, 无压缩/无模糊/无全局"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "R1 信号重释: pair0 重跑 run_full_analysis 得到 sigma=4.45, ivc=0.8975, scaled=0.3941, cross_ch=0.0008, bb=1.0027, slope_ratio=0.9983, variance_ratio=1.0438; 用新随机种子重验 speckle:1 并生成模拟图, 用于核查 saturation_chroma_ratio=1.1547 与 variance_ratio 是否可被乘性噪声完全解释"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2",
+        "thinking": "R1 severity 边界扫描 (SKILL 强制): speckle:1 指纹已精确匹配 (sigma 4.45/4.45, ivc 0.8975/0.8984, variance_ratio 1.0438/1.0438); 按协议检查 sev+1=2 是否更优 (预期 sigma 翻倍 diff>20% -> WEAK)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=40%)"
+        ],
+        "pipeline": "noise_speckle:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,saturate_strengthen_HSV:1",
+        "thinking": "R1 阈值边界信号: saturation_chroma_ratio=1.1547 刚超过 1.15 raw 阈值但被 saturation_from_noise 判定为噪声伪影; 对照控制显示 speckle:1 单独模拟即可复现 1.1547 -> 本候选显式检验叠加 saturate_strengthen:1 是否会过冲该信号"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=14.0px)",
+          "global:mean_shift (diff=0.0801)",
+          "global:variance_ratio (diff=186%)"
+        ],
+        "pipeline": "noise_speckle:1,saturate_strengthen_HSV:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "R1 5-pair support 验证 p1: 同一候选 speckle:1, 新随机种子复核; R0 p1 指纹 sigma=6.67 ivc=0.917 scaled=0.651 cc=0.0018, 无压缩/模糊/全局"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "R1 5-pair support 验证 p2: 同一候选 speckle:1, 新随机种子复核; R0 p2 指纹 sigma=4.82 ivc=0.806 scaled=0.216 cc=0.0022, 无压缩/模糊/全局"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "R1 5-pair support 验证 p3: 同一候选 speckle:1, 新随机种子复核; R0 p3 指纹 sigma=4.57 ivc=0.929 scaled=0.434 cc=0.0029, 无压缩/模糊/全局"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "R1 5-pair support 验证 p4: 同一候选 speckle:1, 新随机种子复核; R0 p4 指纹 sigma=7.78 ivc=0.783 scaled=0.115 cc=0.0006, 无压缩/模糊/全局"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [],
+  "type_discrimination_evidence": {
+    "method": "run_full_analysis on each simulated image (same clean_0), fingerprint compared against target",
+    "target_p0": {
+      "sigma": 4.45,
+      "intensity_var_corr": 0.8975,
+      "intensity_scaled_var_corr": 0.3941,
+      "cross_channel_corr": 0.0008,
+      "variance_ratio": 1.0438,
+      "gm_ratio": 2.2978,
+      "spectral_slope": -1.0383
+    },
+    "sim_noise_speckle_1": {
+      "sigma": 4.45,
+      "intensity_var_corr": 0.8986,
+      "intensity_scaled_var_corr": 0.3955,
+      "cross_channel_corr": 0.0017,
+      "variance_ratio": 1.0438,
+      "gm_ratio": 2.2978,
+      "spectral_slope": -1.0379,
+      "verdict": "ALL signals indistinguishable from target; verify_signals MATCH"
+    },
+    "sim_noise_gaussian_RGB_1": {
+      "sigma": 5.93,
+      "intensity_var_corr": 0.3139,
+      "intensity_scaled_var_corr": -0.8077,
+      "variance_ratio": 1.0051,
+      "gm_ratio": 2.1972,
+      "verdict": "REJECT: sigma +33%, intensity_var_corr far lower, scaled corr negative; verify_signals WEAK (sigma diff 21%)"
+    },
+    "sim_noise_poisson_1": {
+      "sigma": 6.42,
+      "intensity_var_corr": 0.908,
+      "intensity_scaled_var_corr": -0.4327,
+      "variance_ratio": 1.0572,
+      "gm_ratio": 2.6246,
+      "verdict": "REJECT: sigma +44%, scaled corr negative (Poisson var∝I), verify_signals WEAK (sigma diff 31%)"
+    },
+    "sim_blur_gaussian_1": {
+      "gm_ratio": 0.5218,
+      "spectral_slope": -1.0716,
+      "verdict": "REJECT blur: gm_ratio collapses to 0.52 and slope shifts -0.033; target identical to noise-only sim (gm 2.2978, slope -1.0383)"
+    },
+    "sim_compression_jpeg_1": {
+      "verdict": "REJECT JPEG: verify_signals MISMATCH block_boundary diff=47%; target bb=1.0027 with unique_G=256"
+    }
+  },
+  "support_verification": {
+    "candidate": "noise_speckle:1",
+    "pairs": {
+      "p0": {
+        "verify": "MATCH",
+        "target_sigma_est": 4.45,
+        "pipeline_signals": "ivc=0.897 scaled=0.394 cc=0.0008; no comp/blur/global"
+      },
+      "p1": {
+        "verify": "MATCH",
+        "target_sigma_est": 6.67,
+        "pipeline_signals": "ivc=0.917 scaled=0.651 cc=0.0018; no comp/blur/global"
+      },
+      "p2": {
+        "verify": "MATCH",
+        "target_sigma_est": 4.82,
+        "pipeline_signals": "ivc=0.806 scaled=0.216 cc=0.0022; no comp/blur/global"
+      },
+      "p3": {
+        "verify": "MATCH",
+        "target_sigma_est": 4.57,
+        "pipeline_signals": "ivc=0.929 scaled=0.434 cc=0.0029; no comp/blur/global"
+      },
+      "p4": {
+        "verify": "MATCH",
+        "target_sigma_est": 7.78,
+        "pipeline_signals": "ivc=0.783 scaled=0.115 cc=0.0006; no comp/blur/global"
+      }
+    },
+    "note": "Per-pair speckle sigma scales with image brightness (4.45-7.78) — expected for multiplicative noise at fixed c=0.14. All 5 pairs: block_boundary 0.998-1.004, spectral_slope_ratio 0.991-0.999, cross_channel_corr 0.0006-0.0029, variance inflation grows with sigma."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_speckle",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Single-step multiplicative speckle noise (c=0.14, sev1). No compression (bb 0.998-1.004, unique_G=256), no blur (slope ratio 0.991-0.999; blur:1 would drop gm_ratio to 0.52 and shift slope -0.033, target matches noise-only simulation exactly), no global (mean_shift ~ -0.6/255; variance inflation fully explained by noise). Noise type: intensity-var fingerprint (ivc 0.78-0.93, scaled corr positive 0.12-0.65) + cross-channel corr ~0.002 (YCrCb excluded) + exact fingerprint match of speckle:1 simulation (sigma 4.45/4.45, ivc 0.8975/0.8986, scaled 0.3941/0.3955). Gaussian RGB:1 and Poisson:1 rejected (sigma +33%/+44%, scaled corr negative). Per SKILL, noise steps are never LIKELY (seed mismatch) -> step and overall verdict UNCERTAIN. verify_signals MATCH on all 5 pairs (sigma <20%, clean residual).",
+    "alternatives_note": "None saved: Gaussian RGB:1 (WEAK, sigma 21% off, ivc 0.31 vs 0.90) and Poisson:1 (WEAK, sigma 31% off, scaled corr negative) fail statistical match; low-quality alternatives are not informative."
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (SKILL: noise 步骤永不 LIKELY); R0 support PSNR=35.70 dB",
+    "signal_reinterpretation": [
+      {"signal": "saturation_chroma_ratio=1.1547 (raw detect 阈值>1.15, 被 saturation_from_noise 判为噪声伪影)", "source": "run_full_analysis_R1 pair0", "finding": "fresh-seed noise_speckle:1 模拟图复现 1.1547 (target 1.1547 / sim 1.1547), 乘性噪声自身完全解释; 叠加 saturate_strengthen_HSV:1 的模拟过冲到 1.8667 -> 无额外 saturate 步骤"},
+      {"signal": "variance_ratio=1.0438 / contrast_spread_ratio=1.0368 (均>1, 边界)", "source": "run_full_analysis_R1 pair0 + sim", "finding": "speckle:1 模拟给出 1.0438 / 1.0368 逐位一致 -> 无 contrast/gamma/brightness"},
+      {"signal": "clipped_fraction=0.1083 (heavy_clipping=true)", "source": "run_full_analysis_R1 pair0 + sim", "finding": "speckle:1 模拟 0.1083 完全一致 -> 高光截断由原图亮部+噪声造成, 非 brightness/contrast 增益"},
+      {"signal": "brightness_mean_shift=-0.6/255", "source": "run_full_analysis_R1 pair0 + sim", "finding": "模拟 -0.6 一致 -> 无 brightness"},
+      {"signal": "block_boundary=1.0027, unique_G=256", "source": "run_full_analysis_R1 pair0 + sim", "finding": "模拟 bb=1.0002 (diff 0.25% <<8% 阈值), 且 R0 jpeg:1 MISMATCH (bb diff 47%) -> 无 JPEG"},
+      {"signal": "spectral_slope target=-1.0383, gm_ratio=2.2978", "source": "run_full_analysis_R1 pair0 + sim", "finding": "模拟 slope=-1.0387, gm=2.2991 逐位一致; 真实 blur_gaussian:1 会把 gm 压到 0.52 且 slope 偏 -0.033 -> 无 blur"},
+      {"signal": "噪声强度与严重度", "source": "noise_prior sigma=4.45, peeled residual_std=15.1 = c*I (c≈0.14)", "finding": "speckle:2 候选 sigma 偏 40% (WEAK) -> severity=1"},
+      {"signal": "噪声类型", "source": "ivc=0.8975, intensity_scaled_var_corr=0.3941, cross_channel_corr=0.0008, zero_ratio=0.2591", "finding": "乘性指纹 + 通道独立性排除 YCrCb/impulse; R0 gaussian_RGB:1 (ivc 0.31, sigma +33%) 与 poisson:1 (scaled corr 负, sigma +44%) 均 WEAK 拒绝"}
+    ],
+    "fingerprint_p0_target_vs_sim_speckle1": {
+      "target": {"noise_prior_sigma": 4.45, "intensity_var_corr": 0.8975, "intensity_scaled_var_corr": 0.3941, "cross_channel_corr": 0.0008, "variance_ratio": 1.0438, "contrast_spread_ratio": 1.0368, "brightness_mean_shift": -0.6, "saturation_chroma_ratio": 1.1547, "clipped_fraction": 0.1083, "gm_ratio": 2.2978, "spectral_slope": -1.0383, "block_boundary": 1.0027},
+      "sim_speckle1": {"noise_prior_sigma": 4.45, "intensity_var_corr": 0.8984, "intensity_scaled_var_corr": 0.394, "cross_channel_corr": 0.0011, "variance_ratio": 1.0438, "contrast_spread_ratio": 1.0368, "brightness_mean_shift": -0.6, "saturation_chroma_ratio": 1.1547, "clipped_fraction": 0.1083, "gm_ratio": 2.2991, "spectral_slope": -1.0387, "block_boundary": 1.0002},
+      "note": "12 项信号逐项重合 (fresh seed), 无任何残余信号指向漏检退化"
+    },
+    "candidate_ranking": [
+      {"rank": 1, "pipeline": "noise_speckle:1", "verdict": "MATCH 5/5 (R1 fresh seeds)", "status": "ACCEPT"},
+      {"rank": 2, "pipeline": "noise_speckle:2", "verdict": "WEAK (noise:sigma diff=40%)", "status": "REJECT"},
+      {"rank": 3, "pipeline": "noise_speckle:1,saturate_strengthen_HSV:1", "verdict": "WEAK (global:mean_shift diff=0.0801, global:variance_ratio diff=186%, noise:structured_residual FWHM=14px; sim chroma_ratio 1.8667 vs target 1.1547)", "status": "REJECT"}
+    ],
+    "support_verification": {
+      "candidate": "noise_speckle:1",
+      "p0": "MATCH (R1 round 10, fresh seed)",
+      "p1": "MATCH (R1 round 13, fresh seed)",
+      "p2": "MATCH (R1 round 14, fresh seed)",
+      "p3": "MATCH (R1 round 15, fresh seed)",
+      "p4": "MATCH (R1 round 16, fresh seed)",
+      "summary": "5/5 MATCH (R1 独立复核, 与 R0 一致)"
+    },
+    "decision": "NO_CHANGE",
+    "final_pipeline": [
+      {"function": "noise_speckle", "severity": 1, "verdict": "UNCERTAIN"}
+    ],
+    "reason": "fresh-seed speckle:1 模拟在 12 项信号上逐项复现 target (含 3 个被忽略/边界的全局信号), 5 对 support 全部 MATCH; 饱和度叠加候选与 sev2 候选均被信号否决; 无证据支持修正 -> NO_CHANGE"
+  }
+}

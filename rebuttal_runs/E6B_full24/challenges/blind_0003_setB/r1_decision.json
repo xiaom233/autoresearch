@@ -1,0 +1,57 @@
+{
+  "challenge_id": "blind_0003_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 2]],
+  "r1_pipeline": [["blur_glass", 2]],
+  "support_psnr_r0": 27.66,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_glass:2",
+      "role": "baseline re-verification (R0 primary)",
+      "support_pairs_r0": {
+        "psnr": [30.25, 39.76, 35.63, 33.19, 32.20],
+        "mean_psnr_db": 34.21,
+        "ci": ["10/10", "10/10", "10/10", "10/10", "10/10"]
+      },
+      "r1_pair0_recheck": {"psnr_db": 30.27, "ci": "10/10", "metric_diffs": "all 10 CI diffs 0.000"},
+      "signal_profile": "target vs glass:2-sim: variance_ratio 0.8346/0.8338, contrast_spread 0.8745/0.8745, ric -0.5243/-0.5284, gm_ratio 0.5039/0.5038, glass_score 0.4684/0.4702, sigma 1.85/1.85"
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "role": "mandatory severity scan (-1)",
+      "support_psnr": [28.94, 38.26, 34.33, 31.35, 30.65],
+      "mean_psnr_db": 32.71,
+      "support_ci": ["10/10", "6/10", "7/10", "7/10", "8/10"],
+      "delta_vs_glass2_db": -1.50,
+      "verdict": "REJECT"
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "role": "mandatory severity scan (+1; full_analysis heuristic estimated_severity=3)",
+      "support_psnr": [27.27, 37.23, 32.87, 30.85, 29.67],
+      "mean_psnr_db": 31.58,
+      "support_ci": ["9/10", "7/10", "7/10", "8/10", "7/10"],
+      "delta_vs_glass2_db": -2.63,
+      "verdict": "REJECT"
+    }
+  ],
+  "test_candidate_calls": 11,
+  "best_validation": {
+    "pipeline": "blur_glass:2",
+    "pair0_psnr_db": 30.27,
+    "pair0_ci": "10/10 (all metric diffs 0.000)",
+    "support_mean_psnr_db": 34.21,
+    "support_ci_all_pairs": "10/10 (5/5 pairs, R0 validation)",
+    "signal_profile_agreement": "18/18 signals match glass:2 simulation within measurement noise (see predicted_params_R1.json analysis.signal_profile_match_target_vs_glass2_sim)"
+  },
+  "signal_sources": [
+    "variance_ratio=0.8346 + contrast_spread_ratio=0.8745 + mean_shift=-0.6/255: glass:2 simulation reproduces 0.8338/0.8745/-0.5; contrast_weaken_scale:1 would scale variance by 0.5625, gamma/shift severities move mean >=25/255 -> NO missing global step",
+    "residual_intensity_corr=-0.5243 + gamma_suspect_from_noise=true: glass:2 simulation gives ric=-0.5284 -> blur low-pass signature (bright local maxima removed), not gamma",
+    "sigma=1.85 + spatial_corr=0.7338 + cross_channel_corr=0.9875: glass:2 simulation gives 1.85/0.7339/0.9875 identical (structured shuffle residual); peeled §B var_slope=0.0019; noise:1 control dropped pair0 30.25->24.63 dB, CI 10/10->3/10 -> NO_NOISE",
+    "block_boundary=1.0026 + unique_G_ratio=0.9553 + dct_zero_ratio=0.449: glass:2 sim 1.0021/0.9512/0.4492; x_distortion quantization functions cap unique colors at <=24 levels -> NO_COMPRESSION/NO_QUANTIZATION",
+    "gm_ratio=0.5039 + glass_score=0.4684>0.25 + PCA=1.078<2.5 + FFT=2.174<2.2: glass subtype; glass:2 sim gm_ratio=0.5038 -> severity 2 confirmed (analyzer severity heuristic not calibrated for glass)",
+    "5-pair severity scan: glass:1 mean 32.71 dB (-1.50), glass:3 mean 31.58 dB (-2.63) vs glass:2 34.21 dB; CI degrades in both directions"
+  ],
+  "reason": "R1 signal reinterpretation found no evidence of a missed step or wrong severity. A glass:2 simulation on the same clean reproduces all 18 target signals near-exactly, including the signals R0 dismissed as boundary/suspect (variance_ratio, contrast_spread, residual_intensity_corr, sigma, spatial_corr, cross_channel_corr). The mandatory severity scan on all 5 support pairs rejects sev1 and sev3. No candidate reaches >40 dB or +2 dB over the previous round, so the pipeline is unchanged: blur_glass:2. The low trained support PSNR (27.66 < 35) is attributable to glass's random local pixel transposition, which irreversibly destroys local pixel order and caps restorable PSNR; it is not evidence of blind-ID error."
+}

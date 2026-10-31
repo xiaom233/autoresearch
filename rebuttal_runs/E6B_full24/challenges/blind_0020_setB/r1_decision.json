@@ -1,0 +1,72 @@
+{
+  "challenge_id": "blind_0020_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 3],
+    ["contrast_weaken_stretch", 4]
+  ],
+  "r1_pipeline": [
+    ["blur_gaussian", 3],
+    ["contrast_weaken_stretch", 4]
+  ],
+  "support_psnr_r0": 17.63,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4",
+      "evidence": "5-pair support PSNR [38.01, 29.96, 33.26, 34.16, 40.91], mean 35.26, delta vs R0 +0.30 dB, positive on all 5 pairs, CI 10/7/7/9/9",
+      "verdict": "ALTERNATIVE (below change bar)"
+    },
+    {
+      "pipeline": "blur_lens:3,contrast_weaken_stretch:4",
+      "evidence": "pair0 36.02 (-1.70 vs R0), pair1 26.88 (-2.82 vs R0); 2-pair mean 31.45 vs R0 33.71; cross-pair MTF twin clearly worse at matched severity",
+      "verdict": "REJECT"
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4",
+      "evidence": "pair0 37.17 (-0.55 vs R0); severity curve at validated global peaks at 4 (3=37.72, 4=38.01, 5=37.17)",
+      "verdict": "REJECT"
+    },
+    {
+      "pipeline": "blur_glass:3,contrast_weaken_stretch:4",
+      "evidence": "5-pair support PSNR [38.80, 29.54, 33.22, 34.81, 41.67], mean 35.61, delta vs R0 +0.65 dB; pair1 -0.16 dB, CI 9/10/8/10/9",
+      "verdict": "ALTERNATIVE (best mean, below change bar)"
+    }
+  ],
+  "test_candidate_calls": 13,
+  "best_validation": {
+    "by_mean": {
+      "pipeline": "blur_glass:3,contrast_weaken_stretch:4",
+      "support_psnr": [38.80, 29.54, 33.22, 34.81, 41.67],
+      "mean": 35.61,
+      "delta_vs_r0_mean_db": 0.65,
+      "threshold_met": false
+    },
+    "most_consistent": {
+      "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4",
+      "support_psnr": [38.01, 29.96, 33.26, 34.16, 40.91],
+      "mean": 35.26,
+      "delta_vs_r0_mean_db": 0.30,
+      "delta_per_pair": [0.29, 0.26, 0.41, 0.25, 0.28],
+      "threshold_met": false
+    },
+    "r0_baseline": {
+      "pipeline": "blur_gaussian:3,contrast_weaken_stretch:4",
+      "support_psnr": [37.72, 29.70, 32.85, 33.91, 40.63],
+      "mean": 34.96
+    },
+    "change_threshold": "per protocol: >40 dB or +2 dB vs previous round; neither met by any candidate"
+  },
+  "signal_sources": [
+    "variance_ratio=0.1193 + mean_shift=-11.7 + contrast_spread_ratio=0.367: global contrast loss confirmed; R0 matched-config stretch-vs-scale margin 10.2 dB and severity peak at 4 retained (stretch3=28.99 / stretch5=28.80 with sat, stretch4 without sat=37.72)",
+    "gm_ratio=0.1845 + spectral_slope_ratio=1.2355: blur present; after removing stretch gradient factor (~c/4m ~0.3-0.4) the blur severity sits near 3-4, motivating the never-tested severity+1 variant",
+    "residual_anisotropy=1.8337 (above 1.7 workflow trigger, below 4.0 checklist): motion not re-tested at the validated global; gaussian/lens/glass were PSNR-tested instead",
+    "Cepstral PCA subtype=blur_glass(medium) + glass_score=0.2016 (just below 0.25 gate): threshold-boundary signal, glass:3 tested and reached the best mean but regressed on pair1",
+    "blur_pca_ratio=1.17 + blur_density=0.7366: disk-like kernel hint, but lens:3 was 1.7-2.8 dB worse than gaussian at matched config",
+    "block_boundary=0.9944 (0% FP rule) + unique_G=98 with dct_zero_ratio=0.829: JPEG ruled out; global quantization ruled out because a single quantization step would cap unique_G at <=24, not 98; unique_G drop is blur + stretch range compression",
+    "noise_prior sigma=0.37, peeled residual std=3.3 with spatial_corr=0.9946: no noise; residual structure is blur-kernel error, not noise",
+    "pair1 impulse_pct_zero diff +0.448% (target has more exact-dark values than gaussian sim): reinterpreted as blur erosion of clean black regions rather than a missing brightness step, because the generator pool permits at most one global function per category (blind_challenge.py used_cats) and variance_ratio=0.119 cannot be produced by brightness alone",
+    "generator constraint (blind_challenge.py DEG_CATEGORIES, one function per category): rules out contrast+saturation and brightness+contrast combos; 2-step blur+global structure confirmed"
+  ],
+  "reason": "R1 signal reinterpretation (run_full_analysis_R1 reproduces R0 signals) found no missing degradation step. The global step is confirmed as contrast_weaken_stretch:4 (large subtype margin, severity peak); blur family gaussian beats lens (-2.3 dB) and is comparable to glass. The only real gains are marginal severity/subtype refinements: gaussian:4 gives +0.30 dB on all 5 pairs, glass:3 gives +0.65 dB mean with a pair1 regression. Neither reaches the protocol bar (>40 dB or +2 dB vs previous round), so the R0 pipeline is retained unchanged. Residual uncertainty is blur subtype/severity within about +/-1 step."
+}

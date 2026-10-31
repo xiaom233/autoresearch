@@ -1,0 +1,43 @@
+{
+  "challenge_id": "blind_0022_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 3], ["compression_jpeg", 1]],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 1, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR (sigma=0.62, peeled=0.99 < 2)",
+    "signal_reinterpretation": [
+      "variance_ratio=0.8127 vs contrast_spread_ratio=0.9514: 方差降幅(18.7%)远大于稳健展宽降幅(4.9%)，且 contrast_detected_raw=false、mean_shift=-0.0 → 方差损失主要来自 blur 平滑，非 contrast",
+      "brightness/gamma 排除: brightness_mean_shift=-0.0 (精确为 0)。x_distortion 的 gamma 函数 sev1 最小 gamma 为 0.8(brighten) / 1.4(darken)，任何一级都会产生显著 mean_shift；residual_intensity_corr=-0.198 弱相关可由 blur+JPEG 产生，不构成独立 gamma 步骤证据",
+      "saturation_chroma_ratio=0.9057 (9.4% 降幅) 与 JPEG q=25 的 4:2:0 色度子采样量级一致，saturation_detected_raw=false → 非独立 saturation 步骤",
+      "residual_anisotropy=2.035 < SKILL §C-2 motion 阈值 4.0，且 motion:4+jpeg:3 实测仅 17.58dB (R0)；建筑三角网格内容本身抬高各向异性 → motion 假阳性",
+      "glass_score=0.459>0.25 且 glass:3 比所有确定性模糊高 3.4-3.7dB (R1: gaussian:4=24.68, lens:4=25.05; R0: gaussian:3=25.21, lens:3=24.51, motion:4=17.58)；glass 为随机洗牌，按 SKILL §C-4 不追求 >40dB → 维持 glass",
+      "severity 边界: full_analysis 由 gm_ratio=0.361 估 sev=4，但 glass:4+jpeg:1 在 5 对 support 上全部低于 sev3 (27.03/30.56/33.28/24.94/30.79, 均值 29.32 vs 30.31) → 维持 sev=3",
+      "JPEG: block_boundary=1.692 为 0%FP 信号，复测模拟 bb 误差 9% (与 R0 一致)；unique_G=256(clean 同) 排除 quantization；dct_zero_ratio=0.8242 与强平滑+JPEG 一致；sev 1/2/3 的 R0 PSNR 扫描单调 (28.42/27.93/27.37) 且 bb 误差 sev1 最小 → 维持 jpeg:1",
+      "noise: noise_prior sigma=0.62, 剥离后 sigma=0.99 (<2) → NO_NOISE；extreme_pct=58.1% 为 SKILL 明示假阳性 (extreme_pct>50% 且 sigma<5)；spatial_corr=0.963 来自 glass 洗牌不可复现的结构残差，非噪声"
+    ],
+    "support_validation": {
+      "baseline_blur_glass3_jpeg1": {
+        "pair0": 28.42, "p1": 31.25, "p2": 33.70, "p3": 26.37, "p4": 31.80,
+        "mean_5": 30.31,
+        "r0_recorded": {"pair0": 28.44, "p1": 31.24, "p2": 33.68, "p3": 26.35, "p4": 31.78},
+        "note": "5 对逐对复现 R0 (±0.02dB)，glass 随机洗牌的 PSNR 方差可忽略"
+      },
+      "blur_glass4_jpeg1": {
+        "pair0": 27.03, "p1": 30.56, "p2": 33.28, "p3": 24.94, "p4": 30.79,
+        "mean_5": 29.32,
+        "note": "5/5 对低于 sev3，severity 4 假设否定"
+      },
+      "blur_gaussian4_jpeg1": {"pair0": 24.68, "note": "确定性跨族对照，远低于 glass:3 (-3.74dB)"},
+      "blur_lens4_jpeg1": {"pair0": 25.05, "note": "确定性跨族对照，远低于 glass:3 (-3.37dB)"}
+    },
+    "decision_rule": "CHANGE 条件: 纯确定性候选 >40dB，或较上一轮 support PSNR +2dB。所有新候选均更低，未达条件 → NO_CHANGE",
+    "rationale": "R1 信号重释未发现被忽略/误判的信号：方差下降可由 blur 解释，global/brightness/gamma/saturation 均被信号排除；噪声剥离后 sigma<2；blur 子类型由玻璃洗牌纹理与其随机性特征确证。唯一有理论依据的边界假设 (glass sev4) 在 5 对 support 上逐对劣于 sev3。维持 R0 管线 blur_glass:3 + compression_jpeg:1。R0 support 训练 PSNR 23.35dB 低于仿真 PSNR (28-34dB) 属 glass 随机洗牌不可逆造成的能力上限，而非参数错误。"
+  }
+}

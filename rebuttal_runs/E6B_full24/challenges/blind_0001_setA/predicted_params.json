@@ -1,0 +1,37 @@
+{
+  "challenge_id": "blind_0001_setA",
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "quantization_hist", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "noise_poisson", "severity": 2}, {"function": "quantization_hist", "severity": 2}],
+      "psnr_rgb": 13.99,
+      "ci_pass": "8/10",
+      "function_family": "poisson+hist-quant",
+      "note": "severity 亚军；按 run_full_analysis 的 POISSON sev_map(sigma=10.5→sev2) 亦合理"
+    },
+    {
+      "pipeline": [{"function": "noise_speckle", "severity": 2}, {"function": "quantization_hist", "severity": 2}],
+      "psnr_rgb": 13.86,
+      "ci_pass": "8/10",
+      "function_family": "speckle+hist-quant",
+      "note": "跨族噪声对照；raw-residual scaled corr(-0.65) 不支持 speckle，仅作备份"
+    },
+    {
+      "pipeline": [{"function": "noise_poisson", "severity": 3}, {"function": "quantization_median", "severity": 2}],
+      "psnr_rgb": 16.74,
+      "ci_pass": "7/10",
+      "function_family": "poisson+mediancut-quant",
+      "note": "PSNR 最高但 unique=15（target 16）且 0/255 裁剪指纹严重不符；仅作量化实现差异的备份"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "9/10",
+    "mode": "SIGNAL (sigma=10.5)",
+    "rationale": "5 对 support 的全部通道 unique=[16,16,16] 精确定位 16 级量化（quantization_hist sev2 c=16），block_boundary=1.001 排除 JPEG，spectral_slope_ratio=0.995 排除模糊。raw residual 近白（spatial_corr=0.029, cross_ch=0.015）且方差随强度增长（ivc=0.909, scaled corr=-0.646）→ POISSON；严重度扫描 1/2/3/4 的 CI=6/8/9/7 与 sim-sigma 对比（sev3 9.64 最接近 target 10.5）选 sev3。已知残余风险：库 quantization_hist 为直方图均衡映射，与目标近恒等 16 级量化不等价（sim mean +28 vs target -1.7），故确定性步骤也只能 UNCERTAIN；噪声步骤按协议永不 LIKELY。support 复核：pair0-4 CI=9/5/8/7/7，unique/block/zero_crossing/hf_lf 全部稳定通过。"
+  }
+}

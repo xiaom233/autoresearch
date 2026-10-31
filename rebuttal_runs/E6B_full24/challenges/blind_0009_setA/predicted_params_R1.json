@@ -1,0 +1,84 @@
+{
+  "challenge_id": "blind_0009_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_poisson", 1],
+    ["saturate_strengthen_YCrCb", 3]
+  ],
+  "pipeline": [
+    {"step": 1, "function": "noise_poisson", "severity": 1, "category": "noise", "verdict": "UNCERTAIN"},
+    {"step": 2, "function": "saturate_strengthen_YCrCb", "severity": 3, "category": "global", "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"step": 1, "function": "noise_poisson", "severity": 2, "category": "noise"},
+        {"step": 2, "function": "saturate_strengthen_YCrCb", "severity": 3, "category": "global"}
+      ],
+      "function_family": "noise_poisson (severity +1)",
+      "verdict": "UNCERTAIN",
+      "signal_evidence": {
+        "pair0": "MATCH 4/4 (same 4 signals as sev1)"
+      },
+      "note": "R1 new: poisson sev2 also MATCHes pair0 because verify_signals' image-level wavelet sigma is dominated by the saturation/clipping structure; severity not discriminable -> keep minimal sev1 (R0)."
+    },
+    {
+      "pipeline": [
+        {"step": 1, "function": "noise_gaussian_YCrCb", "severity": 1, "category": "noise"},
+        {"step": 2, "function": "saturate_strengthen_YCrCb", "severity": 3, "category": "global"}
+      ],
+      "function_family": "noise_gaussian_YCrCb",
+      "verdict": "UNCERTAIN",
+      "signal_evidence": {
+        "noise:sigma": "MATCH on all 5 pairs (<20%)",
+        "noise:clean_residual": "MATCH on all 5 pairs (FWHM<4px)",
+        "global:mean_shift": "MISMATCH 0.0080-0.0153 on 4/5 pairs"
+      },
+      "note": "R0 alternative retained: matches HF magnitude but systematically misses mean_shift; cross-family noise backup only."
+    },
+    {
+      "pipeline": [
+        {"step": 1, "function": "noise_gaussian_RGB", "severity": 1, "category": "noise"},
+        {"step": 2, "function": "saturate_strengthen_YCrCb", "severity": 3, "category": "global"}
+      ],
+      "function_family": "noise_gaussian_RGB",
+      "verdict": "UNCERTAIN",
+      "signal_evidence": {
+        "noise:sigma": "MISMATCH 33% (pair0)"
+      },
+      "note": "Weakest noise backup (RGB-independent noise yields wrong HF level)."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL",
+    "sigma_initial": 5.56,
+    "signal_reinterpretation": {
+      "full_analysis_R1": "Pair0 re-run identical to R0 on all decisive signals (block_boundary=1.0017, unique_G=256x3, dct_zero_ratio=0.0495, sigma=5.56, impulse_zero_ratio=0.0728, spectral_slope_ratio=0.9996, variance_ratio=2.0279, mean_shift=+16.1, chroma_ratio=2.1609, clipped_fraction=0.5264); only residual_intensity_corr varied 0.4686->0.4744 (subsampling). No threshold flips.",
+      "mean_shift_mixed_signs": "mean_shift=+16.1/255=0.063 but brightness_detected_raw=false (per-channel signs mixed) -> per-channel-identical transforms (brightness_*/gamma_*) excluded; chroma-only amplification (saturation) is the only single-global transform producing mixed-sign channel shifts.",
+      "contrast_spread_boundary": "contrast_spread_ratio=1.2643 is in the 1.20-1.30 boundary band, but analyzer sets contrast_saturation_corrected=true; a pure contrast step would keep mean_shift~0 (contradicts +0.063), and channel scaling would give chroma_ratio ~= spread_ratio (observed 2.16 vs 1.26).",
+      "ric_gamma_suspect": "residual_intensity_corr=0.4686-0.4744 (>0.15) is expected from intensity-dependent poisson noise + clipping structure; gamma remains contradicted by mixed-sign mean shift (R0 tested gamma_HSV:5 -> ms off 0.1056, vr 79% off).",
+      "clipped_fraction": "clipped_fraction=0.5264 / heavy_clipping consistent with the visually verified solid saturated blue sky/blue channel clipping after YCrCb chroma x5; not evidence of a separate brightness step.",
+      "peeled_sb6": "Peeled residual after satY:3: extreme_pct=73.67, zero_ratio=0.4431, vm_slope=15.71, var_slope=10.08, spatial_corr=0.5124, sigma=8.4. Re-interpreted as clipping/saturation structure (raw impulse_zero_ratio=0.0728 << 0.85 rules out impulse; extreme_pct inflated by target clipping vs sim). §B type diagnosis invalid here (SKILL known FP); noise type arbitrated by full-pipeline verify_signals."
+    },
+    "candidate_ranking": [
+      {"rank": 1, "pipeline": "noise_poisson:1,saturate_strengthen_YCrCb:3", "verdict": "MATCH 4/4 on pairs 0,1,2,3,4 (fresh seeds)", "status": "RETAINED"},
+      {"rank": 2, "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3", "verdict": "MATCH 4/4 pair0 only; sigma not discriminative", "status": "alternative (no gain)"},
+      {"rank": 3, "pipeline": "noise_poisson:1,saturate_strengthen_YCrCb:4", "verdict": "PARTIAL pair2 (variance_ratio 22% off)", "status": "rejected"},
+      {"rank": 4, "pipeline": "noise_poisson:1,saturate_strengthen_YCrCb:2", "verdict": "WEAK pair0 (vr 16% off, noise:sigma 70% off)", "status": "rejected"},
+      {"rank": 5, "pipeline": "noise_poisson:1,saturate_strengthen_YCrCb:3,compression_jpeg:1", "verdict": "WEAK pair0 (block_boundary 100% off, noise:sigma 90% off, vr 25% off)", "status": "rejected (compression)"},
+      {"rank": 6, "pipeline": "noise_poisson:1,blur_gaussian:1,saturate_strengthen_YCrCb:3", "verdict": "PARTIAL pair0 (5/6; noise:sigma 93% off)", "status": "rejected (blur not supported)"}
+    ],
+    "support_verification": {
+      "pair0": "MATCH 4/4",
+      "pair1": "MATCH 4/4",
+      "pair2": "MATCH 4/4",
+      "pair3": "MATCH 4/4",
+      "pair4": "MATCH 4/4"
+    },
+    "support_psnr_r0_db": 32.71,
+    "rationale": "Signal re-interpretation reproduced R0's decisive signals with no threshold flips and no ignored signal that contradicts the prediction: mixed-sign mean_shift excludes brightness/gamma; chroma_ratio=2.16 with spread_ratio=1.26 excludes pure contrast; 0%FP compression/blur signals plus explicit masking probes (JPEG1 -> block_boundary 100% off; blur1 -> noise:sigma 93% off) exclude those steps; peeled §B IMPULSE is the documented clipping-inflated FP. Severity neighbourhood scanned: sat2 WEAK, sat3 MATCH 5/5 pairs (fresh seeds), sat4 PARTIAL pair2 (vr 22% off), sat5 WEAK/MISMATCH (R0). No candidate improves on the retained pipeline's MATCH 4/4 across all 5 support pairs; poisson sev2 is indistinguishable but offers no gain, so minimal sev1 is kept. Decision: NO_CHANGE."
+  }
+}

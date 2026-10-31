@@ -1,0 +1,92 @@
+{
+  "challenge_id": "blind_0011_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_gaussian",
+      4
+    ]
+  ],
+  "r1_pipeline": [
+    [
+      "blur_gaussian",
+      4
+    ]
+  ],
+  "support_psnr_r0": 24.53,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_lens:3",
+      "mode": "psnr",
+      "scope": "pair0",
+      "psnr_rgb": 25.13,
+      "ci_pass": "5/10",
+      "result": "REJECT",
+      "signal_source": "deterministic lens severity scan gap: R0 tested lens:4 (31.64) and lens:5 (WEAK) but not lens:3; gm_ratio=0.0973/slope_ratio=1.6437"
+    },
+    {
+      "pipeline": "blur_motion:4",
+      "mode": "psnr",
+      "scope": "pair0",
+      "psnr_rgb": 20.69,
+      "ci_pass": "6/10",
+      "result": "REJECT",
+      "signal_source": "SKILL mandatory severity scan after motion:5 MISMATCH; residual_anisotropy=3.1659 gray zone (2.2-4.0), blur DT motion low-conf"
+    },
+    {
+      "pipeline": "blur_motion:3",
+      "mode": "psnr",
+      "scope": "pair0",
+      "psnr_rgb": 20.19,
+      "ci_pass": "4/10",
+      "result": "REJECT",
+      "signal_source": "complete motion severity scan (est sev5 -> scan 3,4); gm_ratio=0.0973 indicates strong blur, motion:3 under-blurs"
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "mode": "psnr",
+      "scope": "pair0",
+      "psnr_rgb": 33.32,
+      "ci_pass": "10/10",
+      "result": "REJECT",
+      "signal_source": "R0 only had signal WEAK for gaussian:5 (slope diff 0.264), no PSNR; severity_source=gm_ratio estimated sev5"
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "mode": "signal",
+      "scope": "pairs 1-4 (pair0 MATCH from R0)",
+      "verdict": "MATCH 4/4",
+      "result": "RETAIN",
+      "signal_source": "cross-pair validation of the R0 pipeline; matched blur:spectral_slope + blur:wiener_kernel on every support pair"
+    }
+  ],
+  "test_candidate_calls": 8,
+  "best_validation": {
+    "pipeline": "blur_gaussian:4",
+    "psnr_pair0": 37.02,
+    "psnr_cross_pair": [
+      37.02,
+      41.6,
+      39.41,
+      33.41,
+      35.65
+    ],
+    "psnr_mean_cross_pair": 37.42,
+    "ci_pass": "8-10/10 on all 5 pairs",
+    "signal_verdict": "MATCH 5/5 pairs"
+  },
+  "signal_sources": [
+    "run_full_analysis R1 rerun identical to R0: block_boundary=1.001, unique_G=197, dct_zero=0.823, sigma=3.09, spatial_corr=0.588, cross_ch=0.9489, ric=0.0162, gm_ratio=0.0973, slope_ratio=1.6437, anisotropy=3.1659, glass_score=0.0748, variance_ratio=0.5732, contrast_spread=0.8333, mean_shift=-2.5, clipped=0.0143",
+    "determinism: x_distortion gaussian/lens/jpeg are deterministic; a bit-exact GT would reproduce supports at ~inf dB, gaussian:4 only reaches 33.4-41.6 dB -> approximate, not exact",
+    "generator order noise->blur (priority 0 < 1): pre-blur white noise is attenuated ~14x by sigma_k=4, so R0's post-blur additive-noise bound (sigma<0.5) is invalid here",
+    "cross-pair peeled residual std 3.0/2.0/2.6/4.9/3.2 (2.5x) with content-dependent negative bias and smooth spatial_corr 0.984-0.998 -> content-dependent kernel mismatch, not stationary pre-blur noise",
+    "peeled residual noise_prior sigma pairs1-4 = 1.24/1.48/0.99/1.24 (<2), extreme_pct is signed-residual bias FP",
+    "motion family excluded: motion sev3/4/5 = 20.19/20.69/20 (kernel corr 0.49); anisotropy 3.17<4.0 and reproduced by gaussian sim (3.25) = content FP",
+    "lens excluded: lens sev3/4 = 25.13/31.64, lens:5 signal WEAK",
+    "quantization excluded: target unique_G=197 vs <=24 levels expected from quantization_median/hist",
+    "JPEG excluded: bb=1.001; JPEG:1 after blur moves bb by 73%",
+    "global excluded: variance_ratio 0.573 vs blur-only 0.605 (5.3%<8%), chroma 0.7952 vs 0.7936, mean_shift -2.5<3.6; smallest global severities cost >10 dB (25.08/22.94)"
+  ],
+  "reason": "No R1 candidate reaches the CHANGE bar (>40 dB or +2 dB over the R0 baseline): best new candidate gaussian:5 is 33.32 dB on pair0, 3.7 dB below gaussian:4; lens:3 25.13 and motion:3/4 ~20 dB are far worse. The R0 pipeline blur_gaussian:4 matches both blur signals on all 5 support pairs (MATCH 5/5) and reproduces the target at 33.4-41.6 dB (mean 37.42), with CI 8-10/10. The remaining residual (std 2.0-4.9) is smooth, content-dependent and highly variable across supports, consistent with a small kernel/rounding mismatch of an otherwise gaussian-sigma-4 blur, not with a stationary pre-blur noise step; no available discrete function/severity reproduces the supports bit-exactly. R0's post-blur noise bound is invalid under the generator's noise->blur order, but the cross-pair residual variability (2.5x, same-pipeline supports) argues against a constant-sigma pre-blur noise field, and verify_signals cannot certify noise->blur by design (SKILL: noise-first dt 54.7% ~ random). Decision: NO_CHANGE, keep blur_gaussian:4 (UNCERTAIN)."
+}

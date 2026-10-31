@@ -1,0 +1,48 @@
+{
+  "challenge_id": "blind_0005_setB",
+  "pipeline": [
+    {
+      "function": "noise_impulse",
+      "severity": 5,
+      "verdict": "UNCERTAIN",
+      "signal_source": "impulse_zero_ratio=0.9006 (=1-amount, amount=0.10) + 90% 通道样本残差<1.1/255 + 10% 极值翻转; 模拟 noise_impulse:5 的完整信号签名与 target 逐项吻合 (pair0/pair1)"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "overall_verdict": "UNCERTAIN",
+    "tier": 2,
+    "ci_pass_rate": "N/A",
+    "ci_note": "SIGNAL 模式; impulse 为随机噪声, 不同 seed 的像素级 CI/PSNR 无意义 (control PSNR 14.98 dB, 候选 PSNR 也仅反映 seed 失配)",
+    "mode": "SIGNAL",
+    "rationale": "单步 salt&pepper (amount=0.10, sev5)。判据: (1) zero_ratio=0.9006 表示恰好 9.94% 通道样本被翻转为 0/255, 其余 90% 与 clean 完全相同; (2) 5 对 support 的 zero_ratio 全部 0.9005-0.9029, 对应 amount=0.10; (3) clipped_fraction 10.67%, residual std 45.4; (4) clean 施加 noise_impulse:5 后 run_full_analysis 的全部信号与 target 一致 (zero_ratio 0.9002 vs 0.9006, variance_ratio 1.3419 vs 1.3404, chroma_ratio 2.9679 vs 2.961, gm_ratio 3.2234 vs 3.2144, mean_shift -2.6 vs -2.6, block_boundary 0.9955 vs 0.9926, spectral_slope_ratio 0.9579 vs 0.9547); pair1 同样吻合。初轮误判的 SATURATION_strengthen 与 IMPULSE-FP 结论被此签名比对推翻: 饱和/方差/梯度信号均由 impulse 的 0/255 极端样本产生。按 SKILL 规则, 噪声步骤 verify_signals MATCH 仍只能标 UNCERTAIN (seed 失配, 永不 LIKELY)。",
+    "steps": [
+      {
+        "function": "noise_impulse",
+        "severity": 5,
+        "verdict": "UNCERTAIN",
+        "signal_source": "zero_ratio/极值指纹 + 模拟签名比对; verify_signals MATCH (noise:sigma, noise:clean_residual)"
+      }
+    ]
+  },
+  "support_verification": {
+    "pairs_checked": 5,
+    "pairs_simulated": [0, 1],
+    "per_pair_impulse_zero_ratio": {
+      "pair_0": 0.9006,
+      "pair_1": 0.9018,
+      "pair_2": 0.9029,
+      "pair_3": 0.9028,
+      "pair_4": 0.9005
+    },
+    "result": "5/5 一致支持 noise_impulse:5; 无 compression (block_boundary 0.993-1.002), 无 blur (spectral_slope_ratio 0.955-0.989); global 信号由 impulse 极端值解释"
+  },
+  "qwen_gate": {
+    "available": false,
+    "triggered": true,
+    "reason": "IMPULSE verdict 与 sigma_prior=0.0 表面矛盾属 Step 0.5 的『信号矛盾』情形; Qwen/API 不可用, 改用 zero_ratio 指纹 + 模拟信号签名比对完成判定"
+  },
+  "reflection_file": "reflection.json",
+  "full_analysis_file": "full_analysis.json"
+}

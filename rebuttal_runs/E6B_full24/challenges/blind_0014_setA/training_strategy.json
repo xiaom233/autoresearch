@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted_params: verdict=LIKELY, tier=1, pipeline=brightness_brighten_shfit_HSV:3 -> compression_jpeg:2, 全 5 对 PSNR=inf + CI 10/10 (精确复现)",
+    "step1 compression: block_boundary=1.7284 (Tier S, 0% FP) -> JPEG 确认, 但无独立 JPEG 组件开关, 用纯 Swin 即可",
+    "step4 global: brightness_mean_shift=+60.5/255, saturation_chroma_ratio=1.425 -> HSV V 乘性提亮; variance_ratio=1.0611 但 contrast_detected_raw=false / contrast_from_variance=false -> 无 contrast Tier A 信号, 因此不启用 ColorPre / FiLM-GCM",
+    "step3 blur: spectral_slope_ratio=1.0026 (BLUR_UNLIKELY), gm_ratio=0.701 被 brightness+JPEG 完全解释; anisotropy 无 >1.7 证据, 无 motion -> 不启用 OCAB",
+    "step2 noise: 剥离后 residual std=0.0, noise_prior sigma=0.37/0.74 < 2 -> NO_NOISE (reflection noise_6step_check)",
+    "strategy: 含全局 brightness 退化 -> 按 CLAUDE.md 规则 8 与 finetune_strategy §二 (brightness shift -> Direct) 用 Direct, 不用 Ft/RandomCurric",
+    "SimpleGate: exp39 默认常开 (-32K 参数, 8/9 退化安全), 无 Tier S/A 组件触发 -> 纯 Swin + SimpleGate"
+  ],
+  "rationale": "两步确定性管线 (brightness_brighten_shfit_HSV:3 + compression_jpeg:2), PSNR=inf 精确复现且 5 对全部 CI 10/10, 盲识别置信度极高。退化难度低 (§六 Step 0: brightness shift + JPEG sev2 属低难度), 组件收益 ~0 dB。全局 brightness 退化按规则用 Direct 训练。variance_ratio=1.0611 属边界且 contrast 信号明确为 false, 不满足 FiLM-GCM/ColorPre 的 contrast Tier A 门控; 无 motion 且 anisotropy 未达 1.7, 不启用 OCAB; DualBranch/CSN/SCA/FPro 按协议不用。故选择纯 Swin + SimpleGate + Direct (lr=5e-4, epoch=2, batch=16, dim=64)。"
+}

@@ -1,0 +1,823 @@
+{
+  "challenge_id": "blind_0003_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=1.003<1.05, unique_G=235(ratio 0.955), dct_zero_ratio=0.449<0.5)",
+      "blur": "GLASS_BLUR candidate (gm_ratio=0.504, spectral_slope_ratio=1.107, glass_score=0.468>0.25, PCA=1.078<2.5, FFT_anisotropy=2.174<2.2 but >1.7)",
+      "noise": "GAUSSIAN_YCrCb low-confidence (sigma=1.85<2, cross_ch_corr=0.9875 but residual_intensity_corr=-0.528 -> gamma/structured-residual suspect; cross-ch corr 0.99 far above real YCrCb noise range)",
+      "global": "NO_GLOBAL (mean_shift=-0.6/255, variance_ratio=0.835 explained by blur variance reduction, chroma_ratio=0.932)"
+    },
+    "mode": "PSNR (sigma=1.85, borderline; peeled residual check required before accepting NO_NOISE)",
+    "suspected": [
+      "blur_glass",
+      "blur_gaussian",
+      "blur_lens",
+      "blur_motion(borderline FFT)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary 0% FP signal negative)",
+      "global brightness/contrast/saturation",
+      "noise_gaussian_YCrCb as true random noise (cross-ch 0.99 = structured blur residual)"
+    ],
+    "pair0_signal_note": "sigma 1.85 inflated by blur residual; §B on raw residual contaminated by blur (spatial_corr=0.734, cross_ch_corr=0.9875). Must peel blur before noise verdict."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "R1: glass_score=0.468>0.25 (glass range 0.19-0.41, above), PCA=1.078<2.5 rules out motion, gm_ratio=0.504 sev3-4; test glass sev3"
+      },
+      "test_result": {
+        "psnr_rgb": 27.27,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "R1: gaussian baseline (SKILL required coverage). gm_ratio=0.504 -> sev3; deterministic so PSNR directly comparable vs glass 27.27"
+      },
+      "test_result": {
+        "psnr_rgb": 26.88,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_lens:3",
+        "thinking": "R1: lens alternative (radial MTF indistinguishable from gaussian per SKILL C3); deterministic PSNR comparison. Test sev3 matching gm_ratio=0.504"
+      },
+      "test_result": {
+        "psnr_rgb": 28.85,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_motion:3",
+        "thinking": "R1: FFT anisotropy=2.174 >1.7 (SKILL workflow motion hint) but PCA=1.078<2.5; motion random angle -> test to rule out/confirm cross-family"
+      },
+      "test_result": {
+        "psnr_rgb": 21.75,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_lens:4",
+        "thinking": "R2 severity scan: lens won R1 at 28.85dB; gm_ratio=0.504 at sev3/4 boundary -> test lens sev4 (radius6)"
+      },
+      "test_result": {
+        "psnr_rgb": 25.52,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "R2 severity scan: lens sev4 dropped to 25.52; test lens sev2 (radius3) to bracket optimum around sev3"
+      },
+      "test_result": {
+        "psnr_rgb": 28.9,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "R2 cross-family: lens sev2=28.90/sev3=28.85 bracket optimum; test gaussian sev2 (sigma2) at similar effective width to compare subtype fairly"
+      },
+      "test_result": {
+        "psnr_rgb": 29.19,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "R2 cross-family: gaussian sev2=29.19 vs lens sev2=28.90; glass is the glass_score primary signal -> test glass sev2 at matched width for fair subtype comparison"
+      },
+      "test_result": {
+        "psnr_rgb": 30.25,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R2 severity scan: glass sev2 = PSNR 30.25 + CI 10/10 (all metric diffs ~0). Test glass sev1 (lower bound) to confirm optimum at sev2"
+      },
+      "test_result": {
+        "psnr_rgb": 28.93,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "thinking": "R3 control: block_boundary=1.003 says NO_JPEG but analyzer requests still_test. Add jpeg:1 on glass:2 winner; expect PSNR drop / block_boundary CI worsen if JPEG absent"
+      },
+      "test_result": {
+        "psnr_rgb": 29.46,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,noise_gaussian_RGB:1",
+        "thinking": "R3 noise control: sigma_prior raw=1.85, peeled=3.46 but residual spatial_corr=0.95 structured (glass shuffle mismatch). Test weakest gaussian_RGB:1 on glass:2; expect no PSNR/CI gain if no independent noise"
+      },
+      "test_result": {
+        "psnr_rgb": 24.63,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,noise_gaussian_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Support pair1 validation: pair0 winner blur_glass:2 (PSNR 30.25, CI 10/10); confirm same pipeline on independent image 0662"
+      },
+      "test_result": {
+        "psnr_rgb": 39.76,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Support pair2 validation: pair0 CI 10/10, pair1 PSNR 39.76 CI 10/10; confirm on independent image 0683"
+      },
+      "test_result": {
+        "psnr_rgb": 35.63,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Support pair3 validation: pair0/1/2 all CI 10/10; confirm on independent image 0101"
+      },
+      "test_result": {
+        "psnr_rgb": 33.19,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Support pair4 validation: final of 4 support pairs; pair0/1/2/3 all CI 10/10; confirm on independent image 0066"
+      },
+      "test_result": {
+        "psnr_rgb": 32.2,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "R1 baseline: 重验 R0 主候选 glass:2。信号来源: glass_score=0.4684>0.25 + gm_ratio=0.5039 + PCA=1.078<2.5 + FFT=2.174<2.2。同时输出模拟图用于 signal profile 对比 (variance_ratio/ric/glass_score)"
+      },
+      "test_result": {
+        "psnr_rgb": 30.27,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R1 sev-1 扫描 (support pair0): 全信号剖面对比确认 glass 系列 (glass_score=0.468, gm_ratio=0.504), 但 full_analysis 估计 sev3 而 R0 选 sev2; 降一档验证 sev1 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 28.94,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R1 sev-1 扫描 (support pair1): 全信号剖面对比确认 glass 系列 (glass_score=0.468, gm_ratio=0.504), 但 full_analysis 估计 sev3 而 R0 选 sev2; 降一档验证 sev1 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 38.26,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R1 sev-1 扫描 (support pair2): 全信号剖面对比确认 glass 系列 (glass_score=0.468, gm_ratio=0.504), 但 full_analysis 估计 sev3 而 R0 选 sev2; 降一档验证 sev1 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 34.33,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R1 sev-1 扫描 (support pair3): 全信号剖面对比确认 glass 系列 (glass_score=0.468, gm_ratio=0.504), 但 full_analysis 估计 sev3 而 R0 选 sev2; 降一档验证 sev1 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 31.35,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R1 sev-1 扫描 (support pair4): 全信号剖面对比确认 glass 系列 (glass_score=0.468, gm_ratio=0.504), 但 full_analysis 估计 sev3 而 R0 选 sev2; 降一档验证 sev1 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 30.65,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "R1 sev+1 扫描 (support pair0): full_analysis 以 gm_ratio 估计 sev3 (estimated_severity=3), 而 R0 依 pair0 PSNR 选 sev2; 在 5 对 support 上验证 sev3 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 27.27,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "R1 sev+1 扫描 (support pair1): full_analysis 以 gm_ratio 估计 sev3 (estimated_severity=3), 而 R0 依 pair0 PSNR 选 sev2; 在 5 对 support 上验证 sev3 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 37.23,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "R1 sev+1 扫描 (support pair2): full_analysis 以 gm_ratio 估计 sev3 (estimated_severity=3), 而 R0 依 pair0 PSNR 选 sev2; 在 5 对 support 上验证 sev3 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 32.87,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "R1 sev+1 扫描 (support pair3): full_analysis 以 gm_ratio 估计 sev3 (estimated_severity=3), 而 R0 依 pair0 PSNR 选 sev2; 在 5 对 support 上验证 sev3 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 30.85,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "R1 sev+1 扫描 (support pair4): full_analysis 以 gm_ratio 估计 sev3 (estimated_severity=3), 而 R0 依 pair0 PSNR 选 sev2; 在 5 对 support 上验证 sev3 是否更优"
+      },
+      "test_result": {
+        "psnr_rgb": 29.67,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 39.76,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 38.26,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 37.23,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 35.63,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 34.33,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 33.19,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 32.87,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 32.2,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 31.35,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 30.85,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 30.65,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 30.27,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 30.25,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 29.67,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 26
+    },
+    {
+      "pipeline": "blur_glass:2,compression_jpeg:1",
+      "psnr_rgb": 29.46,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 29.19,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 28.94,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 28.93,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_lens:2",
+      "psnr_rgb": 28.9,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_lens:3",
+      "psnr_rgb": 28.85,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 27.27,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 27.27,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 26.88,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_lens:4",
+      "psnr_rgb": 25.52,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_glass:2,noise_gaussian_RGB:1",
+      "psnr_rgb": 24.63,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_motion:3",
+      "psnr_rgb": 21.75,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    }
+  ],
+  "psnr_ranking_note": "Rounds 12-15 are support-pair validations (different clean/degraded images), not pair0 candidates; pair0 ranking starts at round 8 (blur_glass:2 30.25dB).",
+  "noise_6step_check": {
+    "extreme_pct": 59.44,
+    "vm_slope": 3.92,
+    "var_slope": 0.0019,
+    "spatial_corr": 0.9514,
+    "rgb_ratio": 1.0178,
+    "cross_ch_corr": 0.9903,
+    "noise_prior_sigma_raw": 1.85,
+    "noise_prior_sigma_peeled_glass2": 3.46,
+    "source": "peeled_noise_check.py --pipeline blur_glass:2 on pair0",
+    "diagnosis": "NO_NOISE. Auto verdict IMPULSE is a known false positive: extreme_pct=59.44%>50% while noise_prior sigma<5 (SKILL documented JPEG/blur artifact FP). spatial_corr=0.9514 and cross_ch_corr=0.9903 with rgb_ratio=1.0178 indicate structured glass-shuffle mismatch residual, not independent random noise. Control test blur_glass:2+noise_gaussian_RGB:1 collapsed PSNR 30.25->24.63 dB and CI 10/10->3/10, confirming no random noise in target. Raw-step2 YCrCb verdict (cross_ch=0.9875, ric=-0.528) is also structured-residual FP."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_glass",
+        "severity": 2,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "mode": "PSNR (sigma=1.85<2) + CI statistical matching",
+    "ci_pass_rate": "10/10 (pair0)",
+    "psnr_pair0": 30.25,
+    "rationale": "Single-step glass blur sev2. glass_score=0.468>0.25 (pixel-shuffle high-frequency signature), gm_ratio=0.504, spectral_slope_ratio=1.107; PCA=1.078<2.5 and FFT=2.174<2.2 exclude motion. Pair0: glass:2 PSNR=30.25dB CI=10/10 with all CI metric diffs <=0.001 (overshoot/zero-crossing/hf-lf exact), severity scan optimum at sev2 (sev1 28.93, sev3 27.27). Cross-family worse: gaussian:2 29.19 (CI 8/10), lens:2 28.90 (CI 9/10), motion:3 21.75. JPEG control (glass:2+jpeg:1) -> 29.46/CI 7/10 (block_boundary err 66%) confirms NO_COMPRESSION. Noise control -> 24.63/CI 3/10 confirms NO_NOISE. Glass random pixel shuffle limits PSNR (SKILL C.4); 5/5 pairs CI 10/10 constitutes sufficient indicator evidence (SKILL D.4), hence LIKELY.",
+    "alternatives": [
+      "blur_gaussian:2 (29.19dB, CI 8/10)",
+      "blur_lens:2 (28.90dB, CI 9/10)",
+      "blur_glass:1 (28.93dB, CI 10/10, worse exact-metric diffs)"
+    ]
+  },
+  "support_validation": {
+    "candidate": "blur_glass:2",
+    "pairs": [
+      {
+        "index": 0,
+        "image_id": "0005",
+        "psnr_db": 30.25,
+        "ci": "10/10",
+        "role": "primary"
+      },
+      {
+        "index": 1,
+        "image_id": "0662",
+        "psnr_db": 39.76,
+        "ci": "10/10",
+        "role": "support"
+      },
+      {
+        "index": 2,
+        "image_id": "0683",
+        "psnr_db": 35.63,
+        "ci": "10/10 (all metric diffs 0.000)",
+        "role": "support"
+      },
+      {
+        "index": 3,
+        "image_id": "0101",
+        "psnr_db": 33.19,
+        "ci": "10/10",
+        "role": "support"
+      },
+      {
+        "index": 4,
+        "image_id": "0066",
+        "psnr_db": 32.2,
+        "ci": "10/10",
+        "role": "support"
+      }
+    ],
+    "summary": "5/5 pairs CI 10/10 at blur_glass:2; PSNR 30.25-39.76 (glass stochastic shuffle caps PSNR per SKILL C.4). Support consistency strongly confirms single-step glass blur severity 2."
+  },
+  "qwen_gate": {
+    "available": false,
+    "triggered": false,
+    "reason": "sigma=1.85 not in 2<sigma<10 boundary band; SKILL Step 0.5 gate not triggered, no API available regardless"
+  },
+  "budget": {
+    "test_candidate_calls": 15,
+    "limit": 25,
+    "rounds_used": 3,
+    "no_improvement_streak": 0
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=LIKELY but support PSNR 27.66 dB < 35",
+    "method": "信号重释：重跑 run_full_analysis(pair0) + glass:2 模拟图信号剖面对比 + 5 对 support 上的 severity 验证；未使用模型 residual 诊断",
+    "signal_reinterpretation": [
+      {
+        "signal": "variance_ratio=0.8346, contrast_spread_ratio=0.8745, mean_shift=-0.6/255, clipped_fraction=0",
+        "r0_reading": "blur 导致的方差下降；contrast_detected_raw=false (阈值 0.55)",
+        "r1_check": "同一 clean 的 glass:2 模拟图给出 variance_ratio=0.8338, contrast_spread_ratio=0.8745, mean_shift=-0.5；contrast_weaken_scale:1 (PIL factor 0.75) 会把方差乘 0.5625，任何离散 global 档位都无法在均值不变的前提下给出 0.835；gamma/shift 类 sev1 最小也会移动均值 >=25/255",
+        "conclusion": "无遗漏 global 步骤；方差下降是 glass 低通+shuffle 的固有签名"
+      },
+      {
+        "signal": "residual_intensity_corr=-0.5243, gamma_suspect_from_noise=true",
+        "r1_check": "glass:2 模拟图 ric=-0.5284 (与 target 几乎相同)",
+        "conclusion": "残差-强度负相关来自低通移除亮部局部极大值，不是 gamma；brightness gamma/shift 会显著改变均值 (实测 -0.6/255)"
+      },
+      {
+        "signal": "noise_prior sigma=1.85, spatial_corr=0.7338, cross_channel_corr=0.9875 (低置信 GAUSSIAN_YCrCb)",
+        "r1_check": "glass:2 模拟图 sigma=1.85, spatial_corr=0.7339, cross_channel_corr=0.9875 完全一致；R0 peeled §B var_slope=0.0019 (非 Poisson)；R0 控制实验 glass:2+noise_gaussian_RGB:1 使 pair0 PSNR 30.25->24.63 dB、CI 10/10->3/10",
+        "conclusion": "结构化 glass-shuffle 重建残差，非随机噪声；NO_NOISE (sigma<2)"
+      },
+      {
+        "signal": "block_boundary=1.0026, unique_G_ratio=0.9553, dct_zero_ratio=0.449",
+        "r1_check": "glass:2 模拟图 block_boundary=1.0021, unique_G_ratio=0.9512, dct_zero_ratio=0.4492；x_distortion 的 quantization_otsu/median/hist 会把唯一色数压到 <=24 级",
+        "conclusion": "NO_COMPRESSION / NO_QUANTIZATION"
+      },
+      {
+        "signal": "gm_ratio=0.5039, spectral_slope_ratio=1.1073, glass_score=0.4684>0.25, residual_anisotropy=2.1744<2.2, blur_pca_ratio=1.078<2.5",
+        "r1_check": "glass:2 模拟图 gm_ratio=0.5038, spectral_slope_ratio=1.1072, glass_score=0.4702, anisotropy=2.1625, pca=1.016；motion 已由 pair0 PSNR 21.75 排除；gaussian:2=29.19 dB、lens:2=28.90 dB 若为确定性真值应在 pair0 像素级复现 (>40 dB)，实测不能，故非确定性真值",
+        "conclusion": "blur_glass 类型确认；full_analysis 的 gm_ratio 启发式 estimated_severity=3 对 glass 未校准，直接模拟对比 (gm 0.5038 vs 0.5039) 支持 sev2"
+      }
+    ],
+    "candidates": [
+      {
+        "pipeline": "blur_glass:2",
+        "role": "baseline (R0 primary)",
+        "support_psnr": [30.25, 39.76, 35.63, 33.19, 32.20],
+        "mean_psnr_db": 34.21,
+        "support_ci": ["10/10", "10/10", "10/10", "10/10", "10/10"],
+        "r1_pair0_recheck": {"psnr_db": 30.27, "ci": "10/10", "metric_diffs": "all 10 CI diffs 0.000"},
+        "decision": "KEEP"
+      },
+      {
+        "pipeline": "blur_glass:1",
+        "role": "severity scan -1",
+        "support_psnr": [28.94, 38.26, 34.33, 31.35, 30.65],
+        "mean_psnr_db": 32.71,
+        "support_ci": ["10/10", "6/10", "7/10", "7/10", "8/10"],
+        "delta_vs_baseline_db": -1.50,
+        "decision": "REJECT"
+      },
+      {
+        "pipeline": "blur_glass:3",
+        "role": "severity scan +1 (full_analysis heuristic)",
+        "support_psnr": [27.27, 37.23, 32.87, 30.85, 29.67],
+        "mean_psnr_db": 31.58,
+        "support_ci": ["9/10", "7/10", "7/10", "8/10", "7/10"],
+        "delta_vs_baseline_db": -2.63,
+        "decision": "REJECT"
+      }
+    ],
+    "candidate_ranking": ["blur_glass:2 (34.21 dB, CI 10/10 x5) > blur_glass:1 (32.71 dB, CI 6-10/10) > blur_glass:3 (31.58 dB, CI 7-9/10)"],
+    "support_validation": {
+      "summary": "glass:2 在 5/5 对 support 上 CI 10/10，且同图模拟的信号剖面 18 项与 target 近乎一致；sev1 在 5/5 对、sev3 在 5/5 对均低于 glass:2 (分别 -1.50 / -2.63 dB)，且 CI 随偏离而退化。未出现 >40 dB 或 +2 dB 的改善。",
+      "change_criterion": "纯 PSNR 候选需 >40 dB 或相对上一轮 +2 dB —— 均未达到"
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [{"function": "blur_glass", "severity": 2, "verdict": "LIKELY"}],
+      "overall_verdict": "LIKELY",
+      "reason": "信号重释未发现遗漏步骤或严重度错误：glass:2 模拟复现了全部 target 信号 (含 variance_ratio/ric/sigma 等 R0 的边界信号)，5 对 support 的 severity 扫描双向均退化。support PSNR 27.66<35 是 glass 随机局部像素置换 (shuffle_pixels_njit) 不可逆的固有限制，不是盲识别错误。"
+    },
+    "budget": {
+      "test_candidate_calls": 11,
+      "limit": 15,
+      "candidates_tested": 3,
+      "run_full_analysis_runs": 2
+    },
+    "artifacts": [
+      "full_analysis_R1.json",
+      "sim_glass2_R1.png",
+      "full_analysis_sim_glass2_R1.json",
+      "predicted_params_R1.json",
+      "r1_decision.json",
+      "agent_timing_R1.json"
+    ]
+  }
+}

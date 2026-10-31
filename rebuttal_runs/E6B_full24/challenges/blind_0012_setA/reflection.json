@@ -1,0 +1,906 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=3.236 (>>1.1, 0%FP) + dct_zero_ratio=0.937 → JPEG high confidence; unique_G=256 (no color quantization)",
+      "blur": "gm_ratio=0.405, spectral_slope_ratio=1.330; motion signals: residual_anisotropy=1.712 (>1.7), blur_pca_ratio=4.199 (>2.5, 0%FP); glass_score=0.985 is high but anisotropy/PCA lead the decision tree → motion sev~4",
+      "noise": "noise_prior_sigma=0.74 < 2 → NO_NOISE per Step 0.5; GAUSSIAN_YCrCb flag likely FP from blur+JPEG (failure_risk FP_YCrCb_BLUR_JPEG): spatial_corr=0.941, cross_ch_corr=0.866 are blur/JPEG contaminated",
+      "global": "NO_GLOBAL: mean_shift=-0.4/255, variance_ratio=0.896 (contrast_from_variance=false), saturation_ratio=0.985"
+    },
+    "mode": "PSNR (sigma=0.74)"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 62.48,
+    "vm_slope": 0.1685,
+    "var_slope": 0.0892,
+    "spatial_corr": 0.9963,
+    "rgb_ratio": 1.0628,
+    "cross_ch_corr": 0.9387,
+    "residual_std_peeled": 27.7,
+    "noise_prior_sigma_raw": 0.74,
+    "noise_prior_sigma_peeled": 1.24,
+    "diagnosis": "NO_NOISE: peeled residual (blur_motion:5,compression_jpeg:3) dominated by deterministic blur-angle mismatch (std 27.7), which inflates all §B features; extreme_pct>50% + sigma<5 is the known JPEG/blur FP rule in SKILL. Both raw (0.74) and peeled (1.24) wavelet sigma < 2. Step2 GAUSSIAN_YCrCb is FP_YCrCb_BLUR_JPEG (cross-channel correlation from JPEG chroma + strong blur)."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "thinking": "R1 composite baseline: block_boundary=3.24 (JPEG confirmed), residual_anisotropy=1.71>1.7 + pca=4.20>2.5 → motion blur sev~4; global NO_GLOBAL, sigma=0.74 no noise"
+      },
+      "test_result": {
+        "psnr_rgb": 20.8,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:2",
+        "thinking": "R2 JPEG severity scan: jpeg:4 block_boundary diff 23% → try lighter jpeg:2 with motion:4 fixed"
+      },
+      "test_result": {
+        "psnr_rgb": 21.75,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:1",
+        "thinking": "R2 JPEG severity scan lower bound: jpeg:2 gives block_boundary 4% and better PSNR than jpeg:4 → test jpeg:1"
+      },
+      "test_result": {
+        "psnr_rgb": 20.38,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R2 JPEG severity scan: jpeg:1=20.38/CI6, jpeg:2=21.75/CI7 best, jpeg:4=20.80/CI5 → test jpeg:3 to complete bracket"
+      },
+      "test_result": {
+        "psnr_rgb": 31.97,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:3",
+        "thinking": "R3 severity scan (jpeg:3 fixed, m4+j3=31.97/CI8): motion:3 milder"
+      },
+      "test_result": {
+        "psnr_rgb": 19.62,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R3 severity scan (jpeg:3 fixed): motion:4=31.97/CI8 vs motion:3=19.62 → test heavier motion:5"
+      },
+      "test_result": {
+        "psnr_rgb": 19.28,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "thinking": "R2 blur cross-family control (jpeg:3 fixed): DT motion(anisotropy1.71,PCA4.20) but glass_score0.985 high; test gaussian:4 — higher PSNR would overturn DT (gaussian↔lens/motion confusion)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.92,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:3",
+        "thinking": "R2 blur cross-family control: glass_score=0.985 very high; motion:4=31.97 vs gaussian:4=22.92; test glass:4 to rule out glass (non-deterministic, expect <40)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.01,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R3 repeatability check: repeat best candidate motion:4+jpeg:3 (was 31.97/CI8) to verify deterministic match (motion angle stability)"
+      },
+      "test_result": {
+        "psnr_rgb": 19.37,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "thinking": "R3 signal mode: motion angle is random (PSNR repeat 31.97→19.37) → PSNR unreliable for subtype. gaussian:4 is deterministic; verify_signals spectral_slope/Wiener for gaussian"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.519)"
+        ],
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R3 signal mode: compare motion:4 kernel/spectral signals vs gaussian PARTIAL (wiener 0.519); DT says anisotropy+PCA motion"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.105)",
+          "blur:wiener_kernel (corr=0.197)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:3",
+        "thinking": "R3 signal mode: glass_score=0.985 high; gaussian PARTIAL vs motion WEAK; test glass:4 spectral/kernel signals"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.122)",
+          "blur:wiener_kernel (corr=0.233)"
+        ],
+        "pipeline": "blur_glass:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:3",
+        "thinking": "R3 blur subtype coverage: motion(random angle)/gaussian/glass tested; none reached >40dB though deterministic candidate should if exact. Test lens:4 (radial signals, deterministic) with jpeg:3"
+      },
+      "test_result": {
+        "psnr_rgb": 22.49,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:3",
+        "thinking": "R3 gaussian severity scan: peeled sigma=1.24<2 → NO_NOISE; gaussian:4=22.92/CI10 (deterministic, PSNR valid) → test gaussian:5"
+      },
+      "test_result": {
+        "psnr_rgb": 23.24,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3,blur_gaussian:4",
+        "thinking": "R3 order diagnostic: forward gaussian:4+jpeg:3 deterministic PSNR only 22.9 (should be >40 if exact) → test reversed order jpeg:3 then gaussian:4; >40 would reveal reversed pipeline order"
+      },
+      "test_result": {
+        "psnr_rgb": 23.05,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3,blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:3",
+        "thinking": "R3 gaussian severity completeness: g4=22.92, g5=23.24 (deterministic, both plateau → if true is g3 should hit >40); completes 1-5 sweep for gaussian at jpeg:3"
+      },
+      "test_result": {
+        "psnr_rgb": 22.46,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R3 motion severity via signal mode: m4 slope diff 0.105 (>0.08); gaussian 3/4/5 all ~22-23 → nondeterministic blur confirmed. Test m5 spectral slope (rotation-invariant)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.163)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R3 motion severity discrimination: m5 slope matched (<0.08) vs m4 0.105; repeat m4 signal to check whether slope diff is stable across random angles (radial slope near rotation-invariant)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.141)",
+          "blur:wiener_kernel (corr=0.264)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R3 confirm m5 severity: m4 slope failed twice (0.105/0.141), m5 matched once; repeat m5 signal (random angle, radial slope nearly invariant) to check stability"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "Cross-pair validation 1/4 (pair1): final candidate motion:5+jpeg:3, expect comparable signal/PSNR (motion angle random → Wiener varies)"
+      },
+      "test_result": {
+        "psnr_rgb": 18.8,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "Cross-pair validation 2/4 (pair2): final candidate motion:5+jpeg:3"
+      },
+      "test_result": {
+        "psnr_rgb": 28.64,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "Cross-pair validation 3/4 (pair3): final candidate motion:5+jpeg:3"
+      },
+      "test_result": {
+        "psnr_rgb": 26.52,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "Cross-pair validation 4/4 (pair4): final candidate motion:5+jpeg:3"
+      },
+      "test_result": {
+        "psnr_rgb": 22.04,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R1 信号重释 pair0 稳定性: pca=4.20>2.5(0%FP)确认 motion; gm_ratio=0.405→表内 sev4 与 spectral_slope_ratio=1.330→表内 sev4 均与 R0 的 sev5 冲突; 重测 m5 slope(旋转不变)与 Wiener(角度抽签)稳定性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.140)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R1 信号重释 pair0 严重度对照: 聚合估计 gm_ratio=0.405(表内sev4)+slope_ratio=1.330(表内sev4) 指向 m4, 与 R0 由单对 slope 选 m5 冲突; 用旋转不变 spectral_slope 直接对照 m4"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.109)",
+          "blur:wiener_kernel (corr=0.199)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R1 5对support验证 pair1: m5 slope 旋转不变判别, block_boundary 应维持在 <8% (R0 3%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.337)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R1 5对support验证 pair1 严重度对照 m4: 若 slope diff<0.08 表明 m4 同样成立 → 严重度不可分; 期望 m4 与 pair0 相同失败(diff~0.11)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.180)",
+          "compression:block_boundary (diff=8%)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R1 5对support验证 pair2: m5 slope 旋转不变判别; R0 该对 PSNR 28.64(角度接近)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.545)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R1 5对support验证 pair2 严重度对照 m4: 比较 slope diff 与 m5 的差异以判定 sev4/5 可分性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=9%)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R1 5对support验证 pair3: m5 slope 旋转不变判别; R0 该对 PSNR 26.52(block_boundary 6%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.238)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R1 5对support验证 pair3 严重度对照 m4: 比较 slope diff 判定 sev4/5 可分性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.097)",
+          "blur:wiener_kernel (corr=0.256)",
+          "compression:block_boundary (diff=12%)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R1 5对support验证 pair4: m5 slope 旋转不变判别; R0 该对 PSNR 22.04(block 0%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.664)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 33,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R1 5对support验证 pair4 严重度对照 m4: 最后 1 对; m5 已在 pair0-4 slope 全通过, m4 目前 pair0/3 失败"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.206)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 34,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "thinking": "R1 阈值边界复核: glass_score=0.9848 超出工具标定 glass(2-4)=0.19-0.41 约2.4倍(JPEG+强模糊污染疑似); PCA=4.20 0%FP 指向 motion; R0 仅测 glass:4(slope diff 0.122,WEAK), 补测 glass:5 关闭边界分支"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.231)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 31.97,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 28.64,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 26.52,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:3",
+      "psnr_rgb": 23.24,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "compression_jpeg:3,blur_gaussian:4",
+      "psnr_rgb": 23.05,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:3",
+      "psnr_rgb": 22.92,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:3",
+      "psnr_rgb": 22.49,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:3",
+      "psnr_rgb": 22.46,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 22.04,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:2",
+      "psnr_rgb": 21.75,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:3",
+      "psnr_rgb": 21.01,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:4",
+      "psnr_rgb": 20.8,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:1",
+      "psnr_rgb": 20.38,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:3",
+      "psnr_rgb": 19.62,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 19.37,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 19.28,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 18.8,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_motion",
+        "severity": 5,
+        "verdict": "UNCERTAIN",
+        "evidence": "random-angle motion: identical pipeline repeats give PSNR 31.97→19.37 (angle lottery), so PSNR cannot confirm; signal mode at sev5: PARTIAL (slope✓, block✓) then MATCH 3/3 (slope✓ wiener✓ block✓); sev4 spectral_slope failed twice (0.105/0.141>0.08); deterministic blur ruled out: gaussian 3/4/5 all plateau 22.46-23.24 with exact jpeg:3; lens:4 22.49; glass:4 WEAK"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 3,
+        "verdict": "LIKELY",
+        "evidence": "block_boundary 3.236 (>>1.1, 0%FP); simulated block_boundary diff 0-6% on all 5 pairs; signal verification matched compression:block_boundary in every signal run; jpeg:4 diff 23%, jpeg:2 residual diff 4% but PSNR worse"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Two-step blur→JPEG confirmed by forward/reverse order test (reversed 23.05dB, block_boundary 70% off). Blur is non-deterministic motion: all deterministic families (gaussian 3/4/5, lens 4) plateau at 22.5-23.2dB at correct jpeg:3 and never reach >40; motion severity 5 is the only candidate passing rotation-invariant spectral_slope twice (sev4 fails twice) and once MATCHing Wiener kernel. No noise (sigma 1.24<2; §B extreme_pct FP rule), no global (variance_ratio 0.896 is inside non-contrast calibration 0.55-1.80, mean_shift -0.4/255). UNCERTAIN because motion angle is unrecoverable from the allowed scripts, capping pixel PSNR regardless of correct params.",
+    "cross_pair_validation": {
+      "pair0": "motion5+jpeg3: PSNR 19.28 CI 10/10 (final PSNR draw); signal MATCH 3/3",
+      "pair1": "PSNR 18.80, CI 8/10, block_boundary 3%",
+      "pair2": "PSNR 28.64, CI 9/10, block_boundary 2%",
+      "pair3": "PSNR 26.52, CI 10/10, block_boundary 6%",
+      "pair4": "PSNR 22.04, CI 10/10, block_boundary 0%",
+      "conclusion": "block_boundary/unique-color/overshoot/zero-crossing all consistent across 5 pairs; PSNR spread 18.8-31.97 is motion-angle randomness, not pipeline mismatch"
+    },
+    "candidate_tests": 23
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN, support PSNR 24.93 dB",
+    "signal_rereading": [
+      {
+        "signal": "blur_pca_ratio=4.199 (>2.5)",
+        "r0_view": "motion subtype, 0% FP primary signal",
+        "r1_view": "confirmed. Tool calibration: 41% recall, 0% FP over 2880 non-motion cases. Motion subtype stands."
+      },
+      {
+        "signal": "residual_anisotropy=1.7123",
+        "r0_view": "cited as >1.7 motion evidence",
+        "r1_view": "boundary value, only 0.7% above the old 1.7 threshold; current tool uses 2.2 as FFT fallback and treats PCA as primary. Non-decisive either way; motion does not depend on it."
+      },
+      {
+        "signal": "gm_ratio=0.4052 and spectral_slope_ratio=1.3299",
+        "r0_view": "not used for severity; sev5 chosen from pair0 spectral-slope tests",
+        "r1_view": "both aggregate tables map to sev4 (<0.50; >1.30), conflicting with R0 sev5. Resolved by 5-pair direct simulation: rotation-invariant spectral_slope matches 5/5 pairs at sev5 vs 3/5 at sev4; block_boundary 5/5 vs 3/5 (sev4 fails 8%/9%/12% on pairs 1-3). sev5 retained."
+      },
+      {
+        "signal": "glass_score=0.9848",
+        "r0_view": "high but anisotropy/PCA lead the decision tree",
+        "r1_view": "2.4x above the tool's own glass(2-4) calibration 0.19-0.41 -> out-of-range, contaminated by JPEG+strong blur. glass:5 control on pair0 gives PARTIAL (slope pass, block pass, wiener 0.231) with no subtype-specific evidence; cross-family backup only."
+      },
+      {
+        "signal": "noise_prior_sigma=0.74, spatial_corr=0.941, cross_ch_corr=0.8661, residual_intensity_corr=-0.104",
+        "r0_view": "GAUSSIAN_YCrCb is FP from blur+JPEG",
+        "r1_view": "confirmed FP_YCrCb_BLUR_JPEG (documented failure risk); sigma<2 -> NO_NOISE."
+      },
+      {
+        "signal": "variance_ratio=0.8964, contrast_spread_ratio=0.9653, mean_shift=-0.4/255, clipped_fraction=0.0037",
+        "r0_view": "NO_GLOBAL",
+        "r1_view": "confirmed; variance_ratio inside the non-contrast calibration band; no contrast/brightness/saturation/quantization step."
+      },
+      {
+        "signal": "block_boundary=3.2358, dct_zero_ratio=0.9366, unique_G=256",
+        "r0_view": "JPEG:3 LIKELY",
+        "r1_view": "confirmed; block_boundary matched 5/5 pairs at jpeg:3 in R1 too (jpeg:2/4 previously rejected)."
+      }
+    ],
+    "candidates_ranked": [
+      {
+        "rank": 1,
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "support_signal_score": "slope 5/5, block_boundary 5/5, wiener 0/5 (random motion angle); PARTIAL on all 5 pairs"
+      },
+      {
+        "rank": 2,
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "support_signal_score": "slope 3/5 (pair0 0.109, pair3 0.097 fail), block_boundary 3/5 (pair1 8%, pair2 9%, pair3 12% fail), wiener 1/5 lucky (pair2); pair3 MISMATCH"
+      },
+      {
+        "rank": 3,
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "support_signal_score": "pair0 PARTIAL (slope pass, block pass, wiener 0.231); glass_score out of calibration; no subtype-specific match"
+      }
+    ],
+    "support_validation": {
+      "blur_motion:5+compression_jpeg:3": {
+        "pair0": "PARTIAL (slope pass, block pass, wiener 0.140)",
+        "pair1": "PARTIAL (slope pass, block pass, wiener 0.337)",
+        "pair2": "PARTIAL (slope pass, block pass, wiener 0.545)",
+        "pair3": "PARTIAL (slope pass, block pass, wiener 0.238)",
+        "pair4": "PARTIAL (slope pass, block pass, wiener 0.664)"
+      },
+      "blur_motion:4+compression_jpeg:3": {
+        "pair0": "WEAK (slope diff 0.109 fail; block pass)",
+        "pair1": "WEAK (slope pass; block 8% fail)",
+        "pair2": "PARTIAL (lucky Wiener, block 9% fail)",
+        "pair3": "MISMATCH (slope 0.097, wiener 0.256, block 12%)",
+        "pair4": "PARTIAL (slope pass, block pass, wiener 0.206)"
+      },
+      "blur_glass:5+compression_jpeg:3": {
+        "pair0": "PARTIAL (slope pass, block pass, wiener 0.231)"
+      }
+    },
+    "test_candidate_calls": 11,
+    "new_candidates": 1,
+    "rounds": "24-34",
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "blur_motion", "severity": 5, "verdict": "UNCERTAIN"},
+        {"function": "compression_jpeg", "severity": 3, "verdict": "LIKELY"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "reason": "Multi-pair arbitration confirms sev5 over the sev4 suggested by aggregate tables; JPEG:3 and blur->JPEG order reconfirmed on 5/5 pairs; noise and global remain ruled out. Motion angle is unrecoverable with the allowed tooling, so pixel PSNR stays capped regardless of correct params."
+    }
+  }
+}

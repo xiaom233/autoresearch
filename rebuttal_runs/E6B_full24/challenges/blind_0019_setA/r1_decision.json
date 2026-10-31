@@ -1,0 +1,89 @@
+{
+  "challenge_id": "blind_0019_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 3],
+    ["saturate_weaken_HSV", 5],
+    ["compression_jpeg", 3]
+  ],
+  "r1_pipeline": [
+    ["blur_gaussian", 3],
+    ["saturate_weaken_HSV", 5],
+    ["compression_jpeg", 3]
+  ],
+  "support_psnr_r0": 18.23,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_gaussian:3,saturate_weaken_HSV:5,compression_jpeg:4",
+      "pair0_psnr": 30.18,
+      "pair0_ci": "7/10",
+      "signal_verdict_pair0": "MATCH (5/5)",
+      "five_pair_psnr": [30.18, 26.69, 29.08, 28.90, 30.01],
+      "five_pair_mean": 28.97,
+      "delta_vs_r0_mean": -0.34,
+      "outcome": "REJECT_FOR_CHANGE (PSNR -0.34 dB despite signal MATCH); kept as signal-tagged alternative"
+    },
+    {
+      "pipeline": "blur_lens:4,saturate_weaken_HSV:5,compression_jpeg:3",
+      "pair0_psnr": 30.74,
+      "pair0_ci": "7/10",
+      "signal_verdict_pair0": "PARTIAL (block_boundary 35% off)",
+      "five_pair_psnr": null,
+      "delta_vs_r0_pair0": 0.40,
+      "outcome": "REJECT_FOR_CHANGE (below +2 dB, no signal advantage; alternative)"
+    },
+    {
+      "pipeline": "blur_lens:5,saturate_weaken_HSV:5,compression_jpeg:3",
+      "pair0_psnr": 30.10,
+      "pair0_ci": "8/10",
+      "signal_verdict_pair0": null,
+      "outcome": "REJECT (below lens:4 peak)"
+    },
+    {
+      "pipeline": "blur_lens:4,saturate_weaken_HSV:5,compression_jpeg:4",
+      "pair0_psnr": 30.61,
+      "pair0_ci": "7/10",
+      "signal_verdict_pair0": null,
+      "outcome": "REJECT (joint peak worse than lens:4+jpeg:3)"
+    },
+    {
+      "pipeline": "blur_glass:5,saturate_weaken_HSV:5,compression_jpeg:3",
+      "pair0_psnr": 28.12,
+      "pair0_ci": "8/10",
+      "signal_verdict_pair0": "WEAK (spectral_slope diff 0.200, wiener 0.845, block_boundary 19%)",
+      "outcome": "REJECT (glass_score 1.54 outside calibrated glass range 0.19-0.41; JPEG-inflated)"
+    },
+    {
+      "pipeline": "blur_lens:2,saturate_weaken_HSV:5,compression_jpeg:3",
+      "pair0_psnr": 26.73,
+      "pair0_ci": "5/10",
+      "signal_verdict_pair0": null,
+      "outcome": "REJECT (mandatory lens severity sweep -1)"
+    }
+  ],
+  "test_candidate_calls": 14,
+  "best_validation": {
+    "criterion": ">40 dB or +2 dB vs previous round on 5 support pairs",
+    "best_five_pair_candidate": "blur_gaussian:3,saturate_weaken_HSV:5,compression_jpeg:4",
+    "best_five_pair_mean": 28.97,
+    "r0_five_pair_mean": 29.31,
+    "delta": -0.34,
+    "best_pair0_new_candidate": "blur_lens:4,saturate_weaken_HSV:5,compression_jpeg:3",
+    "best_pair0_psnr": 30.74,
+    "delta_pair0": 0.40,
+    "result": "no candidate met the change threshold"
+  },
+  "signal_sources": [
+    "gm_ratio target 0.1932 vs blur_gaussian:3 sim 0.190 (full_analysis_R1 step3_blur)",
+    "spectral_slope_ratio target 1.3972 vs g3 sim 1.393; verify_signals blur:spectral_slope + blur:wiener_kernel MATCH",
+    "residual_anisotropy 1.2574 < 1.7 -> motion excluded",
+    "glass_score 1.5398; calibration gaussian 0.04-0.13 / lens 0.08-0.20 / glass 0.19-0.41 -> 1.54 is out-of-range (JPEG block-edge inflated); glass:5 verify_signals WEAK",
+    "chroma_ratio 0.000; mean_shift +38.6 vs HSV V=max sim +39.2; variance_ratio 0.2321 vs 0.228; contrast needs c>=0.94 and brightness would add >=25.5 mean shift -> no contrast/brightness",
+    "block_boundary 4.8992; jpeg:3 verify_signals diff 37% vs jpeg:4 MATCH, but jpeg:4 PSNR -0.16..-0.50 dB on all 5 pairs",
+    "dct_zero_ratio 0.8758, unique_G 256 -> JPEG present, no colour quantization",
+    "noise_prior sigma 1.98; peeled 6-step extreme_pct 55.5 (known JPEG FP), spatial_corr 0.945, var_slope 0.0014, vm_slope 0.0877 -> NO_NOISE",
+    "R0 R11 noise_gaussian_RGB:2 lowered PSNR 30.34 -> 29.93 (noise redundant)"
+  ],
+  "reason": "Signal re-interpretation reproduced R0's full_analysis byte-for-byte and confirmed the blur (gaussian:3) and global (saturate_weaken_HSV:5) steps at signal level, while uncovering that (a) glass_score 1.54 is an out-of-calibration JPEG-inflated false positive (glass:5 verify_signals WEAK) and (b) compression block_boundary is better matched by jpeg:4 than jpeg:3 (verify_signals PARTIAL->MATCH). However the jpeg:4 candidate lowered simulated PSNR on every one of the 5 support pairs (mean 28.97 vs 29.31, delta -0.34 dB), and the best pair0 new candidate (lens:4, 30.74 dB, +0.40) has an identical PARTIAL signal profile to gaussian:3 and is within the gaussian/lens indistinguishability window. No candidate reached >40 dB or +2 dB, so per the deterministic-candidate rule the R0 pipeline is retained unchanged; jpeg:4 and lens:4 are recorded as alternatives. R0 support PSNR 18.23 is dominated by irrecoverable colour loss from S=0 desaturation and cannot arbitrate these sub-dB differences."
+}

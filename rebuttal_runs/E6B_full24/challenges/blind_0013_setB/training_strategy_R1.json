@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "R1 管线 noise_speckle:3 + compression_jpeg:2（predicted_params_R1/reflection_R1，5 对 support 全 MATCH 3/3）：仍是纯局部两步（noise→JPEG），无全局退化、无 blur/motion，架构判定不因噪声子型/严重度变更而改变",
+    "block_boundary=1.557（Tier S, 0%FP）仅确认 JPEG 存在（full_analysis_R1 step1）；无 JPEG 专用组件开关 → 不启用任何组件",
+    "variance_ratio=0.9193、contrast_spread_ratio=0.9583、mean_shift=-0.0031：无 Tier A contrast 信号（对照 contrast_weaken_scale:1 的 var ratio≈0.56），reflection_R1 已用 severity grid 排除全局项 → 不启用 ColorPre / FiLM-GCM",
+    "gm_ratio=1.087、spectral_slope_ratio=0.989、FFT anisotropy=0.00：无 motion/blur，anisotropy 未达 >1.7 的 OCAB 门控 → OCAB 不启用",
+    "noise 步骤 σ≈2.2（noise_prior 2.22，peeled vm_slope=4.7104、residual_intensity_corr=0.388）且 verdict=UNCERTAIN → Tier B/C，噪声对注意力类型不敏感 → 纯 Swin 基线",
+    "chroma_ratio=0.921（chroma std 低于 clean）→ 无 saturation 信号，ColorPre 不启用（saturation 上 -0.34 有害）",
+    "SimpleGate 默认常开（-32K 参数，exp39 8/9 退化安全，仅 S5 三退化 -0.86）"
+  ],
+  "rationale": "R1 相对 R0 的唯一变化是噪声子型与严重度（noise_gaussian_RGB:2 → noise_speckle:3），管线仍为纯局部两步 noise_speckle:3 + compression_jpeg:2，整体 verdict=UNCERTAIN（Tier 3，σ>2 → 两步骤均不得 LIKELY）。按 finetune_strategy.md §七 信号门控逐项检查：唯一 Tier 信号是 Tier S 的 block_boundary（仅确认 JPEG 存在，无对应架构组件）；无 variance_ratio≠1.0 的 Tier A contrast 信号、无 anisotropy>1.7 的 Tier A motion 信号、无 saturation，故 ColorPre/FiLM-GCM/OCAB 均不启用；噪声步骤属 Tier B/C 不确定性，纯 Swin 最稳。DualBranch/CSN/SCA/FPro 按指令不使用。策略取 Direct（纯局部两步、无 contrast；exp37 True Ft≈Direct 且无预训练 ckpt），lr=5e-4、EPOCH=2、batch=16、embed_dim=64 与 R0 基线一致，使 R0/R1 对比只差退化参数本身。"
+}

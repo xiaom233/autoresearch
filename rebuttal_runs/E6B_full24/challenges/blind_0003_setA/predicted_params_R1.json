@@ -1,0 +1,55 @@
+{
+  "challenge_id": "blind_0003_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 2]],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+      "psnr_pair0": 34.03,
+      "support_psnr": {"pair0": 34.03, "pair1": 27.89, "pair2": 37.32, "pair3": 37.47, "pair4": 34.44},
+      "support_psnr_mean": 34.23,
+      "ci_pass": "8-9/10 (5 pairs)",
+      "function_family": "blur_gaussian"
+    },
+    {
+      "pipeline": [{"function": "blur_lens", "severity": 2}],
+      "psnr_pair0": 33.62,
+      "ci_pass": "10/10 (pair0 only, R0)",
+      "function_family": "blur_lens",
+      "note": "R1 未做 5 对 support; R0 lens 族 1-5 全扫峰值 33.62 (sev2), 无 >40dB"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "overall_verdict": "UNCERTAIN",
+    "mode": "PSNR (sigma=1.48 < 2)",
+    "per_step_verdict": [
+      {"function": "blur_glass", "severity": 2, "verdict": "UNCERTAIN"}
+    ],
+    "support_psnr": {"pair0": 34.66, "pair1": 28.50, "pair2": 38.32, "pair3": 38.83, "pair4": 35.62},
+    "support_psnr_mean": 35.19,
+    "support_ci": "5/5 pairs CI=10/10",
+    "reproducibility": "R1 重跑 blur_glass:2 与 R0 逐对差 <=0.03 dB (34.66/28.50/38.32/38.83/35.62 vs 34.69/28.47/38.27/38.85/35.63); 图像内容依赖的 PSNR 波动 (28.5-38.8), 非随机失配",
+    "signal_reinterpretation": [
+      "variance_ratio=0.8688 + contrast_spread_ratio=0.9197 + mean_shift=-0.5: 追加 contrast_weaken_scale:1 后 PSNR 34.03->26.39 (-7.64 dB, CI 6/10) -> 方差收缩确由模糊引起, 无被忽略的 contrast 步",
+      "unique_G=212 (clean 253, ratio 0.8379) + dct_zero_ratio=0.507 + block_boundary=0.9996: 追加 compression_jpeg:1 后 PSNR 34.03->31.60 (-2.43 dB, CI 6/10, block_boundary 失配 89%) -> 无被模糊掩盖的 JPEG",
+      "sigma=1.48 (<2), peeled sigma=2.97, extreme_pct=58.26, spatial_corr=0.95: 属 SKILL 已知 blur 伪影 FP 模式; x_distortion noise 最小 sev1 sigma=12.75 >> 1.48 -> NO_NOISE",
+      "确定性 gaussian 鲜度族全扫 (R1 补 sev1=30.72, sev3=32.01; R0 sev2=34.03, sev5=28.54): 峰值 34.03, 无 >40dB -> 真模糊非确定性 gaussian",
+      "确定性 lens 族 (R0 全扫 sev1-5: 31.29/33.62/33.47/30.71/28.78): 峰值 33.62, 无 >40dB -> 真模糊非确定性 lens",
+      "glass_score=0.504 > 0.25 + sigma<3 -> glass DT; glass 族 sev1/2/3/5 = 32.87/34.69/32.21/28.41, 峰值 sev2",
+      "子类型 5 对 support 对比: glass:2 均值 35.19 (5/5 CI=10/10) vs gaussian:2 均值 34.23 (CI 8-9/10) -> glass 领先 +0.96 dB 且 CI 更一致"
+    ],
+    "rejected_hypotheses": [
+      {"pipeline": "blur_gaussian:2,contrast_weaken_scale:1", "psnr_pair0": 26.39, "delta_vs_base": -7.64, "reason": "contrast 边界信号被否决"},
+      {"pipeline": "blur_gaussian:2,compression_jpeg:1", "psnr_pair0": 31.60, "delta_vs_base": -2.43, "reason": "遮挡压缩假设被否决, block_boundary 失配 89%"},
+      {"pipeline": "blur_gaussian:3", "psnr_pair0": 32.01, "reason": "severity 3 弱于 2"},
+      {"pipeline": "blur_gaussian:1", "psnr_pair0": 30.72, "reason": "severity 1 弱于 2, 非确定性精确匹配"}
+    ],
+    "change_criterion": "无候选达到 >40 dB 或相对 R0 support 均值 (35.18) +2 dB; 最佳替代 gaussian:2 均值 34.23 低于 glass:2 的 35.19 -> 不满足 CHANGE 条件",
+    "rationale": "R1 信号重释逐项检查了方差/对比度边界、unique_G/DCT 压缩边界、噪声 sigma 边界、以及确定性 gaussian 鲜度空白点; 所有追加退化假设均使 PSNR 显著下降, 唯一存活的解释仍是单步 glass 模糊 sev2。glass:2 在 5 对 support 上 CI 全 10/10, 重跑与 R0 逐对一致 (差<=0.03 dB); 确定性 gaussian/lens 全族无 >40dB 精确匹配, 支持非确定性 glass。glass 内置随机 pixel shuffle 使 PSNR 上限 <40dB, 依 SKILL C4 不追高 PSNR, 维持 UNCERTAIN。决策 NO_CHANGE。"
+  }
+}

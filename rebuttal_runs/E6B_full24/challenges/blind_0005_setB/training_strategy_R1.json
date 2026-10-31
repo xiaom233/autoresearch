@@ -1,0 +1,31 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "noise: impulse_zero_ratio=0.9006 (amount=0.10 → noise_impulse:5); verify_signals MATCH (noise:sigma, noise:clean_residual); 5/5 support pairs zero_ratio 0.9005-0.9029; residual_std=45.4, 90% 通道样本 |residual|<1.1/255",
+    "compression: block_boundary=0.9926 (<1.1), unique_G=256/256 → NO_COMPRESSION",
+    "blur/motion: spectral_slope_ratio=0.9547 (<1.08), FFT_anisotropy=0.00 < 1.7 → BLUR_UNLIKELY, 不满足 OCAB 门控 (需 anisotropy>1.7 + motion)",
+    "global: variance_ratio=1.3404 与 chroma_ratio=2.961 是 impulse 0/255 极端样本假阳性 — clean+noise_impulse:5 模拟签名复现 variance_ratio 1.3419 / chroma_ratio 2.9679 / clipped_fraction 0.1070≈0.1067, 故非 contrast Tier A 真信号, 不触发 ColorPre/FiLM-GCM",
+    "noise_prior_sigma=0.0 为 90% 零残差导致的 wavelet MAD 退化, 不代表无噪声"
+  ],
+  "rationale": "单步纯局部退化 noise_impulse:5 (Tier 2, UNCERTAIN 仅因噪声 seed 不可复现)。finetune_strategy.md §七: 无 Tier S/A 真信号触发组件 (variance_ratio 为 impulse 假阳性, 无 motion/jpeg 结构化退化, anisotropy=0), 按 Tier C 安全兜底 → 纯 Swin + Direct。单步管线无梯度干扰, 不用 RandomCurric; True Ft 在 2-epoch 预算下 ≈ Direct (exp37) 故不加载 ckpt。SimpleGate 默认常开 (-32K 参数, exp39 8/9 安全, 纯 noise 场景 N -0.01 dB), 对 impulse 恢复安全。LR=5e-4, EPOCH=2, batch=16 与基线公平一致。"
+}

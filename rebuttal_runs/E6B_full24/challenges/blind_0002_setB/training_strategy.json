@@ -1,0 +1,31 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "噪声步骤: noise_gaussian_YCrCb:2, verdict=UNCERTAIN (随机退化永不 LIKELY); verify_signals MATCH on pair0 + 4 support pairs (noise:sigma, noise:clean_residual); 通道残差 std 33.2/23.1/39.7 匹配 YCrCb sev2 理论 34.7/23.3/42.2 -> UNCERTAIN 步骤不加组件 (§七 Step 2)",
+    "压缩: block_boundary=0.9956 (<1.1), unique_G=256, unique_G_ratio=1.0 -> NO_COMPRESSION, 无 JPEG 专项 (§七 Tier S 未触发)",
+    "模糊: spectral_slope_ratio=0.9933 (<1.08), FFT anisotropy=0.00, gm_ratio=4.79 为噪声污染不可用 -> BLUR_UNLIKELY; anisotropy 0.00 远低于 1.7 -> 不启用 OCAB (§七 Tier A 未触发)",
+    "全局: variance_ratio=1.2596 / chroma_ratio=1.4682 / clipped_fraction=0.0524, 但 per-step 标注 can_fake_contrast=true, contrast_from_variance=false, contrast_saturation_corrected=true; 饱和度控制实验 WEAK (variance_ratio 差 +200%, mean_shift 差 0.13) 证明全局为噪声伪影 -> 无 contrast/saturation 真实步骤, 不启用 ColorPre/FiLM-GCM (§七 信号矛盾 -> 纯 Swin 兜底)",
+    "SimpleGate: 默认常开, -32K 参数, exp39 8/9 退化安全 (唯一负例为 motion×3 S5 -0.86, 本挑战无模糊); 噪声单步 N 上 -0.01 中性"
+  ],
+  "rationale": "本挑战为单步 YCrCb 高斯噪声 (sev2, sigma=15.8), 压缩/模糊/全局均被 0% FP 级或控制实验信号排除。噪声步骤 verdict 按协议只能 UNCERTAIN, §七 规定 UNCERTAIN 步骤不加任何组件; variance_ratio 偏差已被噪声解释 (可伪造 contrast), 不构成 Tier A contrast 触发。故采用纯 Swin + SimpleGate + Direct 最安全配置 (exp37: 盲识别场景组件 0/24 胜)。训练策略选 Direct: 单步无 contrast 无多步梯度干扰, True Ft 在 2-epoch 预算下 ≈ Direct (exp37/38) 且不推荐; SimpleGate 常开无风险。"
+}

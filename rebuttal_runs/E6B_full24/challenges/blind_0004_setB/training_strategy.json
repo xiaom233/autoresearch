@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted pipeline = [blur_motion sev1], single step, overall verdict UNCERTAIN (pair0 28.84dB, support pair3 37.66dB; PSNR capped by random motion angle)",
+    "residual_anisotropy = 1.6613 < 1.7 -> OCAB Tier A gate NOT triggered (finetune_strategy.md §七: anisotropy>1.7, 0% FP); motion severity=1 far below sev>=5 OCAB rule",
+    "variance_ratio = 0.6935 is a blur-smoothing false positive: reflection rejected global (adding saturate_weaken_HSV/YCrCb or contrast_weaken_scale/stretch on motion:2 dropped PSNR 23.23 -> 19.04/20.55/10.92; contrast_saturation_corrected=true; FP_global_risk flagged) -> no contrast -> no ColorPre (ColorPre only for contrast Tier A) and no FiLM-GCM (needs contrast + structured)",
+    "block_boundary = 1.016 < 1.1, unique_G = 212 (ratio 0.891) -> no compression step (Tier S JPEG gate not triggered)",
+    "noise excluded: peeled noise_prior sigma=1.24 << x_distortion min sigma 12.75, residual spatial_corr=0.984 structured; sigma<2 -> no noise step",
+    "single-step local degradation -> no multi-step gradient interference, Direct sufficient; True Ft ~ Direct (exp37 -0.04dB) and not recommended",
+    "SimpleGate default-on: -32K params, 8/9 degradations safe (exp39; only S5 triple-motion -0.86)",
+    "motion vs gaussian ambiguity (gaussian:2 24.01dB as cross-family backup) -> conservative pure Swin, no risky components (exp37: components 0/24 under blind ID)"
+  ],
+  "rationale": "单步 blur_motion sev1，blur 由 gm_ratio=0.629 + spectral_slope_ratio=1.101 确认，但 anisotropy=1.661 未过 OCAB 的 Tier A 门槛 1.7，且 sev=1 远低于 motion sev>=5 规则，故用 Swin(dim=64, ws=8) 而非 OCAB。variance_ratio=0.694 已被反思证实是 blur 平滑假阳性（追加 global 步骤 PSNR 最大降至 10.92），不存在 contrast 步骤，因此不启用 ColorPre/FiLM-GCM。单步局部退化无梯度干扰，采用 Direct；SimpleGate 常开（exp39 安全，L2 +0.78）。DualBranch/CSN/SCA/FPro 按协议不用。motion 与 gaussian 仍存在跨族不确定性（gaussian:2 24.01dB 备选），进一步支持保守纯 Swin。"
+}

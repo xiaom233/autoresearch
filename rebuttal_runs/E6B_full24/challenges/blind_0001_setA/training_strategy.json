@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted_params/full_analysis step1_compression: block_boundary=1.001 (<1.1, 无 JPEG 块效应), unique_per_channel=[16,16,16] (unique_G=16<200, Tier S, 确认量化存在), dct_zero_ratio=0.048 → 16 级量化 (quantization_hist:2)，非 JPEG；Tier S 但 §七 无量化专用组件，仅默认 SimpleGate",
+    "full_analysis step2_noise: noise_prior_sigma=10.5, spatial_corr=0.029 (近白), cross_channel_corr=0.015 (<0.12 排除 YCrCb), intensity_var_corr=0.909 (>0.15), intensity_scaled_var_corr=-0.646 (<0.3 排除 speckle) → POISSON；但 sigma>2 步骤 verdict=UNCERTAIN，§七 Tier B/C: Swin 即可，不加组件",
+    "full_analysis step3_blur: verdict=BLUR_UNLIKELY, spectral_slope_ratio=0.9948 (<1.08), FFT anisotropy=0.00 (<1.7) → OCAB 触发条件 (anisotropy>1.7 + motion) 不成立",
+    "full_analysis step4_global: verdict=NO_GLOBAL, variance_ratio=1.0815 (contrast_from_variance=false; 偏差 8% 由 Poisson 噪声抬升方差解释), contrast_spread_ratio=1.0408, brightness_mean_shift=-1.7/255 → contrast Tier A 不成立；saturation raw 信号被 false_positive_check=saturation_from_noise 标记 → ColorPre (Tier A contrast) 与 FiLM-GCM (variance_ratio≠1.0 + 结构化 motion/jpeg) 均不触发",
+    "predicted_params analysis: 两步 verdict 均为 UNCERTAIN, tier=3, ci_pass 9/10 → §七 决策规则: Tier C/UNCERTAIN → 纯 Swin + Direct 安全兜底；pipeline 无 contrast (brightness/contrast 规则排除)、无 blur 结构化，属纯局部噪声+量化",
+    "SimpleGate: 默认常开 (exp39 8/9 退化安全, -32K 参数, L2 contrast+noise +0.78)；本挑战无 motion×3 (S5 -0.86 场景不适用)"
+  ],
+  "rationale": "本挑战为 noise_poisson:3 (UNCERTAIN, sigma=10.5) + quantization_hist:2 (UNCERTAIN, 16 级，block_boundary=1.001 排除 JPEG)，无模糊 (spectral_slope_ratio=0.995, anisotropy=0)、无 contrast (variance_ratio=1.0815 仅为噪声抬升，contrast_from_variance=false)、无结构化局部退化。按 finetune_strategy.md §七 信号门控：anisotropy>1.7 未满足 → 不启用 OCAB；variance_ratio Tier A 未成立且无 motion/jpeg 结构化 → 不启用 FiLM-GCM/ColorPre；DualBranch/CSN/SCA/FPro 按协议不用。两步骤 verdict 均 UNCERTAIN 属 Tier C，按决策规则采用纯 Swin + SimpleGate + Direct 安全兜底：SimpleGate 为 exp39 验证的默认常开组件 (-32K, 8/9 安全)，本挑战不含 S5 motion 三重退化，无其 -0.86 dB 风险。lr=5e-4、EPOCH=2、batch=16 与基线公平一致；纯 Swin 在噪声类退化上与任意注意力差异 ~0，Direct 避免 Curric 在 UNCERTAIN 管线上的额外风险。"
+}

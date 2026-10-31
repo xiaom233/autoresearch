@@ -1,0 +1,782 @@
+{
+  "challenge_id": "blind_0018_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED (high): block_boundary=1.802 (>1.1, 0%FP), dct_zero_ratio=0.7346, unique_G=256 (unchanged)",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.346, spectral_slope_ratio=0.9967, FFT anisotropy=0.00 -> no blur evidence",
+      "noise": "noise_prior sigma=1.36 (<2 -> NO_NOISE per protocol); spatial_corr=0.85 / cross_ch_corr=0.92 contaminated by JPEG blocking; residual_intensity_corr=-0.19 (gamma_suspect)",
+      "global": "SATURATION_strengthen_sev4: variance_ratio=1.983, saturation_chroma_ratio=1.3077, mean_shift=-2.5, clipped_fraction=0.0802, contrast_spread_ratio=1.1143 (contrast_from_saturation=true)"
+    },
+    "visual_observation": "pair0: degraded has strongly boosted saturation (vivid blue sky/green trees/colorful wrap) and higher contrast vs washed-out clean; JPEG artifacts not visually obvious at zoom-out but block_boundary 1.8 is strong",
+    "mode": "PSNR (sigma=1.4 < 2)",
+    "qwen_gate": "not triggered (sigma=1.36 < 2); Qwen/API unavailable anyway - recorded skip",
+    "suspected": [
+      "compression_jpeg",
+      "saturation_strengthen"
+    ],
+    "ruled_out": [
+      "blur (gm 1.346, slope ratio 0.997, aniso 0.00)",
+      "noise (sigma 1.36 < 2)"
+    ]
+  },
+  "noise_6step_check": {
+    "extreme_pct": 0.0325,
+    "vm_slope": null,
+    "var_slope": null,
+    "spatial_corr": 0.8523,
+    "rgb_ratio": null,
+    "cross_ch_corr": 0.9234,
+    "noise_prior_sigma": 1.36,
+    "residual_intensity_corr": -0.1867,
+    "diagnosis": "NO_NOISE: sigma=1.36 < 2 -> Step3 peeled noise check skipped per SKILL protocol; vm_slope/var_slope not computed (gate); high spatial/cross-ch correlations are JPEG-blocking contamination, not real noise"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "contrast_strengthen_scale",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 5,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "JPEG: block_boundary=1.802 (0%FP), sim bb=1.810, CI bb-diff 2%, dct_zero_ratio target 0.7346 vs jpeg5 0.7665/jpeg4 0.6629 -> LIKELY jpeg5. Global: variance_ratio target 1.9833 vs sim 1.9815, spread 1.1143 vs 1.1372, chroma 1.3077 vs 1.3527, clipped 8.0% vs 9.6% -> contrast_strengthen_scale:4 best of sev2/3/4 (PSNR 20.34/21.86/23.62 with jpeg5/4); residual mean_shift -2.5 vs +0.9 unexplained (brightness darken1 variants fell to 19.89/21.74); deterministic PSNR ceiling ~23.6 from JPEG re-encode mismatch after inexact contrast scale, so PSNR<30 -> UNCERTAIN, not LIKELY. Blur ruled out (gm 1.346, slope ratio 0.997, anisotropy 0.00). Noise NO_NOISE (sigma 1.36<2).",
+    "alternatives_note": "same-family severity backups only (c3j5 21.86, c4j4 21.81); cross-family saturate_strengthen (9.52) and brightness_darken (21.74/19.89) rejected"
+  },
+  "cross_pair_validation": {
+    "applied_pipeline": "contrast_strengthen_scale:4,compression_jpeg:5",
+    "pair1": {
+      "psnr_rgb": 22.74,
+      "ci_pass": "9/10",
+      "bb": 1.687,
+      "variance_ratio": 2.347,
+      "mean_shift": -12.6
+    },
+    "pair2": {
+      "psnr_rgb": 12.79,
+      "ci_pass": "7/10",
+      "bb": 2.097,
+      "variance_ratio": 2.244,
+      "mean_shift": 3.7,
+      "note": "chroma_ratio 1.855 much higher"
+    },
+    "pair3": {
+      "psnr_rgb": 20.49,
+      "ci_pass": "7/10",
+      "bb": 5.23,
+      "variance_ratio": 2.814,
+      "mean_shift": -22.4
+    },
+    "pair4": {
+      "psnr_rgb": 11.01,
+      "ci_pass": "6/10",
+      "bb": 4.508,
+      "variance_ratio": 1.052,
+      "mean_shift": -75.8,
+      "note": "looks brightness_darken-dominated, not contrast"
+    },
+    "conclusion": "support pairs are heterogeneous in severity/transform mix (mean_shift -75.8..+3.7, bb 1.69..5.23); pair0-target pipeline does not transfer with fixed severity; JPEG present in all 5 pairs (bb>1.6 everywhere)"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "Step1 compression: block_boundary=1.802 (0%FP) + dct_zero_ratio=0.7346 -> JPEG confirmed; start at suggested sev3"
+      },
+      "test_result": {
+        "psnr_rgb": 15.83,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "Step1 compression severity scan: jpeg:3 gave block_boundary diff 5% (pass); test sev2 to bracket (block_boundary=1.802 might be strong compression)"
+      },
+      "test_result": {
+        "psnr_rgb": 15.8,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "Step1 compression severity scan: sev3 bb-diff 5% < sev2 11%; test sev4 to confirm optimum at 3"
+      },
+      "test_result": {
+        "psnr_rgb": 15.68,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4,saturate_strengthen_HSV:4",
+        "thinking": "Step4 global: variance_ratio=1.983 + saturation_chroma_ratio=1.31 -> saturation strengthen; combine with jpeg:4 (bb diff 0%) as current best compression; test sev4 as suggested"
+      },
+      "test_result": {
+        "psnr_rgb": 13.6,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4,saturate_strengthen_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4,saturate_strengthen_HSV:2",
+        "thinking": "Step4 global severity scan: sat:4 dropped PSNR (13.60<15.68) -> severity too strong or wrong type; scan down to sev2 (variance_ratio 1.98 / chroma_ratio 1.31)"
+      },
+      "test_result": {
+        "psnr_rgb": 14.18,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:4",
+        "thinking": "Step4 global alternative: valid name contrast_strengthen_scale; luma variance ratio 1.98 (contrast_from_variance true) vs chroma 1.31 suggests contrast scaling; global before JPEG per ISP order"
+      },
+      "test_result": {
+        "psnr_rgb": 20.34,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:4",
+        "thinking": "Step4 severity scan: contrast_strengthen_scale:2+jpeg4 gave CI 10/10 but PSNR 20.34; variance_ratio 1.98 may need stronger contrast; test sev3"
+      },
+      "test_result": {
+        "psnr_rgb": 21.57,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:4,compression_jpeg:4",
+        "thinking": "Step4 severity scan: contrast sev2 20.34 -> sev3 21.57 improving; test sev4 (variance_ratio 1.98 upper bracket)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.81,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:3,contrast_strengthen_scale:3,compression_jpeg:4",
+        "thinking": "Step4 combined global: luma variance ratio 1.98 vs chroma 1.31 -> contrast + saturation both positive; try contrast3 + sat3 + jpeg4 (3-step, ISP order before JPEG)"
+      },
+      "test_result": {
+        "psnr_rgb": 11.83,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:3,contrast_strengthen_scale:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:4,compression_jpeg:4",
+        "thinking": "Visual check: regenerate current best contrast4+jpeg4 simulated image (same as R8; visual inspection for missing step)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.81,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:5",
+        "thinking": "Signal comparison target-vs-sim: target block_boundary 1.802 > sim(jpeg4) 1.487 and dct_zero_ratio 0.735 > 0.663 -> compression stronger; target contrast slightly weaker than sev4 -> try contrast3 + jpeg5"
+      },
+      "test_result": {
+        "psnr_rgb": 21.86,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:1,contrast_strengthen_scale:3,compression_jpeg:4",
+        "thinking": "Signal gap: sim(c3+j5) matches spread/chroma/clip but mean_shift -0.3 vs target -2.5 and var 1.85 vs 1.98 -> test mild brightness darken before contrast (mean residual + slight var boost); jpeg4 (bb 1.487) vs target 1.802 -- keep 4 first"
+      },
+      "test_result": {
+        "psnr_rgb": 19.89,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:1,contrast_strengthen_scale:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4,contrast_strengthen_scale:3",
+        "thinking": "Order test: JPEG-first (post-edit contrast) vs ISP order; block boundary ratio should be scale-invariant but clipping pattern differs; also tests if PSNR plateau is due to re-encode order"
+      },
+      "test_result": {
+        "psnr_rgb": 20.08,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4,contrast_strengthen_scale:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:4,compression_jpeg:5",
+        "thinking": "Severity grid around best: contrast4 (var 2.08) x jpeg5 (bb 1.92 closer to target 1.80); target var 1.983 between c3/c4 -> test c4+j5"
+      },
+      "test_result": {
+        "psnr_rgb": 23.62,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:1,contrast_strengthen_scale:4,compression_jpeg:5",
+        "thinking": "Residual probe: target mean_shift -2.5 while c4j5 sim +0.9 (clipping-raised); target clipped 8.0% vs sim 9.6% -> test mild darken sev1 before contrast to see direction (3-step allowed)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.74,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:1,contrast_strengthen_scale:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:4,compression_jpeg:5",
+        "thinking": "Pair2 visual recheck: degraded elephants scene is intensely saturated -> global likely saturation strengthen (HSV S boost) BEFORE jpeg, not contrast; test sat4+jpeg5"
+      },
+      "test_result": {
+        "psnr_rgb": 9.52,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:1,contrast_strengthen_scale:4,compression_jpeg:5",
+        "thinking": "Residual pattern: sim c4j5 slightly over on chroma 1.353 vs 1.308, spread 1.137 vs 1.114, clip 9.6% vs 8.0% while var matches -> probe mild saturate_weaken as 3rd step (same-sign correction)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.79,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:1,contrast_strengthen_scale:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:2,compression_jpeg:5",
+        "thinking": "R1 signal re-interpretation: cross-pair target mean_shift pattern (-75.8..+3.7) scales with clean brightness, inconsistent with contrast_strengthen_scale (would shift bright images positive) but consistent with contrast_strengthen_stretch which maps per-channel means toward 0.5; pair0 var_ratio 1.983 (stretch S-curve c=4 sev2) + bb 1.802 -> jpeg5"
+      },
+      "test_result": {
+        "psnr_rgb": 18.88,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:2,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:4",
+        "thinking": "R1 central-severity probe on worst support pair4 (R0 c4j5 gave 11.01 dB; target mean_shift -75.8, var_ratio 1.052): if support plan varies severity per pair, a lower c3+j4 may fit pair4 better than the max-severity R0 choice"
+      },
+      "test_result": {
+        "psnr_rgb": 10.46,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "thinking": "R1 content-normalizing test on pair4: target has ~0% 255-clipping and 2.16% more 0-clipping than the c3 scale sim (which over-produced white clipping, 385180% pct_err on impulse_pct_255), target mean_shift -75.8 with var_ratio 1.052: stretch maps per-channel means toward 0.5 (bright image -> large negative shift, no white clip) at mild c=2.0 sev1"
+      },
+      "test_result": {
+        "psnr_rgb": 17.24,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "thinking": "R1 5-pair validation of stretch1+j5 (pair0): content-normalizing hypothesis from pair4 (+6.2 dB vs R0 11.01); pair0 target var_ratio 1.983 mean_shift -2.5 clipped 8.0%; compare stretch1 c=2.0 against R0 scale c4 (23.62 dB)"
+      },
+      "test_result": {
+        "psnr_rgb": 14.06,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "thinking": "R1 5-pair validation of stretch1+j5 (pair2): content-normalizing hypothesis from pair4 (+6.2 dB vs R0 11.01); pair0 target var_ratio 1.983 mean_shift -2.5 clipped 8.0%; compare stretch1 c=2.0 against R0 scale c4 (23.62 dB)"
+      },
+      "test_result": {
+        "psnr_rgb": 14.05,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "thinking": "R1 5-pair validation of stretch1+j5 (pair1): complete support-set comparison vs R0 scale c4j5 (pair1 baseline 22.74/20.49 dB); target pair signals var_ratio 2.347/2.814, bb 1.687/5.230, mean_shift -12.6/-22.4"
+      },
+      "test_result": {
+        "psnr_rgb": 13.69,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "thinking": "R1 5-pair validation of stretch1+j5 (pair3): complete support-set comparison vs R0 scale c4j5 (pair3 baseline 22.74/20.49 dB); target pair signals var_ratio 2.347/2.814, bb 1.687/5.230, mean_shift -12.6/-22.4"
+      },
+      "test_result": {
+        "psnr_rgb": 12.92,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_scale:4,compression_jpeg:5",
+        "thinking": "R1 composition probe on pair4: R0 c4j5=11.01 and scale sim over-produces 255-clipping while target mean_shift=-75.8 (dark, 2.16% more 0-clip); brightness_darken_gamma_RGB:1 (gamma1.4, midtone -18..-30 levels, untested by R0) may reconcile the dark target with the scale-like pairs"
+      },
+      "test_result": {
+        "psnr_rgb": 11.32,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_scale:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "contrast_strengthen_scale:4,compression_jpeg:5",
+      "psnr_rgb": 23.62,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:1,contrast_strengthen_scale:4,compression_jpeg:5",
+      "psnr_rgb": 22.79,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:3,compression_jpeg:5",
+      "psnr_rgb": 21.86,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:4,compression_jpeg:4",
+      "psnr_rgb": 21.81,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:4,compression_jpeg:4",
+      "psnr_rgb": 21.81,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:1,contrast_strengthen_scale:4,compression_jpeg:5",
+      "psnr_rgb": 21.74,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:3,compression_jpeg:4",
+      "psnr_rgb": 21.57,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:2,compression_jpeg:4",
+      "psnr_rgb": 20.34,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "compression_jpeg:4,contrast_strengthen_scale:3",
+      "psnr_rgb": 20.08,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:1,contrast_strengthen_scale:3,compression_jpeg:4",
+      "psnr_rgb": 19.89,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:2,compression_jpeg:5",
+      "psnr_rgb": 18.88,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+      "psnr_rgb": 17.24,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 15.83,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 15.8,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 15.68,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:4,saturate_strengthen_HSV:2",
+      "psnr_rgb": 14.18,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+      "psnr_rgb": 14.06,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+      "psnr_rgb": 14.05,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+      "psnr_rgb": 13.69,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "compression_jpeg:4,saturate_strengthen_HSV:4",
+      "psnr_rgb": 13.6,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+      "psnr_rgb": 12.92,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:3,contrast_strengthen_scale:3,compression_jpeg:4",
+      "psnr_rgb": 11.83,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_scale:4,compression_jpeg:5",
+      "psnr_rgb": 11.32,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:3,compression_jpeg:4",
+      "psnr_rgb": 10.46,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:4,compression_jpeg:5",
+      "psnr_rgb": 9.52,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    }
+  ],
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 overall verdict=UNCERTAIN (contrast_strengthen_scale UNCERTAIN); R0 support PSNR 15.94 dB",
+    "mode": "PSNR (sigma=1.36 < 2)",
+    "budget": {"run_full_analysis": 1, "peeled_noise_check": 1, "test_candidate_calls": 8, "candidates": 4, "rounds": "18-25"},
+    "signal_reinterpretation": [
+      {
+        "signal": "block_boundary=1.8024, dct_zero_ratio=0.7346, unique_G=256/256",
+        "source": "full_analysis_R1.json (identical to R0)",
+        "reinterpretation": "JPEG confirmed independently of PSNR (0% FP); jpeg5 sim bb 1.810 matches target 1.802, jpeg4 1.487 too low",
+        "action": "keep compression_jpeg:5 LIKELY"
+      },
+      {
+        "signal": "variance_ratio=1.9833, contrast_spread_ratio=1.1143, mean_shift=-2.5, clipped_fraction=0.0802",
+        "source": "full_analysis_R1.json + R0 iterations 6-15",
+        "reinterpretation": "pair0 favors contrast_strengthen_scale:4 (sim var ratio 1.9815; c3 gives 1.852 too low). Residual mean_shift +3.4 levels and clip +1.6% are small vs the pixel RMSE 16.8 at 23.62 dB, so the pair0 PSNR ceiling is not explained by severity alone",
+        "action": "keep contrast_strengthen_scale:4 UNCERTAIN"
+      },
+      {
+        "signal": "gm_ratio=1.3464, spectral_slope_ratio=0.9967, FFT anisotropy=0.00, glass_score/PCA=0.0",
+        "source": "full_analysis_R1.json",
+        "reinterpretation": "no blur evidence: target gradients are above clean (gm>1) and slope ratio ~1.0",
+        "action": "blur ruled out (unchanged)"
+      },
+      {
+        "signal": "noise_prior sigma=1.36 (<2); peeled residual (c4+j5) std=16.4, extreme_pct=84.71%, vm_slope=0.908, var_slope=0.0016, spatial_corr=0.786, rgb_ratio=1.032, cross_ch_corr=0.919, peeled noise_prior sigma=2.47 flat slope",
+        "source": "run_full_analysis_R1.json + peeled_noise_check.py",
+        "reinterpretation": "threshold-boundary sigma re-checked: the peeled residual is dominated by deterministic mismatch (std 16.4), so §B extreme_pct IMPULSE is the documented JPEG/clipping FP when sigma<5; peeled sigma 2.47 is inflated by the same mismatch. Raw sigma 1.36<2",
+        "action": "NO_NOISE upheld; Qwen gate not triggered/unavailable"
+      },
+      {
+        "signal": "cross-pair target heterogeneity: mean_shift -75.8..+3.7, variance_ratio 1.052..2.814, block_boundary 1.687..5.230; pair4 target has ~0% 255-clipping while scale sims over-produce 2.6-2.7% whites (impulse_pct_255 pct_err 374238-385180%)",
+        "source": "R0 cross_pair_validation + R1 test_candidate CI metrics",
+        "reinterpretation": "pair4 cannot be produced by the mean-preserving PIL contrast_strengthen_scale (which amplifies highlights); it is consistent with the content-normalizing contrast_strengthen_stretch S-curve that maps per-channel means toward 0.5. This also indicates the 5 support pairs differ in transform type, not only severity",
+        "action": "test contrast_strengthen_stretch family on all 5 support pairs"
+      }
+    ],
+    "candidate_ranking": [
+      {
+        "rank": 1,
+        "pipeline": "contrast_strengthen_stretch:1,compression_jpeg:5",
+        "support_psnr": {"pair0": 14.06, "pair1": 13.69, "pair2": 14.05, "pair3": 12.92, "pair4": 17.24},
+        "mean": 14.39,
+        "vs_r0_mean": -3.74,
+        "verdict": "REJECT"
+      },
+      {
+        "rank": 2,
+        "pipeline": "contrast_strengthen_stretch:2,compression_jpeg:5",
+        "support_psnr": {"pair0": 18.88},
+        "note": "best stretch severity on pair0 but still < R0 23.62; not expanded to other pairs",
+        "verdict": "REJECT"
+      },
+      {
+        "rank": 3,
+        "pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_scale:4,compression_jpeg:5",
+        "support_psnr": {"pair4": 11.32},
+        "note": "vs R0 pair4 11.01; gamma darken does not resolve pair4 (target needs an S-curve, not a level offset)",
+        "verdict": "REJECT"
+      },
+      {
+        "rank": 4,
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:4",
+        "support_psnr": {"pair4": 10.46},
+        "note": "central severity is worse than the R0 max-severity choice on pair4",
+        "verdict": "REJECT"
+      },
+      {
+        "rank": 5,
+        "pipeline": "contrast_strengthen_scale:4,compression_jpeg:5 (R0, kept)",
+        "support_psnr": {"pair0": 23.62, "pair1": 22.74, "pair2": 12.79, "pair3": 20.49, "pair4": 11.01},
+        "mean": 18.13,
+        "verdict": "KEEP"
+      }
+    ],
+    "support_validation": {
+      "baseline_r0_per_pair": {"pair0": 23.62, "pair1": 22.74, "pair2": 12.79, "pair3": 20.49, "pair4": 11.01},
+      "baseline_r0_mean": 18.13,
+      "threshold": ">40 dB exact match or +2 dB over previous round on the 5-pair validation",
+      "best_candidate": "contrast_strengthen_stretch:1,compression_jpeg:5",
+      "best_mean": 14.39,
+      "threshold_met": false,
+      "heterogeneity_finding": "pairs 0/1/3 prefer contrast_strengthen_scale (R0), pairs 2/4 prefer contrast_strengthen_stretch (R0 under-fits by -1.26/-6.23 dB); single-chain fit is limited"
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "contrast_strengthen_scale", "severity": 4, "verdict": "UNCERTAIN"},
+        {"function": "compression_jpeg", "severity": 5, "verdict": "LIKELY"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "reason": "R1 signal re-analysis is identical to R0; the strongest new hypothesis (stretch family) fails the 5-pair evidence bar (mean 14.39 vs 18.13, no >40 dB pair). Central-severity and gamma-darken probes also fail to beat R0. Support pairs are heterogeneous in transform type, so R0 remains the best single-chain compromise."
+    }
+  }
+}

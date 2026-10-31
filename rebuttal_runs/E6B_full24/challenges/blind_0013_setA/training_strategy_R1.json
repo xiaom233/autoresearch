@@ -1,0 +1,31 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression: block_boundary=1.2081 (>1.1, Tier S, 0% FP) → compression_jpeg:2 confirmed (full_analysis step1_compression; reflection rounds 1/7 MATCH)",
+    "noise: noise_prior sigma=4.82; peeled residual vm_slope=2.603, rgb_ratio=1.027 → noise_speckle:3; full-profile MATCH on all 5 pairs (reflection final_decision)",
+    "global: step4_global verdict NO_GLOBAL — variance_ratio=0.8936 但 contrast_detected_raw=false, contrast_spread_ratio=0.9875, mean_shift=-4.1 由 speckle 乘性噪声解释 → 无 contrast 步骤，Tier A variance_ratio 条件不成立，FiLM-GCM/ColorPre 不触发",
+    "blur/motion: FFT_anisotropy=0.00, spectral_slope_ratio=0.984 (<1.08), blur_gaussian:1 控制测试使 sigma 恶化 87%/bb 恶化 15% → 无 motion，anisotropy>1.7 不成立，OCAB 不触发",
+    "verdict: 两步骤均 UNCERTAIN (sigma=4.82>2, PSNR 禁用, Tier 3) → 保守策略，纯 Swin + Direct (exp37: 盲识别场景组件 0/24 胜)"
+  ],
+  "rationale": "管线为纯局部两步退化 noise_speckle:3 → compression_jpeg:2。JPEG 仅由 0%FP 的 block_boundary 确认，但不匹配任何受门控组件（OCAB 需 anisotropy>1.7+motion，FiLM-GCM/ColorPre 需 contrast Tier A，此处 contrast_detected_raw=false）。两步骤 verdict 均为 UNCERTAIN，按 finetune_strategy.md §七 Tier C 兜底规则：纯 Swin + Direct；SimpleGate 作为 exp39 验证的 -32K 参数默认常开组件保留。DualBranch 等其余组件按指令不使用（含 full_analysis 的 DualBranch 建议，exp37 盲识别 0/24 胜）。"
+}

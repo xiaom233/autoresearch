@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "step2_noise: noise_prior sigma=14.08, spatial_corr_G=0.0022 (iid), cross_channel_corr=0.169, ch_stds R/G/B=29.7/22.4/35.8, rgb_ratio=1.594 → noise_gaussian_YCrCb sev2; verify_signals MATCH 5/5 pairs; noise 步骤因 seed 失配永不为 LIKELY → verdict=UNCERTAIN",
+    "step1_compression: block_boundary=0.9992 (<1.1), unique_G=256/256, dct_zero_ratio=0.023 → NO_COMPRESSION; Tier S JPEG 信号未触发",
+    "step3_blur: spectral_slope_ratio=0.9745 (<1.08) 且 5 pairs 0.975-0.997; FFT_anisotropy=0.00 → BLUR_UNLIKELY, 无 motion 结构 → anisotropy>1.7 不满足, OCAB 不触发",
+    "step4_global: variance_ratio=1.5828 被 noise 完全解释 (contrast_from_noise=true, contrast_noise_corrected=1.0146≈1.0) → 无真实 contrast, ColorPre/FiLM-GCM 的 Tier A 信号不成立",
+    "step4_global: saturation_chroma_ratio=1.998 但 saturation_from_noise=true (假阳性); mean_shift=3.0/255 << 25.5 → 无 saturation/brightness 真实退化",
+    "reflection: blur_control (noise+blur_gaussian:1) 令 sigma 崩塌 93%, 且 clipped_fraction/variance_ratio 与 noise-only 仿真逐项精确吻合 → 无 blur/结构化退化",
+    "SimpleGate 默认常开: exp39 -32K, 8/9 退化安全; 单步纯随机噪声无 Tier S/A 组件信号 → 全部组件关闭",
+    "单步纯局部噪声且无 contrast: finetune_strategy.md §六 Step 1 → Direct; True Ft ≈ Direct (exp37/38)；单步无梯度干扰, RandomCurric 无收益"
+  ],
+  "rationale": "本挑战为单步 noise_gaussian_YCrCb:2 (UNCERTAIN, 5/5 信号 MATCH), 无 compression/blur/global。所有组件触发信号均不成立: anisotropy=0.00 (无 motion, OCAB 禁用), noise-corrected variance_ratio=1.0146 (无真实 contrast, ColorPre/FiLM-GCM 禁用), 无 JPEG (block_boundary=0.9992)。按 finetune_strategy.md §七 兜底规则采用纯 Swin + SimpleGate + Direct, LR=5e-4, EPOCH=2, batch=16; 不加 DualBranch/CSN 等组件 (盲识别场景 0/24 胜), 架构保持最稳定基线。"
+}

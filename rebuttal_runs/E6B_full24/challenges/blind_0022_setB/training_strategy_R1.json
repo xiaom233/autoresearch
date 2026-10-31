@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "step1_compression: block_boundary=1.6491 > 1.1 (Tier S, 0% FP) → JPEG 确认为独立步骤, jpeg:1 在 5/5 support 上 MATCH; jpeg:3/5 曾 MISMATCH(bb diff 10%/38%)",
+    "step3_blur: glass_score=0.6153 > 0.25 + spectral_slope_ratio=1.1654 + wiener corr>0.85, 5/5 support MATCH → blur_glass:3 确定性步骤",
+    "step3_blur: residual_anisotropy=1.5014 < 1.7 → 未达 OCAB Tier A 门控 (anisotropy>1.7), 且 glass 为各向同性模糊, 不启用 OCAB",
+    "step4_global: variance_ratio=0.7802 但 contrast_from_variance=false, verdict=NO_GLOBAL, mean_shift=-0.2, contrast_spread_ratio=0.9343 → variance 下降来自 blur 而非 contrast, 不启用 ColorPre/FiLM-GCM",
+    "step2_noise: peeled noise_prior_sigma=3.95 < sev1 范围 12.75 + spatial_corr=0.9612 结构化 + rgb_ratio=1.06; 判为 glass 像素洗牌/JPEG 残差伪影, 无独立 noise 步骤 → 无噪声相关组件需求",
+    "overall verdict=UNCERTAIN (Tier 3, glass-vs-gaussian MTF 歧义 + 潜在隐藏低 sigma 噪声) → 按 exp37/§七 保守兜底: 纯 Swin + SimpleGate + Direct, 不加高风险组件",
+    "SimpleGate 默认常开: -32K 参数, exp39 8/9 退化安全 (仅 motion×3 S5 -0.86, 本挑战无 motion)"
+  ],
+  "rationale": "本挑战为确定性两步退化 (blur_glass:3 + compression_jpeg:1), 所有 support 对信号 MATCH, 但无 Tier A contrast 信号 (NO_GLOBAL) 且 anisotropy=1.50 未达 OCAB 阈值 1.7, 因此不启用任何额外组件, 仅保留默认 SimpleGate。存在 glass-vs-gaussian 子类型歧义与可能隐藏低 sigma 噪声, overall UNCERTAIN, 按 exp37 盲识别不确定性结论选择纯 Swin + Direct 最稳妥; 2-epoch/1.5h 预算下 True Ft ≈ Direct, 故用 Direct 从头训练。"
+}

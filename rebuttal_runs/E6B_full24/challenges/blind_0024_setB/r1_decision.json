@@ -1,0 +1,32 @@
+{
+  "challenge_id": "blind_0024_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_impulse", 1], ["saturate_strengthen_HSV", 2]],
+  "r1_pipeline": [["noise_impulse", 1], ["saturate_strengthen_HSV", 2]],
+  "support_psnr_r0": 21.36,
+  "candidates_tested": [
+    {"id": "A", "pipeline": "brightness_brighten_gamma_HSV:1,saturate_strengthen_HSV:2", "type": "deterministic", "pair0_psnr": 23.06, "pair0_ci": "3/10", "support_pairs": 1, "verdict": "REJECT"},
+    {"id": "B", "pipeline": "contrast_weaken_stretch:2,saturate_strengthen_HSV:2", "type": "deterministic", "pair0_psnr": 11.35, "pair0_ci": "5/10", "support_pairs": 1, "verdict": "REJECT"},
+    {"id": "C", "pipeline": "compression_jpeg:1,saturate_strengthen_HSV:2", "type": "deterministic", "pair0_psnr": 24.56, "pair0_ci": "4/10", "support_pairs": 1, "verdict": "REJECT"},
+    {"id": "D", "pipeline": "quantization_median:1,saturate_strengthen_HSV:2", "type": "deterministic", "pair0_psnr": 24.39, "pair0_ci": "2/10", "support_pairs": 1, "verdict": "REJECT"},
+    {"id": "E", "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2", "type": "noise", "support_pairs": 5, "verdicts": ["WEAK", "WEAK", "WEAK", "MISMATCH", "WEAK"], "verdict": "REJECT (0/5 PARTIAL/MATCH)"}
+  ],
+  "reference_validations": [
+    {"id": "REF-sat2", "pipeline": "saturate_strengthen_HSV:2", "note": "R0 确定性核心跨 5 对 support PSNR 验证", "support_psnr": {"pair0": 24.89, "pair1": 27.64, "pair2": 19.32, "pair3": 21.51, "pair4": 22.63}, "mean": 23.20, "max": 27.64}
+  ],
+  "test_candidate_calls": 14,
+  "best_validation": {
+    "deterministic_core": {"pipeline": "saturate_strengthen_HSV:2", "support_psnr_mean": 23.20, "support_psnr_max": 27.64, "exact_40db_hit": false, "delta_vs_r0_support_psnr": 1.84},
+    "noise": {"pipeline": "noise_impulse:1,saturate_strengthen_HSV:2", "weak_to_partial_match": "0/5", "sigma_diff_pct_range": [124, 550], "note": "impulse:1 已是 x_distortion 库内最小噪声强度; sev2/3 (R0) 更差 (sigma +247%~+1150%)"}
+  },
+  "signal_sources": [
+    "unique_G_target=174 (<200, SKILL 压缩 0%FP 判据) + block_boundary=1.0026 + dct_zero_ratio=0.4151 → R1 重检 JPEG/量化: jpeg:1(q25)+sat2 模拟呈 8x8 块状 (target 为 1-2px 细颗粒) 且 PSNR 24.56<24.89; quantization_median:1+sat2 的 unique_R/G/B 全面偏离且 PSNR 24.39 → 均排除; clean 自身 unique_G 仅 210, 该判据在此内容上失效",
+    "clipped_fraction=0.2874 / variance_ratio=0.6155 / mean_shift=-18.1 (vs sat2 模拟 mean -23.9, var 0.683) → 目标更亮、方差更低、更少暗端裁剪; brightness_brighten_gamma_HSV:1+sat2 23.06 / contrast_weaken_stretch:2+sat2 11.35 → 该方向排除",
+    "residual_intensity_corr=0.9646 + gamma_suspect=True → RGB gamma 已在 R0 否决 (gamma:1+sat2 22.68), HSV gamma 本次否决 (23.06)",
+    "逐区域对照: target 在 clean 纯黑背景处出现 5-15px 低频彩色斑块、面部 1-2px 细颗粒, sat2 模拟对应区域纯黑/平滑 → 存在饱和之外的附加成分; 残差图呈彩色边缘条纹+致密斑点",
+    "peeled_noise_check (剥离 sat2): residual std=13.3, extreme_pct=45.0% (已知裁剪 FP), var_slope=4.01, spatial_corr=0.946, wavelet sigma=1.48 (<2); 与 R0 剥离不同管线时 §B 结果不一致 → 残差被饱和裁剪污染, 噪声类型不可靠; 取库内最弱 impulse:1 直接验证",
+    "5 对 support signal 验证 (impulse:1+sat2): WEAK×4 + MISMATCH×1, sigma 仍超 124%/200%/233%/250%/550%, variance_ratio 差 29-137%, mean_shift 差 0.0055-0.0184"
+  ],
+  "reason": "R1 共验证 5 个新候选 + 1 个确定性核心跨对复核, 全部未达 CHANGE 条件. (1) 确定性候选: 最高 pair0 PSNR 24.56 dB (jpeg-first) < sat2 单独 24.89 dB, 无一达到 >40 dB 或 +2 dB; sat2 单独在 5 对 support 上均值 23.20 dB (max 27.64), 均 <40 dB, 且较 R0 support PSNR 21.36 仅 +1.84 dB (<+2). (2) 含噪候选: impulse:1+sat2 在 5 对上 0/5 WEAK→PARTIAL/MATCH, 而 sev1 已是库内最小强度, 无法通过降低严重度改善. 因此维持 R0 管线 (NO_CHANGE), 不确定性保留给训练 PSNR 仲裁."
+}

@@ -1,0 +1,36 @@
+{
+  "challenge_id": "blind_0013_setB",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["noise_gaussian_RGB", 2],
+    ["compression_jpeg", 2]
+  ],
+  "r1_pipeline": [
+    ["noise_speckle", 3],
+    ["compression_jpeg", 2]
+  ],
+  "support_psnr_r0": 25.99,
+  "candidates_tested": [
+    {"pipeline": "noise_speckle:1,compression_jpeg:2", "pairs_tested": [0], "verdicts": ["PARTIAL"], "note": "noise:sigma diff=67%; clean_residual+block_boundary matched"},
+    {"pipeline": "noise_speckle:2,compression_jpeg:2", "pairs_tested": [0], "verdicts": ["PARTIAL"], "note": "mandatory severity scan; sigma diff=33% (monotone improvement)"},
+    {"pipeline": "noise_speckle:3,compression_jpeg:2", "pairs_tested": [0, 1, 2, 3, 4], "verdicts": ["MATCH", "MATCH", "MATCH", "MATCH", "MATCH"], "note": "3/3 signals on every support pair"}
+  ],
+  "test_candidate_calls": 7,
+  "best_validation": {
+    "pipeline": "noise_speckle:3,compression_jpeg:2",
+    "support_pairs": 5,
+    "verdicts": {"pair0": "MATCH 3/3", "pair1": "MATCH 3/3", "pair2": "MATCH 3/3", "pair3": "MATCH 3/3", "pair4": "MATCH 3/3"},
+    "r0_baseline_verdicts": {"pair0": "MATCH", "pair1": "PARTIAL", "pair2": "MATCH", "pair3": "WEAK", "pair4": "WEAK"},
+    "improvement": "pairs 1/3/4 improved to MATCH; no pair regressed; majority of R0 WEAK/PARTIAL pairs flipped to MATCH"
+  },
+  "signal_sources": [
+    "residual_intensity_corr=0.388 + gamma_suspect=true (run_full_analysis_R1 rerun) -> residual variance proportional to intensity, rejects homoscedastic additive gaussian noise; poisson rejected by peeled var_slope=-0.336<1 -> speckle",
+    "peeled §B vm_slope=4.7104 (peel compression_jpeg:2) -> >0.01 speckle fingerprint, the signal R0 ignored as JPEG artifact",
+    "block_boundary=1.557 (0%FP) + R0 sweep (jpeg sev2<8%, sev3=20%, sev4=56%) -> compression_jpeg:2 unchanged",
+    "gm_ratio=1.087, spectral_slope_ratio=0.989, FFT anisotropy=0.00 -> blur absent",
+    "variance_ratio=0.9193, contrast_spread_ratio=0.9583, mean_shift=-0.0031 vs minimum global severity grid (contrast_weaken_scale:1 ~0.56 var ratio; darken_gamma:1 mean shift << -0.003) -> global absent (R0's invalid contrast invocations corrected via severity grid)",
+    "chroma_ratio=0.921 (chroma std below clean) -> argues against YCrCb noise (chroma noise would raise it)"
+  ],
+  "reason": "5/5 support pairs MATCH with noise_speckle:3+compression_jpeg:2 versus R0 gaussian_RGB:2 (2 MATCH, 1 PARTIAL, 2 WEAK). The change is driven by two independent signal sources pointing to multiplicative noise (residual_intensity_corr=0.388 and peeled vm_slope=4.7104), and the monotone sigma improvement across the mandatory severity scan. R0's gaussian family cannot fit all 5 pairs at any single severity (pair0 rules out sev1 and sev3), so the change is not a severity drift but a subtype correction."
+}

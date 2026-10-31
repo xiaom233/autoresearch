@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression: block_boundary=3.1003 (>1.1, Tier S, 0% FP) + dct_zero_ratio=0.9066 → JPEG 存在高度确信（LIKELY, sev3）；架构无 JPEG 专项开关可用",
+    "blur: predicted blur_gaussian sev3 (LIKELY)，residual_anisotropy=1.1381 < 1.7 且非 motion → OCAB 门控（anisotropy>1.7 + motion）不满足，不启用",
+    "contrast: variance_ratio=0.683 但 full_analysis step4 contrast_from_variance=false，该方差下降被归因于强 blur；终检 variance_ratio 差 65%、contrast_weaken_scale sev1 verdict=UNCERTAIN（仅由 pct_255/pct_zero 塌缩推断）→ Tier A contrast 信号不明确，不启用 FiLM-GCM/ColorPre",
+    "noise: noise_prior sigma=1.73 < 2；peeled §B IMPULSE 为已知假阳性模式（extreme_pct>50% + sigma<5 → JPEG/blur 残差伪影）→ 无噪声步骤，不加组件",
+    "strategy: 三步混合（blur+contrast+jpeg）且含 contrast → Direct 最安全（finetune_strategy §六 Step1：含 contrast 时 Direct 保守；exp37 盲识别场景纯 Swin 23/24 胜）",
+    "SimpleGate 默认常开：exp39 -32K 参数，8/9 退化安全（本管线类别为 D3 JPEG+blur +0.02、L2 contrast+noise +0.78；无 motion×3 S5 风险）",
+    "overall verdict=UNCERTAIN (tier 3)，PSNR 25.06-28.06 全 <30 → 不确定性高，纯 Swin + Direct 兜底"
+  ],
+  "rationale": "预测管线 blur_gaussian:3 + contrast_weaken_scale:1 + compression_jpeg:3，总体 UNCERTAIN。JPEG 有 Tier S 信号 (block_boundary=3.1) 但无专项组件；motion 已被 anisotropy=1.138 排除，OCAB 不满足门控；contrast 为 UNCERTAIN 且 variance_ratio 被归因于 blur（contrast_from_variance=false，终检差 65%），Tier A contrast 信号不明确，按 exp37/§七 保守规则不启用 FiLM-GCM/ColorPre/CSN/DualBranch。含 contrast 的多步管线选 Direct（非 RandomCurric），架构纯 Swin + 默认 SimpleGate，lr=5e-4，2 epoch。"
+}

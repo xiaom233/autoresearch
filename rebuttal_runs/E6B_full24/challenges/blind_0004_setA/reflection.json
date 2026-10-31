@@ -1,0 +1,867 @@
+{
+  "challenge_id": "blind_0004_setA",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "MILD_COMPRESSION_POSSIBLE (low conf): block_boundary=0.987 (<1.05), unique_G 238 vs 254 (ratio 0.937), dct_zero_ratio=0.521",
+      "blur": "BLUR_UNLIKELY verdict but gm_ratio=0.582 (strong gradient drop), spectral_slope_ratio=1.041 (<1.08), FFT anisotropy=0.00, PCA=0.0",
+      "noise": "sigma=0.74 (wavelet prior) -> below 2, PSNR mode; spatial_corr=0.819 likely from blur smoothness; cross_ch_corr=0.949",
+      "global": "NO_GLOBAL: variance_ratio=0.992, mean_shift=-0.4, clipped_fraction=0.0052"
+    },
+    "mode": "PSNR (sigma=0.74 < 2)",
+    "hypotheses": [
+      "blur_gaussian (gm_ratio=0.582 dominant signal, anisotropy=0 rules out motion, glass_score not raised -> gaussian default, lens alternative MTF-indistinguishable)",
+      "mild JPEG (block_boundary below threshold, unique_G ratio 0.937 near threshold; only test if PSNR under 30-40)",
+      "noise gaussian weak (sigma 0.74 -> likely absent)"
+    ],
+    "qwen_gate": {
+      "available": false,
+      "reason": "Qwen/API unavailable; sigma=0.74 not in 2<sigma<10 boundary, gate not triggered"
+    }
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py on pair0 residual after stripping blur_gaussian:2 (residual std 6.3); corroborated by step2 on raw pair0 (sigma=0.74)",
+    "extreme_pct": 64.47,
+    "extreme_pct_note": "known FP: extreme definition counts signed residual <=0; more than 50% + sigma<5 -> blur/JPEG artifact per SKILL reflection_triggers, not impulse",
+    "vm_slope": 1.4872,
+    "vm_slope_note": "elevated because residual follows image structure (blur kernel mismatch), not multiplicative speckle; ch_stds R=6.3/G=6.2/B=6.3 equal",
+    "var_slope": 0.0109,
+    "var_slope_note": "<1.0 -> not Poisson",
+    "spatial_corr": 0.9822,
+    "spatial_corr_note": "0.98 >> SC-noise range 0.15-0.5 -> structured blur residual, not spatially correlated noise",
+    "rgb_ratio": 1.0322,
+    "rgb_ratio_note": "<1.4 -> not YCrCb noise (equal channel stds)",
+    "cross_ch_corr": 0.975,
+    "cross_ch_corr_note": "blur smooths RGB channels synchronously (known FP); motion:1 simulation with no noise reproduces target cc=0.949 and sigma=0.74",
+    "wavelet_sigma_raw_target": 0.74,
+    "wavelet_sigma_peeled": 1.24,
+    "diagnosis": "NO_NOISE. Wavelet sigma 0.74 (<2, blur warning says lower bound). All high values are explained by structured blur residual; motion:1 (no noise) simulated image reproduces the target's full step2 fingerprint (sigma 0.74, cross_ch 0.958, residual_intensity_corr -0.267).",
+    "gamma_check": "residual_intensity_corr=-0.2657 in step2 is attributable to blur edge residuals; no global degradation (variance_ratio=0.9919, mean_shift=-0.4)"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "gm_ratio=0.582 strong gradient drop -> blur exists; FFT anisotropy=0.00 rules out motion; no glass score elevation -> gaussian default per DT (ELSE branch); spectral_slope_ratio=1.041 mild steepening consistent with mild-moderate gaussian. Test sev2 first."
+      },
+      "test_result": {
+        "psnr_rgb": 32.21,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "sev2 PSNR=32.21dB (30-40 band -> severity window). gm_ratio=0.582 suggests gradient loss stronger than sigma=2. Per severity scan rule, test sev3 (est+1) next."
+      },
+      "test_result": {
+        "psnr_rgb": 31.45,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "sev2=32.21dB > sev3=31.45dB -> severity window between 1 and 2. Test sev1 (est-1) to locate minimum."
+      },
+      "test_result": {
+        "psnr_rgb": 31.71,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:1",
+        "thinking": "Gaussian severity scan plateaued (sev1=31.71, sev2=32.21, sev3=31.45 dB); peeled residual spatial_corr=0.98 structured -> kernel mismatch. Gaussian vs lens MTF indistinguishable (SKILL §C: radial_ratio content-dependent). Test cross-family lens sev1 (periphery sigma=2, center sharper via lensmask)."
+      },
+      "test_result": {
+        "psnr_rgb": 31.75,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "lens sev1=31.75dB (best so far, CI 8/10). Lens severity mapping sigma=(2,4,6,8,10); target gm_ratio=0.582 suggests stronger peripheral blur. Per severity scan rule (lens within 30-40 dB band), test lens sev2 (est+1)."
+      },
+      "test_result": {
+        "psnr_rgb": 32.15,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "PSNR plateau ~31-32 dB across gaussian sev1-3 and lens 1-2 -> subtype/severity mismatch or co-degradation. Switch to SIGNAL mode: Wiener kernel corr + spectral slope diff to test whether target kernel is gaussian-like regardless of severity; peeled residual std 6.3 suggests extra perturbation."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.707)"
+        ],
+        "pipeline": "blur_gaussian:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "gaussian:2 signal mode gave WEAK (wiener kernel corr=0.707 <0.85, spectral slope match). Kernel shape mismatch -> test cross-family lens at same severity in signal mode; if lens corr notably higher, subtype=lens."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.699)"
+        ],
+        "pipeline": "blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:2",
+        "thinking": "PSNR plateau ~32dB across blur-only candidates; peeled residual std 6.3 with spatial_corr 0.98 (structured). If gaussian RGB noise sigma~38 (sev3) precedes blur sigma=2, expected visible residual std ~5.4 -> PSNR ceiling ~33.5 dB, matching plateau; wavelet sigma_prior stays low because noise is blurred; target overshoot/zc higher than blur-only sims. Physics: noise<blur. Test signal mode."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.707)",
+          "noise:structured_residual (FWHM=8.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_motion:2",
+        "thinking": "gm_ratio=0.582 (heavy gradient loss) vs spectral_slope_ratio=1.041 (only mild steepening) is inconsistent with isotropic gaussian. Anisotropic motion blur reduces directional gradients without much changing radial spectrum; residual FWHM stuck at 8px for gaussian fits. Test motion sev2 in signal mode (kernel corr + slope)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.089)"
+        ],
+        "pipeline": "blur_motion:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_lens:3",
+        "thinking": "lens is deterministic (disk kernel radius=[2,3,4,6,8]); lens sev1/2 gave 31.75/32.15 dB not definitive. Target gm_ratio=0.582 suggests heavier blur -> test lens sev3 (radius 4). Deterministic match would yield PSNR>40."
+      },
+      "test_result": {
+        "psnr_rgb": 32.04,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "gaussian is deterministic; sev1-3 plateaued at 31-32 dB (severity fit not exact). gm severity estimate maps 0.582 to sev3 but test sev4 (sigma=4) to rule out tail severities; deterministic match would yield PSNR>40."
+      },
+      "test_result": {
+        "psnr_rgb": 30.37,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "motion:2 signal mode matched wiener kernel (corr>0.85) while gaussian/lens stuck at 0.70 -> target kernel may be anisotropic (motion-like). Motion severity mapping radius=[5,10,15,15,20]; test sev1 in signal mode to check kernel corr + slope consistency across severities."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.828)"
+        ],
+        "pipeline": "blur_motion:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "motion candidates show kernel corr 0.83-0.87 vs 0.70 for gaussian/lens. Before concluding motion, test the other stochastic blur: glass (gaussian sigma 0.9 + pixel shuffle shift=2, sev2). Glass ghosting could also raise overshoot/zc as observed in target."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.653)"
+        ],
+        "pipeline": "blur_glass:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_motion:3",
+        "thinking": "motion family is the only one matching Wiener kernel (sev1 corr=0.828, sev2 >0.85; gaussian/lens 0.70, glass 0.653). Severity scan rule: test motion sev3 (radius 15 sigma 7) in signal mode for kernel corr + spectral slope."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.190)",
+          "blur:wiener_kernel (corr=0.765)"
+        ],
+        "pipeline": "blur_motion:3",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "motion-family is only one matching Wiener kernel (0.83-0.87 vs 0.65-0.71 isotropic); gm_ratio=0.582 (heavy) vs spectral_slope_ratio=1.041 (mild) inconsistency fits anisotropic blur. PSNR mode now to collect CI metrics (overshoot/zc/block_boundary) + PSNR for motion sev1; random angle so PSNR is secondary, CI is the discriminator."
+      },
+      "test_result": {
+        "psnr_rgb": 34.49,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_motion:2",
+        "thinking": "motion sev1 PSNR=34.49dB CI=10/10 (unique colors exact, overshoot 7%, hf_lf 1%) - best fit by far; anisotropic blur confirmed. Severity scan: test sev2 (radius 10 sigma 5) PSNR/CI; gm_ratio=0.582 suggests possibly stronger than sev1."
+      },
+      "test_result": {
+        "psnr_rgb": 29.98,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "Signal-calibration decisive: running run_full_analysis on motion:1 simulated image reproduces target fingerprint almost exactly (gm_ratio 0.572 vs target 0.582; spectral_slope -1.377 vs -1.363; ratio 1.051 vs 1.041), while motion:2 overshoots (0.488/-1.473/1.124). Repeat motion:1 with a new random angle to probe PSNR ceiling (angle sampling of fixed hypothesis, not function enumeration)."
+      },
+      "test_result": {
+        "psnr_rgb": 31.94,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "Round 2 cross-family control: motion:1 has CI 10/10 x2 runs (overshoot 1-7%, zc 6-19%, hf_lf 1%). Before locking, PSNR/CI-test the remaining stochastic blur family member glass at sev3 (sigma1.2, shift2, iter2) to confirm it cannot match the target fingerprint equally well."
+      },
+      "test_result": {
+        "psnr_rgb": 29.27,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "Support validation pair1: final candidate blur_motion:1 (pair0: CI 10/10 twice, gm/slope fingerprint match). Check same pipeline on support pair 1 (DIV2K 0594)."
+      },
+      "test_result": {
+        "psnr_rgb": 27.74,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "Support validation pair2: same motion:1 hypothesis on support image DIV2K 0470; verify CI consistency (angle sampled anew)."
+      },
+      "test_result": {
+        "psnr_rgb": 30.85,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "Support validation pair3: same motion:1 hypothesis on support image DIV2K 0309; verify CI consistency across images."
+      },
+      "test_result": {
+        "psnr_rgb": 22.69,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "Support validation pair4: same motion:1 hypothesis on support image DIV2K 0697; final support check for CI consistency."
+      },
+      "test_result": {
+        "psnr_rgb": 24.99,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "Support control: on pair3 (motion:1 PSNR 22.69 but CI 10/10), run runner-up gaussian:2 to verify it does NOT reach the same CI - decisively separating anisotropic motion from isotropic gaussian on an image with different content."
+      },
+      "test_result": {
+        "psnr_rgb": 26.02,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 Test1 pair0: fresh revalidation of R0 pipeline. Signals: gm_ratio=0.582 (<0.62 pure-blur threshold) -> blur presence strong; step3 'BLUR_UNLIKELY' was an artifact of has_noise=True from low-confidence GAUSSIAN_YCrCb (sigma=0.74) label; FFT_anisotropy=0.00/PCA=0.0 in R0 were uncomputed defaults (early return), not measurements. Kernel evidence: motion 0.83-0.87 > gaussian 0.707 > lens 0.699 > glass 0.653; motion:1 fingerprint gm 0.572 vs target 0.582, slope -1.377 vs -1.363. Save sim for fingerprint/DCT/block-boundary comparison."
+      },
+      "test_result": {
+        "psnr_rgb": 33.04,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 support validation pair1: revalidate R0 pipeline blur_motion:1. Signal basis: gm_ratio=0.582<0.62 (blur present; BLUR_UNLIKELY artifact of has_noise label), step-level fingerprint of a noiseless motion:1 simulation matches target on ALL steps (block_boundary 0.990 vs 0.987, unique_G 238=238, dct 0.568 vs 0.521 vs clean 0.279, sigma 0.74=0.74, gm 0.573 vs 0.582, slope -1.354 vs -1.363, variance_ratio 0.992=0.992). Motion angle is random per call -> PSNR varies; CI is angle-robust."
+      },
+      "test_result": {
+        "psnr_rgb": 37.31,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 support validation pair2: revalidate R0 pipeline blur_motion:1. Signal basis: gm_ratio=0.582<0.62 (blur present; BLUR_UNLIKELY artifact of has_noise label), step-level fingerprint of a noiseless motion:1 simulation matches target on ALL steps (block_boundary 0.990 vs 0.987, unique_G 238=238, dct 0.568 vs 0.521 vs clean 0.279, sigma 0.74=0.74, gm 0.573 vs 0.582, slope -1.354 vs -1.363, variance_ratio 0.992=0.992). Motion angle is random per call -> PSNR varies; CI is angle-robust."
+      },
+      "test_result": {
+        "psnr_rgb": 29.35,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 support validation pair3: revalidate R0 pipeline blur_motion:1 (same signal basis: gm_ratio 0.582<0.62; noiseless motion:1 simulation reproduces all target step fingerprints; motion Wiener kernel corr 0.83-0.87 vs gaussian 0.707/lens 0.699/glass 0.653). Random motion angle -> PSNR draw varies; CI 10/10 expected if subtype correct."
+      },
+      "test_result": {
+        "psnr_rgb": 65.91,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 support validation pair4: revalidate R0 pipeline blur_motion:1 (same signal basis: gm_ratio 0.582<0.62; noiseless motion:1 simulation reproduces all target step fingerprints; motion Wiener kernel corr 0.83-0.87 vs gaussian 0.707/lens 0.699/glass 0.653). Random motion angle -> PSNR draw varies; CI 10/10 expected if subtype correct."
+      },
+      "test_result": {
+        "psnr_rgb": 25.44,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 65.91,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 27
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 37.31,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 34.49,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 33.04,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 32.21,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_lens:2",
+      "psnr_rgb": 32.15,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_lens:3",
+      "psnr_rgb": 32.04,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 31.94,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_lens:1",
+      "psnr_rgb": 31.75,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "psnr_rgb": 31.71,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 31.45,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 30.85,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 30.37,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_motion:2",
+      "psnr_rgb": 29.98,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 29.35,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 26
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 29.27,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 27.74,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 26.02,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 25.44,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 28
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 24.99,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 22.69,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    }
+  ],
+  "support_validation": {
+    "candidate": "blur_motion:1",
+    "pairs": {
+      "pair0": {
+        "psnr_rgb": [
+          34.49,
+          31.94
+        ],
+        "ci_pass": [
+          "10/10",
+          "10/10"
+        ]
+      },
+      "pair1": {
+        "psnr_rgb": [
+          27.74
+        ],
+        "ci_pass": [
+          "9/10"
+        ]
+      },
+      "pair2": {
+        "psnr_rgb": [
+          30.85
+        ],
+        "ci_pass": [
+          "10/10"
+        ]
+      },
+      "pair3": {
+        "psnr_rgb": [
+          22.69
+        ],
+        "ci_pass": [
+          "10/10"
+        ]
+      },
+      "pair4": {
+        "psnr_rgb": [
+          24.99
+        ],
+        "ci_pass": [
+          "10/10"
+        ]
+      }
+    },
+    "control_pair3_gaussian2": {
+      "psnr_rgb": 26.02,
+      "ci_pass": "6/10"
+    },
+    "note": "PSNR varies 22.7-34.5 because x_distortion blur_motion draws a random angle per call (non-deterministic); content-independent CI is stable at 9-10/10 for blur_motion:1 vs 6/10 for gaussian:2 on the same pair3. Signal fingerprint of motion:1 simulation matches target: gm_ratio 0.572 vs 0.582, spectral_slope -1.377 vs -1.363, ratio 1.051 vs 1.041; motion:2 over-blurs (0.488/-1.473/1.124)."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_motion",
+        "severity": 1,
+        "verdict": "UNCERTAIN",
+        "evidence": "Only blur family matching Wiener kernel corr (0.828-0.87 vs 0.65-0.71 for gaussian/lens, 0.653 glass); motion:1 simulation fingerprint matches target (gm_ratio 0.572 vs 0.582; spectral_slope -1.377 vs -1.363; slope ratio 1.051 vs 1.041); CI 10/10 on pair0 x2 and pairs 2/3/4, 9/10 pair1; 6/10 for gaussian:2 control on pair3. PSNR 30-40 band because motion angle is random (non-deterministic per SKILL C4), best 34.49 dB."
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR + CI content-independent metrics + signal fingerprint (sigma=0.74 -> PSNR mode)",
+    "rationale": "Single-step anisotropic motion blur at severity 1 (radius=5, sigma=3). No compression (block_boundary 0.987<1.05, unique_G 238/254), no global (variance_ratio 0.992, mean_shift -0.4, chroma 0.992), no noise (wavelet sigma 0.74; 6-step check all explained by blur residual; noiseless motion:1 simulation reproduces target noise-step fingerprint exactly). Verdict UNCERTAIN rather than LIKELY because blur_motion samples a random angle, so PSNR cannot exceed 40 dB even with correct pipeline (SKILL C4), and best observed PSNR is 34.49 dB (30-40 band). Support pairs 1-4 all consistent (CI >= 9/10).",
+    "alternatives": [
+      {
+        "function": "blur_motion",
+        "severity": 2,
+        "psnr_rgb": 29.98,
+        "ci_pass": "10/10",
+        "note": "same family severity alternative; fingerprint over-blurs (gm 0.488 vs target 0.582)"
+      },
+      {
+        "function": "blur_gaussian",
+        "severity": 2,
+        "psnr_rgb": 32.21,
+        "ci_pass": "7/10",
+        "note": "isotropic cross-family runner-up; wiener kernel corr 0.707, fails overshoot/zc on all pairs"
+      },
+      {
+        "function": "blur_lens",
+        "severity": 2,
+        "psnr_rgb": 32.15,
+        "ci_pass": "7/10",
+        "note": "disk-kernel cross-family runner-up; wiener kernel corr 0.699"
+      }
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (support PSNR 34.70 dB)",
+    "method": "signal re-interpretation (not residual diagnosis): reran run_full_analysis on pair0 (full_analysis_R1.json), ran peeled_noise_check with the R0 pipeline (peeled_noise_R1.json), ran run_full_analysis on clean-vs-clean as a compression baseline, and ran run_full_analysis on a fresh noiseless blur_motion:1 simulation (full_analysis_sim_motion1_pair0_R1.json) as a full-fingerprint control.",
+    "signal_reinterpretation": [
+      {
+        "signal": "step3 verdict BLUR_UNLIKELY vs gm_ratio=0.582",
+        "finding": "Logic artifact. run_full_analysis sets has_noise = (step2.verdict != 'NO_NOISE'); the low-confidence GAUSSIAN_YCrCb label (sigma=0.74) forced has_noise=True, so blur was judged by slope_ratio 1.041<1.08 instead of the pure-blur branch gm_ratio<0.62 (0.582 would have PASSED). Control: clean-vs-clean also returns step2 IMPULSE with sigma=0.0 -> has_noise=True, confirming the verdict-string coupling. Blur presence is real."
+      },
+      {
+        "signal": "FFT anisotropy=0.00, PCA=0.0 (R0 initial_analysis)",
+        "finding": "Not measurements. step3_blur returns early at BLUR_UNLIKELY (run_full_analysis.py lines 526-535); residual_anisotropy/glass_score/blur_PCA (lines 542-600) are never computed. The 0.00/0.0 values are uncomputed defaults echoed by the summary. They never contradicted motion and must not be used as evidence."
+      },
+      {
+        "signal": "dct_zero_ratio=0.5211 > 0.50 (MILD_COMPRESSION_POSSIBLE)",
+        "finding": "Blur-confounded. clean baseline 0.2785; noiseless blur_motion:1 simulation 0.5675 (>= target). Near-zero 8x8 AC coefficients rise under smoothing. block_boundary target 0.9873 vs clean 0.9828 vs sim 0.9897 -> no 8x8 grid (0% FP rule; far below 1.05). No JPEG step."
+      },
+      {
+        "signal": "unique_G 238 vs clean 254 (ratio 0.937)",
+        "finding": "Blur averaging. Noiseless motion:1 sim unique_G=238 (ratio 0.937), per-channel [240,238,239] vs target [242,239,238]. No quantization."
+      },
+      {
+        "signal": "noise-step fingerprint: sigma=0.74, spatial_corr=0.819, cross_ch=0.949, residual_intensity_corr=-0.281",
+        "finding": "Reproduced exactly by a noiseless simulation (0.74, 0.813, 0.947, -0.272). R1 peeled_noise_check after stripping blur_motion:1: residual std 6.8, extreme_pct 63.64% (known FP: >50% with sigma<5), vm_slope 2.54 and spatial_corr 0.975 (structured blur residual, outside SC-noise 0.15-0.5), rgb_ratio 1.030 with equal channel stds (6.9/6.7/6.7 -> not YCrCb), var_slope -0.357 (<1.0 -> not Poisson), wavelet sigma 1.48 (<2). NO_NOISE confirmed."
+      },
+      {
+        "signal": "variance_ratio=0.9919, spread=0.9937, chroma=0.9921, mean_shift=-0.4, clipped=0.0052; gamma_suspect from ric=-0.28",
+        "finding": "NO_GLOBAL stands. Noiseless sim matches all global signals (0.9917/0.9937/0.9912/-0.3/0.0054), so ric=-0.28 and gamma_suspect are blur edge residuals, not a global step."
+      },
+      {
+        "signal": "blur subtype: gm_ratio=0.582 vs spectral_slope_ratio=1.041",
+        "finding": "Joint signature excludes deterministic isotropic blur: gaussian sev1-4 max PSNR 32.21 dB and lens sev1-3 max 32.15 dB are deterministic functions and never exceeded 40 dB -> exact-match ruled out. Motion family is the only one matching the Wiener kernel (0.83-0.87 vs gaussian 0.707/lens 0.699/glass 0.653); motion:2 over-blurs the fingerprint (gm 0.488 vs 0.582)."
+      }
+    ],
+    "full_fingerprint_control": {
+      "sim": "sim_R1_motion1_pair0.png (blur_motion:1, no JPEG/no noise/no global)",
+      "target_vs_sim": {
+        "block_boundary": [0.9873, 0.9897],
+        "unique_G": [238, 238],
+        "dct_zero_ratio": [0.5211, 0.5675],
+        "wavelet_sigma": [0.74, 0.74],
+        "spatial_corr": [0.8186, 0.8127],
+        "cross_channel_corr": [0.9494, 0.947],
+        "residual_intensity_corr": [-0.2807, -0.2717],
+        "gm_ratio": [0.5816, 0.5727],
+        "spectral_slope": [-1.3633, -1.3544],
+        "spectral_slope_ratio": [1.0407, 1.0338],
+        "variance_ratio": [0.9919, 0.9917],
+        "mean_shift": [-0.4, -0.3]
+      },
+      "note": "Every step-level signal of the target (compression, noise, blur, global) is reproduced by a noiseless motion:1 simulation with a fresh random angle."
+    },
+    "candidates_tested": [
+      {
+        "pipeline": "blur_motion:1",
+        "status": "revalidated on 5 support pairs (rounds 24-28)",
+        "support_mean_psnr": 38.21,
+        "best": "pair3 65.91 dB, CI 10/10"
+      }
+    ],
+    "candidate_ranking": [
+      {"pipeline": "blur_motion:1", "support_psnr": [33.04, 37.31, 29.35, 65.91, 25.44], "ci_pass": ["10/10", "10/10", "10/10", "10/10", "7/10"], "note": "pair3 65.91 dB when random angle aligns -> near pixel-exact; lower values are pure angle mismatch"},
+      {"pipeline": "blur_gaussian:2", "support_psnr": [32.21, null, null, 26.02, null], "ci_pass": ["7/10", null, null, "6/10", null], "note": "deterministic -> stable PSNR; ceiling <40 dB rules out exact match (R0 data)"},
+      {"pipeline": "blur_lens:2", "support_psnr": [32.15, null, null, null, null], "ci_pass": ["7/10", null, null, null, null], "note": "deterministic; ceiling <40 dB (R0 data)"},
+      {"pipeline": "blur_motion:2", "support_psnr": [29.98, null, null, null, null], "ci_pass": ["10/10", null, null, null, null], "note": "fingerprint over-blurs (gm 0.488 vs target 0.582) (R0 data)"}
+    ],
+    "support_validation": {
+      "pair0": {"psnr_rgb": 33.04, "ci_pass": "10/10"},
+      "pair1": {"psnr_rgb": 37.31, "ci_pass": "10/10"},
+      "pair2": {"psnr_rgb": 29.35, "ci_pass": "10/10"},
+      "pair3": {"psnr_rgb": 65.91, "ci_pass": "10/10"},
+      "pair4": {"psnr_rgb": 25.44, "ci_pass": "7/10"},
+      "mean_psnr": 38.21,
+      "interpretation": "blur_motion samples a random angle per call; CI 10/10 on 4/5 pairs and a 65.91 dB pixel-level reproduction on pair3 confirm subtype+severity. R0 pair values (22.69-34.49 dB) and R1 values (25.44-65.91 dB) sample the same angle-driven distribution."
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "blur_motion", "severity": 1, "verdict": "UNCERTAIN"}
+      ],
+      "rationale": "R1 signal re-interpretation resolved the boundary/contradictory signals in favor of the R0 pipeline: BLUR_UNLIKELY was a has_noise-verdict artifact, anisotropy/PCA were never computed, dct/unique_G are blur-induced, noise and global fingerprints are fully reproduced by a noiseless motion:1 simulation. Fresh 5-pair validation produced CI 10/10 on 4/5 pairs and 65.91 dB on pair3 (aligned random angle) - a near pixel-exact reproduction that no alternative and no extra step can achieve. Verdict remains UNCERTAIN per SKILL C4 because the random angle makes PSNR draw-dependent."
+    },
+    "budget": {
+      "test_candidate_calls": 5,
+      "new_candidates": 0,
+      "rounds_of_reinterpretation": 1
+    }
+  }
+}

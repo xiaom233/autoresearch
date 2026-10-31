@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": true,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "step4_global: variance_ratio=0.1193 (Tier A, ≠1.0, 低FP) + contrast_spread_ratio=0.3674 → contrast 高置信，触发 ColorPre (exp38 contrast +0.62, exp10 +0.81~18.91)",
+    "对比子型 PSNR 锁定: contrast_weaken_stretch:4=37.72dB vs contrast_weaken_scale:4=24.89dB (Δ12.83dB); stretch sev 峰 3/4/5 = 28.99/37.72/28.80 → 确定性退化，contrast 步子型与严重度均可靠",
+    "blur 步: gaussian sev3 (PSNR motion 21.99<22.30 被否；lens 22.33≈22.30 MTF 不可区分)；residual_anisotropy=1.8337>1.7 但无 motion → 不满足 OCAB 触发条件 (anisotropy>1.7 + motion)，不用 OCAB",
+    "block_boundary=0.9944<1.05 且 JPEG control 24.69<24.89 → 无 JPEG；管线无 motion/jpeg 结构化局部 → 不触发 FiLM-GCM",
+    "noise_prior sigma=0.37<2 且 spatial_corr=0.9946 → 无噪声；SimpleGate 默认常开 (exp39 8/9 安全, -32K)",
+    "含 contrast 全局退化 → Swin (MDTA/OCAB 在 contrast 上崩溃, exp10 L2 Swin 28.70 vs OCAB 18.32)"
+  ],
+  "rationale": "预测管线 blur_gaussian:3 + contrast_weaken_stretch:4。contrast 步 variance_ratio=0.1193 为 Tier A 信号且 stretch:4 经 PSNR 以 12.8dB 优势锁定（37.72dB, 跨 pose 最高 40.63dB），按 §七 门控启用 ColorPre（contrast Tier A 唯一允许组件）；blur 步严重度/子型仅 UNCERTAIN 但无 motion/jpeg 结构化，不满足 OCAB 与 FiLM-GCM 触发条件，故不加。训练策略 Direct（exp37/38 证明 True Ft ≈ Direct，且对比度类退化 Direct 最安全），Swin + SimpleGate 基线，lr=5e-4，EPOCH=2，batch=16。"
+}

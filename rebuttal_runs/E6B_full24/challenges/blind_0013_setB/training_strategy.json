@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "block_boundary=1.557 (Tier S, 0%FP) + severity sweep (sev2 MATCH, sev3/4 MISMATCH) → JPEG sev2 确认；管线中无 JPEG 专用架构组件，仅确认压缩步骤存在",
+    "variance_ratio=0.919（contrast 阈值 0.55 未触及），mean_shift=-0.8/255，contrast_detected_raw=false → 无 contrast Tier A 信号，不启用 ColorPre/FiLM-GCM",
+    "gm_ratio=1.087, spectral_slope_ratio=0.989；blur_gaussian:1 对照 R6 变 WEAK（noise:sigma 67%, bb 23%）→ 无 blur/motion，anisotropy 未触发(>1.7)，OCAB 不启用",
+    "noise: sigma=2.22, peeled rgb_ratio=1.0549 → gaussian_RGB 与 YCrCb 两族均 MATCH，子类型 UNCERTAIN；σ>2 属 Tier B/C → 纯 Swin 基线，噪神不关心注意力类型",
+    "saturation_chroma_ratio=0.921 未检出 → 不启用 ColorPre（saturation 上 ColorPre 有害 -0.34）",
+    "SimpleGate 默认常开（-32K, exp39 8/9 退化安全，仅 S5 三退化 -0.86）"
+  ],
+  "rationale": "管线为纯局部两步退化 noise_gaussian_RGB:2 + compression_jpeg:2，无全局退化、无 motion/结构化信号。整体 verdict=UNCERTAIN (Tier 3, sigma=2.22>2 → PSNR 不可用)。按 finetune_strategy.md §七：Tier S 的 block_boundary 仅确认 JPEG 存在（无对应组件可启用）；Tier B/C 的噪声步骤 → 纯 Swin 基线；不满足 variance_ratio≠1.0 或 anisotropy>1.7，故不启用 ColorPre/FiLM-GCM/OCAB；DualBranch 在盲识别场景 0/24 胜 (exp37) 且任务明令不用。策略取 Direct（纯局部场景 exp37 True Ft ≈ Direct 且无 ckpt），lr=5e-4、EPOCH=2 与基线一致。"
+}

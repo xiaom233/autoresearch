@@ -1,0 +1,34 @@
+{
+  "challenge_id": "blind_0006_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["compression_jpeg", 1]],
+  "r1_pipeline": [["compression_jpeg", 1]],
+  "support_psnr_r0": 32.46,
+  "candidates_tested": [
+    {
+      "pipeline": "compression_jpeg:1",
+      "role": "incumbent re-verification",
+      "support_pairs": [0, 1, 2, 3, 4],
+      "validation": "PSNR=inf dB on all 5 pairs; CI 10/10 with all metric diffs 0.000 (bit-identical reproduction)"
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "role": "severity-specificity control",
+      "support_pairs": [0],
+      "validation": "PSNR=29.70 dB (<40), block_boundary diff 4%; rejected -> severity is uniquely pinned to 1"
+    }
+  ],
+  "test_candidate_calls": 6,
+  "best_validation": "compression_jpeg:1 reproduces all 5 support targets bit-exactly (PSNR=inf dB, 10/10 CI zero-diff); jpeg:2 control gives only 29.70 dB",
+  "signal_sources": [
+    "block_boundary=1.2587 (>1.05, 0%FP) + dct_zero_ratio=0.8159 -> JPEG present",
+    "unique_G=256 -> rules out quantization_median/hist",
+    "peeled residual after jpeg:1: std=0.0, zero_ratio=1.0 -> target is exactly simulation(clean, jpeg:1); no hidden additional step",
+    "step2 GAUSSIAN_YCrCb sigma=0.62 < 2 -> NO_NOISE; cross_channel_corr=0.497 / residual_intensity_corr=-0.138 attributed to JPEG artifact residual, not random noise",
+    "SSB IMPULSE extreme_pct=100% is a degenerate zero-residual artifact (ch_stds=[0,0,0]), matching known FP trigger (extreme_pct>50% + sigma<5)",
+    "gm_ratio=0.9422 >= 0.85, spectral_slope_ratio=0.9936 < 1.08, FFT anisotropy=0.00 -> no blur",
+    "variance_ratio=0.9911, contrast_spread_ratio=1.0023, mean_shift=0.1/255, saturation_chroma_ratio=0.9827, clipped_fraction=0.0062 -> no global step"
+  ],
+  "reason": "R1 signal reinterpretation found no overlooked or misattributed signal: the only candidate (JPEG) is confirmed by a 0%-FP signal and the incumbent pipeline reproduces all 5 support degraded images bit-exactly, which mathematically excludes any additional (or different-severity) degradation step. The CHANGE criterion (>40 dB or +2 dB vs previous round) cannot be met because the incumbent already reaches inf dB. The R0 support PSNR of 32.46 dB therefore reflects training/model capacity, not a blind-ID error; prediction is kept unchanged."
+}

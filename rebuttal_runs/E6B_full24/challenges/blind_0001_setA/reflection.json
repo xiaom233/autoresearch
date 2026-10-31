@@ -1,0 +1,922 @@
+{
+  "challenge_id": "blind_0001_setA",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "unique_G_target=16, unique_G_clean=256 (ratio 0.0625), per_channel=[16,16,16], block_boundary=1.001 (无8x8块), dct_zero_ratio=0.048 -> 非JPEG，强烈指向颜色量化；16 级恰好等于 quantization_hist severity=2 的 c=16",
+      "blur": "BLUR_UNLIKELY: gm_ratio=5.230 (被噪声/量化破坏), spectral_slope_ratio=0.995 (<1.08), FFT anisotropy=0.00, pca=0.0 -> 无明显模糊",
+      "noise": "noise_prior sigma=10.5, intensity_var_corr=0.9087, intensity_scaled_var_corr=-0.6457, spatial_corr=0.0294, cross_channel_corr=0.0153 -> 需剥离量化后复检，sigma 可能被量化带状伪影抬高",
+      "global": "NO_GLOBAL: mean_shift=-1.7/255 (微弱), variance_ratio=1.081, contrast_spread_ratio=1.041; saturation raw=true 但 false_positive_check 标记 saturation_from_noise; clipped_fraction=0.3318 (可能来自量化直方图映射到 0/255)"
+    },
+    "qwen_gate": {
+      "available": false,
+      "note": "Qwen/API 不可用，按协议跳过 Step 0.5 门控"
+    },
+    "mode": "SIGNAL (sigma=10.5)",
+    "suspected": [
+      "quantization_hist:2",
+      "noise (type TBD after peel)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary=1.001)",
+      "blur (spectral_slope_ratio=0.995, anisotropy=0.00)",
+      "brightness/contrast (mean_shift=-1.7, variance_ratio=1.081)"
+    ]
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2",
+        "thinking": "R1: A-priori unique_G=16 per channel exactly equals quantization_hist sev2 c=16; block_boundary=1.001 rules out JPEG. Test deterministic quantization alone in PSNR mode to read unique-value CI metrics (PSNR value treated cautiously)."
+      },
+      "test_result": {
+        "psnr_rgb": 14.13,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,quantization_hist:2",
+        "thinking": "R2: quantization_hist:2 confirmed by exact unique-levels; residual suggests add-noise-before-quantize. noise_prior sigma=10.5 ~ gaussian_RGB sev1 (sigma=12.75). Test full pipeline."
+      },
+      "test_result": {
+        "psnr_rgb": 13.33,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:1,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,quantization_hist:2",
+        "thinking": "R2: run_full_analysis recommended POISSON sev2 (var_slope>1, ivc=0.91, but likely FP from hist quantization); full pipeline test with quantization_hist:2 fixed."
+      },
+      "test_result": {
+        "psnr_rgb": 13.99,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:2,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "R3 severity scan: target impulse_pct_255 exceeds poisson:2 sim by 1.86pp -> stronger bright-region noise may explain more 255 saturation. Test poisson sev3 (c=40)."
+      },
+      "test_result": {
+        "psnr_rgb": 13.8,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4,quantization_hist:2",
+        "thinking": "R3 severity scan cont.: poisson3 reduced 255-clip mismatch 39%->24%; test poisson4 (c=25) to see if bright-region clipping matches further."
+      },
+      "test_result": {
+        "psnr_rgb": 13.57,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:4,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2,quantization_hist:2",
+        "thinking": "R2 cross-family: speckle is multiplicative (bright-weighted like poisson); test speckle sev2 (c=0.21) to discriminate noise family."
+      },
+      "test_result": {
+        "psnr_rgb": 13.86,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_speckle:2,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "Final signal-mode verification of leading candidate (best CI 9/10; only 255-clip 24% mismatch)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.1167)",
+          "global:variance_ratio (diff=157%)"
+        ],
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_median:2",
+        "thinking": "R4: target residual vs clean is white (spcorr 0.03) and mean_shift -1.7 while hist-equalization sims shift +30 -> true 16-level quantizer is near-identity, unlike cdf equalization. Test MEDIANCUT quantizer (adaptive levels)."
+      },
+      "test_result": {
+        "psnr_rgb": 16.74,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:3,quantization_median:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_poisson:1,quantization_hist:2",
+        "thinking": "R3 severity scan completion: poisson1 (c=80) to complete est-2..est+2 sweep around run_full_analysis estimate sev2."
+      },
+      "test_result": {
+        "psnr_rgb": 14.13,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:1,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "Support check pair1: same signature (16 levels, POISSON)."
+      },
+      "test_result": {
+        "psnr_rgb": 12.89,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "Support check pair2: same signature (16 levels, POISSON)."
+      },
+      "test_result": {
+        "psnr_rgb": 13.82,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "Support check pair3: same signature (16 levels, POISSON)."
+      },
+      "test_result": {
+        "psnr_rgb": 13.74,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "Support check pair4: same signature (16 levels, POISSON)."
+      },
+      "test_result": {
+        "psnr_rgb": 12.34,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 101,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1 pair0: 信号重释。unique_per_channel=[16,16,16] 在 5 对 support 恒定；x_distortion noise_poisson:5 (c=15) 输出恰为 17k (k=0..15) 的 16 级均匀量化，逐通道独立。impulse_zero_ratio=0.1336≈2.2/17 与 17 级量化误差幅度一致；cross_ch=0.015 排除共享 cdf 的 quantization_hist（其残差跨通道相关）；target mean_shift=-1.7 vs qhist:2 sim +28 排除 qhist 为末步。故假设末步=poisson:5，独立通道噪声+16级量化一体。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 102,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1 pair0 诊断(不作为判定): 读取 CI 离散指纹 unique_R/G/B 与 0/255 裁剪比例，验证 16 级均匀量化签名是否与 target 一致。PSNR 因 noise seed 失配不作判据。"
+      },
+      "test_result": {
+        "psnr_rgb": 15.28,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 103,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1 pair1: support 复核。16 级均匀量化(17k)签名 + Poisson；pair0 已 MATCH 且 CI 10/10 (unique diff=0, clip 0%)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 104,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1 pair2: support 复核。16 级均匀量化(17k)签名 + Poisson；pair0 已 MATCH 且 CI 10/10 (unique diff=0, clip 0%)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 105,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1 pair3: support 复核。16 级均匀量化(17k)签名 + Poisson；pair0 已 MATCH 且 CI 10/10 (unique diff=0, clip 0%)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 106,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1 pair4: support 复核。16 级均匀量化(17k)签名 + Poisson；pair0 已 MATCH 且 CI 10/10 (unique diff=0, clip 0%)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 107,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "R1 基线对照 pair1: R0 管线 signal 模式复核，量化 hist 共享cdf映射导致 mean_shift/variance_ratio 失配（实现差异），用于 WEAK→MATCH 前后对比。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=29%)",
+          "global:mean_shift (diff=0.1352)",
+          "global:variance_ratio (diff=14%)"
+        ],
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 108,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "R1 基线对照 pair2: R0 管线 signal 模式复核，量化 hist 共享cdf映射导致 mean_shift/variance_ratio 失配（实现差异），用于 WEAK→MATCH 前后对比。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=29%)",
+          "global:mean_shift (diff=0.0581)",
+          "global:variance_ratio (diff=48%)"
+        ],
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 109,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "R1 基线对照 pair3: R0 管线 signal 模式复核，量化 hist 共享cdf映射导致 mean_shift/variance_ratio 失配（实现差异），用于 WEAK→MATCH 前后对比。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=32%)",
+          "global:mean_shift (diff=0.1040)",
+          "global:variance_ratio (diff=161%)"
+        ],
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 110,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "R1 基线对照 pair4: R0 管线 signal 模式复核，量化 hist 共享cdf映射导致 mean_shift/variance_ratio 失配（实现差异），用于 WEAK→MATCH 前后对比。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=35%)",
+          "global:mean_shift (diff=0.1438)",
+          "global:variance_ratio (diff=45%)"
+        ],
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4",
+        "thinking": "R2 severity边界复检: full_analysis estimated_severity=2 与 R1 选定 sev5 冲突, 需检验最近邻 sev4。离散不变量: target 5对support逐通道unique=[16,16,16]; c=15(sev5)输出17k电平恰16级, c=25(sev4)应26级。先用signal模式看noise:sigma与clean_residual能否区分sev4。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4",
+        "thinking": "R2 severity边界诊断(非PSNR判据): 读取sev4模拟图的逐通道unique电平数与0/255裁剪指纹。target逐通道unique=[16,16,16](级距17=255/15), c=25(sev4)理论电平10.2k应给26级。若unique≠16则sev4被离散指纹排除, 维持R1的sev5。"
+      },
+      "test_result": {
+        "psnr_rgb": 16.16,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R2 pair0 复核: 维持R1候选。离散不变量 unique=[16,16,16](级距17=255/15)+Poisson方差指纹(ivc=0.909,scaled=-0.646); sev4已由26级指纹排除。signal模式复核 noise:sigma/clean_residual。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R2 pair1 复核: 维持R1候选。5对support逐通道unique=[16,16,16]恒定+Poisson方差指纹; pair0 全信号与sim逐一相等(variance_ratio/mean_shift/clip/unique均相同)。signal模式复核 noise:sigma/clean_residual。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R2 pair2 复核: 维持R1候选。5对support逐通道unique=[16,16,16]恒定+Poisson方差指纹; pair0 全信号与sim逐一相等(variance_ratio/mean_shift/clip/unique均相同)。signal模式复核 noise:sigma/clean_residual。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R2 pair3 复核: 维持R1候选。5对support逐通道unique=[16,16,16]恒定+Poisson方差指纹; pair0 全信号与sim逐一相等(variance_ratio/mean_shift/clip/unique均相同)。signal模式复核 noise:sigma/clean_residual。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R2 pair4 复核: 维持R1候选。5对support逐通道unique=[16,16,16]恒定+Poisson方差指纹; pair0 全信号与sim逐一相等(variance_ratio/mean_shift/clip/unique均相同)。signal模式复核 noise:sigma/clean_residual。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "noise_poisson:3,quantization_median:2",
+      "psnr_rgb": 16.74,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "noise_poisson:4",
+      "psnr_rgb": 16.16,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "noise_poisson:5",
+      "psnr_rgb": 15.28,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 102
+    },
+    {
+      "pipeline": "quantization_hist:2",
+      "psnr_rgb": 14.13,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "noise_poisson:1,quantization_hist:2",
+      "psnr_rgb": 14.13,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "noise_poisson:2,quantization_hist:2",
+      "psnr_rgb": 13.99,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "noise_speckle:2,quantization_hist:2",
+      "psnr_rgb": 13.86,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "noise_poisson:3,quantization_hist:2",
+      "psnr_rgb": 13.82,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "noise_poisson:3,quantization_hist:2",
+      "psnr_rgb": 13.8,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "noise_poisson:3,quantization_hist:2",
+      "psnr_rgb": 13.74,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "noise_poisson:4,quantization_hist:2",
+      "psnr_rgb": 13.57,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,quantization_hist:2",
+      "psnr_rgb": 13.33,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "noise_poisson:3,quantization_hist:2",
+      "psnr_rgb": 12.89,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "noise_poisson:3,quantization_hist:2",
+      "psnr_rgb": 12.34,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    }
+  ],
+  "noise_6step_check": {
+    "method": "peeled_noise_check.py (target - quantization_hist:2(clean)) + run_full_analysis step2 raw-residual classifier",
+    "peeled_residual_contaminated": true,
+    "peeled_contamination_note": "剥离残差被 quantizer 实现差异污染：库 quantization_hist 是直方图均衡映射（对 pair0 等值于 +30 亮度平移，残差 std=38.5, spatial_corr=0.744, cross_ch=0.241 结构化），而真实退化的 16 级量化近似恒等（5 对 support 的 mean_shift 均为 -1~-3）。因此 peeled §B 的 extreme_pct=87% 属于 SKILL 已知假阳性（extreme_pct>50% + 结构残差），不可直接采信。",
+    "extreme_pct": 87.18,
+    "vm_slope": 0.3316,
+    "var_slope": -2.3581,
+    "spatial_corr": 0.7439,
+    "rgb_ratio": 1.1101,
+    "cross_ch_corr": 0.2411,
+    "raw_residual_signals": {
+      "noise_prior_sigma": 10.5,
+      "impulse_zero_ratio": 0.1336,
+      "spatial_corr": 0.0294,
+      "cross_channel_corr": 0.0153,
+      "intensity_var_corr": 0.9087,
+      "intensity_scaled_var_corr": -0.6457
+    },
+    "diagnosis": "raw residual 近白（spatial_corr=0.029, cross_ch=0.015）且方差随强度增长（ivc=0.909>0.15, scaled corr=-0.646<0.3）→ POISSON（run_full_analysis 高置信）。排除 YCrCb（cross_ch 0.015<0.12）、gaussian_RGB（ivc 0.909>0.15）、speckle（scaled corr<0.3）。CI 跨族对比同向：poisson:3 9/10 > speckle:2 8/10 > gaussian_RGB:1 7/10。"
+  },
+  "quantizer_implementation_note": {
+    "evidence": "5 对 support 全部 unique_per_channel=[16,16,16]（clean=256），block_boundary≈1.00，且 target-mean≈clean-mean（-1.2~-2.9）。本地 x_distortion quantization_hist:2 同为 16 级但采用直方图均衡 cdf 映射，使模拟图整体 +28~+34 亮度并产生结构化残差。目标残差近白（spatial 0.03）说明真实 16 级量化近似恒等（均匀级距）。",
+    "decision": "函数名与严重度按能精确复现 16 级的最匹配函数保存为 quantization_hist:2；映射差异记为已知实现差异，不因此改判函数族（quantization_median:2 仅 15 级且 0/255 裁剪指纹严重不符：0 级 37%、255 级 100% 误差）。"
+  },
+  "support_verification": {
+    "pipeline": "noise_poisson:3,quantization_hist:2",
+    "pairs": {
+      "pair0": {
+        "psnr_rgb": 13.8,
+        "ci_pass": "9/10"
+      },
+      "pair1": {
+        "psnr_rgb": 12.89,
+        "ci_pass": "5/10"
+      },
+      "pair2": {
+        "psnr_rgb": 13.82,
+        "ci_pass": "8/10"
+      },
+      "pair3": {
+        "psnr_rgb": 13.74,
+        "ci_pass": "7/10"
+      },
+      "pair4": {
+        "psnr_rgb": 12.34,
+        "ci_pass": "7/10"
+      }
+    },
+    "stable_signals": "全部 5 对 unique_R/G/B diff=0%、block_boundary 通过（11-16%）、zero_crossing（0-4%）与 hf_lf（3-5%）通过；差异集中在 impulse_* 裁剪指纹（图像内容相关，pair0 clip=0.33 vs pair1 clip=0.13）。",
+    "conclusion": "support 一致：16 级量化 + 独立通道噪声 + 无模糊/无 JPEG 的退化族在 5 对图像上稳定复现。"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_poisson",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "quantization_hist",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "rationale": "① 量化：5 对 support 全部 unique=[16,16,16]，精确等于 quantization_hist sev2 c=16；block_boundary=1.001 排除 JPEG；dct_zero 低；② 噪声：raw-residual 指纹 POISSON（ivc=0.909, scaled_corr=-0.646, cross_ch=0.015 排除 YCrCb），severity 扫描 1/2/3/4 CI=6/8/9/7 → sev3，且 sev3 的 sim sigma(9.64) 最接近 target(10.5)；③ 无模糊（spectral_slope_ratio=0.995, anisotropy=0, 5 对一致）且无 JPEG；④ 残余不确定性：库 quantization_hist 的 cdf 均衡映射与真实近恒等 16 级量化不等价，导致 mean_shift/variance_ratio 信号检验 WEAK（sim +28 vs target -1.7），故确定性步骤也只能标 UNCERTAIN。噪声步骤按协议永不 LIKELY。"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN；R0 管线 signal 验证 pair0 WEAK；support PSNR 20.63 dB",
+    "mode": "SIGNAL (sigma=10.5)",
+    "signal_reinterpretation": [
+      {
+        "signal": "unique_per_channel=[16,16,16]（5 对 support 恒定，clean=256）",
+        "r0_interpretation": "quantization_hist:2 的 c=16 直方图量化",
+        "r1_reinterpretation": "x_distortion noise_poisson severity=5 的 c=15 使输出电平恰为 255*k/15 = 17k (k=0..15)，即 16 级均匀量化（级距 17），逐通道独立。'16 级'不唯一指向 qhist；qhist 为确定性函数，若为真值则 qhist:2(clean) PSNR 必然 >>40dB，而 R0 round1 实测 14.13 dB。",
+        "action": "改测 noise_poisson:5 单步"
+      },
+      {
+        "signal": "mean_shift=-1.7（5 对 -1.2~-2.9）；qhist:2 sim 为 +28~+34",
+        "r0_interpretation": "记为 qhist 的 cdf 均衡实现差异（残余风险）",
+        "r1_reinterpretation": "末步若为共享 cdf 的 qhist，target 必然继承其 +28 平移；target 近零平移说明末步不是 qhist——mean_shift 数值本身即排除证据。",
+        "action": "quantization_hist 从管线移除"
+      },
+      {
+        "signal": "residual cross_channel_corr=0.0153, spatial_corr=0.0294",
+        "r0_interpretation": "仅用于判 POISSON（近白独立噪声）",
+        "r1_reinterpretation": "qhist 对 R/G/B 施加同一映射，自然图像 RGB 相关 → 量化残差应强跨通道相关；cross_ch=0.015 证明末步为逐通道独立随机噪声。",
+        "action": "强化移除 qhist 的依据"
+      },
+      {
+        "signal": "impulse_zero_ratio=0.1336；clipped_fraction=0.3318（pair0，pair1 0.13）",
+        "r0_interpretation": "0/255 裁剪指纹列为内容相关残差",
+        "r1_reinterpretation": "均匀 17 级量化下 P(|err|<1.1)≈2.2/17=0.129，与 0.1336 吻合；Poisson c=15 尾部在 0/255 饱和，裁剪比例内容依赖（0.13~0.33）与随机噪声一致；确定性全局映射会带来跨通道相关残差（已排除）。",
+        "action": "作为 17 级量化 + Poisson 的联合指纹"
+      },
+      {
+        "signal": "noise_prior_sigma=10.5, intensity_var_corr=0.9087, intensity_scaled_var_corr=-0.6457",
+        "r0_interpretation": "sev2 先验 + CI 扫描选择 poisson:3",
+        "r1_reinterpretation": "sigma 是残差 wavelet-MAD，跨不同量化器不可直接横比；离散不变量（16 级均匀电平）更硬：库中仅 poisson:5 给出 16 级（sev4=26 级, sev3=41 级）。Poisson 方差∝强度指纹保留。",
+        "action": "severity 由离散电平数锁定为 5"
+      },
+      {
+        "signal": "block_boundary=1.001, spectral_slope_ratio=0.9948, anisotropy=0, variance_ratio=1.0815, contrast_spread_ratio=1.0408",
+        "r0_interpretation": "无 JPEG / 无模糊 / 无 global",
+        "r1_reinterpretation": "维持排除；variance_ratio=1.0815 可由 Poisson 方差(+8%)与 0/255 裁剪解释，无需 global 步骤。",
+        "action": "单步管线"
+      }
+    ],
+    "candidates": [
+      {
+        "id": "C1",
+        "pipeline": "noise_poisson:5",
+        "rationale": "16 级均匀电平(17k)+逐通道独立+Poisson 方差指纹；severity 由电平数锁定",
+        "pair0_signal": "MATCH (2✓/0✗)",
+        "pair0_psnr_diagnostic_only": 15.28,
+        "pair0_ci": "10/10 (unique_R/G/B diff=0.000, impulse_total -0.014(0%), impulse_pct_zero -0.027(0%), impulse_pct_255 0.013(0%), zero_crossing/hf_lf ≈0)",
+        "support_signal": "MATCH 5/5"
+      }
+    ],
+    "support_verification": {
+      "candidate": "noise_poisson:5",
+      "per_pair": {
+        "pair0": {
+          "r0_pipeline_signal": "WEAK (2✓/2✗: mean_shift diff=0.1167, variance_ratio 157%)",
+          "r1_signal": "MATCH (2✓/0✗)",
+          "ci_pass": "10/10"
+        },
+        "pair1": {
+          "r0_pipeline_signal": "WEAK (1✓/3✗: noise:sigma 29%, mean_shift 0.1352, variance_ratio 14%)",
+          "r1_signal": "MATCH (2✓/0✗)"
+        },
+        "pair2": {
+          "r0_pipeline_signal": "WEAK (1✓/3✗: noise:sigma 29%, mean_shift 0.0581, variance_ratio 48%)",
+          "r1_signal": "MATCH (2✓/0✗)"
+        },
+        "pair3": {
+          "r0_pipeline_signal": "WEAK (1✓/3✗: noise:sigma 32%, mean_shift 0.1040, variance_ratio 161%)",
+          "r1_signal": "MATCH (2✓/0✗)"
+        },
+        "pair4": {
+          "r0_pipeline_signal": "WEAK (1✓/3✗: noise:sigma 35%, mean_shift 0.1438, variance_ratio 45%)",
+          "r1_signal": "MATCH (2✓/0✗)"
+        }
+      },
+      "majority": "5/5 对 WEAK→MATCH（满足 CHANGE 判据：多数对由 WEAK→PARTIAL/MATCH）",
+      "baseline_note": "R0 管线的 global:mean_shift/variance_ratio 失配源于 qhist 共享 cdf 映射的实现差异；noise:sigma 失配说明 poisson:3+qhist:2 的整体噪声水平亦不符。poisson:5 在两项噪声信号上 5/5 全部 MATCH。"
+    },
+    "budget": {
+      "new_candidates": 1,
+      "test_candidate_calls": 10,
+      "breakdown": "pair0 signal + pair0 psnr 诊断 + pairs1-4 signal (C1) + pairs1-4 signal (R0 基线对照)",
+      "termination": "C1 全 5 对 MATCH，无需 severity 扫描/换类型，第 1 轮重释即收敛"
+    },
+    "final_decision": {
+      "pipeline": [
+        {
+          "function": "noise_poisson",
+          "severity": 5,
+          "verdict": "UNCERTAIN"
+        }
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "decision": "CHANGE",
+      "rationale": "16 级均匀电平(17k) + 逐通道独立 + Poisson 方差指纹共同锁定 noise_poisson:5；quantization_hist:2 被确定性复现矛盾/mean_shift/cross_ch 三重证据排除。5 对 support 5/5 WEAK→MATCH，pair0 CI 10/10。噪声步骤按协议永不 LIKELY → UNCERTAIN。"
+    }
+  },
+  "reflection_R2": {
+    "round": "R2",
+    "trigger": "R1 support PSNR 30.82 dB vs R0 20.63 dB (Δ+10.19) → 触发 R2 复查",
+    "mode": "SIGNAL (sigma=10.5)",
+    "signal_reinterpretation": [
+      {
+        "signal": "full_analysis R2 重跑（pair0, 输出 full_analysis_R2.json）",
+        "r1_interpretation": "16 级电平+Poisson 方差指纹指向 noise_poisson:5",
+        "r2_reinterpretation": "15 项信号与 R1 逐项完全一致：unique_per_channel=[16,16,16], block_boundary=1.001, dct_zero_ratio=0.048, sigma=10.5, impulse_zero_ratio=0.1336, spatial_corr=0.0294, cross_ch=0.0153, ivc=0.9087, scaled=-0.6457, spectral_slope_ratio=0.9948, gm_ratio=5.230(噪声破坏不可用), variance_ratio=1.0815, mean_shift=-1.7, contrast_spread=1.0408, clipped_fraction=0.3318。无新信号，R1 结论稳定。",
+        "action": "维持 R1 管线"
+      },
+      {
+        "signal": "estimated_severity=2（sigma=10.5 的经验映射）vs R1 选定 sev5 —— 阈值/映射边界冲突",
+        "r1_interpretation": "sigma 映射不可跨量化器横比，改由离散电平数锁定 sev5（仅 c=15 给 16 级）",
+        "r2_reinterpretation": "直接实测最近邻 noise_poisson:4：signal 模式 MATCH（noise:sigma 容差<20%，无法区分 sev4/5 —— 说明 signal 模式不足以定 severity），psnr 诊断读离散指纹 unique_R/G/B diff=-10（sim 26 级 vs target 16 级），裁剪指纹失配 impulse_total 21%、pct_zero 21%、pct_255 22% → sev4 被 16 级不变量排除，sev5 保持。",
+        "action": "severity=5 确认；不改变管线"
+      },
+      {
+        "signal": "variance_ratio=1.0815, contrast_spread_ratio=1.0408, saturation_chroma_ratio=1.4856 (raw saturation=true, 但 FP 标记 saturation_from_noise)",
+        "r1_interpretation": "由 Poisson(+8%)+0/255 裁剪解释，无 global 步骤",
+        "r2_reinterpretation": "对 sim=add_distortion(clean, noise_poisson:5) 重跑 run_full_analysis（full_analysis_R2_sim_poisson5_pair0.json），与 target 逐项对比：variance_ratio 1.0815/1.0815、mean_shift -1.7/-1.7、contrast_spread 1.0408/1.0408、saturation_chroma_ratio 1.4856/1.4856、clipped_fraction 0.3318/0.3318、unique [16,16,16]/[16,16,16]、block_boundary 0.999/1.001、dct_zero 0.0482/0.048、sigma 10.38/10.5、impulse_zero 0.1337/0.1336、spatial_corr 0.0284/0.0294、cross_ch 0.0152/0.0153、ivc 0.9106/0.9087、scaled -0.6363/-0.6457、slope_ratio 0.9945/0.9948。全部边界信号（含 saturation）均由单步 Poisson 解释，无需新增 global/saturation 步骤。",
+        "action": "不新增步骤"
+      },
+      {
+        "signal": "unique_G=16 触发 Step1 COMPRESSION_DETECTED（规则 <200，0% FP）",
+        "r1_interpretation": "16 级量化指纹被 poisson:5 一并解释，无需独立 compression",
+        "r2_reinterpretation": "sim(poisson:5) 同样得到 unique=[16,16,16] 与 block_boundary=0.999，说明该 COMPRESSION_DETECTED 就是 Poisson c=15 的输出量化指纹；JPEG 另有 block_boundary=1.001 与 dct_zero_ratio=0.048 双重排除。",
+        "action": "不新增 compression 步骤"
+      }
+    ],
+    "candidates": [
+      {
+        "id": "C1",
+        "pipeline": "noise_poisson:5",
+        "status": "维持（NO_CHANGE）",
+        "evidence": "5 对 support signal MATCH 5/5 (每对 2✓/0✗)；pair0 sim 与 target 15 项信号逐一相等"
+      },
+      {
+        "id": "C2",
+        "pipeline": "noise_poisson:4",
+        "status": "排除",
+        "evidence": "signal MATCH（sigma 容差内不可分），但 psnr 指纹诊断 unique diff=-10（26 级 vs 16 级）+ clip 指纹 21-22% 失配"
+      }
+    ],
+    "support_verification": {
+      "candidate": "noise_poisson:5",
+      "per_pair": {
+        "pair0": "MATCH (2✓/0✗)",
+        "pair1": "MATCH (2✓/0✗)",
+        "pair2": "MATCH (2✓/0✗)",
+        "pair3": "MATCH (2✓/0✗)",
+        "pair4": "MATCH (2✓/0✗)"
+      },
+      "majority": "5/5 MATCH（当前管线已全 MATCH，无候选可满足 WEAK→PARTIAL/MATCH 的 CHANGE 判据）"
+    },
+    "budget": {
+      "new_candidates": 1,
+      "test_candidate_calls": 7,
+      "breakdown": "poisson:4 signal+psnr 诊断 (2 次) + poisson:5 pair0 signal (1 次) + pairs1-4 signal (4 次)",
+      "termination": "第 1 轮信号重释即收敛：无新信号、severity 边界已排除，无改善 → NO_CHANGE"
+    },
+    "final_decision": {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 5, "verdict": "UNCERTAIN"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "decision": "NO_CHANGE",
+      "rationale": "R2 重释未发现 R1 之外的新信号；sim(clean, poisson:5) 复现 target 全部 15 项信号（含 variance_ratio/mean_shift/clip/saturation 等边界项），单步管线已完整解释；最近邻 sev4 由 26 级指纹+裁剪失配排除；5 对 support 全 MATCH。无证据支持 CHANGE → NO_CHANGE（噪声步骤按协议永不 LIKELY → UNCERTAIN）。"
+    }
+  }
+}

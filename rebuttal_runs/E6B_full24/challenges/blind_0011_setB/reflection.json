@@ -1,0 +1,730 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=0.9976 (<1.1 -> no JPEG confirmed), unique_G=223 (>=200), dct_zero_ratio=0.7887 -> MILD_COMPRESSION_POSSIBLE low confidence, should_still_test only if PSNR low",
+      "blur": "gm_ratio=0.2236, spectral_slope_ratio=1.543, residual_anisotropy=2.06, glass_score=0.0635 (<0.25), pca_ratio=1.13 -> GAUSSIAN_BLUR, estimated severity 5 (sigma=5px)",
+      "noise": "noise_prior_sigma=1.61 (<2 -> NO_NOISE threshold), spatial_corr=0.831 suspicious but sigma too low; YCrCb hypothesis low confidence, residual_intensity_corr=-0.60 more consistent with global contrast/gamma than noise",
+      "global": "variance_ratio=0.6514, contrast_spread_ratio=0.7378, mean_shift=-1.7 (tiny), saturation_chroma_ratio=0.9387 -> contrast weaken candidate; note variance reduction partly attributable to strong blur, so effective contrast severity may be milder than analyzer estimate sev4"
+    },
+    "mode": "PSNR (sigma=1.6 < 2)",
+    "suspected": [
+      "blur_gaussian sev4-5",
+      "contrast_weaken_scale (severity uncertain, likely mild)",
+      "noise absent (sigma<2)"
+    ],
+    "ruled_out": [
+      "brightness shift (mean_shift only -1.7)",
+      "glass blur (glass_score=0.06)",
+      "impulse/poisson/speckle signatures"
+    ]
+  },
+  "qwen_noise_gate": {
+    "triggered": false,
+    "reason": "sigma_prior=1.61 < 2 → policy ELSE branch (NO_NOISE), gate not in boundary band 2-10; Qwen/API additionally unavailable in this run — gate skipped and recorded per instruction"
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py on pair0, pipeline stripped = blur_gaussian:4",
+    "residual_std": 2.5,
+    "extreme_pct": 76.18,
+    "zero_ratio": 0.1618,
+    "vm_slope": 0.0631,
+    "var_slope": 0.1092,
+    "spatial_corr": 0.9915,
+    "rgb_ratio": 1.0627,
+    "cross_ch_corr": 0.2744,
+    "ivc_intensity_var_corr": 0.7019,
+    "ch_stds": {
+      "R": 2.4,
+      "G": 2.6,
+      "B": 2.5
+    },
+    "noise_prior_sigma_target": 1.61,
+    "diagnosis": "IMPULSE(extreme 76%) 为已知 FP (blur/边缘残差放大 extreme_pct, noise_prior<5); 残差平滑 (spatial_corr 0.99) + 通道均匀 (rgb_ratio 1.06, 非 YCrCb 预期 >1.4) + cross_ch 0.27 ≈ RGB 加性噪声仿真 0.28 → blur 前施加的 noise_gaussian_RGB; 仿真标定: RGB:3+blur:4 剥离残差 std=3.1 vs target 2.5 → sigma_white≈31, 介于 sev2(25.5)/sev3(38.25), 主选 sev3; speckle 仿真被排除 (residual std 4.6, cross_ch 0.62 vs target 0.27)"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_RGB",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "blur_gaussian",
+        "severity": 4,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "确定性 blur 步: blur_gaussian:4 在 pair0 PSNR=39.29dB/CI 10/10, signal 模式 spectral_slope + wiener_kernel MATCH (5/5 pairs), sev 3/5 与 lens:4/motion:4 均更差; JPEG(block_boundary 0.998<1.1, 叠加后 35.95dB + block 边界失配 102%)、contrast scale(26.23)/stretch(16.84)、brightness(mean_shift -1.7)、quantization(unique_G=223) 全部排除. 剥离 blur 后残差 std=2.5 且平滑/通道均匀, 与 'noise_gaussian_RGB(blur 前)+blur_gaussian:4' 仿真统计一致 (cross_ch 0.274 vs 0.279, rgb_ratio 1.06 vs 1.05); 说明存在 blur 前的加性 RGB 噪声. 因 noise→blur 顺序下噪声类型不可完全判别 (SKILL 54.7%) 且幅度介于 sev2/3, 噪声步标 UNCERTAIN; overall=UNCERTAIN.",
+    "alternatives": [
+      "noise_gaussian_RGB:2,blur_gaussian:4 (sigma 检查同样通过, 残差标定 σ≈31 介于两档之间)",
+      "blur_gaussian:4 alone (PSNR 39.29/34.13 dB, CI 10/10, 但残差噪声步未解释)",
+      "noise_speckle:3,blur_gaussian:4 (vm_slope 提示, 但仿真残差 std/cross_ch 与 target 不符)"
+    ]
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "R1: blur DT 主判据 gm_ratio=0.224 + spectral_slope_ratio=1.543 强 blur 信号, 估计 sev5 (sigma=5px); 先单独验证 blur 幅度"
+      },
+      "test_result": {
+        "psnr_rgb": 34.66,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:1",
+        "thinking": "R2: blur:5 单独 PSNR=34.66 已高, 剩余残差应来自全局 contrast (variance_ratio=0.651, mean_shift~0); 实测方差比大于 sev1 理论 0.5625, 说明真实 contrast 更弱或部分方差降低来自 blur, 先加最轻 sev1"
+      },
+      "test_result": {
+        "psnr_rgb": 26.23,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "R3: blur:5 单独 PSNR=34.66 但加 contrast 后大幅下降 (26.23), contrast_weaken_scale 被排除; 剩余 PSNR 缺口可能来自 blur severity 偏差, 按 severity 扫描规则测试 sev4 (±1)"
+      },
+      "test_result": {
+        "psnr_rgb": 39.29,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "R4: severity 扫描继续向下, blur:4 → 39.29dB (优于 sev5 34.66), 检查 sev3 是否进一步逼近, 确定幅度拐点"
+      },
+      "test_result": {
+        "psnr_rgb": 32.79,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_lens:4",
+        "thinking": "R5: 跨子类型对比, gaussian:4=39.29dB 尚未 >40; MTF 已知不可区分 gaussian/lens, 测试 lens:4 (disk radius=6) 作为跨族替代"
+      },
+      "test_result": {
+        "psnr_rgb": 33.86,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:1",
+        "thinking": "R6: gaussian:4=39.29dB 残差 RMSE~2.8; variance_ratio=0.651 需解释, scale 型 contrast 已被排除 (26.23dB), 测试非线性 stretch:1 (最轻, 理论上 var ratio~0.8, 与 blur 后残差方差降低相容)"
+      },
+      "test_result": {
+        "psnr_rgb": 16.84,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "R7: 诊断模式(signal), 检查 gaussian:4 模拟图与 target 的逐信号差异 (spectral_slope/variance_ratio/block_boundary), 定位 39.29dB 残差来源"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_motion:4",
+        "thinking": "R8: 交叉族验证. residual_anisotropy=2.06>1.7 (Step2 决策树 motion 门限), 但 <4.0 (Section C 门限) 存在矛盾; gaussian:4 已 signal MATCH, 测 motion:4 排除方向性模糊 (注意 motion 角度随机, PSNR 仅作下界参考)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.73,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:1",
+        "thinking": "R9: 排除压缩. block_boundary=0.9976 无 JPEG 证据, 但 step1 标 MILD_COMPRESSION_POSSIBLE + unique_G ratio 0.907 (should_still_test); 在最佳 blur 后叠加最轻 JPEG sev1 验证是否解释 39.29dB 残差"
+      },
+      "test_result": {
+        "psnr_rgb": 35.95,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "P1 复核: 在 support pair1 上复核最终候选 blur_gaussian:4 (pair0 39.29dB)"
+      },
+      "test_result": {
+        "psnr_rgb": 34.13,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "thinking": "R11: 噪声-模糊耦合假设. 剥离 blur:4 后残差平滑 (spatial_corr=0.99, 邻域相关), std=2.5, 通道均匀 (R2.4/G2.6/B2.5) → 疑似 blur 前已施加 RGB 高斯噪声 (blur sigma4 衰减因子~0.07 → sigma_white~35 ≈ sev3=38.25). 用 signal 模式检查 wavelet sigma 是否匹配 (seed 无关)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=12.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,blur_gaussian:4",
+        "thinking": "R12: 竞争假设. 剥离残差 ivc=0.70 (残差-强度强相关) + vm_slope=0.063>0.01 + spatial_corr=0.99 → 乘性/斑点噪声特征 (speckle c=0.28, blur 前施加, 预期残差 std≈c*0.07*mean≈2.5); 用 signal 模式检查 wavelet sigma (seed 无关)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=26.0px)"
+        ],
+        "pipeline": "noise_speckle:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "thinking": "R13: severity 校准. 残差 std 标定: target 2.5 vs RGB:3 仿真 3.1 (ratio 0.81, 介于 sev2/sev3); 用 seed 无关的 wavelet sigma 检查 sev2 (sigma=25.5) 是否同样匹配, 判断真实严重度"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=14.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "thinking": "P1 复核+噪声类型校准: pair1 剥离残差 std=4.4 明显高于 pair0 (2.5), 生成 RGB:3+blur:4 仿真做同口径剥离标定 (seed 无关)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=220.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "thinking": "P2 复核: support pair2 复核最终候选 noise_gaussian_RGB:3,blur_gaussian:4 (signal 模式, seed 无关)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=130.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "thinking": "P3 复核: support pair3 复核最终候选 (signal 模式)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=16.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "thinking": "P4 复核: support pair4 复核最终候选 (signal 模式)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=18.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,contrast_weaken_scale:1",
+        "thinking": "R1-C1 信号重释: variance_ratio=0.6514 + contrast_spread_ratio=0.7378 + residual_intensity_corr=-0.5945 + mean_shift=-1.7(clipped=0) 提示 contrast_weaken 可能; R0 仅在落败的 blur:5 基座上测过 scale:1 (26.23dB), 从未与胜出的 blur:4 组合验证; 本候选检验 contrast 能否解释 blur:4 剥离残差(std 2.5)与方差比 0.65"
+      },
+      "test_result": {
+        "psnr_rgb": 27.25,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "R1-C2: 完成 blur_gaussian:4 的 5 对 support 确定性验证 (R0 已有 pair0=39.29/pair1=34.13); 目的: 建立无噪声确定性上限, 检验是否存在确定性候选 >40dB; 信号源 gm_ratio=0.2236 + spectral_slope_ratio=1.543, C1 已排除 contrast (blur4+contrast1=27.25)"
+      },
+      "test_result": {
+        "psnr_rgb": 45.92,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "R1-C2: blur_gaussian:4 5 对 support 验证 (pair2=45.92 已见); 目的: 评估确定性上限与残差随内容的变异, 判断是否需额外步骤"
+      },
+      "test_result": {
+        "psnr_rgb": 41.28,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "R1-C2: blur_gaussian:4 5 对 support 验证 (pair2=45.92, pair3=41.28); 完成确定性上限评估"
+      },
+      "test_result": {
+        "psnr_rgb": 40.21,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "R1-C3 信号重释: pair1 对 blur:4 残差 RMSE=5.0 且 peeled 残差通道相关(cross_ch=0.86)/强度相关(ivc=0.95)/极平滑(spatial_corr=0.999), 提示模糊核本身或幅度失配; 检验 sev5 是否在离群对(pair1)上更优"
+      },
+      "test_result": {
+        "psnr_rgb": 33.62,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:4",
+        "thinking": "R1-C4 信号重释: pair1 peeled 残差(blur:4 剥离) std=4.4, vm_slope=0.0156>0.01, ivc=0.95, cross_ch=0.86, 内容相关残差; 固定白噪声无法解释 5 对间 RMSE 1.29-5.01 的 4x 变异, 乘性噪声可随图像强度缩放; R0 只测过 speckle:3 (未按 SKILL 扫 sev±2), 现补测最轻 sev1 (c=0.14)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=18.0px)"
+        ],
+        "pipeline": "noise_speckle:1,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 45.92,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 41.28,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 40.21,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 39.29,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:1",
+      "psnr_rgb": 35.95,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 34.66,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 34.13,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_lens:4",
+      "psnr_rgb": 33.86,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 33.62,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 32.79,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_scale:1",
+      "psnr_rgb": 27.25,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:1",
+      "psnr_rgb": 26.23,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_motion:4",
+      "psnr_rgb": 21.73,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_stretch:1",
+      "psnr_rgb": 16.84,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    }
+  ],
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (noise step unclassifiable under noise->blur; R0 support PSNR 26.11 dB)",
+    "protocol": "signal reinterpretation (not residual diagnosis); 3 rounds; <=5 candidates; <=15 test_candidate calls; no GT access",
+    "signal_reinterpretation": [
+      {
+        "signal": "variance_ratio=0.6514 / contrast_spread_ratio=0.7378 / residual_intensity_corr=-0.5945",
+        "r0_interpretation": "full_analysis flagged CONTRAST_weaken_sev4; R0 rejected contrast using blur:5 base (26.23 dB) and stretch:1 (16.84 dB), never tested scale:1 on the winning blur:4 base",
+        "r1_reinterpretation": "blur_gaussian:4,contrast_weaken_scale:1 = 27.25 dB (vs 39.29 blur-only). contrast_weaken_scale sev1 = factor 0.75, i.e. residual RMSE ~11 => any available contrast severity is far too strong. variance_ratio 0.65 is explained by strong blur (gm_ratio=0.2236), not by a global step.",
+        "consequence": "contrast definitively excluded; no global step"
+      },
+      {
+        "signal": "mean_shift=-1.7, clipped_fraction=0.0, saturation_chroma_ratio=0.9387, unique_G=223",
+        "r0_interpretation": "brightness/saturation/quantization excluded",
+        "r1_reinterpretation": "confirmed against x_distortion severity tables: brightness sev1 shift=0.10*255=25.5 levels (8 variants incl. gamma) >> 1.7; saturate_weaken sev1=0.70 HSV / 0.60 YCrCb vs observed 0.9387; quantization_median/hist give <=20/24 levels per channel vs unique_G 223.",
+        "consequence": "brightness/saturation/quantization/vignette ruled out quantitatively"
+      },
+      {
+        "signal": "block_boundary=0.9976, unique_G=223 >= 200",
+        "r0_interpretation": "JPEG rejected (block_boundary<1.1; jpeg:1 on blur:4 = 35.95 dB < 39.29)",
+        "r1_reinterpretation": "compression_jpeg sev1 = quality 25 (strongest available quality); adding it to blur:4 lowers PSNR (35.95) => target contains no JPEG step. unique_G far above quantization levels.",
+        "consequence": "compression/quantization excluded"
+      },
+      {
+        "signal": "raw-residual cross_channel_corr=0.982 (analyzer: GAUSSIAN_YCrCb); peeled residual channel stds",
+        "r0_interpretation": "YCrCb verdict is a blur artifact; peeled residual channel-uniform -> gaussian_RGB",
+        "r1_reinterpretation": "peeled rgb_ratio pair0=1.06, pair1=1.14, both below the YCrCb signature range 1.35 (sev1) - 1.57 (sev3); ch_stds uniform (R2.4/G2.6/B2.5 and R4.3/G4.1/B4.6). RGB-family retained, YCrCb rejected.",
+        "consequence": "noise type family unchanged (RGB additive)"
+      },
+      {
+        "signal": "peeled residual after blur:4 across 5 pairs (RMSE 2.77/5.01/1.29/2.20/2.49); pair0 cross_ch=0.27 vs pair1 cross_ch=0.86",
+        "r0_interpretation": "single noise_gaussian_RGB:3 (sigma_white~31) before blur, residual std ~2.5-3.1 constant",
+        "r1_reinterpretation": "a fixed-sigma white noise after blur:4 yields a content-independent residual RMSE (sigma*||h||2); observed per-pair spread 1.29-5.01 (4x) is impossible for one fixed severity (pair2 < sev1 level; pair1 > sev3 level). The residual also changes character across pairs: channel-independent on pair0 (cross_ch 0.27) but image-structured on pair1 (cross_ch 0.86, ivc 0.95, vm_slope 0.0156). => the noise step is real but its type/severity are not identifiable under noise->blur (SKILL: 54.7% ~ random).",
+        "consequence": "noise step stays UNCERTAIN; R0 sev3 kept, sev2 alternative kept"
+      },
+      {
+        "signal": "peeled extreme_pct 76-82%",
+        "r0_interpretation": "known FP of blur/edge residuals",
+        "r1_reinterpretation": "metric definition (residual = target - simulated in float) makes ~50% of pixels res<=0 by construction; extreme_pct is structurally inflated. Not impulse evidence.",
+        "consequence": "IMPULSE not tested / not adopted"
+      }
+    ],
+    "candidate_ranking": [
+      {
+        "rank": 1,
+        "pipeline": "blur_gaussian:4",
+        "validation": "5-pair PSNR 39.29/34.13/45.92/41.28/40.21; mean 40.17 dB; pooled 38.54 dB; 3/5 >40 dB",
+        "verdict": "best deterministic explanation; not sufficient for CHANGE (2/5 pairs <40 dB, residual unmodeled)"
+      },
+      {
+        "rank": 2,
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4 (R0)",
+        "validation": "verify_signals PARTIAL on 5/5 pairs (matched blur:spectral_slope, blur:wiener_kernel, noise:sigma; mismatch noise:structured_residual)",
+        "verdict": "kept (noise step real but type/severity unresolved)"
+      },
+      {
+        "rank": 3,
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "validation": "PARTIAL (identical matched set to sev3)",
+        "verdict": "indistinguishable from sev3"
+      },
+      {
+        "rank": 4,
+        "pipeline": "noise_speckle:1,blur_gaussian:4",
+        "validation": "pair1 PARTIAL (same matched set as RGB:3; structured_residual FWHM=18px)",
+        "verdict": "no improvement; content-dependent residual hypothesis not confirmed"
+      },
+      {
+        "rank": 5,
+        "pipeline": "blur_gaussian:4,contrast_weaken_scale:1",
+        "validation": "pair0 PSNR 27.25 dB (CI 7/10)",
+        "verdict": "rejected (contrast sev1 far too strong)"
+      }
+    ],
+    "support_validation": {
+      "blur_gaussian:4": {
+        "pair0": 39.29,
+        "pair1": 34.13,
+        "pair2": 45.92,
+        "pair3": 41.28,
+        "pair4": 40.21,
+        "mean": 40.17,
+        "pooled": 38.54
+      },
+      "blur_gaussian:5": {
+        "pair1": 33.62
+      },
+      "blur_gaussian:4,contrast_weaken_scale:1": {
+        "pair0": 27.25
+      },
+      "noise_gaussian_RGB:3,blur_gaussian:4": {
+        "pair0": "PARTIAL(R0)",
+        "pair1": "PARTIAL(R0)",
+        "pair2": "PARTIAL(R0)",
+        "pair3": "PARTIAL(R0)",
+        "pair4": "PARTIAL(R0)"
+      },
+      "noise_speckle:1,blur_gaussian:4": {
+        "pair1": "PARTIAL(R1)"
+      }
+    },
+    "noise_type_discrimination": "All tested noise candidates (RGB:2, RGB:3, speckle:1, speckle:3) return PARTIAL with the identical matched set (blur:spectral_slope, blur:wiener_kernel, noise:sigma) and the same mismatched seed-dependent structured_residual. SKILL 54.7% under noise-before-blur => no majority WEAK->PARTIAL/MATCH improvement is achievable; protocol forbids a noise-step change on PSNR.",
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        [
+          "noise_gaussian_RGB",
+          3
+        ],
+        [
+          "blur_gaussian",
+          4
+        ]
+      ],
+      "rationale": "blur_gaussian:4 solid (best in every pair, all alternatives worse); contrast/JPEG/global/quantization excluded by measurement and severity tables; noise step real (peeled residual std 2.5-4.4, channel-uniform, smooth) but type/severity unidentifiable under noise->blur. Deterministic simplification blur:4 reaches mean 40.17 dB but pooled 38.5 dB with 2/5 pairs <40 (pair1 34.13) and leaves a real residual; dropping noise on PSNR alone violates SKILL noise rules. Keep R0 pipeline at UNCERTAIN."
+    },
+    "budget": {
+      "signal_reinterpretation_rounds": 3,
+      "new_candidates": 4,
+      "test_candidate_calls": 6,
+      "calls_budget": 15,
+      "candidates_budget": 5
+    },
+    "artifacts": [
+      "full_analysis_R1.json",
+      "predicted_params_R1.json",
+      "r1_decision.json",
+      "agent_timing_R1.json"
+    ]
+  }
+}

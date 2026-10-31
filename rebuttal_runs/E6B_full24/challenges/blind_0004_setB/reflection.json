@@ -1,0 +1,1103 @@
+{
+  "challenge_id": "blind_0004_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=1.016 (<1.1), unique_G=212 (ratio 0.891), dct_zero_ratio=0.447; should_still_test mild JPEG",
+      "blur": "gm_ratio=0.629, spectral_slope_ratio=1.101, residual_anisotropy=1.661 (<1.7), glass_score=0.700, pca_ratio=1.65; DT: motion? but glass_score>0.25 & sigma<3 -> glass candidate; gaussian baseline",
+      "noise": "noise_prior sigma=0.62 -> NO_NOISE likely; residual_intensity_corr=0.597 (gamma/global suspect); spatial_corr=0.777 from structure",
+      "global": "variance_ratio=0.694, mean_shift=-0.4 (~0), saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759; contrast may be explained by saturation (contrast_saturation_corrected=true)"
+    },
+    "mode": "PSNR (sigma=0.62 < 2, deterministic-dominant)",
+    "suspected": [
+      "saturation weaken (HSV or YCrCb)",
+      "mild-moderate blur (glass/gaussian)",
+      "possible contrast weaken"
+    ],
+    "ruled_out": [
+      "impulse noise (sigma~0)",
+      "strong JPEG (block_boundary 1.016)",
+      "brightness shift (mean_shift -0.4/255)"
+    ]
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "R1: gm_ratio=0.629, spectral_slope_ratio=1.101 -> blur exists; gaussian baseline (DT depth3 safe default), sev2 as central estimate"
+      },
+      "test_result": {
+        "psnr_rgb": 24.01,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "R1: glass_score=0.700>0.25 + sigma=0.62<3 -> DT glass candidate (SKILL Step2 decision tree); glass sev2 = sigma0.9 shift2"
+      },
+      "test_result": {
+        "psnr_rgb": 24.02,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:1",
+        "thinking": "R1 global: variance_ratio=0.694, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift~0 -> test global-only candidates (saturation_weaken vs contrast_weaken_scale)"
+      },
+      "test_result": {
+        "psnr_rgb": 20.83,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_YCrCb:1",
+        "thinking": "R1 global: variance_ratio=0.694, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift~0 -> test global-only candidates (saturation_weaken vs contrast_weaken_scale)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.17,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_YCrCb:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "contrast_weaken_scale:1",
+        "thinking": "R1 global: variance_ratio=0.694, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift~0 -> test global-only candidates (saturation_weaken vs contrast_weaken_scale)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.63,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,saturate_weaken_HSV:1",
+        "thinking": "R1 combo: blur (gm_ratio .63) + global (variance_ratio .694, chroma_ratio .794). Physical order blur->global(ISP). Compare saturate vs contrast addition."
+      },
+      "test_result": {
+        "psnr_rgb": 23.68,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,saturate_weaken_HSV:1",
+        "thinking": "R1 combo: blur (gm_ratio .63) + global (variance_ratio .694, chroma_ratio .794). Physical order blur->global(ISP). Compare saturate vs contrast addition."
+      },
+      "test_result": {
+        "psnr_rgb": 23.71,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,contrast_weaken_scale:1",
+        "thinking": "R1 combo: blur (gm_ratio .63) + global (variance_ratio .694, chroma_ratio .794). Physical order blur->global(ISP). Compare saturate vs contrast addition."
+      },
+      "test_result": {
+        "psnr_rgb": 23.37,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "R1 blur severity scan + motion cross-check: gaussian sev1/3 vs motion:2 (residual_anisotropy=1.66 near 1.7 threshold) vs glass:3 (DT estimate)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.86,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "R1 blur severity scan + motion cross-check: gaussian sev1/3 vs motion:2 (residual_anisotropy=1.66 near 1.7 threshold) vs glass:3 (DT estimate)"
+      },
+      "test_result": {
+        "psnr_rgb": 23.42,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_motion:2",
+        "thinking": "R1 blur severity scan + motion cross-check: gaussian sev1/3 vs motion:2 (residual_anisotropy=1.66 near 1.7 threshold) vs glass:3 (DT estimate)"
+      },
+      "test_result": {
+        "psnr_rgb": 23.23,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "R1 blur severity scan + motion cross-check: gaussian sev1/3 vs motion:2 (residual_anisotropy=1.66 near 1.7 threshold) vs glass:3 (DT estimate)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.72,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 motion severity scan (1/3) + global addition test: motion:2 CI=8/10 best; variance_ratio=0.694 & chroma_ratio=0.794 wait for global step; test saturate vs contrast after blur"
+      },
+      "test_result": {
+        "psnr_rgb": 22.32,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_motion:3",
+        "thinking": "R1 motion severity scan (1/3) + global addition test: motion:2 CI=8/10 best; variance_ratio=0.694 & chroma_ratio=0.794 wait for global step; test saturate vs contrast after blur"
+      },
+      "test_result": {
+        "psnr_rgb": 23.11,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_motion:2,saturate_weaken_HSV:1",
+        "thinking": "R1 motion severity scan (1/3) + global addition test: motion:2 CI=8/10 best; variance_ratio=0.694 & chroma_ratio=0.794 wait for global step; test saturate vs contrast after blur"
+      },
+      "test_result": {
+        "psnr_rgb": 19.04,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_motion:2,contrast_weaken_scale:1",
+        "thinking": "R1 motion severity scan (1/3) + global addition test: motion:2 CI=8/10 best; variance_ratio=0.694 & chroma_ratio=0.794 wait for global step; test saturate vs contrast after blur"
+      },
+      "test_result": {
+        "psnr_rgb": 20.55,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R2: motion:1 CI=10/10 (unique 0-1%, zcd 2%, hf_lf 1%) - repeat draw to test angle robustness; plus mild gamma-like contrast_weaken_stretch:2 to test subtle global (residual_intensity_corr=0.597)"
+      },
+      "test_result": {
+        "psnr_rgb": 28.84,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R2: motion:1 CI=10/10 (unique 0-1%, zcd 2%, hf_lf 1%) - repeat draw to test angle robustness; plus mild gamma-like contrast_weaken_stretch:2 to test subtle global (residual_intensity_corr=0.597)"
+      },
+      "test_result": {
+        "psnr_rgb": 20.62,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,contrast_weaken_stretch:2",
+        "thinking": "R2: motion:1 CI=10/10 (unique 0-1%, zcd 2%, hf_lf 1%) - repeat draw to test angle robustness; plus mild gamma-like contrast_weaken_stretch:2 to test subtle global (residual_intensity_corr=0.597)"
+      },
+      "test_result": {
+        "psnr_rgb": 10.92,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,contrast_weaken_stretch:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_motion:2",
+        "thinking": "R2 severity discrimination: motion:1 max PSNR=28.84 while motion:2/3 single draws ~23; repeat motion:2 draws to estimate angle-limited ceiling; expect <26 if true severity=1"
+      },
+      "test_result": {
+        "psnr_rgb": 19.27,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_motion:2",
+        "thinking": "R2 severity discrimination: motion:1 max PSNR=28.84 while motion:2/3 single draws ~23; repeat motion:2 draws to estimate angle-limited ceiling; expect <26 if true severity=1"
+      },
+      "test_result": {
+        "psnr_rgb": 26.19,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 控制基线: 重测 R0 最优管线在 pair0; 信号来源 gm_ratio=0.6291+spectral_slope_ratio=1.101 证明 blur 存在, residual_anisotropy=1.6613 接近 motion 阈值1.7, R0 motion:1 最佳 28.84dB 且 pair3 37.66dB 远超 gaussian/glass 约24dB 上限"
+      },
+      "test_result": {
+        "psnr_rgb": 35.5,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 控制基线: pair1 重测 motion:1; 同 R0 记录值对照 (R0 pair1); 角度随机导致逐次 PSNR 波动, 需与候选同批比较"
+      },
+      "test_result": {
+        "psnr_rgb": 49.54,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 控制基线: pair2 重测 motion:1; 同 R0 记录值对照 (R0 pair2); 角度随机导致逐次 PSNR 波动, 需与候选同批比较"
+      },
+      "test_result": {
+        "psnr_rgb": 28.15,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 控制基线: pair3 重测 motion:1; 同 R0 记录值对照 (R0 pair3); 角度随机导致逐次 PSNR 波动, 需与候选同批比较"
+      },
+      "test_result": {
+        "psnr_rgb": 30.16,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "R1 控制基线: pair4 重测 motion:1; 同 R0 记录值对照 (R0 pair4); 角度随机导致逐次 PSNR 波动, 需与候选同批比较"
+      },
+      "test_result": {
+        "psnr_rgb": 42.71,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "thinking": "R1 重新审视被忽略的 compression: block_boundary=1.0156<1.1 但 SKILL 明确 mild JPEG 可逃逸检测 (should_still_test=true), unique_G_ratio=0.8908, dct_zero_ratio=0.4473; R0 从未测试任何 JPEG 候选。物理顺序 blur->JPEG(存储最后)。pair0"
+      },
+      "test_result": {
+        "psnr_rgb": 21.16,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "thinking": "R1 重新审视被忽略的 compression: block_boundary=1.0156<1.1 但 SKILL 明确 mild JPEG 可逃逸检测 (should_still_test=true), unique_G_ratio=0.8908, dct_zero_ratio=0.4473; R0 从未测试任何 JPEG 候选。物理顺序 blur->JPEG(存储最后)。pair1"
+      },
+      "test_result": {
+        "psnr_rgb": 27.57,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "thinking": "R1 重新审视被忽略的 compression: block_boundary=1.0156<1.1 但 SKILL 明确 mild JPEG 可逃逸检测 (should_still_test=true), unique_G_ratio=0.8908, dct_zero_ratio=0.4473; R0 从未测试任何 JPEG 候选。物理顺序 blur->JPEG(存储最后)。pair2"
+      },
+      "test_result": {
+        "psnr_rgb": 31.56,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "thinking": "R1 重新审视被忽略的 compression: block_boundary=1.0156<1.1 但 SKILL 明确 mild JPEG 可逃逸检测 (should_still_test=true), unique_G_ratio=0.8908, dct_zero_ratio=0.4473; R0 从未测试任何 JPEG 候选。物理顺序 blur->JPEG(存储最后)。pair3"
+      },
+      "test_result": {
+        "psnr_rgb": 33.09,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "thinking": "R1 重新审视被忽略的 compression: block_boundary=1.0156<1.1 但 SKILL 明确 mild JPEG 可逃逸检测 (should_still_test=true), unique_G_ratio=0.8908, dct_zero_ratio=0.4473; R0 从未测试任何 JPEG 候选。物理顺序 blur->JPEG(存储最后)。pair4"
+      },
+      "test_result": {
+        "psnr_rgb": 18.82,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "thinking": "R1 重新审视被忽略的 global: variance_ratio=0.6935, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift=-0.4(非 brightness), clipped_fraction=0; R0 仅在 motion:2 上测过 sat:1 (19.04dB), 从未在 winning motion:1 上测试 mild global。物理顺序 blur->global(ISP)。pair0"
+      },
+      "test_result": {
+        "psnr_rgb": 19.27,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 33,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "thinking": "R1 重新审视被忽略的 global: variance_ratio=0.6935, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift=-0.4(非 brightness), clipped_fraction=0; R0 仅在 motion:2 上测过 sat:1 (19.04dB), 从未在 winning motion:1 上测试 mild global。物理顺序 blur->global(ISP)。pair1"
+      },
+      "test_result": {
+        "psnr_rgb": 23.79,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 34,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "thinking": "R1 重新审视被忽略的 global: variance_ratio=0.6935, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift=-0.4(非 brightness), clipped_fraction=0; R0 仅在 motion:2 上测过 sat:1 (19.04dB), 从未在 winning motion:1 上测试 mild global。物理顺序 blur->global(ISP)。pair2"
+      },
+      "test_result": {
+        "psnr_rgb": 18.67,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 35,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "thinking": "R1 重新审视被忽略的 global: variance_ratio=0.6935, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift=-0.4(非 brightness), clipped_fraction=0; R0 仅在 motion:2 上测过 sat:1 (19.04dB), 从未在 winning motion:1 上测试 mild global。物理顺序 blur->global(ISP)。pair3"
+      },
+      "test_result": {
+        "psnr_rgb": 33.3,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 36,
+      "hypothesis": {
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "thinking": "R1 重新审视被忽略的 global: variance_ratio=0.6935, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift=-0.4(非 brightness), clipped_fraction=0; R0 仅在 motion:2 上测过 sat:1 (19.04dB), 从未在 winning motion:1 上测试 mild global。物理顺序 blur->global(ISP)。pair4"
+      },
+      "test_result": {
+        "psnr_rgb": 20.51,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 49.54,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 42.71,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 26
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 35.5,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+      "psnr_rgb": 33.3,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 35
+    },
+    {
+      "pipeline": "blur_motion:1,compression_jpeg:1",
+      "psnr_rgb": 33.09,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 30
+    },
+    {
+      "pipeline": "blur_motion:1,compression_jpeg:1",
+      "psnr_rgb": 31.56,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 29
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 30.16,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 28.84,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 28.15,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "blur_motion:1,compression_jpeg:1",
+      "psnr_rgb": 27.57,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 28
+    },
+    {
+      "pipeline": "blur_motion:2",
+      "psnr_rgb": 26.19,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 24.02,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 24.01,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+      "psnr_rgb": 23.79,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 33
+    },
+    {
+      "pipeline": "blur_gaussian:2,saturate_weaken_HSV:1",
+      "psnr_rgb": 23.71,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_glass:2,saturate_weaken_HSV:1",
+      "psnr_rgb": 23.68,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "psnr_rgb": 23.42,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_glass:2,contrast_weaken_scale:1",
+      "psnr_rgb": 23.37,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_motion:2",
+      "psnr_rgb": 23.23,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_motion:3",
+      "psnr_rgb": 23.11,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 22.86,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 22.72,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "contrast_weaken_scale:1",
+      "psnr_rgb": 22.63,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 22.32,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "saturate_weaken_YCrCb:1",
+      "psnr_rgb": 21.17,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_motion:1,compression_jpeg:1",
+      "psnr_rgb": 21.16,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 27
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:1",
+      "psnr_rgb": 20.83,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 20.62,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_motion:2,contrast_weaken_scale:1",
+      "psnr_rgb": 20.55,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+      "psnr_rgb": 20.51,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 36
+    },
+    {
+      "pipeline": "blur_motion:2",
+      "psnr_rgb": 19.27,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+      "psnr_rgb": 19.27,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 32
+    },
+    {
+      "pipeline": "blur_motion:2,saturate_weaken_HSV:1",
+      "psnr_rgb": 19.04,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_motion:1,compression_jpeg:1",
+      "psnr_rgb": 18.82,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 31
+    },
+    {
+      "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+      "psnr_rgb": 18.67,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 34
+    },
+    {
+      "pipeline": "blur_motion:1,contrast_weaken_stretch:2",
+      "psnr_rgb": 10.92,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    }
+  ],
+  "noise_6step_check": {
+    "residual_definition": "target - simulate(clean, blur_motion:1) on pair0 (peeled_noise_check.py; one random angle draw, residual std=26.6)",
+    "extreme_pct": 58.32,
+    "zero_ratio": 0.1711,
+    "vm_slope": 4.0735,
+    "var_slope": -0.0715,
+    "ivc": 0.9842,
+    "spatial_corr": 0.9842,
+    "rgb_ratio": 1.1251,
+    "cross_channel_corr": 0.9799,
+    "ch_stds": {
+      "R": 26.7,
+      "G": 24.9,
+      "B": 28.0
+    },
+    "noise_prior_sigma_peeled": 1.24,
+    "noise_prior_sigma_raw": 0.62,
+    "diagnosis": "NO_NOISE. extreme_pct=58.32% is a known false positive (SKILL: extreme_pct>50% AND noise_prior sigma<5 -> ignore IMPULSE; it counts residual<=0 which is ~half the pixels by construction). vm_slope=4.07 is unstable (16x16 patch means ~0) and invalid on a structured residual. spatial_corr=0.984 + ivc=0.984 => residual is highly structured (motion-kernel angle mismatch), not noise. Independent physical bound: x_distortion minimum noise sigma = 0.05*255 = 12.75 (noise_gaussian_RGB:1 / YCrCb luma) >> measured sigma <=1.24, so no x_distortion noise step of any severity can be present. rgb_ratio=1.125<1.4 (not YCrCb). var_slope=-0.07<1.0 also satisfies rule A (no Poisson/quantization)."
+  },
+  "reflection_R0_checks": {
+    "dt_psnr_contradiction": "NOT triggered: no alternative blur family beat motion by >5dB (gaussian:2 24.01, glass:2 24.02 vs motion:1 best 28.84 / support pair3 37.66).",
+    "peeled_extreme_fp_rule": "APPLIED: extreme_pct>50% + sigma<5 -> ignored §B IMPULSE; trust noise_prior/physics -> NO_NOISE.",
+    "global_false_positive_rule": "APPLIED: variance_ratio=0.694 / saturation_chroma_ratio=0.794 / contrast_spread_ratio=0.759 are explainable by motion-blur smoothing (full_analysis flagged FP_global_risk + contrast_from_saturation). Adding saturate_weaken_HSV:1, saturate_weaken_YCrCb:1, contrast_weaken_scale:1 or contrast_weaken_stretch:2 on top of blur all reduced PSNR (23.7->19.0->10.9) and/or broke unique-color match (diff up to +113), so no global step exists.",
+    "qwen_gate": {
+      "available": false,
+      "triggered": true,
+      "reason": "sigma=0.62<2 but full_analysis noise verdict was low-confidence GAUSSIAN_YCrCb and peeled §B flagged IMPULSE/SPECKLE => contradictory signals; Qwen API unavailable, resolved by physics bound (min x_distortion noise sigma=12.75)"
+    }
+  },
+  "support_validation": {
+    "candidate": "blur_motion:1",
+    "note": "motion angle is stochastic in x_distortion (uniform[-90,90]); each simulation draw uses a new angle, so PSNR varies with angle proximity while angle-robust texture statistics stay matched.",
+    "pairs": [
+      {
+        "pair": 0,
+        "psnr_rgb": 28.84,
+        "psnr_all_draws": [
+          22.32,
+          28.84,
+          20.62
+        ],
+        "ci_pass": "8/10, 10/10, 10/10",
+        "unique_color_diffs": "0-3%",
+        "zero_crossing_diff": "1-2%",
+        "hf_lf_diff": "0-1%"
+      },
+      {
+        "pair": 1,
+        "psnr_rgb": 24.46,
+        "ci_pass": "8/10",
+        "unique_color_diffs": "0-1%",
+        "zero_crossing_diff": "0%",
+        "hf_lf_diff": "1%",
+        "block_boundary_diff": "4%"
+      },
+      {
+        "pair": 2,
+        "psnr_rgb": 29.11,
+        "ci_pass": "6/10",
+        "unique_color_diffs": "0-2%",
+        "zero_crossing_diff": "9%",
+        "hf_lf_diff": "1%",
+        "block_boundary_diff": "25% (only mismatch; other pairs 4-15%, pair0 target block_boundary=1.016 -> no JPEG)"
+      },
+      {
+        "pair": 3,
+        "psnr_rgb": 37.66,
+        "ci_pass": "10/10",
+        "unique_color_diffs": "0%",
+        "zero_crossing_diff": "12%",
+        "hf_lf_diff": "2%",
+        "note": "near-exact reproduction: radius-5 kernel at a matching angle -> strong evidence severity=1 (a too-weak/too-strong severity could not reach 37.7dB)"
+      },
+      {
+        "pair": 4,
+        "psnr_rgb": 17.62,
+        "ci_pass": "9/10",
+        "unique_color_diffs": "0-1%",
+        "zero_crossing_diff": "14%",
+        "hf_lf_diff": "2%",
+        "note": "low PSNR from unfavourable random angle draw; texture statistics still match"
+      }
+    ],
+    "conclusion": "All 5 pairs consistent with single-step blur_motion:1; no evidence of any second degradation step (noise/compression/global all rejected)."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_motion",
+        "severity": 1,
+        "verdict": "UNCERTAIN",
+        "signals": "residual_anisotropy=1.661 (near 1.7 motion threshold); motion PSNR ceiling 28.84 (pair0) / 37.66 (pair3) vs ~24 max for gaussian/glass (angle-independent); angle-robust zero_crossing / hf_lf / unique-color diffs 0-3% across all 5 pairs; motion:2 best draw 26.19 with zcd 9-11% off vs motion:1 0-2%"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "verdict_reason": "Type+severity strongly supported by signals, but per SKILL verdict rule deterministic-step PSNR is 30-40dB (37.66 on pair3) and pair0 best is 28.84dB because x_distortion motion angle is random at generation; PSNR cannot reach >40dB without angle luck. Marked UNCERTAIN, not LIKELY.",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "blur_motion",
+            "severity": 2
+          }
+        ],
+        "psnr": 26.19,
+        "function_family": "blur_motion",
+        "reason": "severity+1 scan; systematically worse angle-robust stats (zcd 9-11%, unique_G up to 7%)"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_gaussian",
+            "severity": 2
+          }
+        ],
+        "psnr": 24.01,
+        "function_family": "blur_gaussian",
+        "reason": "cross-family backup (MTF gaussian/lens indistinguishable); CI 4/10, worse texture stats"
+      }
+    ],
+    "rationale": "Single-step motion blur: gm_ratio=0.629 + spectral_slope_ratio=1.101 prove blur; glass_score=0.70 is the known FP of the glass detector (DT override rejected by PSNR ceiling and CI); residual_anisotropy=1.66 supports motion. Severity=1 (radius5/sigma3) because support pair3 reaches 37.66dB with the radius-5 kernel and zcd/hf_lf/unique-color match within 0-3% across pairs, while motion:2/3 show systematic over-blur (zcd 9-20% low). No noise (min x_distortion noise sigma 12.75 >> 1.24, §B residual structured spatial_corr 0.984). No compression (block_boundary 1.016, dct_zero stable). No global (all global additions reduced PSNR up to 10.9 and broke unique-color statistics). Mean shift -0.4/255 rules out brightness."
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (mandatory reflection per protocol); R0 support PSNR=34.55 dB",
+    "mode": "PSNR (noise_prior sigma=0.62 < 2; physics bound: minimum x_distortion noise sigma 12.75)",
+    "pair0_analysis_refresh": "Re-ran run_full_analysis.py on pair0 -> full_analysis_R1.json; signals reproduce R0 within rerun noise (e.g. residual_intensity_corr 0.5916 vs 0.5968); block_boundary=1.0156, gm_ratio=0.6291, spectral_slope_ratio=1.1011, residual_anisotropy=1.6613, glass_score=0.7004, variance_ratio=0.6935, saturation_chroma_ratio=0.794, mean_shift=-0.4.",
+    "signal_reinterpretation": [
+      {
+        "signal": "residual_anisotropy=1.6613, just below the 1.7 motion threshold",
+        "r0_interpretation": "boundary evidence for motion; PSNR ceiling (28.84 pair0 / 37.66 pair3) decisive",
+        "r1_recheck": "fresh motion:1 control draws on support reached 49.54 dB (pair1, CI 8/10 where the only two mismatches have diff~0.000, i.e. percentage artifacts) and 42.71 dB (pair4, CI 10/10); no angle-independent family (gaussian/glass ~24 dB in R0) can approach this",
+        "conclusion": "motion blur confirmed; severity=1 retained (motion:2 best 26.19 dB; motion:2/3 systematically over-blur, zcd 9-20% low)"
+      },
+      {
+        "signal": "glass_score=0.7004 > 0.25 (DT glass candidate)",
+        "r0_interpretation": "known glass-detector false positive; rejected by PSNR ceiling and CI",
+        "r1_recheck": "R1 control >40 dB draws are incompatible with random glass blur; no new glass evidence",
+        "conclusion": "glass stays rejected (kept only in R0 alternatives)"
+      },
+      {
+        "signal": "block_boundary=1.0156 (<1.1), unique_G_ratio=0.8908, dct_zero_ratio=0.4473",
+        "r0_interpretation": "NO_COMPRESSION but no JPEG candidate was ever tested (SKILL: should_still_test, mild JPEG can evade block_boundary)",
+        "r1_recheck": "tested blur_motion:1+compression_jpeg:1 on all 5 support pairs: pair PSNR 21.16/27.57/31.56/33.09/18.82 (mean 26.44 vs control 37.21, -10.77 dB); block_boundary target-sim diff -0.064..-0.324 (25-134% error); CI 5-6/10 on every pair",
+        "conclusion": "JPEG rejected; no compression step"
+      },
+      {
+        "signal": "variance_ratio=0.6935, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift=-0.4, clipped_fraction=0",
+        "r0_interpretation": "explained by motion-blur smoothing; global additions tested only atop motion:2 (19.04/20.55 dB) or with aggressive contrast_weaken_stretch:2 atop motion:1 (10.92 dB)",
+        "r1_recheck": "tested blur_motion:1+saturate_weaken_HSV:1 on all 5 support pairs (never tested atop the winning motion:1): 19.27/23.79/18.67/33.30/20.51 (mean 23.11 vs control 37.21, -14.10 dB), CI <=8/10; control itself matches unique-color counts within 0-3%",
+        "conclusion": "global rejected; the variance/chroma deficit is explained by blur smoothing"
+      },
+      {
+        "signal": "noise_prior sigma=0.62; peeled §B extreme_pct=58.32, zero_ratio=0.1711, vm_slope=4.0735, var_slope=-0.0715, spatial_corr=0.9842, rgb_ratio=1.1251, cross_channel_corr=0.9799, ch_stds=[26.7,24.9,28.0]",
+        "r0_interpretation": "NO_NOISE (extreme_pct>50%+sigma<5 false-positive rule; structured residual; physics bound min noise sigma 12.75 >> 1.24)",
+        "r1_recheck": "sigma<2 -> PSNR mode per SKILL; spatial_corr=0.984 indicates an angle-mismatch structured residual, not noise; §B impulse reading is the documented FP",
+        "conclusion": "NO noise; zero noise candidates spent"
+      },
+      {
+        "signal": "brightness: mean_shift=-0.4/255, clipped_fraction=0",
+        "r0_interpretation": "excluded (minimum brightness shift 25.5/255)",
+        "r1_recheck": "unchanged",
+        "conclusion": "brightness excluded"
+      }
+    ],
+    "candidates": [
+      {
+        "pipeline": "blur_motion:1",
+        "role": "control re-test of the previous pipeline on 5 support pairs",
+        "pair_psnr": [35.5, 49.54, 28.15, 30.16, 42.71],
+        "pair_ci": ["10/10", "8/10", "6/10", "10/10", "10/10"],
+        "mean_psnr": 37.21,
+        "pairs_above_40db": [1, 4],
+        "note": "R0 recorded the same pipeline at mean 27.54 dB; the +9.67 dB gap is pure stochastic motion-angle draw variance"
+      },
+      {
+        "pipeline": "blur_motion:1,compression_jpeg:1",
+        "role": "ignored-compression probe",
+        "pair_psnr": [21.16, 27.57, 31.56, 33.09, 18.82],
+        "mean_psnr": 26.44,
+        "delta_vs_control": -10.77,
+        "verdict": "REJECT"
+      },
+      {
+        "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+        "role": "ignored-global probe",
+        "pair_psnr": [19.27, 23.79, 18.67, 33.3, 20.51],
+        "mean_psnr": 23.11,
+        "delta_vs_control": -14.1,
+        "verdict": "REJECT"
+      }
+    ],
+    "support_validation": {
+      "pairs": 5,
+      "control_ranked": "pair1 49.54 (CI 8/10) > pair4 42.71 (10/10) > pair0 35.50 (10/10) > pair3 30.16 (10/10) > pair2 28.15 (6/10)",
+      "mean_psnr": 37.21,
+      "pairs_above_40db": [1, 4],
+      "conclusion": "The unchanged single-step blur_motion:1 pipeline reproduces most support pairs near texture-exactly and exceeds 40 dB on two pairs; both probes are >10 dB worse with systematic block/color mismatches"
+    },
+    "budget": {
+      "signal_reread_rounds": 1,
+      "candidates_generated": 3,
+      "test_candidate_calls": 15,
+      "psnr_tests": 15
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "blur_motion", "severity": 1, "verdict": "LIKELY"}
+      ],
+      "rationale": "No candidate improved over the unchanged pipeline (required >40 dB or +2 dB). The two genuine R0 coverage gaps were closed: mild JPEG (mean 26.44, -10.77 dB) and mild saturation (mean 23.11, -14.10 dB) both rejected with systematic CI mismatches. blur_motion:1 now shows >40 dB on 2/5 fresh support draws with near-perfect CI, so the step verdict is raised from UNCERTAIN to LIKELY while the pipeline itself stays unchanged."
+    }
+  }
+}

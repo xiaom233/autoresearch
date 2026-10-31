@@ -1,0 +1,53 @@
+{
+  "challenge_id": "blind_0019_setB",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 4},
+    {"function": "compression_jpeg", "severity": 4},
+    {"function": "saturate_weaken_HSV", "severity": 5}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 5}
+      ],
+      "evidence": "MTF 无法区分 gaussian/lens/glass；glass_score=1.466 与 5 对 wiener_kernel 匹配支持 glass，lens 为同族备选",
+      "function_family": "blur"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "evidence": "顺序备选：pair0/pair1 各 5/5 MATCH，但暗图 pair2/pair3 的 variance_ratio 失配 266%/114%；主顺序 blur→JPEG→sat 为 4✓/1✗ (variance 10%)",
+      "function_family": "order"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 4}
+      ],
+      "evidence": "饱和度严重度 ±1 容差：目标为完全灰度，sev4/5 在 x_distortion 中可能不可分；sev5 已使 mean_shift/variance_ratio 在 pair0/1/4 匹配",
+      "function_family": "global"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode; final pipeline signal pass 23/25 across 5 pairs)",
+    "mode": "SIGNAL (initial noise_prior sigma=2.84; noise step ruled out — peeled residual is structure-dominated by glass kernel mismatch, sigma below sev1 injection range, and removing the noise candidate fixed variance_ratio)",
+    "signal_pass_detail": {
+      "pair0": "MATCH 5/5",
+      "pair1": "MATCH 5/5",
+      "pair2": "PARTIAL 4/5 (variance_ratio diff 43%, dark low-variance image)",
+      "pair3": "PARTIAL 4/5 (variance_ratio diff 10%)",
+      "pair4": "MATCH 5/5"
+    },
+    "rationale": "JPEG: block_boundary=4.388 (0% FP) + dct_zero_ratio=0.902；severity 扫描 1-5 后 jpeg:4 最优（组合下 bb 5/5 匹配）。Blur: gm_ratio=0.154 强模糊，anisotropy=1.302<1.7 排除 motion，glass_score=1.466>0.25 且 sigma<3 → glass；glass:4 MATCH 而 glass:5 WEAK、gaussian:4 WEAK，5 对 wiener+slope 全匹配。Global: 目标确为完全灰度（clean 彩色/bear、夜景等，degraded 均无彩色；saturation_chroma_ratio=0.0），saturate_weaken_HSV:5 使 mean_shift 5/5、variance_ratio 3/5 匹配；顺序 sat→JPEG 在暗图上失配，由 pair3 对照定为 JPEG→sat。无噪声：§B 标记为已知 FP（结构残差 spatial_corr=0.968、sigma 5.68 低于 sev1），加入噪声反而破坏 variance_ratio。未做 PSNR 确认（SIGNAL 模式；glass 随机核使 PSNR 不可达 40dB）。",
+    "qwen_gate": "TRIGGERED (2<sigma<10) but Qwen/API unavailable → skipped and recorded",
+    "candidate_tests": 25
+  }
+}

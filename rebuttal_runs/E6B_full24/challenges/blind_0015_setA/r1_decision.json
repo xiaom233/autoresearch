@@ -1,0 +1,52 @@
+{
+  "challenge_id": "blind_0015_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "r1_pipeline": [
+    ["blur_gaussian", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "support_psnr_r0": 18.92,
+  "candidates_tested": [
+    {
+      "candidate": "noise_gaussian_RGB:1,blur_gaussian:1,brightness_darken_shfit_RGB:3",
+      "mode": "signal",
+      "scope": "5 support pairs",
+      "result": "PARTIAL x4 + WEAK x1; 0/5 verdict improvement; structured_residual FWHM=4.0px",
+      "outcome": "REJECT"
+    },
+    {
+      "candidate": "noise_speckle:1,blur_gaussian:1,brightness_darken_shfit_RGB:3",
+      "mode": "signal",
+      "scope": "pair0 tiebreaker",
+      "result": "PARTIAL, noise:sigma diff=100% (gaussian was 50%)",
+      "outcome": "REJECT"
+    },
+    {
+      "candidate": "blur_glass:1,brightness_darken_shfit_RGB:3",
+      "mode": "psnr",
+      "scope": "pairs 0-2 (dropped early, dominated)",
+      "result": "28.97/26.72/26.47 vs baseline 28.22/29.15/28.78 (mean -1.33 dB)",
+      "outcome": "REJECT"
+    }
+  ],
+  "test_candidate_calls": 14,
+  "best_validation": {
+    "baseline_signal_5pairs": "PARTIAL x5 (only wiener_kernel mismatched, corr 0.750-0.768; spectral_slope/mean_shift/variance_ratio matched on every pair)",
+    "noise_gaussian_5pairs": "PARTIAL x4 + WEAK x1 (pair2); noise:sigma MATCH on pairs 1/3/4, 40-50% diff on pairs 0/2; 0/5 verdict improvement",
+    "glass_psnr_3pairs": "28.97/26.72/26.47 vs baseline 28.22/29.15/28.78 on pairs 0/1/2",
+    "speckle_pair0": "PARTIAL, noise:sigma diff=100%"
+  },
+  "signal_sources": [
+    "noise_prior_sigma(target)=1.24 < 2 but SKILL says the pure-noise sigma estimate is biased low and unreliable when blur is present; peeled residual sigma=2.72 -> sigma gate re-opened instead of vetoing noise",
+    "gm_ratio target=0.429 vs gaussian:1 sim=0.337 and dct_zero target=0.467 vs sim=0.629 -> extra pre-blur HF source tested as noise_gaussian_RGB:1",
+    "peeled 6-step vm_slope=2.8767 (>0.01 speckle rule) -> noise_speckle:1 tested; noise:sigma diff=100% -> rejected (gaussian 50% better)",
+    "wiener_kernel corr=0.750-0.768 systematic on all 5 pairs -> blur subtype uncertainty; glass/lens PSNR tests and FFT anisotropy=0.00 (motion excluded) leave no representable upgrade; gaussian sev1 stays",
+    "brightness mean_shift=-47.5, variance_ratio=0.7479, clipped_fraction=0.2154, spread=0.7961, saturation=1.0066, unique_G=197 vs sim -46.7/0.746/0.215/0.794/1.0057/198 -> brightness_darken_shfit_RGB:3 re-confirmed"
+  ],
+  "reason": "No candidate meets the mandated CHANGE thresholds. Noise arm: majority WEAK->PARTIAL/MATCH not met (0/5 improved, 1/5 regressed; structured_residual stays at the FWHM=4.0px boundary, residual remains dominated by the systematic wiener/kernel mismatch rather than white noise). Deterministic arm: glass is dominated by -1.33 dB mean on 3 pairs, lens is below the gaussian baseline, motion is excluded by anisotropy=0.00, and gaussian sev1 is the severity floor. The brightness step is unchanged (exactly pinned). R1 pipeline is identical to R0 item-for-item."
+}

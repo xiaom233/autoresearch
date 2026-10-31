@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "blur_lens:4 LIKELY (full_analysis step3: gm_ratio=0.4047, glass_score=1.023); residual_anisotropy=1.6547 < 1.7 threshold且非motion → OCAB 不触发",
+    "brightness_brighten_shfit_RGB:1 LIKELY: brightness_mean_shift=24.0 ≈ RGB shift sev1(+25.5), 加性 shift 低难度 → 纯 Swin；非 HSV 故不加 ColorMLP",
+    "compression_jpeg:4: block_boundary=3.2006 (>1.1, Tier S, 0% FP) 确认 JPEG；无 JPEG 专项组件门控",
+    "step4_global=NO_GLOBAL: contrast_detected_raw=false, contrast_spread_ratio=0.9226, variance_ratio=0.8055 归因 JPEG/clipping (brightness_from_jpeg=true, clipped_fraction=0.0188) → 无 contrast Tier A，ColorPre/FiLM-GCM 不启用",
+    "noise: peeled §B extreme_pct=90.68 为已知 JPEG/blur 伪影 FP；noise_prior sigma=0.74<2 且无噪声步骤 → 不加任何噪声相关组件",
+    "exp39: SimpleGate -32K，8/9 退化安全，默认常开；exp37: 盲识别下组件 0/24 胜，无 Tier A 信号时纯 Swin + Direct 最稳"
+  ],
+  "rationale": "三步确定性退化（lens blur sev4 + RGB brightness shift sev1 + JPEG sev4），无噪声、无 contrast。JPEG 有 Tier S block_boundary 确认但无对应可启用组件；anisotropy 1.6547 低于 OCAB 门控 1.7；variance_ratio 偏离已判定为 JPEG/裁剪伪影而非 contrast，故不触发 FiLM-GCM/ColorPre。按默认保守策略采用纯 Swin + SimpleGate + Direct，LR=5e-4，2 epoch。"
+}

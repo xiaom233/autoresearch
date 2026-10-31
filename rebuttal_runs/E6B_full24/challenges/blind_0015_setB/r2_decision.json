@@ -1,0 +1,50 @@
+{
+  "challenge_id": "blind_0015_setB",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 2],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "r1_pipeline": [
+    ["blur_motion", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "r2_pipeline": [
+    ["blur_motion", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "support_psnr_r0": 16.91,
+  "support_psnr_r0_source": "r0_result.json (trained R0 model on support pairs)",
+  "support_psnr_r1": 30.66,
+  "support_psnr_r1_source": "r1_result.json (trained R1 model on support pairs)",
+  "candidates_tested": [],
+  "candidate_generation_note": "No new candidate was generated: the R1 pipeline reproduced support pair2 bit-exactly (MSE=0, PSNR=inf, R32), which uniquely locks function/severity/order; every signal-driven alternative (JPEG, noise, contrast/gamma, saturation, gaussian/lens/glass blur, order swap, severity variants) was already refuted in R0/R1 and is excluded by the bit-exact reproduction. The 5 test_candidate calls this round are support reproducibility runs of the unchanged R1 pipeline, not new candidates.",
+  "verification_runs": [
+    {"round": 35, "pair": "pair0", "pipeline": "blur_motion:1,brightness_darken_shfit_RGB:3", "psnr_rgb": 37.52, "ci_pass": "10/10", "r1_psnr_same_pair": 43.01},
+    {"round": 36, "pair": "pair1", "pipeline": "blur_motion:1,brightness_darken_shfit_RGB:3", "psnr_rgb": 24.39, "ci_pass": "10/10", "r1_psnr_same_pair": 58.91},
+    {"round": 37, "pair": "pair2", "pipeline": "blur_motion:1,brightness_darken_shfit_RGB:3", "psnr_rgb": 37.16, "ci_pass": "10/10", "r1_psnr_same_pair": "inf (bit-exact)"},
+    {"round": 38, "pair": "pair3", "pipeline": "blur_motion:1,brightness_darken_shfit_RGB:3", "psnr_rgb": 26.24, "ci_pass": "10/10", "r1_psnr_same_pair": 36.66},
+    {"round": 39, "pair": "pair4", "pipeline": "blur_motion:1,brightness_darken_shfit_RGB:3", "psnr_rgb": 61.19, "ci_pass": "10/10", "r1_psnr_same_pair": 37.56}
+  ],
+  "test_candidate_calls": 5,
+  "test_candidate_rounds": [35, 36, 37, 38, 39],
+  "best_validation": {
+    "pipeline": "blur_motion:1,brightness_darken_shfit_RGB:3",
+    "r2_per_pair_psnr": {"pair0": 37.52, "pair1": 24.39, "pair2": 37.16, "pair3": 26.24, "pair4": 61.19},
+    "r2_mean_psnr_db": 37.3,
+    "r0_mean_psnr_db": 28.16,
+    "r2_per_pair_ci": "10/10 on all 5 pairs",
+    "criterion": "No CHANGE: unchanged pipeline; no new candidate reached the >40 dB or +2 dB rule against R1 simulation results (R1 already had 43.01 / 58.91 / inf / 36.66 / 37.56 dB). R2 fresh draws: 4/5 pairs CI 10/10 with pair4 at 61.19 dB (>40 dB), pair2 bit-exact in R32."
+  },
+  "signal_sources": [
+    "pair2 bit-exact (R32, MSE=0): locks blur_motion:1 + brightness_darken_shfit_RGB:3 (function/severity/order); R2 R37 same pipeline with a different random angle gave 37.16 dB CI 10/10 -> gap is angle variance",
+    "R2 R39 pair4: same pipeline 61.19 dB CI 10/10 (R1: 37.56) -> pipeline exact; per-pair spread is x_distortion random motion angle",
+    "compression: block_boundary=0.9935/1.0068 (<1.05), R2 CI unique_G diff=0-1 all pairs; unique_G=203 is arithmetic consequence of additive RGB shift sev3 + clipping; adding JPEG lowered PSNR in R0 (34.17/35.54)",
+    "noise: noise_prior sigma=0.74/1.48 (<2); peeled_noise_check_R2 (exact pipeline) extreme_pct=74.99%, vm_slope=0.6969, spatial_corr=0.9758, rgb_ratio=1.2502 with sigma<5 -> SKILL known FP rule; bit-exact pair2 excludes noise",
+    "global: mean_shift -36.3/-43.9/-46.1/-49.0/-49.3 monotonic with clipped_fraction; variance_ratio 0.657-0.851 explained by darkening+clipping (contrast_from_variance=false, brightness_clip_explains_variance=true) -> brightness_darken_shfit_RGB:3, not contrast/gamma",
+    "pair4 saturation_weaken_sev3 flag (chroma_ratio=0.8397) ruled out: bit-exact reproduction has no saturation step and R39 hit 61.19 dB",
+    "motion rule: pair1 residual after brightness_RGB:3 peel residual_anisotropy=2.198 (>1.7, 94% recall/0% FP) -> MOTION_BLUR; severity=1 fixed by bit-exact"
+  ],
+  "reason": "R2 signal re-examination found no new or alternative degradation: the R1 pipeline is exact (pair2 MSE=0 bit-exact; fresh pair4 draw 61.19 dB). All additional signals are explained (unique_G=203 and variance_ratio from additive brightness shift + clipping; extreme_pct/spatial_corr from blur-artifact residual; pair4 chroma from additive shift + clipping) or excluded by the bit-exact reproduction (JPEG, noise, saturation, contrast/gamma, other blur kernels). The R1→R2 per-pair PSNR spread (17.6-61.2 dB on identical pipelines) is the random motion-angle draw inside x_distortion, which cannot be encoded in predicted params. The trained R1 support PSNR (30.66 dB) is therefore limited by angle stochasticity + the 2-epoch budget, not by blind-ID error. No candidate can beat bit-exact, so the R1 pipeline is retained item-by-item -> NO_CHANGE."
+}

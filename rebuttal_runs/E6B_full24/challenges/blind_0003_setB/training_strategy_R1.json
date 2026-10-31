@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted pipeline = blur_glass:2 单步 (verdict LIKELY, Tier 1, CI 10/10, 5/5 support pairs CI 10/10, PSNR 30.25-39.76)",
+    "block_boundary=1.0026 < 1.1 (Tier S 负) + unique_G=235 (无量化/压缩) -> 无 JPEG/compression 步骤, 不触发 JPEG 专项",
+    "variance_ratio=0.8346 != 1.0 但 step4 verdict=NO_GLOBAL, contrast_detected_raw=false, contrast_spread_ratio=0.8745; reflection 归因于 blur 方差衰减, 非 contrast -> ColorPre/FiLM-GCM 的 contrast Tier A 门控不满足",
+    "residual_anisotropy=2.1744 > 1.7 但 blur_pca_ratio=1.078 < 2.5 且 FFT=2.174 < 2.2, motion:3 实测 PSNR=21.75dB 远低于 glass:2 的 30.25dB; 已知 glass 是 motion 检测 FP 源 (hybrid_dt FP(glass)=140) -> motion 未确认, OCAB 不启用",
+    "glass_score=0.4684 > 0.25, gm_ratio=0.5039, CI 指标 diffs <=0.001 (overshoot/zero-crossing/hf-lf 精确匹配) -> 单步局部 blur, 无结构化全局退化",
+    "sigma_prior=1.85<2 且 peeled 后 spatial_corr=0.9514, cross_ch_corr=0.9903 (结构残差), 噪声对照测试 PSNR 30.25->24.63 / CI 10/10->3/10 -> NO_NOISE, 不启用噪声相关处理"
+  ],
+  "rationale": "单步局部 glass blur (sev2), 信号高置信 (LIKELY, Tier 1, 5/5 support CI 10/10)。按 finetune_strategy.md §七: 无 contrast Tier A (variance_ratio 由 blur 解释), 无 motion 确认 (anisotropy 为 glass FP, PCA/FFT/PSNR 三重否定), 无 compression (block_boundary Tier S 阴性) -> 不启用 FiLM-GCM/ColorPre/OCAB/CSN/DualBranch; 纯 Swin + SimpleGate (+Direct)。SimpleGate 为默认常开 (-32K, exp39 8/9 安全, blur 上 +0.06), 单步 blur 不涉及 S5 motion 三退化风险场景, 保持启用。策略选 Direct: 单步局部退化无梯度干扰, True Ft 在 2-epoch 预算下与 Direct 无差异 (exp37/38), 且无 contrast 全局退化。LR=5e-4, EPOCH=2 与基线公平对齐。"
+}

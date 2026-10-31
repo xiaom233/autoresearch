@@ -1,0 +1,62 @@
+{
+  "challenge_id": "blind_0023_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 5], ["contrast_weaken_scale", 1], ["compression_jpeg", 4]],
+  "r1_pipeline": [["blur_glass", 5], ["contrast_weaken_scale", 1], ["compression_jpeg", 4]],
+  "support_psnr_r0": 21.2,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_glass:5,quantization_median:4,compression_jpeg:4",
+      "pairs": [0],
+      "psnr": [24.18],
+      "ci": ["8/10"],
+      "signal_source": "variance_ratio=0.7047 介于无全局模拟 0.87-0.94 与 contrast1 模拟≈0.505 之间; R0 记录 quant4+jpeg5 曾在 pair0 精确匹配 unique_G(222 vs 221)/bb(6.886 vs 6.875)/chroma -> 颜色量化或可提供中间档方差压缩",
+      "outcome": "REJECT (低于 R0 基线 25.49)"
+    },
+    {
+      "pipeline": "blur_glass:5,quantization_median:2,compression_jpeg:4",
+      "pairs": [0],
+      "psnr": [25.34],
+      "ci": ["8/10"],
+      "signal_source": "quant4 方差压缩可能过强 -> severity 扫描降至 2 (SKILL 强制 severity 扫描)",
+      "outcome": "REJECT (25.34 < 25.49, 未超基线)"
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:4",
+      "pairs": [2],
+      "psnr": [20.48],
+      "ci": ["7/10"],
+      "signal_source": "pair2 residual_anisotropy=1.6429 距 motion 阈值 1.7 仅 3% (阈值边界信号重检); motion5 或可同时解释 gm_ratio=0.136 与 variance_ratio=0.5898",
+      "outcome": "REJECT (20.48 远低于 R0 基线 25.82; 边界信号为内容依赖)"
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_scale:1,compression_jpeg:4",
+      "pairs": [0, 1, 2, 3, 4],
+      "psnr": [25.53, 25.50, 25.77, 25.16, 24.85],
+      "ci": ["10/10", "10/10", "8/10", "8/10", "7/10"],
+      "signal_source": "glass5×contrast1 联合严重度歧义: contrast1 使 vr≈0.505 低于 target 0.7047, glass4 可回升方差; R0 未测该组合",
+      "outcome": "ALTERNATIVE (5 对均值 25.36 vs R0 25.36, Δ+0.006 dB; CI 43/50 vs 38/50; 未达 +2 dB)"
+    }
+  ],
+  "test_candidate_calls": 8,
+  "best_validation": {
+    "pipeline": "blur_glass:4,contrast_weaken_scale:1,compression_jpeg:4",
+    "support_psnr": [25.53, 25.50, 25.77, 25.16, 24.85],
+    "support_psnr_mean": 25.36,
+    "support_psnr_delta_vs_r0": 0.006,
+    "support_ci_total": "43/50 vs R0 38/50",
+    "change_threshold": ">40 dB 或相对上一轮 +2 dB",
+    "threshold_met": false
+  },
+  "signal_sources": [
+    "block_boundary=6.8747/6.165 (0%FP) -> JPEG 确认; jpeg4 模拟 bb 5.93/5.95 为离散档最佳",
+    "gm_ratio=0.189/0.136, spectral_slope_ratio=1.3339/1.3357, blur_flatness=0.3949, glass_score=1.449 -> glass 模糊确认",
+    "variance_ratio=0.7047/0.5898, contrast_spread_ratio=0.8428/0.7217, mean_shift=-2.0/0.0 -> 轻度均值保持的方差压缩",
+    "residual_anisotropy=1.3391/1.6429 (pair2 处 1.7 阈值边界 -> motion 重检被否定)",
+    "unique_G=221/244, dct_zero_ratio=0.92 -> compression 确认; unique_G 与模拟 235 的差值经 quant2/4 重检被否定",
+    "noise_prior sigma 目标与无噪模拟完全相等 1.61/2.35; peeled residual spatial_corr=0.978, std=13.5, rgb_ratio=1.109 -> NO_NOISE",
+    "residual_intensity_corr=-0.1959 + gamma_suspect: 无法用 gamma 解释 (目标 mean_shift≈0, gamma 必移均值), 不生成 gamma 候选"
+  ],
+  "reason": "R1 重跑 run_full_analysis 与 R0 信号逐字复现 (block_boundary 6.8747, gm_ratio 0.189, variance_ratio 0.7047, sigma 1.61), 未发现被忽略的退化步骤。4 个新候选管线被信号驱动生成: quantization 中间档 (24.18/25.34) 与 motion 边界重检 (20.48) 均明显劣于基线; glass4×contrast1 联合严重度在 5 对 support 上 PSNR 完全持平 (Δ+0.006 dB), 仅 CI 43/50 vs 38/50 略优, 未达 REFLECT_INSTRUCTIONS 的 CHANGE 门槛 (>40 dB 或 +2 dB)。按协议 3 轮信号重释内无实质改善, 决定 NO_CHANGE, 保留 R0 pipeline; glass4 变体作为首要 alternative 供训练 PSNR 仲裁。"
+}

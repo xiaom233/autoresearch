@@ -1,0 +1,90 @@
+{
+  "challenge_id": "blind_0005_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_impulse", 5]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_impulse",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (含 noise; zero_ratio 确定性指纹 + verify_signals 双证据; PSNR 对随机脉冲位置无效)",
+    "support_psnr_r0": 43.15,
+    "signal_reinterpretation": [
+      {
+        "signal": "zero_ratio",
+        "value": "0.9001 (pair0); 5 对 support 上 0.9000-0.9117",
+        "interpretation": "精确等于 1-amount(0.10) (x_distortion/noise.py: sev 表 [0.01,0.03,0.05,0.07,0.10])。90% 元素逐位不变是决定性约束: blur/JPEG/contrast/saturation/brightness/gaussian/speckle/poisson 均会改动几乎所有像素 → 只可能是单一步稀疏逐元素替换 (impulse)。pair2 的 0.9117 略高是因为暗部像素被 pepper 替换后数值不变 (替换为 0 与原值 0 相同)，与 amount=0.10 不矛盾"
+      },
+      {
+        "signal": "clipped_fraction / extreme_pct",
+        "value": "clipped_fraction=0.1006; extreme_pct=95.0 (=90% 精确零残差 + ~5% pepper)",
+        "interpretation": "独立再现 10% 元素替换；与 zero_ratio 同源同值，非 global 退化证据"
+      },
+      {
+        "signal": "mean_shift",
+        "value": "+1.3/255 = 0.0051 (pair0)",
+        "interpretation": "平衡 s&p (5% salt→255, 5% pepper→0) 在 μ≈114 上的期望偏移 = 0.05*(255-114)+0.05*(0-114) = +1.35 → 与观测 +1.3 吻合。brightness 阈值 0.08 远未达到 → brightness 判为 FP"
+      },
+      {
+        "signal": "variance_ratio / contrast_spread_ratio / saturation_chroma_ratio",
+        "value": "2.1835 / 2.7978 / 3.251 (pair0)",
+        "interpretation": "10% 极值替换的混合方差 = 0.9*var_c + 1642 (μ≈114 推导)，反解 var_c≈1280 (σ≈35.8)，与 residual_std=42 自洽 → variance_ratio 完全由 impulse 解释，contrast/saturation 判为 FP；且 5 对 support 上 global flags 组合不一致 (vr 1.23-2.18, chroma 1.83-13.8)，impulse 指纹恒定 0.900/10%"
+      },
+      {
+        "signal": "block_boundary / unique_G / dct_zero_ratio",
+        "value": "0.9964 / 256 / 0.016",
+        "interpretation": "无 JPEG/quantization 信号；且 JPEG 会改动几乎所有像素，与 zero_ratio=0.90 结构性互斥"
+      },
+      {
+        "signal": "spectral_slope / spectral_slope_ratio / gm_ratio",
+        "value": "target -1.1062 vs clean -1.2323; ratio=0.8976 (<1.08); gm_ratio=5.327",
+        "interpretation": "谱斜率变平而非变陡，符合白噪声样脉冲叠加，不符合 blur (ratio>1.08)；gm_ratio 被脉冲尖峰放大不可用；blur 会改动几乎所有像素，与 zero_ratio=0.90 结构性互斥"
+      },
+      {
+        "signal": "noise_prior sigma (两路估计不一致)",
+        "value": "run_full_analysis: 0.0; peeled_noise_check wavelet MAD: 23.23",
+        "interpretation": "稀疏脉冲对 MAD 类估计器不稳定；peeled 的 sigma=23.2 与 'flat slope→Gaussian RGB' 是 10% 尖峰在 wavelet 细节系数上的伪影，不能作为稠密噪声证据——若存在 σ≈23 的稠密噪声，zero_ratio 会≈0 而非 0.90。§B 有序诊断在 step1 (extreme_pct 95%>0.3%) 即判定 IMPULSE (confidence=high)"
+      },
+      {
+        "signal": "rgb_ratio / cross_channel_corr",
+        "value": "1.0353 / 0.0032",
+        "interpretation": "逐通道独立替换 → RGB s&p，非 YCrCb (rgb_ratio<1.4)、非 speckle/poisson (§B 顺序止于 step1)；vm_slope=10.04/var_slope=0.038 在稀疏脉冲下无判别意义"
+      },
+      {
+        "signal": "severity 边界",
+        "value": "zero_ratio 期望值: sev4(0.07)→0.93 vs sev5(0.10)→0.90; 观测 0.9001",
+        "interpretation": "确定性指纹唯一指向 sev5；sev4 相差 3 个百分点，且 R0 CI 对照 impulse:4 仅 7/10 (impulse 指标误差 30%)"
+      }
+    ],
+    "support_validation_R1": {
+      "protocol": "test_candidate.py --mode signal, 5 对 support, 对照对象为 R0 pipeline noise_impulse:5",
+      "pair0": "MATCH (2✓/0✗: noise:sigma, noise:clean_residual)",
+      "pair1": "MATCH (2✓/0✗)",
+      "pair2": "MATCH (2✓/0✗)",
+      "pair3": "MATCH (2✓/0✗)",
+      "pair4": "MATCH (2✓/0✗)",
+      "summary": "5/5 对 MATCH → 当前管线无 WEAK→PARTIAL/MATCH 的提升空间, 不存在 CHANGE 依据"
+    },
+    "controls": {
+      "noise_impulse:4 (pair0, --mode signal)": "MATCH — verify_signals 的 noise 检查 (sigma=0 与残差 FWHM) 对 impulse 幅度不敏感，无法区分 sev4/sev5；由确定性指纹 zero_ratio (0.9001 vs sev4 期望 0.93) 判定 sev5",
+      "noise_gaussian_RGB:2 (pair0, --mode signal)": "WEAK (noise:sigma diff=1067%) → 跨族候选被否决"
+    },
+    "test_candidate_calls": 7,
+    "test_candidate_budget": "≤15",
+    "candidates_tested": [
+      "noise_impulse:5 (5 对 support 基线验证)",
+      "noise_impulse:4 (pair0 severity 对照)",
+      "noise_gaussian_RGB:2 (pair0 跨族对照)"
+    ],
+    "rationale": "R1 信号重释未发现被忽略/误判/阈值边界信号反证 R0：zero_ratio=0.9001 精确等于 1-amount(0.10)，5 对 support 全部复现 (0.9000-0.9117)，且 90% 逐位不变在结构上排除任何非稀疏步骤；run_full_analysis 的 contrast/saturation/brightness 标记可由 impulse 的方差/均值/色度混合效应定量解释 (mean_shift +1.35 预测 vs +1.3 观测; variance_ratio 反解 var_c≈1280 与 residual_std=42 自洽)。signal 模式在 5/5 对 MATCH，无任何候选出现 WEAK→PARTIAL/MATCH 的改善 → NO_CHANGE。R0 训练 support PSNR=43.15 dB 亦与管线一致。verdict 依 SKILL exp37 规则保持 UNCERTAIN (噪声步骤永不 LIKELY)。"
+  }
+}

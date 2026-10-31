@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "pipeline 单步 saturate_weaken_HSV:4, step verdict=LIKELY, PSNR=inf (pair0 及 support pair1-4 全部逐像素精确), Tier 1 确定性",
+    "saturation_chroma_ratio=0.2042 与 HSV c=0.2 精确对应 → 饱和度退化确证 (Tier C 型全局退化, §七: 不加任何组件)",
+    "variance_ratio=0.9736 且 contrast_spread_ratio=1.0073、contrast_detected_raw=false → 无 contrast/stretch, ColorPre 与 FiLM-GCM 的 Tier A 触发条件不成立; 且 §七 ColorPre 禁用场景含 saturation (-0.34)",
+    "anisotropy=0, gm_ratio=1.099, spectral_slope_ratio=0.967 → 无 motion/模糊, OCAB 的 anisotropy>1.7 门控不成立",
+    "block_boundary=0.999, unique_G=244, sigma=0.0 且剥离后残差 std=0.0 → 无 JPEG/噪声/空间结构, 无结构化局部退化 → FiLM-GCM 禁用",
+    "brightness 假设已被 PSNR 排除 (20.33dB), ColorMLP (brightness_HSV 专用) 不启用; 纯全局退化下 CSN 禁用 (-4.6~-11.7 dB)",
+    "SimpleGate 为默认常开组件 (exp39 8/9 安全, -32K), 单步全局饱和度不属 S5 三退化风险场景"
+  ],
+  "rationale": "§七 信号门控: 本挑战为单步确定性全局饱和度退化 (PSNR=inf, LIKELY), 属 Tier C saturation 信号, 规则明确为纯 Swin + Direct、不加组件。所有 Tier S/A 触发条件 (variance_ratio≠1.0 的 contrast、anisotropy>1.7 的 motion、block_boundary>1.1 的 JPEG) 均不满足; 且 ColorPre 在 saturation 上有害、CSN 在纯全局退化上灾难性失败。单步退化无梯度干扰, Direct 为 §六 Step 1 推荐; True Ft 与 Direct 无差异 (exp37) 故不加载 ckpt。仅保留 SimpleGate (默认安全)。"
+}

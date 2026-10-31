@@ -1,0 +1,30 @@
+{
+  "challenge_id": "blind_0001_setA",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [["noise_poisson", 3], ["quantization_hist", 2]],
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 5, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "ci_pass_rate": "10/10 (pair0)",
+    "mode": "SIGNAL (sigma=10.5)",
+    "support_psnr_r0": 20.63,
+    "rationale": "信号重释：target 的 unique_per_channel=[16,16,16]（5 对 support 恒定）并非只能由 quantization_hist:2 解释。x_distortion noise_poisson severity=5 的 c=15 使输出电平恰为 255*k/15 = 17k (k=0..15)，即 16 级均匀量化（级距 17）且逐通道独立——与 target 的 16 级离散指纹完全一致。三条独立证据排除 quantization_hist 作为末步：① qhist 为确定函数，若为真值 qhist:2(clean) 应 PSNR>>40dB，实测仅 14.13dB；② qhist 共享 cdf 映射会带来 +28 亮度平移，target mean_shift 仅 -1.7（5 对 -1.2~-2.9）；③ qhist 对 R/G/B 施加同一映射，自然图像 RGB 相关 → 残差应强跨通道相关，实测 cross_channel_corr=0.015。补充指纹：impulse_zero_ratio=0.1336≈2.2/17=0.129（17 级量化误差幅度）；clipped_fraction=0.3318（pair0，pair1 0.13，内容依赖）由 Poisson c=15 的 0/255 尾部饱和解释。severity 由离散电平数锁定：poisson:4→26 级、poisson:3→41 级均不可能，仅 sev5 给 16 级。5 对 support 信号验证全部 MATCH (2✓/0✗)，R0 管线在同 5 对全部 WEAK（mean_shift/variance_ratio 失配为 qhist 实现差异 + sigma 失配）。噪声步骤按协议永不为 LIKELY，故 verdict=UNCERTAIN。",
+    "key_evidence": [
+      "unique_per_channel=[16,16,16] 在 5 对 support 恒定；poisson:5 (c=15) 输出 17k 共 16 级，逐通道独立",
+      "pair0 CI 10/10：unique_R/G/B diff=0.000，impulse_pct_zero diff=-0.027(0%)，impulse_pct_255 diff=0.013(0%)，zero_crossing/hf_lf diff≈0",
+      "impulse_zero_ratio=0.1336 ≈ P(|quant_err|<1.1)=2.2/17=0.129",
+      "mean_shift target -1.7 vs qhist:2 sim +28~+34 → 末步非 qhist（确定性复现矛盾）",
+      "residual cross_channel_corr=0.0153 → 逐通道独立，排除共享 cdf 的 qhist",
+      "raw residual 近白 (spatial_corr=0.029) + ivc=0.909 + scaled_var_corr=-0.646 → POISSON 保留",
+      "block_boundary=1.001 排除 JPEG；spectral_slope_ratio=0.9948 排除模糊；variance_ratio=1.0815 与 Poisson(+8%)+裁剪自洽，无需 global 步骤"
+    ],
+    "support_signal_check": "poisson:5: MATCH 5/5 (每对 2✓/0✗)；R0 管线 poisson:3+qhist:2: WEAK 5/5",
+    "alternatives_note": "留空：能够产生 16 级均匀电平的库函数仅 noise_poisson:5；noise_poisson:4→26 级、poisson:3→41 级，gaussian_RGB/speckle 无法产生 16 级离散电平，按 alternatives 质量要求不保存低质量候选。",
+    "residual_risk": "噪声 seed 失配使 PSNR 仅 15.28 dB（pair0），PSNR 不作为判据；若训练后 support PSNR 无提升，可回退 R0 的 poisson:3 严重度假设核对。"
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "challenge_id": "blind_0019_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 3],
+    ["saturate_weaken_HSV", 5],
+    ["compression_jpeg", 3]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN",
+      "signal_source": "gm_ratio target 0.1932 vs g3 sim 0.190; spectral_slope_ratio target 1.3972 vs sim 1.393; verify_signals blur:spectral_slope + blur:wiener_kernel MATCH; residual_anisotropy 1.2574 < 1.7 excludes motion"
+    },
+    {
+      "function": "saturate_weaken_HSV",
+      "severity": 5,
+      "verdict": "LIKELY",
+      "signal_source": "chroma_ratio 0.000 (S=0 grayscale); mean_shift +38.6 matches HSV V=max sim +39.2; variance_ratio 0.2321 vs sim 0.228; verify_signals global:mean_shift + global:variance_ratio MATCH in every signal check"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 3,
+      "verdict": "LIKELY",
+      "signal_source": "block_boundary 4.8992 (0%FP signal); dct_zero_ratio 0.8758; unique_G 256. Severity kept at 3: jpeg:4 gives verify_signals MANUAL MATCH on block_boundary but lowers simulated PSNR on ALL 5 support pairs (mean -0.34 dB), so no PSNR evidence to change"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 30.18,
+      "five_pair_psnr": [30.18, 26.69, 29.08, 28.90, 30.01],
+      "five_pair_mean": 28.97,
+      "five_pair_ci": ["7/10", "6/10", "7/10", "7/10", "10/10"],
+      "function_family": "jpeg severity +1 (q8)",
+      "note": "Only R1 candidate with verify_signals MATCH 5/5 on pair0 (block_boundary fixed). But simulated PSNR is 0.16-0.50 dB LOWER than R0 jpeg:3 on each of the 5 pairs (mean 29.31 -> 28.97, delta -0.34). Signal/PSNR conflict; CHANGE bar (+2 dB or >40 dB) not met. Kept as signal-tagged alternative."
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 30.74,
+      "function_family": "lens blur (severity sweep peak)",
+      "note": "Highest pair0 PSNR among new R1 candidates (+0.40 vs R0 30.34). Lens severity sweep: sev2 26.73 / sev3 28.36 / sev4 30.74 / sev5 30.10. However verify_signals is PARTIAL (blur signals match, block_boundary off 35%), identical profile to gaussian:3, and SKILL states gaussian/lens MTF are indistinguishable; +0.40 dB is below the +2 dB bar and not 5-pair validated (budget)."
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 5},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 30.10,
+      "ci_pass": "8/10",
+      "function_family": "lens blur (severity +2)",
+      "note": "Pairs with lens:4 peak; confirms lens:4 is the lens-family best, still below/equal to gaussian variants."
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 30.61,
+      "ci_pass": "7/10",
+      "function_family": "lens + jpeg severity +1",
+      "note": "Joint peak test; worse than lens:4 with jpeg:3 (30.74)."
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 28.12,
+      "ci_pass": "8/10",
+      "function_family": "glass blur (SKILL decision tree candidate)",
+      "note": "Fair re-test of the analyzer glass suggestion (R0 glass:5 was confounded with contrast3+jpeg4). verify_signals WEAK: spectral_slope diff 0.200, wiener corr 0.845, block_boundary diff 19%. Key re-interpretation: glass_score 1.5398 is far outside the calibrated glass range 0.19-0.41 and is inflated by JPEG block edges. Glass ruled out."
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 2},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 26.73,
+      "ci_pass": "5/10",
+      "function_family": "lens blur (severity -1)",
+      "note": "Mandatory lens severity sweep -1; clearly worse. Lens severity monotonic to sev4."
+    }
+  ],
+  "analysis": {
+    "overall_verdict": "UNCERTAIN",
+    "mode": "PSNR (sigma_prior=1.98 < 2)",
+    "support_psnr_r0": 18.23,
+    "rationale": "R1 signal re-interpretation found no pipeline that beats R0 gaussian:3 + saturate_weaken_HSV:5 + compression_jpeg:3 on the 5 support pairs by the required margin (>40 dB or +2 dB). Sampling ~30.7 dB across every blur subtype/severity, JPEG severity, order and joint combination indicates a residual component not captured by any single x_distortion pipeline (all content-independent signals except block_boundary already match). The R1 signal-level finding is that jpeg:4 matches target block_boundary better (verify_signals MATCH 5/5) while jpeg:3 is 0.16-0.50 dB closer in PSNR on all pairs; per the deterministic-candidate rule, PSNR governs, so the R0 pipeline is retained and jpeg:4 recorded as a signal-tagged alternative. Note: support_psnr 18.23 is dominated by irrecoverable colour loss (complete S=0 desaturation), so it cannot arbitrate the blur/JPEG severity details; the change rule is applied on simulated 5-pair PSNR as instructed.",
+    "signal_reinterpretation": [
+      {
+        "signal": "glass_score 1.5398 (SKILL decision tree: >0.25 + sigma<3 -> glass)",
+        "r0_treatment": "Analyzer LENS/GLASS suggestion overridden by PSNR; glass only tested once with confounded steps",
+        "r1_finding": "Calibrated ranges are gaussian 0.04-0.13, lens 0.08-0.20, glass 0.19-0.41; 1.5398 is ~4x outside the glass range and is inflated by JPEG 8x8 block edges in the Laplacian/gradient ratio. Fair glass:5 test gives verify_signals WEAK (spectral_slope diff 0.200, wiener corr 0.845, block_boundary 19%) and PSNR 28.12. Glass ruled out.",
+        "action": "no change"
+      },
+      {
+        "signal": "gm_ratio 0.1932, spectral_slope_ratio 1.3972, variance_ratio 0.2321",
+        "r0_treatment": "blur_gaussian:3 selected",
+        "r1_finding": "verify_signals for gaussian:3 matches blur:spectral_slope and blur:wiener_kernel; only compression:block_boundary mismatches (37%). Blur type/severity is signal-confirmed.",
+        "action": "keep blur_gaussian:3"
+      },
+      {
+        "signal": "Lens family (analyzer verdict LENS_BLUR medium confidence, PCA 1.19)",
+        "r0_treatment": "lens:3 tested (28.36 dB) and discarded; severity sweep skipped",
+        "r1_finding": "Mandatory lens severity sweep: sev2 26.73 / sev3 28.36 / sev4 30.74 / sev5 30.10. Peak lens:4 is +0.40 dB over gaussian:3 but verify_signals is the same PARTIAL profile (block_boundary 35% off). SKILL notes gaussian/lens MTF are practically indistinguishable; +0.40 dB is insufficient evidence.",
+        "action": "no change (lens:4 recorded as alternative)"
+      },
+      {
+        "signal": "block_boundary 4.8992 vs jpeg:3 sim",
+        "r0_treatment": "jpeg:3 chosen by PSNR/CI (bb sim 3.10); jpeg:4 only tested with gaussian:4",
+        "r1_finding": "verify_signals with jpeg:3 = PARTIAL (block_boundary diff 37%); with jpeg:4 = MATCH 5/5 (all blur/global/compression signals). However jpeg:4 lowers simulated PSNR on every pair: 30.18/26.69/29.08/28.90/30.01 (mean 28.97) vs R0 30.34/27.03/29.35/29.34/30.51 (mean 29.31), delta -0.34 dB. Signal/PSNR conflict unresolved; deterministic-candidate rule requires PSNR >40 or +2 dB -> no change.",
+        "action": "keep compression_jpeg:3; jpeg:4 in alternatives"
+      },
+      {
+        "signal": "chroma_ratio 0.000, mean_shift +38.6, variance_ratio 0.2321",
+        "r0_treatment": "saturate_weaken_HSV:5 LIKELY",
+        "r1_finding": "Re-confirmed: verify_signals global:mean_shift and global:variance_ratio MATCH in all four signal checks. Variance algebra still excludes contrast (c>=0.94 needed to keep var_ratio 0.232) and brightness (would add >=25.5 mean shift on top of the V=max desaturation).",
+        "action": "keep saturate_weaken_HSV:5"
+      },
+      {
+        "signal": "noise_prior sigma 1.98; peeled §B extreme_pct 55.5, spatial_corr 0.945, var_slope 0.0014, vm_slope 0.0877",
+        "r0_treatment": "NO_NOISE (structured residual; known extreme_pct FP; noise:2 test degraded PSNR)",
+        "r1_finding": "No new evidence for noise. sigma sits on the 2.0 boundary and the residual is highly structured (spatial_corr 0.945) with var_slope~0 (poisson excluded); RGB identity after S=0 makes rgb_ratio/cross_ch uninformative. R0 R11 noise_gaussian_RGB:2 lowered PSNR 30.34->29.93. Also a 4-step option (blind_challenge can sample up to 4 categories) was checked algebraically: pre-blur noise is attenuated below visibility, brightness/contrast are excluded by mean/variance.",
+        "action": "keep NO_NOISE"
+      }
+    ],
+    "five_pair_validation": {
+      "r0_pipeline_blur_gaussian3_sat5_jpeg3": {
+        "pair0": 30.34,
+        "pair1": 27.03,
+        "pair2": 29.35,
+        "pair3": 29.34,
+        "pair4": 30.51,
+        "mean": 29.31,
+        "ci_pass": ["7/10", "6/10", "7/10", "7/10", "8/10"]
+      },
+      "r1_candidate_blur_gaussian3_sat5_jpeg4": {
+        "pair0": 30.18,
+        "pair1": 26.69,
+        "pair2": 29.08,
+        "pair3": 28.90,
+        "pair4": 30.01,
+        "mean": 28.97,
+        "ci_pass": ["7/10", "6/10", "7/10", "7/10", "10/10"],
+        "delta_vs_r0": -0.34
+      },
+      "conclusion": "The only R1 candidate that reached a change evaluation on all 5 pairs (signal MATCH) is uniformly slightly worse in PSNR. Best pair0-only new candidate lens:4 (+0.40 dB) has no signal advantage and stays an alternative. No candidate reaches >40 dB or +2 dB, so NO_CHANGE."
+    },
+    "budget_r1": {
+      "test_candidate_calls": 14,
+      "pair0_screening_psnr": 6,
+      "pair0_signal_checks": 4,
+      "five_pair_validation_extra_pairs": 4,
+      "new_pipelines_tested": 6
+    }
+  }
+}

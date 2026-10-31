@@ -1,0 +1,35 @@
+{
+  "challenge_id": "blind_0003_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 2]],
+  "r1_pipeline": [["blur_glass", 2]],
+  "support_psnr_r0": 28.41,
+  "candidates_tested": [
+    {"pipeline": "blur_glass:2", "role": "control/support 复核", "support_psnr": [34.66, 28.50, 38.32, 38.83, 35.62], "mean": 35.19, "ci": "5/5 x 10/10", "outcome": "KEEP"},
+    {"pipeline": "blur_gaussian:3", "role": "确定性 severity 边界 (未测点)", "psnr_pair0": 32.01, "ci": "8/10", "outcome": "REJECT"},
+    {"pipeline": "blur_gaussian:1", "role": "确定性 severity 边界 (未测点)", "psnr_pair0": 30.72, "ci": "9/10", "outcome": "REJECT"},
+    {"pipeline": "blur_gaussian:2", "role": "主要替代子类型 5 对 support", "support_psnr": [34.03, 27.89, 37.32, 37.47, 34.44], "mean": 34.23, "ci": "8-9/10", "outcome": "REJECT (低于 glass 0.96 dB 且 CI 更差)"},
+    {"pipeline": "blur_gaussian:2,contrast_weaken_scale:1", "role": "variance_ratio 边界 (被忽略 global)", "psnr_pair0": 26.39, "ci": "6/10", "outcome": "REJECT (-7.64 dB vs base)"},
+    {"pipeline": "blur_gaussian:2,compression_jpeg:1", "role": "unique_G/DCT 压缩边界 (被模糊掩盖)", "psnr_pair0": 31.60, "ci": "6/10", "outcome": "REJECT (-2.43 dB vs base, block_boundary 失配89%)"}
+  ],
+  "test_candidate_calls": 13,
+  "test_candidate_invocations_total": 14,
+  "test_candidate_failed_invocations": 1,
+  "best_validation": {
+    "pipeline": "blur_glass:2",
+    "support_psnr": {"pair0": 34.66, "pair1": 28.50, "pair2": 38.32, "pair3": 38.83, "pair4": 35.62},
+    "support_psnr_mean": 35.19,
+    "ci": "5/5 pairs CI=10/10",
+    "reproducibility_vs_r0": "逐对差 <=0.03 dB"
+  },
+  "signal_sources": [
+    "variance_ratio=0.8688, contrast_spread_ratio=0.9197, mean_shift=-0.5 -> 模糊方差收缩, contrast 假设被 -7.64dB 否决",
+    "unique_G=212 (ratio 0.8379), dct_zero_ratio=0.507, block_boundary=0.9996 -> mild compression 边界, JPEG 假设被 -2.43dB 否决",
+    "noise_prior sigma=1.48 (<2); peeled sigma=2.97; extreme_pct=58.26 + spatial_corr=0.95 为已知 blur FP; x_distortion noise sev1 sigma=12.75 -> NO_NOISE",
+    "glass_score=0.504 (>0.25), sigma<3 -> glass DT; gm_ratio=0.2986, spectral_slope_ratio=1.094, anisotropy=1.20 (<1.7 排除 motion)",
+    "确定性 gaussian 族 sev1/2/3/5 = 30.72/34.03/32.01/28.54 与 lens 族 sev1-5 = 31.29/33.62/33.47/30.71/28.78 均无 >40dB -> 非确定性 glass",
+    "5 对 support: glass:2 mean 35.19 (CI 10/10 x5) vs gaussian:2 mean 34.23 (CI 8-9/10)"
+  ],
+  "reason": "R1 信号重释未发现被忽略或误判的退化步: variance/contrast 边界和 unique_G/DCT 压缩边界对应的追加候选在 pair0 上均产生显著负增益 (-7.64/-2.43 dB), 噪声边界 (sigma=1.48) 远低于任何 noise 函数最小 sev1 (sigma=12.75), 确定性 gaussian/lens 全鲜度族均无 >40dB 精确匹配。glass:2 在 5 对 support 上 CI 全 10/10、PSNR 与 R0 逐对复现 (差<=0.03 dB), 优于 gaussian:2 均值 0.96 dB。无候选满足 >40dB 或 +2dB 的改变阈值, 维持 R0 管线 blur_glass:2, 决策 NO_CHANGE (UNCERTAIN, glass 随机 pixel shuffle 使 PSNR 上限 <40dB)。"
+}

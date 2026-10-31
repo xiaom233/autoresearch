@@ -1,0 +1,243 @@
+{
+  "challenge_id": "blind_0008_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=1.0042 (<1.05), unique_G=256/256, dct_zero_ratio=0.2999",
+      "blur": "BLUR_UNLIKELY: gm_ratio=0.9551, spectral_slope_ratio=0.9999 (threshold 1.08), anisotropy=0, pca=0",
+      "noise": "NO_NOISE: noise_prior_sigma=0.25 (<2), cross_channel_corr=0.2826 but negligible sigma",
+      "global": "BRIGHTNESS_brighten (mean_shift=20.5/255, clipped_fraction=5.2%) + SATURATION_weaken (chroma_ratio=0.2027); variance_ratio=0.9178 (contrast_from_variance=False)"
+    },
+    "mode": "PSNR (sigma=0.25 < 2)",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "sigma=0.25<2, gate not triggered"
+    },
+    "suspected": [
+      "brightness brighten (shift or gamma), severity ~1",
+      "saturation weaken, scale ~0.2 (HSV sev4 or YCrCb sev3)"
+    ],
+    "ruled_out": [
+      "compression_jpeg",
+      "blur",
+      "noise",
+      "contrast (spread_ratio=0.956, variance explained by clipping)"
+    ],
+    "order_hypotheses": [
+      "brightness -> saturation (same priority shuffle)",
+      "saturation -> brightness"
+    ],
+    "reasoning": "Only global signals are strong; saturation chroma ratio 0.2027 matches uniform chroma scale 0.2; mean shift 20.5 matches brighten sev1 variants under clipping (5.2% pixels). 4 of the 5 remaining non-global signals are absent, so pure global 2-step is most plausible."
+  },
+  "noise_6step_check": {
+    "applicable": false,
+    "noise_prior_sigma": 0.25,
+    "extreme_pct": null,
+    "vm_slope": null,
+    "var_slope": null,
+    "spatial_corr": null,
+    "rgb_ratio": null,
+    "cross_ch_corr": null,
+    "diagnosis": "sigma=0.25 < 2 -> NO_NOISE (SKILL Step 3 rule). residual_intensity_corr=-0.0157, spatial_corr=0.9883 reflects blur-free image content, not noise."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,saturate_weaken_YCrCb:3",
+        "thinking": "R1: 信号驱动 — mean_shift=20.5 表明 brighten；chroma_ratio=0.2027 匹配均匀 chroma 缩放 0.2 (YCrCb sev3)；RGB shift +25.5 经 5.2% 裁剪后接近 20.5；先测 RGB-shift 与 YCrCb-sat 顺序"
+      },
+      "test_result": {
+        "psnr_rgb": 22.22,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,saturate_weaken_YCrCb:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:1,saturate_weaken_YCrCb:3",
+        "thinking": "R1: 隔离 brightness 子类型 — 固定 YCrCb-sat:3，换 HSV V+0.1 (V 为 max 通道，比例提亮，mean shift 约 20-22 与观测 20.5 吻合)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.22,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:1,saturate_weaken_YCrCb:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "R2: 重新归因 — 5 对 support 的 chroma_ratio 全≈0.20 (scale=0.2) 且 mean_shift 随图像内容变化 6.9-20.5; target 保留 0.52% 零点与 ~4.8% 255 像素 (RGB-shift 会破坏零点) → HSV 饱和度削弱保持 V/max 不变、上移 min 通道, 自然抬升 RGB 均值; 假设单步 saturate_weaken_HSV:4, 无 brightness"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "Support 复核 pair1: pair0 已 PSNR=inf 精确命中 saturate_weaken_HSV:4; 各对 chroma_ratio≈0.20 一致, 验证同管线跨图适用"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "Support 复核 pair2: pair0 已 PSNR=inf 精确命中 saturate_weaken_HSV:4; 各对 chroma_ratio≈0.20 一致, 验证同管线跨图适用"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "Support 复核 pair3: pair0 已 PSNR=inf 精确命中 saturate_weaken_HSV:4; 各对 chroma_ratio≈0.20 一致, 验证同管线跨图适用"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "Support 复核 pair4: pair0 已 PSNR=inf 精确命中 saturate_weaken_HSV:4; 各对 chroma_ratio≈0.20 一致, 验证同管线跨图适用"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,saturate_weaken_YCrCb:3",
+      "psnr_rgb": 22.22,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:1,saturate_weaken_YCrCb:3",
+      "psnr_rgb": 21.22,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    }
+  ],
+  "support_observations": {
+    "pair0": {"mean_shift": 20.5, "chroma_ratio": 0.2027, "clipped_fraction": 0.0522, "variance_ratio": 0.9178},
+    "pair1": {"mean_shift": 6.9, "chroma_ratio": 0.2011, "clipped_fraction": 0.0006, "variance_ratio": 0.863},
+    "pair2": {"mean_shift": 18.8, "chroma_ratio": 0.2038, "clipped_fraction": 0.0035, "variance_ratio": 1.1726},
+    "pair3": {"mean_shift": 16.3, "chroma_ratio": 0.2018, "clipped_fraction": 0.0043, "variance_ratio": 0.6653},
+    "pair4": {"mean_shift": 15.3, "chroma_ratio": 0.2018, "clipped_fraction": 0.0173, "variance_ratio": 1.0957},
+    "conclusion": "chroma_ratio 0.201-0.204 恒定 -> 均匀 chroma 缩放 0.2; mean_shift 随图像内容大幅波动 (6.9-20.5) 且 target 保留清图零点/255 极值 -> mean_shift 是 saturate_weaken_HSV 副作用 (V= max 不变、min 通道上移) 而非 brightness 步骤"
+  },
+  "attribution_revision": {
+    "revised_at_round": 3,
+    "from": "brightness_brighten + saturate_weaken (2-step)",
+    "to": "saturate_weaken_HSV only (1-step)",
+    "signal_sources": [
+      "impulse_pct_zero: target=0.524% 与 clean 一致, RGB/HSV-shift 模拟均归零 (0%) -> 不存在 additive brightening",
+      "impulse_pct_255: target≈4.76% < shift 模拟 5.05-5.28% -> 无 255 裁剪增量",
+      "chroma_ratio=0.2027 与 saturate_weaken_HSV:4 (scale=0.2) 精确一致, 5 对 support 全部 0.201-0.204",
+      "HSV 饱和度削弱保持 V(max) 不变、min 通道上移, 使 RGB 均值上升 (mean_shift 6.9-20.5, 内容依赖) 且方差比可升可降 (0.665-1.173) -> 完美解释原被误归因给 brightness 的全局信号"
+    ]
+  },
+  "final_decision": {
+    "pipeline": [
+      {"function": "saturate_weaken_HSV", "severity": 4, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "LIKELY",
+    "step_count": 1,
+    "tier": 1,
+    "rationale": "pair0 单步 saturate_weaken_HSV:4 仿真 PSNR=inf (像素级零误差), CI 10/10; 4 对 support 全部 PSNR=inf, CI 10/10。确定性单步退化, PSNR >> 40dB -> LIKELY。无噪声 (sigma=0.25), 无压缩 (block_boundary=1.004), 无模糊 (spectral_slope_ratio=1.000)。初期的 brightness 归因是 HSV 饱和度削弱抬高 RGB 均值的假象, 已由零点/255 极值保留与精确 PSNR 修正。"
+  }
+}

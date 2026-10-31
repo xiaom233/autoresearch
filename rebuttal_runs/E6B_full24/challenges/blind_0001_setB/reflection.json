@@ -1,0 +1,754 @@
+{
+  "challenge_id": "blind_0001_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=1.003 (无JPEG 8x8信号), 但 unique_G=16/16/16 (ratio 0.0625, <200 → compression/quantization 存在, 0%FP), dct_zero_ratio=0.0162, subtype=QUANTIZATION_OR_JPEG2000",
+      "blur": "BLUR_UNLIKELY: gm_ratio=3.002 (noise-destroyed), spectral_slope_ratio=0.9928 (<1.08), FFT anisotropy=0.00, pca=0.0 → 无模糊迹象",
+      "noise": "noise_prior sigma=17.79; intensity_var_corr=0.7955 (正相关, 类Poisson/乘性); cross_channel_corr=0.0149; spatial_corr=0.0137; impulse_zero_ratio=0.0463",
+      "global": "NO_GLOBAL (low confidence): variance_ratio=1.1964, mean_shift=-2.8/255=-0.011, clipped_fraction=0.1477 (14.8% 像素饱和), chroma_ratio=1.98 (FP: saturation_from_noise=true)"
+    },
+    "signal_interpretation": "unique_G=16 per channel 与 x_distortion.quantization_hist severity=2 的 num_classes=16 精确吻合；quantization_median:2=15 classes 次之。clipped_fraction 14.8% 与 histogram 量化的 cdf 映射到 0/255 一致；variance_ratio=1.196 与直方图均衡化拉伸方差一致。block_boundary=1.003 排除 JPEG。sigma=17.79 可能被量化台阶伪影抬高 (wavelet MAD 在台阶状残差上高估)，需剥离后重估。",
+    "mode": "SIGNAL (sigma=17.8)",
+    "qwen_gate": {
+      "available": false,
+      "note": "Qwen/API 不可用，跳过 Step 0.5 门控"
+    }
+  },
+  "noise_6step_check": {
+    "note": "最终管线无 deterministic 步骤需剥离；以下为用 noise_poisson:5 剥离后的 §B 数值 (peeled_final_sb6.json) + 原始残差 DT 信号。extreme_pct 在带符号残差上恒高 (~50%+)，属 SKILL 已知度量缺陷 (已知FP)，不作为 impulse 判据；vm_slope 被异方差噪声放大。",
+    "extreme_pct": 58.72,
+    "zero_ratio": 0.174,
+    "vm_slope": 35.1406,
+    "var_slope": 0.1206,
+    "spatial_corr": 0.3335,
+    "rgb_ratio": 1.1502,
+    "cross_ch_corr": 0.0008,
+    "raw_residual_signals": {
+      "impulse_zero_ratio": 0.0463,
+      "spatial_corr": 0.0137,
+      "cross_channel_corr": 0.0149,
+      "intensity_var_corr": 0.7955,
+      "intensity_scaled_var_corr": -0.7402
+    },
+    "diagnosis": "cross_ch_corr≈0.001 (剥离后) / 0.0149 (原始) → 三通道独立, 排除 YCrCb; 残差近白 (spatial_corr≈0.014) 排除 SC/speckle (speckle 在 p2 上模拟得 sc=0.43/cc=0.29, 与 target 0.003/0.003 严重不符); impulse 被 sigma 排除 (impulse:5+hist2 模拟 sigma 仅 4.2 vs target 17.8). 原始残差 DT: corr_mean_var=0.7955>0.15 且 corr_scaled=-0.7402<0.3 → POISSON (三对 target 一致). 最终以单步 noise_poisson:5 复现全部信号, 5/5 对 verify_signals=MATCH."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2",
+        "thinking": "R1: unique_G=16/16/16 与 quantization_hist:2 (num_classes=16) 精确吻合; block_boundary=1.003 排除JPEG; clipped_fraction=14.8% 与hist量化映射到0/255一致. 测试确定性量化是否解释 target 的全局信号"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0657)",
+          "global:variance_ratio (diff=56%)"
+        ],
+        "pipeline": "quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,quantization_hist:2",
+        "thinking": "R1: target unique_G=16 (noise后加会破坏色阶, 故噪声必在量化前); sim_hist2 单独 mean_shift=+13.9 vs target -2.8, variance_ratio 1.086 vs 1.196, clipped 6.2% vs 14.8% → 量化前噪声改变直方图/cdf. noise_prior sigma=17.8. 先测 gaussian_RGB:2 (sigma=25.5)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=28%)",
+          "global:mean_shift (diff=0.0520)",
+          "global:variance_ratio (diff=21%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2,quantization_hist:2",
+        "thinking": "R1: target ivc=+0.7955 (残差方差随亮度增加) 而 gaussian:2+hist2 模拟得 ivc=-0.63 (负相关) → 乘性噪声(speckle)假设. speckle:2 sigma=0.21*I ~ 21-27, 与 gaussian:2 量级相近但强度相关"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=46%)",
+          "global:mean_shift (diff=0.0661)",
+          "global:variance_ratio (diff=48%)"
+        ],
+        "pipeline": "noise_speckle:2,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,quantization_hist:2",
+        "thinking": "R2 二元对比/severity扫描: gaussian:2+hist2 WEAK(sigma差28%, 且 target sigma=17.8 > 模拟12.5, target sc=0.014 < 模拟0.045 → 噪声更强). 按 SKILL severity 扫描 gaussian:2→3 (sigma=38.25)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0386)",
+          "global:variance_ratio (diff=15%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_speckle:4,quantization_hist:2",
+        "thinking": "R2 跨族对比: gaussian:3+hist2 除 ivc 外全部指纹吻合(sigma 17.5 vs 17.8, clip/spread/chroma 接近), 但 ivc 符号相反(target +0.796 vs sim -0.647) → 强度相关噪声(speckle)可翻转 ivc. 前述 speckle:2 sigma仅10, 按严重度扫描升到 speckle:4 (c=0.35*I)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0622)",
+          "global:variance_ratio (diff=30%)"
+        ],
+        "pipeline": "noise_speckle:4,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "thinking": "R2 覆盖: 噪声类型三类全覆盖要求(§B/信号图首判 POISSON, ivc=+0.7955 类Poisson). poisson:5 c=15 理论上sigma受限于sqrt(I/15)~4, 但量化bin翻转会放大残差; 验证指纹"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0547)",
+          "global:variance_ratio (diff=19%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:5,quantization_hist:2",
+        "thinking": "R3 severity扫描(g3→g5,+2): g3+hist2 ms=+7.0 vr=1.225 仍不达 target(ms=-2.8,vr=1.196); 更强噪声使直方图更平→cdf 输出均值趋近中点, 检验 ms 是否转负、vr/ivc 是否改善"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=42%)",
+          "global:mean_shift (diff=0.0130)",
+          "global:variance_ratio (diff=81%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,quantization_hist:2",
+        "thinking": "R3 severity微调: sp4+hist2 ivc=0.769/isvc=-0.651 已接近 target(0.796/-0.740), 但 sigma_est 15.9<17.8 → speckle:5 (c=0.42) 检验 sigma/ivc/global 是否更优; 多对 (p0/p1/p2) ivc 均 +0.80~+0.88 稳定支持乘性噪声"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0550)",
+          "global:variance_ratio (diff=11%)"
+        ],
+        "pipeline": "noise_speckle:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,quantization_hist:2",
+        "thinking": "support p1 复核: gaussian:3+hist2 — pair0 上 sigma/sc/cc/global 吻合但 ivc 符号反; 在 p1 检验 ivc 是否仍为负(与 target +0.879 对比)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.1467)",
+          "global:variance_ratio (diff=101%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,quantization_hist:2",
+        "thinking": "support p1 复核: speckle:5+hist2 — pair0 指纹大部分吻合(sigma 18.4 vs 17.8, ivc 0.846 vs 0.796, clip/vr/spread/chroma 接近); 在 p1 检验 global(ms/vr) 与 ivc"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=42%)",
+          "global:mean_shift (diff=0.1242)",
+          "global:variance_ratio (diff=149%)"
+        ],
+        "pipeline": "noise_speckle:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,quantization_hist:2",
+        "thinking": "R3 severity扫描(g3+1): g3 在 p0/p1 的 sigma 均吻合(17.5/20.4 vs 17.8/19.2), g5 过冲(sigma 26.7, vr 1.355). 检验 g4 是否在 p0 更优或居中"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0255)",
+          "global:variance_ratio (diff=47%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,quantization_hist:2",
+        "thinking": "support p2 复核: 主候选 gaussian:3+hist2, 检验 sigma(目标10.5)/ivc(0.842)/global(ms -0.6, vr 1.201, clip 30.9%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=118%)",
+          "global:mean_shift (diff=0.1648)",
+          "global:variance_ratio (diff=299%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5,quantization_hist:2",
+        "thinking": "R2 覆盖/跨族: target p0/p1/p2 ivc 恒 +0.80~0.88 (强度相关), sc 0.003~0.027 极低, clip 15~31% 高. 量化前 impulse 的 0/255 像素经 hist2 仍为精确 0/255(unique_G 不变), 稀疏极值→低sc; 测 impulse:5 (amount=10%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=63%)",
+          "global:mean_shift (diff=0.0407)",
+          "global:variance_ratio (diff=11%)"
+        ],
+        "pipeline": "noise_impulse:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_speckle:4,quantization_hist:2",
+        "thinking": "support p1: speckle:4+hist2 — p0 上 sp4 sigma 15.9/ivc 0.77 接近; sp5 在 p1 sigma 过冲(26.8 vs 19.2), 检验 sp4 是否更稳"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=29%)",
+          "global:mean_shift (diff=0.1226)",
+          "global:variance_ratio (diff=109%)"
+        ],
+        "pipeline": "noise_speckle:4,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_speckle:4,quantization_hist:2",
+        "thinking": "support p2: speckle:4+hist2 — p2 target sigma 仅 10.5 但 clip 31%; 乘性噪声在暗图 sigma 更低, 检验 sp4 跨图 sigma 与 clip/ms/vr"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.1665)",
+          "global:variance_ratio (diff=226%)"
+        ],
+        "pipeline": "noise_speckle:4,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "thinking": "support p1: poisson:5+hist2 — p0 上 sigma 18.04/clip 0.1479 几乎完美; poisson sigma~sqrt(I) 内容依赖或可解释 target 跨图 sigma 波动(17.8/19.2/10.5)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.1225)",
+          "global:variance_ratio (diff=120%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "thinking": "support p2: poisson:5+hist2 — 检验 poisson 是否复现 p2 的低 sigma(10.5) 及高 clip(31%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=74%)",
+          "global:mean_shift (diff=0.1624)",
+          "global:variance_ratio (diff=318%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "单步假设: noise_poisson:5 c=15 的 λ=15I, 输出 k/15 → 恰好16个色阶(k=0..15, 步长17), 可独立解释 unique_G=16/16/16; sigma=255*sqrt(I/15)=21~66, 与 target 残差量级一致; 检验单步是否比分步更贴合全局信号"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "support p1 复核: 单步 poisson:5 — p0 全信号精确吻合(sigma/ivc/isvc/ms/clip/vr/spread/chroma/unique_G=16); 在 p1 检验 sigma/clean_residual 及其余指纹"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "support p2 复核: 单步 poisson:5 — p2 target sigma 10.5/clip 31%, 检验 sigma 与残差"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "support p3 复核: 单步 poisson:5 — 检验 sigma/clean_residual 与全局指纹"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "support p4 复核: 单步 poisson:5 — 最后一对, 检验 sigma/clean_residual 与全局指纹"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1-A pair0: 状态管线复核. 信号来源: unique_G=16/16/16 与 poisson c=15 (sev5, 输出 k/15 → 17 步长色阶) 精确匹配; sigma=17.79, ivc=+0.7955, isvc=-0.7402, cross_ch=0.0149. 5 对 support 全量复核起点"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1-A pair1: 状态管线复核. 信号来源: pair1 目标 sigma=19.15, ivc 强正, unique_G 16; poisson:5 预测同构强度相关方差"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1-A pair2: 状态管线复核. 信号来源: pair2 目标 sigma=10.5 (较暗图 → poisson sigma=255*sqrt(I/15) 更低), unique_G 16; 检验跨图 sigma 内容依赖性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1-A pair3: 状态管线复核. 信号来源: pair3 目标 sigma=19.52, unique_G 16, cross_ch 低; 检验 poisson:5 跨图一致性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5",
+        "thinking": "R1-A pair4: 状态管线复核. 信号来源: pair4 目标 sigma=12.73, unique_G 16, cross_ch 低; 检验 poisson:5 跨图一致性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4",
+        "thinking": "R1-B pair0: severity 边界对照. 信号来源: unique_G=16 → k/15 网格 → c=15 (sev5); sev4 是 c=25 → 26 级色阶, 预测 sigma=255*sqrt(I/25) 比 sev5 低约 22%, 检验是否可被 sigma/clean_residual 拒绝"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=26%)"
+        ],
+        "pipeline": "noise_poisson:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4",
+        "thinking": "R1-B pair1: severity 边界对照, 信号来源同 pair0 (unique_G=16 → c=15; sev4 c=25 预测 sigma 低 22%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4",
+        "thinking": "R1-B pair2: severity 边界对照, 信号来源同 pair0 (unique_G=16 → c=15; sev4 c=25 预测 sigma 低 22%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4",
+        "thinking": "R1-B pair3: severity 边界对照, 信号来源同 pair0 (unique_G=16 → c=15; sev4 c=25 预测 sigma 低 22%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4",
+        "thinking": "R1-B pair4: severity 边界对照, 信号来源同 pair0 (unique_G=16 → c=15; sev4 c=25 预测 sigma 低 22%)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_poisson",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 2,
+    "alternatives": [],
+    "reinterpretation": "初始假设 quantization_hist:2 (unique_G=16 精确匹配 num_classes=16) 被证伪: 该假设在全局信号上失败 (mean_shift +13.9 vs -2.8, vr 1.086 vs 1.196), 且任何 [noise, quantization_hist:2] 组合最多 WEAK. 真正原因: noise_poisson:5 (c=15) 的 lambda=15*I, 输出恰为 k/15 (k=0..15) → 16 个色阶 per channel, 且 sigma=255*sqrt(I/15)≈21-66. 单步 poisson:5 在 pair0 上复现全部信号至小数位 (sigma 17.79/17.79, ms -2.8/-2.8, clip 0.1477/0.1478, vr 1.1964/1.1966, spread/chroma 完全一致, ivc/isvc/sc/cc 接近).",
+    "rationale": "verify_signals MATCH on 5/5 support pairs (noise:sigma, noise:clean_residual). SKILL 规则: 噪声步骤即使 MATCH 也只能 UNCERTAIN (随机种子失配, 永不 LIKELY). 无 blur (spectral_slope_ratio≈0.99, FFT anisotropy=0.00), 无 JPEG (block_boundary≈1.0), 无独立 global/contrast (全局统计由 poisson 噪声+clipping 完全解释). 因此 pipeline 仅 1 步.",
+    "excluded_hypotheses": [
+      "compression_jpeg / quantization_hist:2: block_boundary≈1.0; quantization_hist:2 全局信号失配 (ms/vr)",
+      "blur_*: spectral_slope_ratio 0.973-0.994, FFT anisotropy 0.00",
+      "noise_gaussian_RGB:3: 最多 WEAK, p2 sigma 22.1 vs 10.5, global 信号失配",
+      "noise_speckle:4/5: p2 模拟 sc=0.43/cc=0.29 vs target 0.003/0.003; p1 sigma 过冲",
+      "noise_impulse:5: 模拟 sigma 4.2 vs target 17.8",
+      "noise_gaussian_YCrCb: target cross_channel_corr 0.003-0.024 远低于 YCrCb 噪声特征 (>0.12)"
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (noise 步骤协议性触发), support_psnr_r0=30.15 dB",
+    "mode": "SIGNAL (sigma=17.8) — 噪声候选全程未用 PSNR 判定",
+    "signal_reanalysis": [
+      {"signal": "unique_G=16/16/16 (clean=256)", "value": "ratio=0.0625", "interpretation": "poisson c=15 (sev5) 输出 k/15 的 17 步长色阶网格的直接指纹; R1 模拟对照: sev5 → unique_G=16, sev4 → unique_G=26 → 严重度唯一确定为 5", "status": "被忽略信号复检后确认"},
+      {"signal": "block_boundary", "value": "1.0031 (<1.05, 0%FP 阈值)", "interpretation": "无 JPEG 8x8 块效应; dct_zero_ratio=0.0162 佐证", "status": "排除 compression"},
+      {"signal": "unique_G 与 compression 的混淆", "value": "16", "interpretation": "R0 已测 quantization_hist:2 (16 classes) 全局信号失配 (mean_shift +13.9 vs -2.8, variance_ratio 1.086 vs 1.196); R1 指纹对照确认 16 级来自 poisson 网格而非量化", "status": "排除 quantization_hist"},
+      {"signal": "spectral_slope_ratio / anisotropy / pca", "value": "0.9928 / 0.00 / 0.0", "interpretation": "无 blur; gm_ratio=3.002 为噪声破坏后的不可用值, 不作为反证", "status": "排除 blur (gaussian/motion/lens/glass)"},
+      {"signal": "variance_ratio / contrast_spread_ratio", "value": "1.1964 / 1.1212", "interpretation": "sev5 模拟复现 1.1973 / 1.1212; sev4 模拟 1.1206 / 1.0798 失配 → 方差增大来自 Poisson 噪声而非 contrast/gamma", "status": "排除 contrast 附加步"},
+      {"signal": "mean_shift / clipped_fraction", "value": "-2.8 / 0.1477", "interpretation": "sev5 模拟复现 -2.8 / 0.1479; sev4 模拟 -2.1 / 0.1028 → 均值偏移与 14.8% 裁剪由 poisson:5 + uint8 截断/裁剪产生, 非 brightness", "status": "排除 brightness 附加步"},
+      {"signal": "saturation_chroma_ratio", "value": "1.9767", "interpretation": "sev5 模拟复现 1.9761 (sev4 1.6861) → 色度膨胀由噪声引起, 非 saturation 步", "status": "排除 saturation 附加步"},
+      {"signal": "residual_intensity_corr / intensity_scaled_var_corr", "value": "0.7955 / -0.7402", "interpretation": "方差随强度增加 → Poisson 型; sev5 模拟 0.7953 / -0.7318 复现", "status": "噪声类型确认"},
+      {"signal": "spatial_corr / cross_channel_corr (原始残差)", "value": "0.0137 / 0.0149", "interpretation": "近白残差 + 通道独立 → 非 space-correlated, 非 YCrCb", "status": "排除其他噪声族"},
+      {"signal": "剥离后 §B (poisson:5 剥离)", "value": "extreme_pct=58.73, vm_slope=33.37, var_slope=-0.4567, spatial_corr=0.3345, rgb_ratio=1.1518, cross_ch_corr=0.0003", "interpretation": "残差为两次独立 Poisson 实现之差 + 裁剪零区结构, extreme_pct/vm_slope/spatial_corr 均为 SKILL 已知度量伪影; cross_ch≈0.0003 再次排除 YCrCb; 不构成新增退化证据", "status": "伪影解释"},
+      {"signal": "noise_prior sigma (原始残差 vs 剥离残差)", "value": "17.79 vs 30.15", "interpretation": "剥离残差 sigma≈√2×原始 + 裁剪放大, 符合两次独立 Poisson 抽样之差; 若剥离管线错误会系统性偏离", "status": "与 poisson:5 一致"}
+    ],
+    "candidate_ranking": [
+      {"rank": 1, "pipeline": "noise_poisson:5", "support_match": "5/5", "signal_evidence": "pair0 12 项指纹逐位复现 (unique_G 16/16, sigma 17.79/17.79, ivc 0.7955/0.7953, isvc -0.7402/-0.7318, ms -2.8/-2.8, vr 1.1964/1.1973, spread 1.1212/1.1212, clip 0.1477/0.1479, chroma 1.9767/1.9761)", "verdict": "ACCEPT (状态管线保持)"},
+      {"rank": 2, "pipeline": "noise_poisson:4", "support_match": "4/5 (pair0 WEAK, sigma diff=26%)", "signal_evidence": "pair0 指纹系统性失配: unique_G=26 vs 16, sigma=14.08 vs 17.79, ms=-2.1 vs -2.8, vr=1.1206 vs 1.1964, clip=0.1028 vs 0.1477, chroma=1.6861 vs 1.9767", "verdict": "REJECT (severity 边界确认)"}
+    ],
+    "support_verification": {
+      "poisson5": {"pairs": 5, "match": 5, "details": ["p0 MATCH", "p1 MATCH", "p2 MATCH", "p3 MATCH", "p4 MATCH"]},
+      "poisson4": {"pairs": 5, "match": 4, "weak": 1, "details": ["p0 WEAK (noise:sigma diff=26%)", "p1 MATCH", "p2 MATCH", "p3 MATCH", "p4 MATCH"]},
+      "note": "verify_signals 的 noise:sigma 阈值 (20%) 对 sev4/sev5 在部分图上不敏感 (估计器方差), 严重度由 unique_G 色阶网格 + 全局指纹高精度对照判定"
+    },
+    "test_candidate_calls": 10,
+    "candidates_tested": 2,
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 5, "verdict": "UNCERTAIN"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "rationale": "信号重释无新发现; 状态管线 5/5 MATCH 且 12 项指纹逐位复现目标; 唯一替代 (poisson:4) 被色阶网格与全局指纹否定. 噪声步骤依 SKILL 维持 UNCERTAIN (seed 失配), 无足够证据 CHANGE."
+    }
+  }
+}

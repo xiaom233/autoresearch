@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0019_setB",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["blur_glass", 4],
+    ["compression_jpeg", 4],
+    ["saturate_weaken_HSV", 5]
+  ],
+  "pipeline": [
+    {"function": "blur_lens", "severity": 4, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"},
+    {"function": "saturate_weaken_HSV", "severity": 5, "verdict": "LIKELY"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (deterministic pipeline; peeled noise sigma is structure-dominated lower bound, no noise step)",
+    "support_validation": {
+      "pair0": "PSNR=inf dB (pixel-exact reproduction; all 10 CI metric diffs=0)",
+      "pair1": "PSNR=inf dB (pixel-exact; all CI diffs=0)",
+      "pair2": "PSNR=inf dB (pixel-exact; all CI diffs=0)",
+      "pair3": "PSNR=inf dB (pixel-exact; all CI diffs=0)",
+      "pair4": "not tested (test_candidate 15-call budget exhausted); identical fixed pipeline across supports -> 4/5 pixel-exact is conclusive"
+    },
+    "signal_reinterpretation": {
+      "blur_subtype": "full_analysis auto verdict was LENS_BLUR (medium); R0 overrode to glass because glass_score=1.466>0.25 (known FP; hybrid-DT FP(glass)~140/3840). Boundary signal: target impulse_total_pct exceeded lens:5 sim on 4/5 pairs (+0.019/+0.006/+0.203/+0.099) -> lens:5 over-smooths; lens:4 (disk r=6) reproduces target exactly on pairs 0-3.",
+      "blur_severity": "gm_ratio=0.154 (severity_source=gm_ratio) estimated sev5; PSNR boundary sweep showed lens:5 30.2-33.3 dB vs lens:4 inf dB -> true severity 4.",
+      "why_r0_signal_passed": "glass:4 (double gaussian sigma=1.4 + local shuffle) mimics a disk low-pass in aggregate spectral_slope and wiener-kernel correlation; block_boundary/mean_shift/variance_ratio are insensitive to exact kernel. 23/25 signal pass was insufficient for subtype; support PSNR is decisive for deterministic pipelines.",
+      "noise": "No noise. Target is exactly grayscale (saturation_chroma_ratio=0.0; peeled rgb_ratio=1.0, cross_ch_corr=1.0). Peeled sigma=5.68 is a wavelet lower bound on structure-dominated residual (extreme_pct=72.0%, spatial_corr=0.962). Generator order forces noise before blur (priority 0 < 1); lens r=6 disc kernel attenuates injected noise ~14x (sum(k^2)^0.5 ~ 0.07), so any noise would be < ~1 gray level. Exact reproduction proves no hidden noise step.",
+      "global": "Target is fully desaturated -> saturate severity 5 mandatory. HSV vs YCrCb resolved by mean_shift: target brightness_mean_shift=+30.5/255 matches HSV V=max path (max(R,G,B) mean); YCrCb luma path would be ~+6. R0 5/5 mean_shift match + exact reproduction confirm saturate_weaken_HSV:5.",
+      "compression_and_order": "block_boundary=4.388 (0% FP) + dct_zero_ratio=0.902. Exact reproduction confirms compression_jpeg:4 and the physical order blur -> JPEG -> saturation (same order R0 deduced).",
+      "variance_ratio_boundary": "R0 pair2/pair3 variance_ratio mismatches (43%/10%) were a genuine wrong-kernel signal; with lens:4 the exact reproduction gives variance_ratio diff=0."
+    },
+    "rejected_candidates": {
+      "blur_glass:4 (R0)": "mean support PSNR 27.40 dB over 5 pairs (26.92-28.91), CI 46/50; wrong subtype.",
+      "blur_lens:5": "mean support PSNR 31.54 dB (30.17-33.30), but target impulse extremes systematically exceed lens:5 sim (over-smoothing); rejected by lens:4 pixel-exact result.",
+      "blur_gaussian:5": "pair0 PSNR 29.57 dB, CI 6/10 (impulse/clipping and zero_crossing mismatches); rejected."
+    },
+    "support_psnr_r0_trained": 19.33,
+    "rationale": "R1 精确复现：blur_lens:4 -> compression_jpeg:4 -> saturate_weaken_HSV:5 在 support pair0-pair3 上施加于 clean 后与 degraded 像素完全一致（PSNR=inf，10/10 CI 全为 0 差异）。R0 的 blur_glass:4 为错误子类型：glass_score=1.466 是 lens 模糊的假阳性，玻璃随机核在 5 对 support 上的 SIGNAL 复核（23/25）只是聚合信号近似匹配，被确定性 PSNR 推翻。R0 训练 support PSNR 19.33 dB 的主因即 blur 子类型错误（另叠加灰度化导致的色度信息上限）。根因修复后以 lens:4 训练。"
+  }
+}

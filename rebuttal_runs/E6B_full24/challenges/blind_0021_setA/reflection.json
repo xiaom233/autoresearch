@@ -1,0 +1,1158 @@
+{
+  "challenge_id": "blind_0021_setA",
+  "qwen_gate": {
+    "available": false,
+    "reason": "Qwen/API unavailable; Step 0.5 gate context (noise signal contradiction: noise_prior sigma=0.74 vs peeled §B IMPULSE 90.68%) resolved via physical PSNR bound instead"
+  },
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=3.201 (>>1.1, 0%FP), dct_zero_ratio=0.903 → strong JPEG",
+      "blur": "GLASS_BLUR: gm_ratio=0.405, spectral_slope_ratio=1.224, anisotropy=1.65, glass_score=1.023>0.25, pca=1.258 → strong blur sev~4",
+      "noise": "GAUSSIAN_YCrCb low confidence: noise_prior_sigma=0.74 (<2), spatial_corr=0.766, cross_ch_corr=0.679, residual_intensity_corr=-0.19 (gamma suspect). sigma<2 → likely NO real noise",
+      "global": "NO_GLOBAL (low conf): mean_shift=24.0 (≈brightness shift sev1 =+25.5 levels), variance_ratio=0.806, clipped_fraction=1.9%; analyzer attributes to JPEG but magnitude≈brightness sev1; visual pair1 shows lifted shadows"
+    },
+    "mode": "PSNR (sigma=0.74 < 2)",
+    "suspected": [
+      "compression_jpeg (strong)",
+      "blur (glass vs gaussian)",
+      "brightness_brighten (sev1?)"
+    ],
+    "ruled_out": [
+      "global contrast damage (spread_ratio=0.923 near 1)",
+      "saturation (0.924 near 1)"
+    ]
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py on best deterministic pipeline (blur_lens:4 → brightness_brighten_shfit_RGB:1 → compression_jpeg:4), pair0",
+    "extreme_pct": 90.68,
+    "vm_slope": 2.3275,
+    "var_slope": 0.3074,
+    "spatial_corr": 0.9347,
+    "rgb_ratio": 1.1552,
+    "cross_ch_corr": 0.759,
+    "noise_prior_sigma": 1.48,
+    "diagnosis": "NO_NOISE. §B IMPULSE (extreme_pct=90.68%) is the documented JPEG/blur-artifact false positive: noise_prior sigma=1.48<5, cross_ch_corr=0.759 high and spatial_corr=0.93 → residual is structural (kernel/JPEG mismatch), not white noise. Decisive physical bound: every noise function at sev1 (gaussian_RGB sigma=12.75 levels, speckle 0.14 multiplicative, poisson c=80 → ~20 levels at mid-gray, impulse 1% pixels) caps PSNR at <=~26 dB, yet the noise-free deterministic pipeline reaches 34.83 dB (pair0) and 43.8/43.2 dB (support pairs). Therefore no noise step exists."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "Step1 compression: block_boundary=3.201 (0%FP) + dct_zero_ratio=0.903 → strong JPEG; test sev5 (q=5)"
+      },
+      "test_result": {
+        "psnr_rgb": 18.21,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "Step1 compression: severity scan ±1, test sev4 (q=8)"
+      },
+      "test_result": {
+        "psnr_rgb": 18.55,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "Step1 compression: severity scan, test sev3 (q=12)"
+      },
+      "test_result": {
+        "psnr_rgb": 18.33,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Round2 combined: mean_shift=24≈brightness shift sev1(+25.5); gm_ratio=0.405 strong blur; JPEG cliff sev4; test gaussian sigma=4"
+      },
+      "test_result": {
+        "psnr_rgb": 30.23,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:4",
+        "thinking": "Round2: glass_score=1.023>0.25 + anisotropy=1.65<1.7 → glass blur alternative sev4, keep brightness+jpeg"
+      },
+      "test_result": {
+        "psnr_rgb": 26.05,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "thinking": "Round3 control: drop brightness step to verify its contribution (mean_shift=24); keep glass:4+jpeg:4"
+      },
+      "test_result": {
+        "psnr_rgb": 19.32,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "thinking": "Round3: gaussian alternative severity scan (gm_ratio=0.405 very strong → sev5 sigma=5); compare vs gaussian:4 (30.23dB)"
+      },
+      "test_result": {
+        "psnr_rgb": 27.51,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:1,blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Round3: brightness variant — HSV V+0.1 (saturation_chroma_ratio=0.923 slight desat matches HSV V shift) vs RGB+0.1"
+      },
+      "test_result": {
+        "psnr_rgb": 25.95,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:1,blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "Round3 cross-family: lens blur (disk radius=6) alternative to gaussian, same brightness+jpeg"
+      },
+      "test_result": {
+        "psnr_rgb": 33.97,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:5,compression_jpeg:4",
+        "thinking": "Round3 severity scan: lens winner 33.97dB → test radius=8 (sev5), keep brightness+jpeg4"
+      },
+      "test_result": {
+        "psnr_rgb": 28.9,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:3,compression_jpeg:4",
+        "thinking": "Round3 severity scan: lens sev3 (radius=4), keep brightness+jpeg4"
+      },
+      "test_result": {
+        "psnr_rgb": 30.42,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:3",
+        "thinking": "Round3 JPEG severity scan: block_boundary CI was 4-6% at jpeg4; test jpeg3 (q=12)"
+      },
+      "test_result": {
+        "psnr_rgb": 28.6,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:5",
+        "thinking": "Round3 JPEG severity scan: test jpeg5 (q=5), keep lens4+brightness1"
+      },
+      "test_result": {
+        "psnr_rgb": 25.93,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "Round3 brightness subtype: HSV V+0.1 vs RGB+0.1 under best lens4+jpeg4 (RGB scored 33.97dB)"
+      },
+      "test_result": {
+        "psnr_rgb": 26.13,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:2,blur_lens:4,compression_jpeg:4",
+        "thinking": "Round3 brightness severity scan: sev2 (+38 levels) vs sev1 (+25.5, observed mean_shift=24)"
+      },
+      "test_result": {
+        "psnr_rgb": 25.42,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:2,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Round4 order check: brightness priority=2 (ISP, after blur) variant vs priority=0; same params best-so-far"
+      },
+      "test_result": {
+        "psnr_rgb": 34.83,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "Round4 brightness subtype: gamma_RGB sev1 (gamma=0.8) — residual_intensity_corr=-0.19 suggests intensity-dependent (gamma) brightening"
+      },
+      "test_result": {
+        "psnr_rgb": 25.58,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Round4 order: brightness after JPEG (post-edit priority) — test third ordering"
+      },
+      "test_result": {
+        "psnr_rgb": 34.83,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Round4 confirmation: best candidate (34.83dB CI10/10) reproduced with sim saved for visual check"
+      },
+      "test_result": {
+        "psnr_rgb": 34.83,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:3",
+        "thinking": "Round4 JPEG rescan under better order (blur→brightness→jpeg): jpeg3"
+      },
+      "test_result": {
+        "psnr_rgb": 28.67,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:5",
+        "thinking": "Round4 JPEG rescan under better order: jpeg5"
+      },
+      "test_result": {
+        "psnr_rgb": 25.99,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Round4 fair blur compare under better order: gaussian4"
+      },
+      "test_result": {
+        "psnr_rgb": 30.7,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support pair 1 verification of final candidate (lens4+brightness_RGB1+jpeg4)"
+      },
+      "test_result": {
+        "psnr_rgb": 37.76,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support pair 2 verification of final candidate (lens4+brightness_RGB1+jpeg4)"
+      },
+      "test_result": {
+        "psnr_rgb": 43.81,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support pair 3 verification of final candidate (lens4+brightness_RGB1+jpeg4)"
+      },
+      "test_result": {
+        "psnr_rgb": 43.15,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support pair 4 verification of final candidate (lens4+brightness_RGB1+jpeg4)"
+      },
+      "test_result": {
+        "psnr_rgb": 38.34,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "thinking": "R1 signal re-interpretation: physical constraint allows brightness at priority-2 (ISP, same group as JPEG, shuffled) = post-JPEG application; R0 round18 intended 'brightness after JPEG' but recorded the identical string as round16, so this order was never actually tested. mean_shift=24.0 and clipped_fraction=0.0188 determine brightness sev1 (+25.5 levels)."
+      },
+      "test_result": {
+        "psnr_rgb": 34.1,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1 signal re-interpretation: residual_anisotropy=1.6547 is within 0.05 of the 1.7 motion threshold (94% recall, 0% FP at >1.7), a boundary signal ignored by R0. Testing motion sev4 with fixed brightness sev1 (mean_shift=24.0) and JPEG sev4 (block_boundary=3.201)."
+      },
+      "test_result": {
+        "psnr_rgb": 21.42,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:4",
+        "thinking": "R1 signal re-interpretation: glass_score=1.0231 >> 0.25 and sigma=0.74 < 3 meets the SKILL Step-2 glass DT rule, yet R0 rejected glass using PSNR (26.05 dB). If glass is stochastic (pixel shuffle), PSNR is not reproducible and cannot reject it; this run repeats R0 round-5 string verbatim to test reproducibility."
+      },
+      "test_result": {
+        "psnr_rgb": 26.05,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:4",
+        "thinking": "R1 reproducibility run 2: identical string again; if PSNR stays 26.05 dB the glass simulation is deterministic under the tool, so R0's PSNR-based rejection of glass is valid rather than a stochastic-seed artifact."
+      },
+      "test_result": {
+        "psnr_rgb": 26.06,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "blur_lens:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1 boundary signal: R0 scanned lens sev3/5 only under the rejected brightness-first order (30.42/28.90 dB); under the winning order (blur->brightness->JPEG) the lens severity +/-1 neighborhood was never tested. gm_ratio=0.4047 (strong blur); test lens sev3 (radius=4) in final order."
+      },
+      "test_result": {
+        "psnr_rgb": 30.24,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "blur_lens:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1 severity boundary: complete the lens severity scan in the winning order (blur->brightness->JPEG) with sev5 (radius=8); sev4 pair0=34.83 dB. gm_ratio=0.4047 is very strong blur, so sev5 needs an explicit check in the final order."
+      },
+      "test_result": {
+        "psnr_rgb": 29.2,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 33,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "R1 support verification (pair1): physical constraint permits brightness priority-0 (ambient light, before optical blur); R0 selected priority-2 based only on a 0.86 dB pair0 margin (33.97 vs 34.83) and never evaluated pairs 1-4 under this order."
+      },
+      "test_result": {
+        "psnr_rgb": 37.64,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 34,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "R1 support verification (pair2): complete the 5-pair comparison for the priority-0 brightness order; pair0=33.97, pair1=37.64 (vs priority-2 34.83/37.76)."
+      },
+      "test_result": {
+        "psnr_rgb": 42.99,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 35,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "R1 support verification (pair3): priority-0 brightness order accumulating evidence (pairs0-2 all slightly below priority-2 order: -0.86/-0.12/-0.82 dB)."
+      },
+      "test_result": {
+        "psnr_rgb": 42.88,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 36,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "R1 support verification (pair4): final pair for the priority-0 brightness order; compare 5-pair mean against R0 priority-2 order (34.83/37.76/43.81/43.15/38.34, mean 39.58)."
+      },
+      "test_result": {
+        "psnr_rgb": 36.66,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 43.81,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 43.15,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 42.99,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 34
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 42.88,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 35
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 38.34,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 26
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 37.76,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 37.64,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 33
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 36.66,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 36
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 34.83,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 34.83,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 34.83,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 34.1,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 27
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 33.97,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 30.7,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:3,compression_jpeg:4",
+      "psnr_rgb": 30.42,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_lens:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 30.24,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 31
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 30.23,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_lens:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 29.2,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 32
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:5,compression_jpeg:4",
+      "psnr_rgb": 28.9,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:3",
+      "psnr_rgb": 28.67,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:3",
+      "psnr_rgb": 28.6,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": 27.51,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 26.13,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:4",
+      "psnr_rgb": 26.06,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 30
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:4",
+      "psnr_rgb": 26.05,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:4,compression_jpeg:4",
+      "psnr_rgb": 26.05,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 29
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:5",
+      "psnr_rgb": 25.99,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:1,blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 25.95,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:5",
+      "psnr_rgb": 25.93,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 25.58,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:2,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 25.42,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_motion:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 21.42,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 28
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:4",
+      "psnr_rgb": 19.32,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 18.55,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 18.33,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 18.21,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "support_validation": {
+    "candidate": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+    "pairs": [
+      {
+        "pair": 1,
+        "psnr_rgb": 37.76,
+        "ci_pass": "9/10"
+      },
+      {
+        "pair": 2,
+        "psnr_rgb": 43.81,
+        "ci_pass": "10/10"
+      },
+      {
+        "pair": 3,
+        "psnr_rgb": 43.15,
+        "ci_pass": "10/10"
+      },
+      {
+        "pair": 4,
+        "psnr_rgb": 38.34,
+        "ci_pass": "10/10"
+      }
+    ],
+    "note": "Same parameters reproduce target on all 4 support pairs; 2 pairs >43 dB = exact reproduction. Pair0 (primary) 34.83 dB lowest (texture-rich car scene, content-dependent JPEG sensitivity), CI 10/10."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_lens",
+        "severity": 4,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "brightness_brighten_shfit_RGB",
+        "severity": 1,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "order": "blur → brightness → JPEG (brightness priority-2 ISP position; brightness→blur→JPEG scored 33.97 dB, slightly lower)",
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "3 degradations, no noise (peeled §B IMPULSE is known FP; any noise sev1 would cap PSNR ≤26 dB vs observed 34.8/43.8/43.2/38.3/37.8). Blur: PSNR-verified lens:4 (radius=6) beats gaussian:4 by 3.7-4.1 dB and glass:4; radial/glass_score were content-dependent. Brightness: mean_shift=24.0 ≈ RGB shift sev1 (+25.5, minus 1.9% clipping), control without brightness drops 6.7 dB; HSV/gamma/severity-2 variants all worse. JPEG: block_boundary=3.201 (0% FP), sev4 (q=8) optimal among 3/4/5 scans. Pair0 PSNR 34.83 (<40) keeps compression step UNCERTAIN; support pairs 43.81/43.15 dB >40 confirm parameters.",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "blur_gaussian",
+            "severity": 4
+          },
+          {
+            "function": "brightness_brighten_shfit_RGB",
+            "severity": 1
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 4
+          }
+        ],
+        "psnr_rgb": 30.7,
+        "ci_pass": "9/10",
+        "function_family": "blur_gaussian",
+        "note": "cross-family backup, 4.1 dB below winner"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_glass",
+            "severity": 4
+          },
+          {
+            "function": "brightness_brighten_shfit_RGB",
+            "severity": 1
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 4
+          }
+        ],
+        "psnr_rgb": 26.05,
+        "ci_pass": "10/10",
+        "function_family": "blur_glass",
+        "note": "stochastic pixel-shuffle blur cannot be PSNR-reproduced; retained because glass_score=1.023>0.25 and CI=10/10"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "brightness_brighten_shfit_RGB",
+            "severity": 1
+          },
+          {
+            "function": "blur_lens",
+            "severity": 4
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 4
+          }
+        ],
+        "psnr_rgb": 33.97,
+        "ci_pass": "10/10",
+        "function_family": "order_variant",
+        "note": "brightness priority-0 (ambient light) ordering, 0.86 dB below winner"
+      }
+    ]
+  },
+  "reflection_R1": {
+    "trigger": "R0 overall verdict UNCERTAIN (compression step pair0 34.83 dB < 40); trained R0 support PSNR 27.32 dB",
+    "full_analysis_rerun": "full_analysis_R1.json identical to R0 full_analysis.json except residual_intensity_corr -0.1908 -> -0.1902; signal base stable",
+    "signal_reinterpretation": [
+      {
+        "signal": "glass_score=1.0231>0.25 + sigma=0.74<3 (SKILL Step-2 glass DT rule)",
+        "r0_handling": "rejected by PSNR 26.05 dB",
+        "r1_action": "repeat exact R0 round5 string twice: 26.05 / 26.06 dB (stable within 0.01 dB) -> glass sim effectively deterministic; lens:4 deterministically reproduces target at 43.81/43.15 dB on support pairs 2/3, impossible for a different stochastic realization; DT glass recall 79% leaves FP room",
+        "conclusion": "glass correctly rejected"
+      },
+      {
+        "signal": "residual_anisotropy=1.6547, 0.05 below the 1.7 motion threshold (angle FFT checklist threshold 4.0)",
+        "r1_action": "blur_motion:4 in winning order",
+        "value": "21.42 dB (12.4 dB below lens:4)",
+        "conclusion": "boundary signal is negative; motion rejected"
+      },
+      {
+        "signal": "gm_ratio=0.4047 strong blur; R0 scanned lens sev3/5 only under the rejected brightness-first order",
+        "r1_action": "lens sev3 / sev5 in final order",
+        "value": "30.24 / 29.20 dB vs 34.83 at sev4",
+        "conclusion": "lens:4 interior optimum confirmed in winning order"
+      },
+      {
+        "signal": "brightness priority-2 group contains JPEG (same-priority shuffle) -> post-JPEG brightness permitted; R0 round18 intended it but recorded the identical round16 string",
+        "r1_action": "blur_lens:4,compression_jpeg:4,brightness_RGB:1",
+        "value": "34.10 dB, CI 7/10 (impulse_pct_255 diff 124%: post-JPEG clipping spread mismatch)",
+        "conclusion": "post-JPEG order worse than blur->brightness->JPEG"
+      },
+      {
+        "signal": "brightness priority-0 (ambient light, pre-blur) permitted by physical constraint; R0 chose priority-2 on a 0.86 dB pair0 margin with no support evidence",
+        "r1_action": "5-pair verification of brightness:1->lens:4->jpeg:4",
+        "value": "pairs 33.97/37.64/42.99/42.88/36.66, mean 38.83 dB vs 39.58 dB for R0 order",
+        "conclusion": "priority-2 order retained (delta -0.75 dB)"
+      },
+      {
+        "signal": "noise_prior sigma=0.74/1.48 < 2; peeled par B extreme_pct=90.68 FP (var_slope=0.3074<1, spatial_corr=0.9347)",
+        "r1_action": "no noise candidate tested (physical bound: any noise sev1 caps PSNR ~26 dB vs observed 43.8 dB)",
+        "conclusion": "no noise step"
+      }
+    ],
+    "candidate_ranking": [
+      {
+        "rank": 1,
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "support_5pair_mean": 39.58,
+        "status": "R0 pipeline retained"
+      },
+      {
+        "rank": 2,
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "support_5pair_mean": 38.83,
+        "status": "rejected"
+      },
+      {
+        "rank": 3,
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "pair0": 34.1,
+        "status": "rejected (CI 7/10)"
+      },
+      {
+        "rank": 4,
+        "pipeline": "blur_lens:3 / lens:5 + brightness:1 + jpeg:4",
+        "pair0": [
+          30.24,
+          29.2
+        ],
+        "status": "rejected"
+      },
+      {
+        "rank": 5,
+        "pipeline": "brightness:1,blur_glass:4,jpeg:4",
+        "pair0": [
+          26.05,
+          26.06
+        ],
+        "status": "rejected"
+      },
+      {
+        "rank": 6,
+        "pipeline": "blur_motion:4,brightness:1,jpeg:4",
+        "pair0": 21.42,
+        "status": "rejected"
+      }
+    ],
+    "support_validation": {
+      "unchanged_candidate": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "pairs": [
+        {
+          "pair": 0,
+          "psnr_rgb": 34.83,
+          "ci_pass": "10/10",
+          "source": "R0 rounds 16/18/19"
+        },
+        {
+          "pair": 1,
+          "psnr_rgb": 37.76,
+          "ci_pass": "9/10",
+          "source": "R0 round 23"
+        },
+        {
+          "pair": 2,
+          "psnr_rgb": 43.81,
+          "ci_pass": "10/10",
+          "source": "R0 round 24"
+        },
+        {
+          "pair": 3,
+          "psnr_rgb": 43.15,
+          "ci_pass": "10/10",
+          "source": "R0 round 25"
+        },
+        {
+          "pair": 4,
+          "psnr_rgb": 38.34,
+          "ci_pass": "10/10",
+          "source": "R0 round 26"
+        }
+      ],
+      "mean_psnr_rgb": 39.58,
+      "note": "No R1 candidate beats the unchanged pipeline on the same pairs; CHANGE bar (>40 dB on 5 pairs or +2 dB over R0) not met by any candidate"
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {
+          "function": "blur_lens",
+          "severity": 4,
+          "verdict": "LIKELY"
+        },
+        {
+          "function": "brightness_brighten_shfit_RGB",
+          "severity": 1,
+          "verdict": "LIKELY"
+        },
+        {
+          "function": "compression_jpeg",
+          "severity": 4,
+          "verdict": "UNCERTAIN"
+        }
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "reason": "R1 signal re-interpretation confirmed all three steps and the priority-2 order; the four previously unexplored signal paths (glass DT reproducibility, motion anisotropy boundary, lens severity +/-1 in winning order, post-JPEG/priority-0 brightness orders) all scored lower. Best alternative loses 0.75 dB on 5 support pairs. Low trained support PSNR 27.32 dB is not explained by any residual signal-level error."
+    }
+  }
+}

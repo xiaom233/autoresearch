@@ -1,0 +1,415 @@
+{
+  "challenge_id": "blind_0006_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=1.4499 (>1.1, 0%FP), dct_zero_ratio=0.7572, unique_G=256 (ratio 1.0)",
+      "blur": "BLUR_UNLIKELY: gm_ratio=0.9472, spectral_slope_ratio=1.0006 (thr 1.08)",
+      "noise": "noise_prior_sigma=0.74 (<2); step2 nominal GAUSSIAN_YCrCb sev5 but spatial_corr=0.353/cross_ch_corr=0.374 likely contaminated by JPEG; FP_YCrCb_BLUR_JPEG risk flagged",
+      "global": "NO_GLOBAL: variance_ratio=0.9923, mean_shift=0.1, saturation_chroma_ratio=0.9738"
+    },
+    "mode": "PSNR (sigma=0.74 < 2)",
+    "suspected": [
+      "compression_jpeg"
+    ],
+    "ruled_out": [
+      "global (brightness/contrast/saturation)",
+      "heavy noise (sigma<2)"
+    ]
+  },
+  "noise_6step_check": {
+    "peeled_pipeline": "compression_jpeg:1",
+    "residual_std": 0.0,
+    "extreme_pct": 100.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "noise_prior_sigma_after_peel": 1.24,
+    "diagnosis": "NO_NOISE. Peeled residual std=0.0 (JPEG:1 模拟与 target 像素级完全一致, PSNR=inf); §B extreme_pct=100%/IMPULSE及sigma=1.24均为全零残差退化数值/伪信号 (SKILL 已知 FP: extreme_pct>50% + sigma<5 → 忽略 IMPULSE, 信任 NO_NOISE). 原始 sigma=0.74 来自 JPEG 伪影污染 (FP_YCrCb_BLUR_JPEG)."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "compression_jpeg",
+        "severity": 1,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR",
+    "alternatives": [],
+    "rationale": "block_boundary=1.4499 强 JPEG 信号 (0%FP); JPEG sev 3/4/2 = 27.80/26.71/30.46 dB, sev1 = inf dB (像素级完全一致, CI 10/10). 剥离后残差 std=0 → 无 noise/blur/global. 5 对 support 全部 PSNR=inf 复现.",
+    "support_verification": {
+      "pair_1": "compression_jpeg:1 → PSNR=inf, CI 10/10",
+      "pair_2": "compression_jpeg:1 → PSNR=inf, CI 10/10",
+      "pair_3": "compression_jpeg:1 → PSNR=inf, CI 10/10",
+      "pair_4": "compression_jpeg:1 → PSNR=inf, CI 10/10"
+    }
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "block_boundary=1.4499 (0%FP JPEG signal), dct_zero_ratio=0.7572; mid severity first (sev3) since boundary strong"
+      },
+      "test_result": {
+        "psnr_rgb": 27.8,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "sev3 27.8dB with block_boundary diff 20%; test stronger JPEG sev4 (block_boundary=1.45 suggests aggressive compression)"
+      },
+      "test_result": {
+        "psnr_rgb": 26.71,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "sev4 worse (26.71) than sev3 (27.80); monotic trend suggests lower severity, test sev2"
+      },
+      "test_result": {
+        "psnr_rgb": 30.46,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "sev2 best so far (30.46dB, CI 9/10); trend increasing as severity decreases; test sev1 boundary"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "Pair0 exact match (PSNR=inf, residual std=0). Verify same pipeline on support pair 1"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "Pair0/pair1 exact match (PSNR=inf). Verify same pipeline on support pair 2"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "Pair0-2 exact match (PSNR=inf). Verify same pipeline on support pair 3"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "Pair0-3 exact match (PSNR=inf). Verify same pipeline on support pair 4"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 signal recheck pair0: block_boundary=1.4499 (>1.05, 0%FP JPEG), dct_zero_ratio=0.7572, unique_G=256 (no quantization); variance_ratio=0.9923 + contrast_spread_ratio=1.0015 + mean_shift=0.1 (no global); gm_ratio=0.9472 + spectral_slope_ratio=1.0006 (no blur); sigma=0.74<2 and peeled residual std=0 (no noise). Re-verify R0 compression_jpeg:1 exact reproduction."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 support re-verify pair1: same deterministic signals as pair0 (block_boundary=1.4499 JPEG 0%FP, no global/blur/noise). Check if compression_jpeg:1 reproduces degraded_1 exactly."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 support re-verify pair2: same deterministic signals (block_boundary=1.4499 JPEG, flat global/blur/noise). Check exact reproduction of degraded_2 with compression_jpeg:1."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 support re-verify pair3: same deterministic signals (block_boundary=1.4499 JPEG 0%FP, no global/blur/noise). Check exact reproduction of degraded_3 with compression_jpeg:1."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 support re-verify pair4: same deterministic signals (block_boundary=1.4499 JPEG 0%FP, no global/blur/noise). Check exact reproduction of degraded_4 with compression_jpeg:1."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 30.46,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 27.8,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 26.71,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "reflection_R1": {
+    "trigger": "R0 verdict=LIKELY but support_psnr=31.24 < 35 (r0_result.json)",
+    "mode": "PSNR (sigma=0.74 < 2)",
+    "signal_reinterpretation": {
+      "reproduced_analysis": "run_full_analysis.py R1 (full_analysis_R1.json) 与 R0 full_analysis.json 数值逐项一致（确定性信号，可复现）",
+      "signals_reviewed": [
+        {"signal": "block_boundary", "value": 1.4499, "threshold": ">1.05/1.1, 0%FP", "reading": "JPEG 确认，无歧义"},
+        {"signal": "dct_zero_ratio", "value": 0.7572, "threshold": "JPEG 特征", "reading": "支持 JPEG"},
+        {"signal": "unique_G", "value": "target=256, clean=256, ratio=1.0", "threshold": "<200 → compression/quant", "reading": "无 quantization（远离阈值），JPEG:1 后唯一色数不变"},
+        {"signal": "gm_ratio", "value": 0.9472, "threshold": "<0.85 → blur 可疑", "reading": "非边界值，无 blur"},
+        {"signal": "spectral_slope_ratio", "value": 1.0006, "threshold": ">1.08 → blur", "reading": "无 blur"},
+        {"signal": "fft_anisotropy / pca_ratio", "value": "0.00 / 0.0", "threshold": ">1.7/4.0 motion, >0.25 glass", "reading": "无 motion/glass blur"},
+        {"signal": "variance_ratio", "value": 0.9923, "threshold": "≠1.0 → contrast/gamma", "reading": "偏差 0.8%，无 contrast/gamma"},
+        {"signal": "contrast_spread_ratio", "value": 1.0015, "threshold": "≈1.0", "reading": "无 contrast"},
+        {"signal": "mean_shift", "value": 0.1, "threshold": ">0.08 (0-255 归一化口径之外, 远低于可检)", "reading": "无 brightness"},
+        {"signal": "saturation_chroma_ratio", "value": 0.9738, "threshold": "<, 检测 saturation", "reading": "无 saturation"},
+        {"signal": "clipped_fraction", "value": 0.0178, "threshold": "heavy_clipping=false", "reading": "无 clipping 型退化"},
+        {"signal": "noise_prior sigma", "value": 0.74, "threshold": "<2 → NO_NOISE", "reading": "无噪声"},
+        {"signal": "residual_intensity_corr", "value": 0.0015, "threshold": "|ric| 高 → gamma/强度相关残差", "reading": "无 gamma 迹象"},
+        {"signal": "peeled §B (after compression_jpeg:1)", "value": "residual_std=0.0, zero_ratio=1.0, ch_stds R=G=B=0; extreme_pct=100%, sigma_after_peel=1.24", "reading": "NO_NOISE — 全零残差导致 §B 数值退化（nan/0/100%），属 SKILL 已知 extreme_pct 伪信号规则（extreme_pct>50% + sigma<5 → 忽略 IMPULSE）"},
+        {"signal": "R0 risk flags FP_blur_risk / FP_YCrCb_BLUR_JPEG", "value": "spatial_corr=0.3526, cross_ch_corr=0.374", "reading": "由 JPEG 8x8 块效应在原始残差上抬升；剥离 JPEG:1 后残差恰为 0，两个风险标志均无残余证据 → 不构成修正假设"}
+      ],
+      "boundary_signals": "未发现阈值边界项：gm_ratio 0.947 vs 0.85、slope_ratio 1.0006 vs 1.08、sigma 0.74 vs 2、variance_ratio 0.992 vs 1.0 均有裕量；未发现被忽略的二阶统计量异常（偏度/残差-强度相关均无异常）",
+      "new_hypotheses": "无可成立的新假设：target 与 JPEG(clean, sev1) 像素级相同，任何额外非恒等退化步都会破坏像素同一性。"
+    },
+    "candidate_ranking": [
+      {"pipeline": "compression_jpeg:1", "mode": "psnr", "pair0_psnr": "inf", "support_5pairs": "inf × 5 (CI 10/10)", "decision": "KEEP"},
+      {"pipeline": "compression_jpeg:2", "mode": "psnr", "pair0_psnr": 30.46, "support_5pairs": "未重测（R0 已测，远逊于 inf）", "decision": "REJECT"},
+      {"pipeline": "compression_jpeg:3", "mode": "psnr", "pair0_psnr": 27.8, "decision": "REJECT"},
+      {"pipeline": "compression_jpeg:4", "mode": "psnr", "pair0_psnr": 26.71, "decision": "REJECT"}
+    ],
+    "support_verification_R1": {
+      "pair_0": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10"},
+      "pair_1": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10"},
+      "pair_2": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10"},
+      "pair_3": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10"},
+      "pair_4": {"pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci": "10/10"}
+    },
+    "budget": {"candidates_tested": 1, "test_candidate_calls": 5, "signal_reinterpretation_rounds": 1},
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "compression_jpeg", "severity": 1, "verdict": "LIKELY"}
+      ],
+      "reason": "5/5 support 对 JPEG:1 像素级复现（PSNR=inf, CI 10/10）→ 确定性识别确认，已达确定性上限；CHANGE 需 support PSNR >40 dB 或 +2 dB，无候选可超过 inf；无信号证据支持修正。support_psnr=31.24 (<35) 反映近无损 JPEG 下模型恢复能力（输入-目标差距小、输出接近恒等），非盲识别错误。"
+    }
+  }
+}

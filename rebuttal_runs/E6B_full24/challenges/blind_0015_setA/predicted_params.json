@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0015_setA",
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 1},
+    {"function": "brightness_darken_shfit_RGB", "severity": 3}
+  ],
+  "pipeline_string": "blur_gaussian:1,brightness_darken_shfit_RGB:3",
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "pipeline_string": "blur_glass:1,brightness_darken_shfit_RGB:3",
+      "psnr": 28.97,
+      "ci_pass": "8/10",
+      "function_family": "blur:glass",
+      "note": "highest pair0 PSNR (29.0) but glass is seeded/non-deterministic; DT gave gaussian (PCA=0, FFT aniso=0); keep as cross-family backup"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "pipeline_string": "blur_lens:1,brightness_darken_shfit_RGB:3",
+      "psnr": 28.16,
+      "ci_pass": "8/10",
+      "function_family": "blur:lens",
+      "note": "MTF-indistinguishable from gaussian; signal PARTIAL same as gaussian (wiener 0.770)"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 1},
+        {"function": "blur_gaussian", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "pipeline_string": "noise_gaussian_RGB:1,blur_gaussian:1,brightness_darken_shfit_RGB:3",
+      "psnr": null,
+      "stats": "signal mode (noise seed -> PSNR meaningless): moved gm_ratio 0.337->0.414 (target 0.429) and dct_zero 0.629->0.504 (target 0.467); noise:sigma diff 50% (sev2 150%)",
+      "function_family": "noise:gaussian_RGB",
+      "note": "signal-supported light sensor noise before blur; excluded from primary because SKILL sigma gate 1.24<2 -> NO_NOISE"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "7/10 (pair0); 7-8/10 across 5 pairs",
+    "mode": "PSNR (noise_prior sigma=1.24 < 2; Qwen noise gate triggered=false and API unavailable anyway, skipped and recorded)",
+    "psnr": 28.22,
+    "psnr_gap": 1.75,
+    "pair0_psnr": 28.22,
+    "pair_psnr": {"pair0": 28.22, "pair1": 29.15, "pair2": 28.78, "pair3": 26.10, "pair4": 27.66},
+    "per_step_verdict": {
+      "blur_gaussian:1": "UNCERTAIN",
+      "brightness_darken_shfit_RGB:3": "LIKELY"
+    },
+    "rationale": "brightness_darken_shfit_RGB:3 reproduced exactly on pair0 (mean_shift -47.5 vs -46.7, variance_ratio 0.748 vs 0.746, clipped_fraction 0.215 vs 0.215, spread 0.796 vs 0.794, saturation unchanged 1.0066 vs 1.0057) and clipping matched on all 5 pairs (diff 0-1%); HSV-shift/gamma variants rejected (HSV alters saturation, gamma leaves only 6.4% clipping vs 21.5%). Blur presence LIKELY (gm_ratio 0.429 vs 0.876 without blur; PSNR 24.83->28.22) but subtype/severity UNCERTAIN: gaussian/lens/glass sev1 within 0.8 dB (28.22/28.16/28.97), wiener kernel corr 0.768<0.85 for all, target keeps slightly more HF than every sev1 blur. JPEG ruled out in both positions (27.36/27.47 dB). Light noise-before-blur signature (gm/dct_zero) noted but formal sigma gate 1.24<2 -> NO_NOISE; kept as alternative. Overall UNCERTAIN because no deterministic step exceeds 40 dB (multi-step with heavy clipping caps PSNR; best pair0 28.22 dB, 5-pair 26.1-29.2 dB, CI 7-8/10)."
+  }
+}

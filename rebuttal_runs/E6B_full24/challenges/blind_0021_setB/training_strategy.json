@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "final_decision pipeline = blur_gaussian:3 -> brightness_brighten_shfit_RGB:1 -> compression_jpeg:4, 5/5 support pairs PSNR=inf, CI=10/10 (pixel-exact reproduction)",
+    "compression: block_boundary=7.7444 > 1.1 (Tier S, 0% FP) + dct_zero_ratio=0.9304 + unique_G_ratio=0.892 -> JPEG:4 confirmed",
+    "contrast/ColorPre/FiLM-GCM gate: full_analysis variance_ratio=0.955 (~1.0), contrast_spread_ratio=1.0162, contrast_from_variance=false -> no contrast -> neither ColorPre nor FiLM-GCM triggered (finetune_strategy.md §7 Tier A rule)",
+    "OCAB gate: residual_anisotropy=1.5591 < 1.7 and refined blur is gaussian:3 (isotropic, glass FP corrected by severity scan 31.41->33.87->47.18->inf) -> no motion evidence -> OCAB not triggered",
+    "global: mean_shift=+24.0 with variance_ratio=0.955 (additive) = brightness_brighten_shfit_RGB:1, not contrast; finetune_strategy.md §6/§7 brightness (shift) -> Direct, no component",
+    "noise: peeled residual after exact pipeline = 0.0 (sigma_prior=0.62 artifact of JPEG/blur) -> no noise step, no noise-specific handling needed",
+    "SimpleGate: default-on safety (-32K, 8/9 safe exp39), S5 motion-triple exception not applicable (no motion)"
+  ],
+  "rationale": "盲识别达到像素级精确复现 (PSNR=inf, 5/5 support pairs, CI=10/10), 但管线仅含 gaussian blur + additive brightness shift + JPEG, 无任何 Tier S/A 组件触发信号: variance_ratio=0.955≈1.0 无 contrast (ColorPre/FiLM-GCM 不启用), anisotropy=1.559<1.7 非 motion (OCAB 不启用)。按 finetune_strategy.md §六 Step1, brightness shift 全局加性且无 contrast -> Direct 最安全; 各步骤 LIKELY 且精确, 但无组件匹配退化, 故纯 Swin+SimpleGate 从零 Direct 训练 (lr=5e-4, 2 epoch, batch=16, dim=64), 避免 exp37 组件不匹配风险。"
+}

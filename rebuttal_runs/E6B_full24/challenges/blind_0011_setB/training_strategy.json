@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "blur 步 LIKELY (blur_gaussian:4): pair0 PSNR=39.29dB CI=10/10, signal 模式 spectral_slope + wiener_kernel MATCH (5/5 pairs); sev3 32.79 / sev5 34.66 / lens:4 33.86 / motion:4 21.73 均更差 → 确定性高斯模糊已确认",
+    "noise 步 UNCERTAIN (noise_gaussian_RGB:3): 剥离 blur:4 后残差 std=2.5, spatial_corr=0.9915, rgb_ratio=1.063, cross_ch=0.274 (仿真 0.279), 通道均匀加性噪声; noise→blur 顺序下类型判别率仅 54.7%, σ≈31 介于 sev2/3 → 不触发任何组件",
+    "contrast 已被 PSNR 排除: blur:5+contrast_weaken_scale:1 → 26.23dB (CI 5/10), blur:4+contrast_weaken_stretch:1 → 16.84dB; variance_ratio=0.6514 主要来自 blur 平滑 → 不启用 FiLM-GCM/ColorPre",
+    "motion 已被 PSNR 排除: blur_motion:4 → 21.73dB 远低于 blur_gaussian:4 39.29dB; 虽然 residual_anisotropy=2.0593>1.7, 但竞品假设被数据否决 → 不启用 OCAB",
+    "compression 排除: block_boundary=0.9976<1.1 (Tier S 未触发), unique_G=223>=200; 叠加 jpeg:1 后 35.95dB 且 block 边界失配 → 无 JPEG 专项",
+    "无明确 Tier S/A 组件触发信号 → 纯 Swin + SimpleGate (exp39 8/9 安全) + Direct"
+  ],
+  "rationale": "确定性 blur_gaussian:4 已由 PSNR 39.29dB + 双信号 MATCH 确认; 噪声步因 noise→blur 耦合判型不可靠 (UNCERTAIN), 且 contrast/motion/JPEG 候选均被 PSNR 测试明确排除。所有潜在组件触发信号要么不成立 (contrast, motion) 要么置信度不足 (noise 类型), 按 finetune_strategy.md §七 Tier 门控规则采用纯 Swin + SimpleGate + Direct, 不使用任何可能因退化误配而有害的组件。"
+}

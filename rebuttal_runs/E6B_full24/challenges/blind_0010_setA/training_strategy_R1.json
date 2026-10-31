@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "R0 预测 PSNR=inf (MSE=0) x 5 对支持图全部逐像素复现 blur_gaussian:1 -> brightness_darken_gamma_HSV:5，Tier 1 确定性完全匹配，功能+严重度+顺序均已验证 (LIKELY)",
+    "anisotropy=0（reflection initial_analysis 记录），blur 为 gaussian sev1 无方向性 -> OCAB 门控 (anisotropy_ratio>1.7 + motion) 不触发",
+    "block_boundary=0.9973 < 1.1 -> 无 JPEG（Tier S 未触发），JPEG 专项不启用",
+    "variance_ratio=0.7094 但 contrast_from_variance=false + contrast_saturation_corrected=true，且加 saturate_weaken 后 PSNR -3dB -> 方差下降由 gamma 暗化 (mean_shift=-66.7, clipped_fraction=26.4%) 解释而非 contrast -> ColorPre/FiLM-GCM 的 Tier A contrast 门控不成立",
+    "noise_prior_sigma=1.48 且无噪声步骤即可 PSNR=inf -> 无噪声；noise 相关证据为 gamma 假阳性（reflection 6-step 检查）",
+    "SimpleGate 默认常开：exp39 -32K 参数，8/9 退化安全（仅 S5 -0.86）",
+    "blur_gaussian:1 极轻且非 motion/jpeg -> FiLM-GCM 的结构化局部条件不满足"
+  ],
+  "rationale": "管线为低难度确定性组合（gaussian blur sev1 + gamma 暗化 sev5，均属全局/轻度低难度，finetune_strategy.md §六 Step 0），且盲识别达到 PSNR=inf 的最高置信。§七 信号门控无任何 Tier S/A 组件触发（无 contrast、无 motion/anisotropy>1.7、无 JPEG），按默认路径选纯 Swin + SimpleGate + Direct。gamma 类全局退化在 exp38 中 FiLM-GCM 收益 ≈0（+0.30 微益）且 exp37 盲识别场景组件 0/24 胜，故不启用 FiLM-GCM/ColorPre；DualBranch/CSN/SCA/FPro/FreqMod 按 exp37/exp39/废弃清单不使用。训练策略：Direct 从头训练（2 步管线虽可考虑 RandomCurric，但 blur sev1 梯度干扰极小，Direct 更稳定且与基线一致），lr=5e-4，EPOCH_BUDGET=2，batch=16。"
+}

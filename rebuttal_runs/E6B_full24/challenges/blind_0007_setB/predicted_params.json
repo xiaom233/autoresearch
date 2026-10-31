@@ -1,0 +1,54 @@
+{
+  "challenge_id": "blind_0007_setB",
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 1,
+      "verdict": "UNCERTAIN",
+      "evidence": "fingerprint-identical reproduction on pair0+pair1 (sigma 5.81, ivc 0.816/0.971, izr 0.200/0.261, bb 0.988, slope -1.257, vr 1.064, mean_shift -0.6, chroma 1.460, clip 0.0161); verify_signals MATCH on 5/5 pairs"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "noise_gaussian_RGB",
+          "severity": 1
+        }
+      ],
+      "psnr": null,
+      "stats": {
+        "verify_signals": "MATCH (sigma, clean residual)",
+        "fingerprint": "inconsistent: intensity_var_corr 0.3911 vs target 0.8161; impulse_zero_ratio 0.0954 vs 0.2004; mean_shift -0.1 vs -0.6; clipped_fraction 0.0518 vs 0.0161; chroma_ratio 1.2703 vs 1.4604"
+      },
+      "function_family": "noise_additive_gaussian",
+      "note": "audit-only cross-family fallback; refuted by intensity-dependent variance fingerprint"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "ci_pass_rate": "N/A (signal mode; verify_signals MATCH 5/5 pairs)",
+    "mode": "signal",
+    "step_verdicts": {
+      "compression": "ABSENT",
+      "blur": "ABSENT",
+      "global": "ABSENT",
+      "noise": "UNCERTAIN (speckle sev1, near-conclusive fingerprint match; SKILL: noise never LIKELY)"
+    },
+    "support_validation": {
+      "pair1": "MATCH",
+      "pair2": "MATCH",
+      "pair3": "MATCH",
+      "pair4": "MATCH"
+    },
+    "failure_risks_addressed": {
+      "MISS_comp_BY_NOISE": "tested compression_jpeg:1 on top of speckle -> block_boundary diff 36% mismatch; unique_G=256 and dct_zero=0.08 reproduced exactly without JPEG",
+      "FP_blur_risk": "spectral_slope target -1.2573 vs clean -1.2579; adding blur_gaussian:1 broke noise sigma by 90%; gm_ratio 2.3814 reproduced by speckle-only sim 2.3815"
+    },
+    "qwen_gate": {
+      "available": false
+    },
+    "rationale": "Single-step noise_speckle:1 (c=0.14). Noise presence is certain (residual std 17.1 DN, white: lag-1 spatial_corr 0.0003, cross-channel 0.0006). Type: variance grows with intensity (intensity_var_corr 0.8161; scaled-var corr -0.034 on pair0, 0.34-0.74 on supports) + channel std ratio R20.5>G16.7>B13.4 + 20% of |residual|<=1 DN => signal-dependent multiplicative noise (speckle), not constant-sigma gaussian, not zero-mean-independent YCrCb (cross-channel ~0). Simulation fingerprint comparison: noise_speckle:1 reproduces all target signals across two images to within rounding noise, while poisson:1 (sigma 28% high, izr 0.097 vs 0.200), gaussian_RGB:1 (ivc 0.391 vs 0.816) and added blur/JPEG variants are refuted. Verdict kept UNCERTAIN per SKILL rule that noise steps cannot be LIKELY (seed mismatch); no PSNR used (sigma>=2)."
+  }
+}

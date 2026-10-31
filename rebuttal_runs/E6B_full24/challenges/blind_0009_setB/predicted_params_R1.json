@@ -1,0 +1,49 @@
+{
+  "challenge_id": "blind_0009_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_gaussian_YCrCb", 1],
+    ["saturate_strengthen_YCrCb", 4]
+  ],
+  "pipeline": [
+    {"function": "noise_gaussian_YCrCb", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "saturate_strengthen_YCrCb", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 1},
+        {"function": "saturate_strengthen_YCrCb", "severity": 3}
+      ],
+      "function_family": "ycbcr_noise + ycbcr_saturation (severity-3 variant)",
+      "support_verification": {
+        "pair0": {"verdict": "PARTIAL", "matched": ["noise:sigma", "noise:clean_residual", "global:variance_ratio"], "mismatched": ["global:mean_shift (0.0153)"]},
+        "pair1": {"verdict": "WEAK", "matched": ["noise:sigma", "noise:clean_residual"], "mismatched": ["global:mean_shift (0.0198)", "global:variance_ratio (9%)"]},
+        "pair2": {"verdict": "WEAK", "matched": ["noise:clean_residual", "global:variance_ratio"], "mismatched": ["noise:sigma (81%)", "global:mean_shift (0.0307)"]},
+        "pair3": {"verdict": "WEAK", "matched": ["noise:sigma", "noise:clean_residual"], "mismatched": ["global:mean_shift (0.0264)", "global:variance_ratio (13%)"]},
+        "pair4": {"verdict": "WEAK", "matched": ["noise:sigma", "noise:clean_residual"], "mismatched": ["global:mean_shift (0.0153)", "global:variance_ratio (12%)"]}
+      },
+      "aggregate": "11/20 signal matches (vs 8/20 for R0 pipeline); only pair0 flips WEAK->PARTIAL, pair4 regresses PARTIAL->WEAK; majority WEAK->PARTIAL/MATCH criterion NOT met",
+      "note": "Kept as the strongest R1 alternative; variance/sigma fit systematically better on pairs 1-3, but mean_shift remains structurally mismatched on vivid pairs under every integer saturation severity (sim darkening too uniform)."
+    }
+  ],
+  "analysis": {
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=14.7 pair0; 10.9-28.0 across 5 pairs)",
+    "signal_reinterpretation": [
+      "Cross-pair chroma envelope: target saturation_chroma_ratio = 2.996/4.273/2.621/5.465/5.369 (pairs 0-4), max 5.47; saturate_strengthen_YCrCb scale grid c=[2,3,5,8,16] -> sev3 (c=5) is the smallest severity that can span the envelope; sev4 (c=8) requires heavy clipping on all pairs. Not decisive (clipping+noise modulation), so verified empirically.",
+      "R0 R12: satYCrCb:3 alone matched pair0 variance (sim 1.614 vs target 1.579) while R14 satYCrCb:4 overshot (17% diff) -> pair0 variance favors sev3.",
+      "Target global signature is strongly content-dependent: mean_shift -16.8/-13.0/-2.0/-2.8/-12.9 and variance_ratio 1.579/1.693/1.424/1.238/2.510 across pairs 0-4 (run_full_analysis_R1 rerun). R0 sat4 sims darkened all pairs ~-13..-17 (pair2 mean diff 0.0478, pair3 0.0392) -> simulated darkening too uniform vs target.",
+      "R0 cross-pair sims with sat4 overshot variance by 22%/47%/83% on pairs 1/2/3 -> sat4 too strong on vivid scenes.",
+      "Noise type re-check: channel sigma ratio 1.8 (>1.4 -> YCrCb rule) is confounded by chroma amplification/clipping after severe saturation, but candidate B still matched noise:sigma on 4/5 pairs -> gaussian_YCrCb remains the best-supported noise subtype; residual_intensity_corr spread 0.118-0.668 and sigma spread 10.9-28.0 are consistent with clipping interplay rather than requiring another noise family.",
+      "Compression/blur re-confirmed absent on all 5 pairs: block_boundary 0.9951-1.0034, unique_G 256, spectral_slope_ratio 0.966-1.000."
+    ],
+    "candidate_ranking": [
+      {"rank": 1, "pipeline": "noise_gaussian_YCrCb:1,saturate_strengthen_YCrCb:3", "support_matches": "11/20 (PARTIAL pair0; WEAK pairs1-4)", "decision": "REJECT for CHANGE (1/5 WEAK->PARTIAL, not majority)"},
+      {"rank": 2, "pipeline": "noise_gaussian_YCrCb:1,saturate_strengthen_YCrCb:4 (R0)", "support_matches": "8/20 (PARTIAL pair4; WEAK pairs0-3)", "decision": "KEEP"}
+    ],
+    "rationale": "R1 signal reinterpretation identified a real gap in R0's severity grid (sat3 never tested jointly with noise). Candidate B (nY1+sat3) improved signal-level fit on 4/5 pairs (sigma matches 4/5 vs 2/5; variance matches 3/5 vs 2/5; mean diffs halved on pairs 2/3) but only pair0 transitioned WEAK->PARTIAL and pair4 transitioned PARTIAL->WEAK, so the mandated majority-pair WEAK->PARTIAL/MATCH criterion for noise-containing candidates is not met. The residual mismatch is structural: the YCrCb-saturation model darkens every pair by ~-9..-18 while the target darkens only -2..-3 on the two vivid pairs, and no integer saturation severity bridges that gap. Per protocol: no majority evidence -> NO_CHANGE; R0 pipeline retained, candidate B recorded as alternative."
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "challenge_id": "blind_0022_setB",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 3, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 1, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 3}, {"function": "compression_jpeg", "severity": 1}],
+      "function_family": "blur_gaussian",
+      "psnr": null,
+      "stats": "gaussian/lens MTF known indistinguishable; glass_score=0.615>0.25 favors glass; peeled residual std glass:3=9.7 < gaussian:3=12.5 (glass better)",
+      "note": "cross-family backup if glass subtype is wrong"
+    },
+    {
+      "pipeline": [{"function": "noise_gaussian_RGB", "severity": 1}, {"function": "blur_glass", "severity": 3}, {"function": "compression_jpeg", "severity": 1}],
+      "function_family": "noise_gaussian_RGB",
+      "psnr": null,
+      "stats": "sigma after peel 3.95 (< sev1 library range 12.75); rgb_ratio=1.06 (not YCrCb); residual spatial_corr=0.96 (structured, not white noise); noise:sigma matched but residual FWHM=4.0px borderline",
+      "note": "only if a low-sigma noise step is hidden under strong glass blur (would be attenuated ~20x); tested with jpeg2 variant: WEAK"
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 3}, {"function": "compression_jpeg", "severity": 2}],
+      "function_family": "compression_jpeg",
+      "psnr": 28.38,
+      "stats": "pair0 signal MATCH (bb diff <8%) but support pair1 PARTIAL (bb diff 13%); jpeg1 matched 5/5 pairs",
+      "note": "alternative JPEG severity"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "8/10",
+    "mode": "SIGNAL (sigma=2.22, Qwen gate unavailable)",
+    "rationale": "Deterministic 2-step verified by signal matching on all 5 pairs (blur:spectral_slope + blur:wiener_kernel + compression:block_boundary, 15/15 checks). blur_glass:3 selected over gaussian:3 (residual std 9.7 vs 12.5); severity 3 minimizes peeled residual (glass2=12.7, glass3=9.7, glass4=11.1). JPEG sev1 (quality 25) matched 5/5; sev2 failed support1, sev3/5 rejected on pair0. Noise deemed absent: peeled extreme_pct 55.2% is known JPEG/blur-shuffle FP (rule: extreme>50% + sigma<5), noise_prior sigma=3.95 below sev1 range, per-channel ratio 1.06 (RGB not YCrCb), spatial_corr=0.96 structured residual; residual floor explained by glass pixel-shuffle nondeterminism (PSNR 28.38 expected for glass). Overall UNCERTAIN due to glass-vs-gaussian MTF ambiguity and residual low-sigma hidden-noise ambiguity."
+  },
+  "support_verification": {
+    "pair0": "MATCH (blur_glass:3+compression_jpeg:1)",
+    "pair1": "MATCH",
+    "pair2": "MATCH",
+    "pair3": "MATCH",
+    "pair4": "MATCH",
+    "detail": "5/5 support pairs all three signals matched (<8% block_boundary, spectral_slope diff<0.08, wiener corr>0.85)"
+  }
+}

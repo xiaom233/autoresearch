@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "ocab",
+    "window_size": 16,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 30
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "R1 管线 blur_motion:5 + compression_jpeg:3 (R0: motion:3 + jpeg:4, decision=CHANGE); 两步 verdict 均为 UNCERTAIN, 因 motion 核角度随机 PSNR 无法达 40dB, 由训练后 support PSNR 仲裁",
+    "residual_anisotropy=1.7823 > 1.7 (Tier A, 0% FP) + blur_pca_ratio=4.061 > 2.5 (motion 0% FP) + 5 对 support PCA=4.06-5.54 全部判 motion + subtype_confidence=high -> OCAB 触发 (finetune_strategy.md §七: Tier A 信号明确时即使 verdict=UNCERTAIN 仍可启用组件)",
+    "R1 severity 3->5 不改变架构方向: §六 Step 2 'motion sev>=5 -> OCAB' 与 CLAUDE.md '严重 motion blur -> OCAB + ws=16' 一致; severity 加强只会增加 motion 结构化建模需求; 5 对 m5j3 模拟 spectral_slope_ratio Δ<=0.057、variance_ratio Δ<=0.005 与目标自洽",
+    "block_boundary=2.792 > 1.1 (Tier S, 0% FP) -> JPEG 确认; R1 将 JPEG 4->3 (motion:5 固定下 jpeg:4 模拟 bb 过冲 19-31%, jpeg:3 误差 1.0-4.9%); 无 JPEG 专项架构组件, 且无 contrast 不触发 FiLM-GCM",
+    "NO_GLOBAL: contrast_from_variance=false, contrast_spread_ratio=0.9583, mean_shift=-0.2, variance_ratio=0.8796 由 blur 完全解释 (5 对模拟 Δ<=0.005) -> FiLM-GCM / ColorPre 均不触发 (两者均需 contrast Tier A variance_ratio)",
+    "NO_NOISE: noise_prior_sigma=0.74 < 2 (5 对 0.37-1.11), §B extreme_pct=48.5% 为 JPEG/blur 已知假阳性 -> 不加任何噪声相关组件",
+    "参数公平 (§五): OCAB 必须 AR_EMBED_DIM=30 (~467K, +2.9% vs Swin dim64 454K, 满足 <=1.05x); SimpleGate 按 exp39 默认常开 (-32K, 8/9 退化安全; D3 JPEG+blur +0.02, 本管线为单步 motion 非 S5 三退化负例)"
+  ],
+  "rationale": "R1 管线为 blur_motion(5) + compression_jpeg(3), 两步局部退化, 无 contrast 全局退化、无噪声。策略选 Direct (E6B 批次默认; True Ft 按 exp37/38 与 Direct 无差异不推荐; 多步无 contrast 的 RandomCurric 理论可选, 但为保持批次一致与安全不启用)。§七门控: anisotropy=1.7823>1.7 (Tier A, 0% FP) + motion 子类型高置信 (PCA=4.06, 5 对 4.06-5.54 全判 motion, gaussian/lens/glass 确定性族已证伪) -> 即便两步 verdict 均为 UNCERTAIN 仍启用 OCAB (window=16, dim=30 参数对齐 +2.9%); SimpleGate 默认常开; 无 contrast 故 FiLM-GCM/ColorPre 一律不加。与 R0 相比仅预测参数变化 (motion 3->5, jpeg 4->3), 架构决策机制 (Tier A anisotropy + motion) 未变, OCAB 方向在 sev5 下更有利。风险: 两步均 UNCERTAIN, alternatives 保留 motion:4+jpeg:3 (过模糊回退) 与 motion:5+jpeg:4 (JPEG 回退); 若 R1 训练后 support PSNR 低于 R0 的 22.30, 回退 R0 参数或纯 Swin。"
+}

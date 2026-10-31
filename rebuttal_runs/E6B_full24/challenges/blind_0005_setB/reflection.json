@@ -1,0 +1,406 @@
+{
+  "challenge_id": "blind_0005_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9926, unique_G=256/256, dct_zero_ratio=0.0147)",
+      "blur": "BLUR_UNLIKELY (gm_ratio=3.214 是色度放大导致的高频膨胀, spectral_slope_ratio=0.955, FFT_anisotropy=0.00, pca=0.0)",
+      "noise": "IMPULSE (zero_ratio=0.9006) 但 noise_prior_sigma=0.0 -> 判定为假阳性: 饱和增强只改变色度像素, 大面积灰色混凝土像素残差<1.1/255, 稀疏改变伪造了 impulse 指纹",
+      "global": "SATURATION_strengthen (chroma_ratio=2.961, variance_ratio=1.340, clipped_fraction=10.67%, mean_shift=-2.6/255=-0.010)"
+    },
+    "mode": "SIGNAL (sigma_prior=0.0 是稀疏残差假象; impulse 随机 seed 使 PSNR/像素级 CI 无效)",
+    "suspected": [
+      "saturate_strengthen_YCrCb (chroma std x3 == sev2 scale=3.0)",
+      "saturate_strengthen_HSV (S x3 == sev1, 可能被 clipping 限制到有效 chroma x~3)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary 0.9926, unique_G 256)",
+      "blur_* (spectral_slope_ratio 0.955 < 1.08, FFT anisotropy 0; gm_ratio 3.2 是色度放大副产物)",
+      "noise_* (wavelet sigma=0.0; impulse zero_ratio 为稀疏饱和改变假阳性)",
+      "brightness_* (mean_shift=-0.010 < 0.014, 三通道同向不明显)",
+      "contrast_* (contrast_saturation_corrected=true, spread_ratio 1.233 < 1.30)"
+    ]
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:2",
+        "thinking": "Round1: chroma_ratio=2.961 ≈ 3.0 (=YCrCb strengthen sev2 scale 3.0); mean_shift -2.6/255 微弱; gm_ratio 3.21 与 chroma x3 一致; clipped_fraction 10.7% 与色度裁剪一致"
+      },
+      "test_result": {
+        "psnr_rgb": 13.79,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_YCrCb:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:1",
+        "thinking": "Round1b: YCrCb:2 PSNR=13.79 过强且灰色墙面出现暖色偏; 目标灰色保持中性 -> HSV S通道 x3 (sev1) 只放大已有色度, 中性灰 S≈0 不变, 更符合观察"
+      },
+      "test_result": {
+        "psnr_rgb": 13.69,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "",
+        "thinking": "Control: 空管线 = clean 原图 vs target, 量化退化总体幅度 (判断候选是否真的接近目标)"
+      },
+      "test_result": {
+        "psnr_rgb": 14.98,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "Round1c: 重新解读指纹: zero_ratio=0.9006 表示恰好10%通道样本被改为0/255 (amount=0.10=impulse sev5), residual std=45.4 (PSNR=15dB), wavelet sigma=0 是90%零残差的假象, gm_ratio 3.21 与10%极值翻转一致; PSNR对随机噪声seed失配无效 -> 用信号模式"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1-1: 信号重释复核 R0 主管线。zero_ratio=0.9006 → 9.94% channel samples 被改变; clipped_fraction=10.67%; x_distortion noise_impulse severity amount=[0.01,0.03,0.05,0.07,0.10] → amount=0.10=sev5。pair0 signal 模式复核"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1-support pair1: 复核 R0 主管线 noise_impulse:5 (zero_ratio≈0.90, amount=0.10=sev5); signal 模式 5 对 support 验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1-support pair2: 复核 R0 主管线 noise_impulse:5 (zero_ratio≈0.90, amount=0.10=sev5); signal 模式 5 对 support 验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1-support pair3: 复核 R0 主管线 noise_impulse:5 (zero_ratio≈0.90, amount=0.10=sev5); signal 模式 5 对 support 验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1-support pair4: 复核 R0 主管线 noise_impulse:5 (zero_ratio≈0.90, amount=0.10=sev5); signal 模式 5 对 support 验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2",
+        "thinking": "R1-control: 跨族对照 — gaussian 会改变几乎所有像素, 与 zero_ratio=0.9006 (90% 样本逐位不变) 矛盾; 预期 noise:sigma 不匹配 → 排除跨族替代"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=183%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "",
+      "psnr_rgb": 14.98,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "saturate_strengthen_YCrCb:2",
+      "psnr_rgb": 13.79,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:1",
+      "psnr_rgb": 13.69,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    }
+  ],
+  "signal_reinterpretation": {
+    "trigger": "两个饱和候选 PSNR 均 ~13.7 dB (< control 14.98 dB), 且 peeled_noise_check zero_ratio=0.9004",
+    "key_insight": "残差是稀疏极值的: 90.04% 通道样本 |target-clean|<1.1/255, 其余 10% 为 0/255 极端值 (residual std=45.4, clipped_fraction=10.67%)。这是 salt&pepper (amount=0.10) 的精确指纹, 不是饱和增强。",
+    "why_saturation_was_FP": "impulse 的 0/255 极端样本把 Cr/Cb std 抬高到 2.96x (chroma_ratio), 同时抬高 variance_ratio=1.34, gm_ratio=3.21, spectral_slope_ratio=0.955; step4 的 contrast_from_saturation 交叉验证只防 saturation->contrast, 未考虑 impulse->saturation 的假阳性",
+    "why_sigma_prior_zero": "wavelet MAD 在 90% 精确零残差上退化为 0, 不能用 sigma<2 推 NO_NOISE",
+    "decisive_test": "clean + noise_impulse:5 的完整信号签名与 target 几乎逐位一致 (见 support_verification 与 sim_imp5 对比)"
+  },
+  "noise_6step_check": {
+    "note": "无确定性退化可剥离 (pipeline 为空), §B 数值来自 peeled_noise_check on raw residual (peeled_noise_p0.json)。impulse 场景下 vm_slope/var_slope/extreme_pct 被稀疏 ±255 残差放大, 仅作辅助; 判别依据为 zero_ratio + 模拟签名比对。",
+    "extreme_pct": 95.03,
+    "vm_slope": 6.8303,
+    "var_slope": 4.5054,
+    "spatial_corr": 0.393,
+    "rgb_ratio": 1.0208,
+    "channel_stds_RGB": [
+      45.0,
+      45.1,
+      46.0
+    ],
+    "cross_channel_corr": 0.0192,
+    "zero_ratio": 0.9004,
+    "residual_std": 45.4,
+    "noise_prior_sigma_on_residual": 0.0,
+    "diagnosis": "IMPULSE (salt&pepper) amount≈0.10 -> severity 5。zero_ratio=1-amount=0.9004 精确对应 amount=0.0996; 5 对 support 的 zero_ratio 全部为 0.9005-0.9029; rgb_ratio=1.02 (<1.4 非 YCrCb); cross_channel_corr=0.019 (低, 逐通道独立翻转, 符合 skimage s&p 逐样本实现); 其余 gaussian/speckle/poisson/SC 都会改变几乎所有像素, 与 zero_ratio=0.90 矛盾"
+  },
+  "support_verification": {
+    "pair_0": {
+      "impulse_zero_ratio": 0.9006,
+      "clipped_fraction": 0.1067,
+      "variance_ratio": 1.3404,
+      "mean_shift": -2.6,
+      "chroma_ratio": 2.961,
+      "sim_impulse5_signature": {
+        "impulse_zero_ratio": 0.9002,
+        "clipped_fraction": 0.107,
+        "variance_ratio": 1.3419,
+        "mean_shift": -2.6,
+        "chroma_ratio": 2.9679
+      }
+    },
+    "pair_1": {
+      "impulse_zero_ratio": 0.9018,
+      "clipped_fraction": 0.1361,
+      "variance_ratio": 1.2363,
+      "mean_shift": 4.4,
+      "chroma_ratio": 2.9572,
+      "sim_impulse5_signature": {
+        "impulse_zero_ratio": 0.902,
+        "clipped_fraction": 0.136,
+        "variance_ratio": 1.2358,
+        "mean_shift": 4.4,
+        "chroma_ratio": 2.9516
+      }
+    },
+    "pair_2": {
+      "impulse_zero_ratio": 0.9029,
+      "clipped_fraction": 0.155,
+      "variance_ratio": 1.2774,
+      "mean_shift": 5.0,
+      "chroma_ratio": 3.2574
+    },
+    "pair_3": {
+      "impulse_zero_ratio": 0.9028,
+      "clipped_fraction": 0.1534,
+      "variance_ratio": 1.2277,
+      "mean_shift": 3.9,
+      "chroma_ratio": 2.4547
+    },
+    "pair_4": {
+      "impulse_zero_ratio": 0.9005,
+      "clipped_fraction": 0.1077,
+      "variance_ratio": 1.3292,
+      "mean_shift": -2.2,
+      "chroma_ratio": 2.1902
+    },
+    "conclusion": "5/5 对均给出 IMPULSE + zero_ratio≈0.90 (amount=0.10, sev5); 无 JPEG (block_boundary 0.993-1.002), 无 blur (spectral_slope_ratio 0.955-0.989), global 信号 (variance/chroma/mean_shift, 含符号变化 +4.4/+5.0/+3.9/-2.2) 全部由 impulse 极端值解释 (pair0/pair1 的模拟签名逐项吻合)",
+    "pairs_simulated": [
+      0,
+      1
+    ]
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_impulse",
+        "severity": 5,
+        "verdict": "UNCERTAIN",
+        "signal": "impulse_zero_ratio=0.9006 -> amount=0.10 (sev5); 模拟签名在 pair0/pair1 上逐项吻合; verify_signals MATCH"
+      }
+    ],
+    "alternatives": [],
+    "alternatives_note": "无高质量替代: 确定性候选 (saturation) 已被 control/signature 对比否定 (PSNR 13.7 < control 14.98, 且模拟饱和图像无 impulse 颗粒); 邻近 severity (impulse:4 -> zero_ratio≈0.93) 与实测 0.9006 不符, 不保留",
+    "overall_verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL",
+    "rationale": "单步 salt&pepper 噪声: 90% 通道样本完全不变, 10% 翻转为 0/255, 与 noise_impulse sev5 (amount=0.10) 的逐通道 Bernoulli 翻转精确对应。由于随机 seed 无法像素级复现, 按 SKILL 规则噪声步骤最高只能给 UNCERTAIN (信号统计 MATCH)。"
+  },
+  "reflection_R1": {
+    "trigger": "R0 verdict=UNCERTAIN (噪声步骤规则性 UNCERTAIN), R0 support PSNR=41.96 dB; 按协议必须信号重释",
+    "mode": "SIGNAL (impulse 随机 seed 使像素级 PSNR/CI 无效)",
+    "reanalysis": {
+      "source": "run_full_analysis.py 重跑 pair0 → full_analysis_R1.json (与 R0 full_analysis.json 逐项一致, 分析确定可复现)",
+      "signal_reinterpretations": [
+        {
+          "signal": "step2 estimated_severity=3",
+          "issue": "工具启发式严重度与 x_distortion amount 表不符 (被误判的边界信号)",
+          "evidence": "x_distortion/noise.py: noise_impulse amount=[0.01,0.03,0.05,0.07,0.10] for sev1-5; impulse_zero_ratio=0.9006 → 9.94% channel samples changed → amount≈0.0994 → sev5",
+          "action": "severity 修正为 sev5 (R1 独立复核与 R0 一致)"
+        },
+        {
+          "signal": "noise_prior_sigma=0.0",
+          "issue": "若按 sigma<2 推 NO_NOISE 会误判",
+          "evidence": "wavelet MAD 在 90% 精确零残差 (salt&pepper 稀疏翻转) 上退化为 0, 属稀疏残差假象; 非稀疏噪声 (gaussian 等) 会改变几乎所有像素, 与 zero_ratio=0.9006 矛盾",
+          "action": "弃用 sigma 判据, 以 zero_ratio(amount) 指纹为准"
+        },
+        {
+          "signal": "step4 SATURATION_strengthen_sev5 (variance_ratio=1.3404, chroma_ratio=2.961, contrast_spread_ratio=1.2334 接近阈值 1.30, clipped_fraction=0.1067)",
+          "issue": "impulse→saturation 假阳性 (被忽略的耦合路径)",
+          "evidence": "R1 模拟 noise_impulse:5 (sim_imp5_R1_p0.png) 的 run_full_analysis: variance_ratio 1.3416 vs 1.3404, chroma_ratio 2.9665 vs 2.961, contrast_spread_ratio 1.2366 vs 1.2334, clipped_fraction 0.1070 vs 0.1067, mean_shift -2.6 vs -2.6, gm_ratio 3.221 vs 3.2144, spectral_slope_ratio 0.9558 vs 0.9547, block_boundary 0.9973 vs 0.9926, impulse_zero_ratio 0.9003 vs 0.9006; 且 zero_ratio=0.9006 表示 90% 样本逐位不变, 任何改变 >1.1/255 的全局确定性步骤都被排除 (会改变几乎所有像素)",
+          "action": "不添加 saturation/contrast 步骤; step4 判为 impulse 极端样本诱导的假阳性"
+        },
+        {
+          "signal": "gm_ratio=3.2144 (升高), spectral_slope_ratio=0.9547, FFT anisotropy=0.00, pca=0.0",
+          "issue": "blur 判定边界信号",
+          "evidence": "blur 期望降低 gm_ratio 并抬高 spectral_slope_ratio >1.08; 实测方向相反, 且模拟 impulse:5 给出 gm_ratio=3.221 / slope_ratio=0.9558, 与 target 一致 → gm 膨胀来自 impulse 极端值",
+          "action": "blur 排除"
+        },
+        {
+          "signal": "block_boundary=0.9926, unique_G=256/256, dct_zero_ratio=0.0147",
+          "issue": "compression 判定",
+          "evidence": "block_boundary<1.1 (0% FP 信号), unique_G 与 clean 相同 (256), dct_zero_ratio 与 clean 相同",
+          "action": "compression 排除"
+        }
+      ]
+    },
+    "candidates": [
+      {
+        "rank": 1,
+        "pipeline": "noise_impulse:5",
+        "evidence": "zero_ratio(amount) 指纹 + 全信号签名一致 + 5/5 support MATCH",
+        "decision": "KEEP"
+      },
+      {
+        "rank": 2,
+        "pipeline": "noise_impulse:4",
+        "evidence": "empty-pipeline peel zero_ratio 0.9003-0.9024 → changed 9.76-9.97%, 超过 sev4 amount 上限 0.07 (zero_ratio≈0.93), 超出实测约 2.7pp; verify_signals 对 impulse severity 不敏感 (noise:sigma 依赖 wavelet sigma≈0), 故未耗 test_candidate, 由 amount 指纹否决",
+        "decision": "REJECT"
+      },
+      {
+        "rank": 3,
+        "pipeline": "noise_gaussian_RGB:2",
+        "evidence": "verify_signals WEAK (noise:sigma diff=183%); gaussian 改变几乎所有像素, 与 zero_ratio=0.9006 矛盾",
+        "decision": "REJECT"
+      }
+    ],
+    "support_validation": {
+      "method": "test_candidate.py --mode signal on 5 support pairs (pair0 带 --output-sim) + empty-pipeline peeled_noise_check zero_ratio",
+      "per_pair": {
+        "pair_0": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9004},
+        "pair_1": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9004},
+        "pair_2": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9024},
+        "pair_3": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9021},
+        "pair_4": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9003}
+      },
+      "summary": "5/5 MATCH (noise:sigma + noise:clean_residual); changed fraction 9.76-9.97% → amount≈0.10 → sev5 逐对一致"
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [{"function": "noise_impulse", "severity": 5, "verdict": "UNCERTAIN"}],
+      "overall_verdict": "UNCERTAIN",
+      "reason": "R1 独立复核未发现优于 R0 的候选: 主信号 (zero_ratio=amount 指纹) 在 5/5 support 上逐对支持 amount=0.10 (sev5), 全信号签名 (含被 step4 误判为 saturation 的全局信号) 由单步 impulse 精确复现, 跨族 gaussian 对照 WEAK。按 SKILL 规则噪声步骤 verdict 保持 UNCERTAIN。"
+    }
+  }
+}

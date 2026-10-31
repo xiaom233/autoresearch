@@ -1,0 +1,79 @@
+{
+  "challenge_id": "blind_0020_setA",
+  "round": "R2",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["noise_gaussian_RGB", 1],
+    ["blur_gaussian", 3],
+    ["contrast_weaken_scale", 5]
+  ],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 4, "verdict": "LIKELY"},
+    {"function": "contrast_weaken_stretch", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": "blur_glass:3,contrast_weaken_stretch:4",
+      "psnr": 35.24,
+      "stats": "R1 管线 (上一轮). 5 对 33.58-42.55 (mean 37.42), CI 8/9/8/9/8; pair0 signal WEAK (spectral_slope diff=0.126). R2 中 glass:4 在 5/5 对均优于它 (+0.96~+1.53 dB)",
+      "function_family": "glass blur severity -1 backup"
+    },
+    {
+      "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+      "psnr": 35.67,
+      "stats": "pair0 PSNR=35.67, CI 8/10; severity 上邻, 比 glass:4 低 1.11 dB (过模糊, blur:spectral_slope 重新偏离)",
+      "function_family": "glass blur severity +1 backup"
+    },
+    {
+      "pipeline": "blur_gaussian:3,contrast_weaken_stretch:4",
+      "psnr": 34.57,
+      "stats": "pair0 PSNR=34.57 (R1 测试), CI 7/10; gaussian ringing 使 overshoot 偏差 23% (glass:4 为 1%), 跨族备份",
+      "function_family": "gaussian blur (cross-family backup)"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (5 对 support) + SIGNAL (pair0)",
+    "support_psnr_r0": 13.61,
+    "support_psnr_r1_trained": 20.07,
+    "support_pair_psnr_previous_round_sim": {
+      "pair0": 35.25,
+      "pair1": 42.55,
+      "pair2": 33.58,
+      "pair3": 39.42,
+      "pair4": 37.31,
+      "mean": 37.42
+    },
+    "support_pair_psnr_r2": {
+      "pair0": 36.78,
+      "pair1": 43.51,
+      "pair2": 34.97,
+      "pair3": 40.74,
+      "pair4": 38.28,
+      "mean": 38.86
+    },
+    "ci_pass_r2": ["8/10", "9/10", "10/10", "9/10", "8/10"],
+    "change_criterion": "pair1=43.51 dB 与 pair3=40.74 dB > 40 dB; 5/5 对相对上一轮仿真提升 (+0.96~+1.53 dB, mean 37.42->38.86, +1.44 dB); signal 模式由 R1 的 WEAK (spectral_slope diff=0.126) 改善为 MATCH 4/4",
+    "key_signals": {
+      "contrast_spread_ratio": 0.3757,
+      "variance_ratio": 0.1184,
+      "mean_shift": 0.0518,
+      "saturation_chroma_ratio": 0.5281,
+      "unique_G_target": 105,
+      "block_boundary": 0.9899,
+      "glass_score": 0.2854,
+      "mtf_roughness": 2.6964,
+      "gm_ratio": 0.0833,
+      "blur_density": 0.7455,
+      "spectral_slope_target": -1.1909,
+      "spectral_slope_clean": -0.9287,
+      "noise_prior_sigma": 2.22,
+      "residual_intensity_corr_R2": 0.0389,
+      "peeled_residual_std_R2": 3.7,
+      "peeled_spatial_corr_R2": 0.9883
+    },
+    "rationale": "R2 信号重释聚焦 R1 未完成的 severity 扫描. (1) Blur: run_full_analysis 的 gm_ratio=0.0833 (severity_source) 估计 sev5, glass_score=0.2854>0.25 + mtf_roughness=2.6964 锁定 glass 族; 但 R1 只测过 glass:3 (与 stretch:4 组合) 和 glass:5 (仅与 stretch:5 组合), 未做 ±1 扫描, 而 R1 最终 signal 结果恰为 WEAK (spectral_slope diff=0.126 > 0.08). R2 单调扫描: glass:2=31.89, glass:3=35.24, glass:4=36.78, glass:5=35.67 (pair0) -> 最优 sev4; 且 glass:4 时 verify_signals 返回 MATCH 4/4 (blur:spectral_slope, blur:wiener_kernel, global:mean_shift, global:variance_ratio), R1 的斜率偏差被消除. (2) Global: stretch:4 仍最优; stretch:3 在 glass:4 下仅 30.97 dB 且 unique_G 比目标少 22 (欠压缩, 颜色过多), stretch:5 (R1: 31.2) 过压缩 -> 保持 contrast_weaken_stretch:4 (c=0.6). (3) 噪声: 新管线剥离后 residual_std 由 R1 的 4.4 降至 3.7, spatial_corr=0.9883 (结构化, 非白噪声), extreme_pct=58.89% 属 sigma<5 已知假阳性, noise_prior sigma=4.45 为 blur 下界估计; R1 已证 noise_gaussian_RGB:1 的 sigma 偏差 124% -> 维持 NO_NOISE. (4) JPEG: block_boundary=0.9899<1.1, 模拟 unique_G 与目标差 1-2 -> 无压缩步. (5) 5 对 support: 34.97-43.51 dB, mean 38.86, 全部优于 R1 (37.42), CI 8-10/10.",
+    "caveats": "pair2 仍最低 (34.97 dB); glass 为随机 pixel-shuffle 实现, 与真实管线的 shuffle 种子差异不可消除 (残余 impulse_pct_zero 偏差 0.6-0.9%); signal MATCH 仅在 pair0 上测得, 其余 4 对只做了 PSNR/CI 验证; 最终效果仍需训练 PSNR 仲裁."
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": true,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression_jpeg sev5 LIKELY (Tier S 0%FP): block_boundary=1.7589 (>1.1), dct_zero_ratio=0.7235; 5 对 support 复现误差 <=2% (full_analysis_R1 / reflection_R1)",
+    "contrast_strengthen_stretch sev4: variance_ratio=2.3402 (Tier A, 落在 contrast_strengthen 校准区间 1.84-2.74), mean_shift=+16.4 (0-255), clipped_fraction=0.1241, residual_intensity_corr=0.326/gamma_suspect=True — 单一 S 曲线同时解释方差、均值与残差-强度相关",
+    "R1 单 global 结构已交叉验证: 生成器 global 类别每管线至多一次 (R0 双 global 不可生成); stretch:4+jpeg:5 在 5/5 support pairs 全部改善 (28.33/31.15/28.83/27.92/26.23 dB, 均值 28.49 vs R0 26.78, +1.71 dB), CI 10/10 全对, 无对退化",
+    "R0 训练 support PSNR=18.79 dB (r0_result.json, nan=false, best_step=7546) 印证 R0 管线错误、R1 修正必要",
+    "noise ruled out: raw sigma=0.74, peeled sigma=1.48 (<2); peeled extreme_pct=90.6% 为结构化残差的已知假阳性 (residual std=9.8, sigma<5 规则)",
+    "blur ruled out: spectral_slope_ratio=0.933 (<1.08), FFT anisotropy=0, PCA=0; R0 插入 blur_gaussian:1 代价 -5.25 dB",
+    "no motion: anisotropy 未 >1.7 -> 不启用 OCAB; 无 brightness_HSV 步骤 -> 不加 ColorMLP; 无噪声/模糊共享结构 -> 不用 CSN",
+    "verdict=UNCERTAIN 但 Tier S/A 信号明确 -> finetune_strategy.md §七 允许启用组件: variance_ratio≠1.0 (Tier A) + 结构化 JPEG (block_boundary, Tier S) -> FiLM-GCM"
+  ],
+  "rationale": "管线含 contrast_strengthen_stretch -> 按 finetune_strategy.md §六 Step 1 选 Direct (含 contrast 时 RandomCurric 有 -0.15 dB 风险, Direct 最安全); contrast 全局退化 -> Swin (MDTA/OCAB 在 contrast 上崩溃), window=8。FiLM-GCM 触发: contrast 步骤 Tier A variance_ratio=2.3402 (校准区间 1.84-2.74) + JPEG 结构化局部 (block_boundary=1.7589, Tier S 0%FP) 同时存在, 符合 §七 'variance_ratio≠1.0 + 结构化(motion/jpeg) -> FiLM-GCM' (exp10 L5 +3.52, exp38 stretch +0.35, exp39 9/9 全胜 avg +3.16); R1 反思已用 5 对 support 验证该确定性管线 (CI 10/10, 均值 +1.71 dB), 组件与退化类型匹配可信; lr=5e-4 规避 GCM NaN (§九)。ColorPre 不启用: FiLM-GCM 已覆盖同一 Tier A 信号且更强, ColorPre 跨退化泛化最差; 无 noise/blur 不加 CSN; 无 motion 不开 OCAB; DualBranch/SCA/FPro/FreqMod/ChannelCurve/ColorMLP 按规则不使用。SimpleGate 默认常开 (-32K, exp39 8/9 安全, 本管线无 motion)。"
+}

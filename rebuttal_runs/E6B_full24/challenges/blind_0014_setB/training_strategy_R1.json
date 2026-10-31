@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "预测管线 brightness_brighten_shfit_HSV:3 → compression_jpeg:2 在 5/5 support 对 PSNR=inf (RMSE=0, CI 10/10)，Tier 1 确定性退化，参数可信",
+    "brightness 全局退化: mean_shift=+47.9/255 (三通道同向), clipped_fraction=45.1% → finetune_strategy.md §七 Step1 / CLAUDE.md 规则8: 含全局退化用 Direct，不用 Ft",
+    "JPEG Tier S 信号: block_boundary=1.6353 > 1.1 (0% FP), dct_zero_ratio=0.798, unique_G 213→181 → 结构伪影存在但无对应可启用组件（JPEG 专项只需确认）",
+    "variance_ratio=0.4841 为 HSV 亮度提升+亮部裁剪的派生效应，PSNR=inf 匹配排除独立 contrast 步骤 → 不满足 FiLM-GCM/ColorPre 的 'contrast Tier A' 门控；且 FiLM-GCM 在 brightness_HSV+重裁剪下有 NaN 风险 (exp40 §九)，brightness 上收益 ≈ -0.02 dB (exp38)",
+    "无 motion: spectral_slope_ratio=0.951 (<1.08), BLUR_UNLIKELY, 无 anisotropy>1.7 → 不启用 OCAB；sigma=0.49<2 无 noise，不存在 Tier C 噪声误判风险",
+    "SimpleGate 默认常开: exp39 -32K 参数，8/9 退化安全 (仅 S5 motion 三退化 -0.86，本管线无 motion)"
+  ],
+  "rationale": "Tier 1 高置信确定性管线 (brightness_HSV:3 + JPEG:2，5/5 对像素级完全复现)。含全局 brightness 退化 → Direct 从零训练最安全；无 contrast、无 motion、无噪声，所有 Tier A 组件门控均不满足（variance_ratio 系裁剪派生而非 contrast）。故采用纯 Swin (ws=8, dim=64) + SimpleGate + Direct，lr=5e-4, 2 epoch，与基线预算一致。JPEG sev2 属低难度退化，纯 Swin 隐式容量足够。"
+}

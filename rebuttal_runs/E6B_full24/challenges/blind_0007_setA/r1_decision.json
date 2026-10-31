@@ -1,0 +1,31 @@
+{
+  "challenge_id": "blind_0007_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_speckle", 1]],
+  "r1_pipeline": [["noise_speckle", 1]],
+  "support_psnr_r0": 35.7,
+  "candidates_tested": [
+    {"pipeline": "noise_speckle:1", "pairs": ["p0", "p1", "p2", "p3", "p4"], "verdict": "MATCH 5/5", "status": "ACCEPT"},
+    {"pipeline": "noise_speckle:2", "pairs": ["p0"], "verdict": "WEAK (noise:sigma diff=40%)", "status": "REJECT"},
+    {"pipeline": "noise_speckle:1,saturate_strengthen_HSV:1", "pairs": ["p0"], "verdict": "WEAK (global:mean_shift diff=0.0801, global:variance_ratio diff=186%, noise:structured_residual FWHM=14px; 模拟 chroma_ratio 1.8667 vs target 1.1547)", "status": "REJECT"}
+  ],
+  "test_candidate_calls": 6,
+  "best_validation": {
+    "pipeline": "noise_speckle:1",
+    "method": "verify_signals (SIGNAL mode, fresh random seeds)",
+    "pairs": {"p0": "MATCH", "p1": "MATCH", "p2": "MATCH", "p3": "MATCH", "p4": "MATCH"},
+    "fingerprint_pair0": "target vs sim_speckle1: sigma 4.45/4.45, ivc 0.8975/0.8984, scaled 0.3941/0.3940, cross_ch 0.0008/0.0011, variance_ratio 1.0438/1.0438, contrast_spread 1.0368/1.0368, mean_shift -0.6/-0.6, saturation_chroma_ratio 1.1547/1.1547, clipped_fraction 0.1083/0.1083, gm_ratio 2.2978/2.2991, spectral_slope -1.0383/-1.0387, block_boundary 1.0027/1.0002"
+  },
+  "signal_sources": [
+    "saturation_chroma_ratio=1.1547 (raw 边界, R0 判为噪声伪影) -> speckle:1 模拟复现 1.1547, 叠加 saturate_strengthen_HSV:1 过冲到 1.8667 -> 无饱和退化",
+    "variance_ratio=1.0438 / contrast_spread_ratio=1.0368 -> speckle:1 模拟逐位复现 -> 无 contrast/gamma/brightness",
+    "clipped_fraction=0.1083 (heavy_clipping) -> 模拟 0.1083 一致 -> 原图亮部+噪声所致, 非增益",
+    "mean_shift=-0.6/255 -> 模拟 -0.6 一致 -> 无 brightness",
+    "block_boundary=1.0027 / unique_G=256 -> 模拟 bb=1.0002 (diff 0.25%); R0 jpeg:1 MISMATCH 47% -> 无 JPEG",
+    "spectral_slope -1.0383 / gm_ratio 2.2978 -> 模拟 -1.0387 / 2.2991; blur_gaussian:1 会使 gm=0.52, slope 偏 -0.033 -> 无 blur",
+    "noise sigma 4.45, peeled residual_std 15.1 (c≈0.14); speckle:2 sigma diff 40% (WEAK) -> severity=1",
+    "noise type: ivc 0.8975, scaled corr +0.3941, cross_ch 0.0008, zero_ratio 0.2591; R0 gaussian_RGB:1 与 poisson:1 均 WEAK -> speckle"
+  ],
+  "reason": "R1 信号重释未产生任何可支持的修正候选: 纯 speckle:1 的新种子模拟逐项复现 target 全部信号 (含 3 个边界/被忽略信号), 5 对 support 全部 MATCH; 唯一两个替代假设 (sev2、叠加饱和度) 均被信号否决. 无证据 -> NO_CHANGE, pipeline 保持 noise_speckle:1 (verdict UNCERTAIN, 噪声步骤按 SKILL 永不 LIKELY)."
+}

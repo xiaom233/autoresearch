@@ -1,0 +1,274 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=3.236 (>>1.1, 0%FP), dct_zero_ratio=0.9366 强量化，unique_G 未减少(256)",
+      "blur": "MOTION_BLUR: gm_ratio=0.405, spectral_slope_ratio=1.330, FFT_anisotropy=1.712, PCA=4.20>2.5 (0%FP note), glass_score=0.985 偏高需 cross-check",
+      "noise": "noise_prior sigma=0.74 (<2 → NO_NOISE)；§B spatial_corr=0.941 为 blur/JPEG 残留污染，不可靠",
+      "global": "NO_GLOBAL: variance_ratio=0.896, mean_shift=-0.4, saturation_chroma_ratio=0.985"
+    },
+    "mode": "PSNR (sigma=0.74)",
+    "qwen_gate": "跳过（Qwen/API 不可用；且 sigma=0.74 < 2 不触发边界门）",
+    "suspected": [
+      "compression_jpeg",
+      "blur_motion"
+    ],
+    "ruled_out": [
+      "noise (sigma<2)",
+      "global (variance_ratio/mean_shift 均接近1/0)"
+    ]
+  },
+  "noise_6step_check": {
+    "note": "将在 peeled_noise_check 剥离确定性退化后填写",
+    "extreme_pct": null,
+    "vm_slope": null,
+    "var_slope": null,
+    "spatial_corr": null,
+    "rgb_ratio": null,
+    "cross_ch_corr": null,
+    "diagnosis": "pending"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "R1: block_boundary=3.236 + dct_zero_ratio=0.937 强量化信号，全分析推荐 jpeg:4，先单独确认压缩档位"
+      },
+      "test_result": {
+        "psnr_rgb": 20.45,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "R1: jpeg:4 单独 PSNR=20.45，用 jpeg:5 对比确认压缩档位方向"
+      },
+      "test_result": {
+        "psnr_rgb": 20.18,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "R1: jpeg:4 (PSNR 20.45, CI 7/10) 优于 jpeg:5 (20.18, CI 5/10)，向下测 jpeg:3 确认是否更低"
+      },
+      "test_result": {
+        "psnr_rgb": 20.64,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "thinking": "R2: jpeg 单独测试 3/4/5 均 ~20-21dB (ขาด blur)，进入 Step2；PCA=4.20>2.5 + FFT=1.71>1.7 → motion:4，按物理顺序 blur→JPEG，联合测试"
+      },
+      "test_result": {
+        "psnr_rgb": 27.2,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:4",
+        "thinking": "R2: motion:4+jpeg:4 跳到 27.20dB，扫 motion:3 确认方向"
+      },
+      "test_result": {
+        "psnr_rgb": 20.61,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "thinking": "R2: motion:4+jpeg:4=27.20 vs motion:3=20.61，向上扫 motion:5"
+      },
+      "test_result": {
+        "psnr_rgb": 21.72,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R3: motion:4 峰值确认 (3=20.61,5=21.72)，固定 blur 扫 JPEG 档位，先 jpeg:3"
+      },
+      "test_result": {
+        "psnr_rgb": 28.59,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:2",
+        "thinking": "R3: motion:4+jpeg:3=28.59 (CI 8/10) 优于 jpeg:4，向下再测 jpeg:2"
+      },
+      "test_result": {
+        "psnr_rgb": 29.2,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:1",
+        "thinking": "R3: jpeg 档位持续上升 (4→27.20, 3→28.59, 2→29.20)，测 jpeg:1 边界"
+      },
+      "test_result": {
+        "psnr_rgb": 26.52,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:2",
+        "thinking": "R2 跨族对比: motion:4+jpeg:2 峰值仅 29.2dB (<30)，glass_score=0.985 高需排查；先测 gaussian:4 基线对比 (DT 的 alternative)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.91,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:2",
+      "psnr_rgb": 29.2,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 28.59,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:4",
+      "psnr_rgb": 27.2,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:1",
+      "psnr_rgb": 26.52,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:2",
+      "psnr_rgb": 22.91,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:4",
+      "psnr_rgb": 21.72,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 20.64,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:4",
+      "psnr_rgb": 20.61,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 20.45,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 20.18,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    }
+  ]
+}

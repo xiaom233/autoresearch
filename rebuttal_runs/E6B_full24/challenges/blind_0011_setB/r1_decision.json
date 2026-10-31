@@ -1,0 +1,60 @@
+{
+  "challenge_id": "blind_0011_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_gaussian_RGB", 3], ["blur_gaussian", 4]],
+  "r1_pipeline": [["noise_gaussian_RGB", 3], ["blur_gaussian", 4]],
+  "support_psnr_r0": 26.11,
+  "candidates_tested": [
+    {
+      "candidate": "blur_gaussian:4,contrast_weaken_scale:1",
+      "pairs": ["pair0"],
+      "result": "PSNR 27.25 dB, CI 7/10 (vs blur-only 39.29 dB)",
+      "verdict": "REJECT",
+      "signal_source": "variance_ratio=0.6514 + contrast_spread_ratio=0.7378 + residual_intensity_corr=-0.5945 (contrast hypothesis untested on the winning blur:4 base in R0)"
+    },
+    {
+      "candidate": "blur_gaussian:4",
+      "pairs": ["pair0 (R0)", "pair1 (R0)", "pair2", "pair3", "pair4"],
+      "result": "5-pair PSNR 39.29/34.13/45.92/41.28/40.21 dB; mean 40.17 dB; pooled 38.54 dB; 3/5 pairs >40 dB",
+      "verdict": "BEST_DETERMINISTIC_NOT_ADOPTED",
+      "signal_source": "gm_ratio=0.2236, spectral_slope_ratio=1.5434, spectral_slope + wiener_kernel MATCH on all 5 pairs; best severity/subtype in every pair"
+    },
+    {
+      "candidate": "blur_gaussian:5",
+      "pairs": ["pair1"],
+      "result": "PSNR 33.62 dB < blur:4 34.13 dB on the outlier pair1",
+      "verdict": "REJECT",
+      "signal_source": "pair1 residual RMSE 5.01 and structured peeled residual (cross_ch=0.86, ivc=0.95) suggested blur/severity mismatch; sev5 worse => blur:4 confirmed"
+    },
+    {
+      "candidate": "noise_speckle:1,blur_gaussian:4",
+      "pairs": ["pair1"],
+      "result": "PARTIAL; matched [blur:spectral_slope, blur:wiener_kernel, noise:sigma]; mismatched [noise:structured_residual FWHM=18.0px]",
+      "verdict": "NO_IMPROVEMENT",
+      "signal_source": "peeled pair1 vm_slope=0.0156 (>0.01), ivc=0.9493, cross_ch=0.8604, content-dependent residual; R0 only tested speckle:3 without the SKILL-mandated severity scan"
+    }
+  ],
+  "test_candidate_calls": 6,
+  "best_validation": {
+    "deterministic_best": {
+      "pipeline": "blur_gaussian:4",
+      "support_psnr": {"pair0": 39.29, "pair1": 34.13, "pair2": 45.92, "pair3": 41.28, "pair4": 40.21},
+      "mean_psnr_db": 40.17,
+      "pooled_psnr_db": 38.54,
+      "pairs_above_40db": 3
+    },
+    "noise_best": {
+      "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+      "verdict": "PARTIAL on 5/5 pairs (identical matched set to sev2 and to speckle:1/3)",
+      "note": "no signal-mode improvement achievable under noise->blur coupling (SKILL 54.7%)"
+    }
+  },
+  "signal_sources": [
+    "full_analysis_R1 (pair0 rerun): block_boundary=0.9976, unique_G=223, noise_prior_sigma=1.61, cross_channel_corr=0.982 (raw), residual_intensity_corr=-0.5945, gm_ratio=0.2236, spectral_slope_ratio=1.5434, residual_anisotropy=2.0593, glass_score=0.0635, variance_ratio=0.6514, contrast_spread_ratio=0.7378, mean_shift=-1.7, saturation_chroma_ratio=0.9387, clipped_fraction=0.0",
+    "peeled_noise_check pair0 (R0, strip blur:4): residual std=2.5, vm_slope=0.0631, var_slope=0.1092, spatial_corr=0.9915, rgb_ratio=1.0627, cross_ch=0.2744, ch R2.4/G2.6/B2.5",
+    "peeled_noise_check pair1 (R1, strip blur:4): residual std=4.4, vm_slope=0.0156, var_slope=-0.0403, ivc=0.9493, spatial_corr=0.9986, rgb_ratio=1.1383, cross_ch=0.8604, ch R4.3/G4.1/B4.6",
+    "x_distortion severity tables (tool reference): blur_gaussian sigma=severity; contrast_weaken_scale sev1=0.75; saturate_weaken sev1=0.70/0.60; brightness shift sev1=0.10*255=25.5; quantization median/hist <=20/24 levels; compression_jpeg sev1=quality 25"
+  ],
+  "reason": "R1 信号重释未产生可验证的改进候选。(1) blur_gaussian:4 为唯一稳健步骤: 5 对 support PSNR 39.29/34.13/45.92/41.28/40.21, 所有替代(sev3/sev5/lens4/motion4/JPEG1/contrast1/stretch1)均更差。(2) contrast 假设在正确蓝牙基座上被实测排除(blur4+contrast_weaken_scale:1=27.25dB); brightness/saturation/quantization 由信号幅度与函数 severity 表排除。(3) noise 步保持 UNCERTAIN: 剥离残差证明随机成分存在(std 2.5-4.4、通道均匀、平滑), 但 noise->blur 顺序下类型/严重度不可判别 — RGB:2、RGB:3、speckle:3、speckle:1 的 verify_signals 全为 PARTIAL 且 matched 集合相同, 不满足'多数对 WEAK→PARTIAL/MATCH 改善'的 CHANGE 条件。(4) 纯确定性简化 blur:4 的 5 对均值 40.17dB 仅勉强越线且 2/5 对 <40dB (pair1 34.13), 合并 PSNR 38.5dB, 残差仍有未建模成分; 依据 SKILL/反思规则不得仅凭 PSNR 剔除 noise 步。故 NO_CHANGE, 保留 R0 pipeline。"
+}

@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression: block_boundary=1.692 (Tier S, 0%FP) 确认 JPEG，但 JSON 开关无 JPEG 专项组件 → 纯 Swin 处理",
+    "blur: glass_score=0.459, gm_ratio=0.361, anisotropy=2.035>1.7 — OCAB 门控需 anisotropy>1.7 且为 motion；blur_motion:4 实测 PSNR 17.58dB（vs glass:3 28.44dB）被否决，子类为 glass 像素洗牌 → 不启用 OCAB",
+    "global: contrast_detected_raw=false, contrast_spread_ratio=0.951, mean_shift≈0；variance_ratio=0.813 可由 blur 解释（reflection 已归因）；contrast_weaken_scale:1 实测 22.26dB（较 28.44 低 6.2dB）证伪 → 不满足 ColorPre/FiLM-GCM 的 contrast Tier A 门控",
+    "structured local: motion 已被 PSNR 否决、glass 为随机洗牌非结构化 → FiLM-GCM 的 contrast+结构化条件不成立",
+    "noise: noise_prior sigma=0.62（剥离后 0.99）<2 → NO_NOISE（extreme_pct=58% 为 SKILL 明示 FP）",
+    "overall: Tier 3 UNCERTAIN；SimpleGate 为默认常开（exp39 8/9 安全，-32K 参数）"
+  ],
+  "rationale": "管线为 blur_glass:3 + compression_jpeg:1 两步，整体 UNCERTAIN（Tier 3）。唯一 Tier S 信号 block_boundary 确认 JPEG，但无对应组件开关；anisotropy=2.035 虽 >1.7，但 motion 候选被 PSNR 实测否决（17.58dB），不满足『anisotropy + motion』门控；contrast 被直接 PSNR 测试证伪（-6.2dB），variance_ratio=0.813 已由 blur 解释，不满足 ColorPre/FiLM-GCM 的 Tier A contrast 门控；无噪声、无全局退化。按 exp37/STRATEGY_INSTRUCTIONS 保守原则采用纯 Swin + SimpleGate + Direct，不启用任何高风险组件。两步无 contrast 且含压缩，梯度干扰存在，但可选项仅 Direct 模板，保持 Direct。"
+}

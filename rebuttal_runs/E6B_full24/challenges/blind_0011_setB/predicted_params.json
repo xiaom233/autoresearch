@@ -1,0 +1,43 @@
+{
+  "challenge_id": "blind_0011_setB",
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 3},
+    {"function": "blur_gaussian", "severity": 4}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 2},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "function_family": "noise_gaussian_RGB (severity alternative)",
+      "stats": {"verdict": "PARTIAL", "matched": ["blur:spectral_slope", "blur:wiener_kernel", "noise:sigma"]},
+      "evidence": "残差 std 标定: target 2.5 vs RGB:3 仿真 3.1 → sigma_white≈31, 介于 sev2(25.5) 与 sev3(38.25); sev2 与 sev3 的 wavelet noise:sigma 检查均通过 (seed 无关)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "function_family": "blur-only (noise step unexplained)",
+      "psnr": 39.29,
+      "stats": {"ci_pass": "10/10", "peeled_residual_std_pair0": 2.5, "pair1_psnr": 34.13},
+      "evidence": "PSNR 最优确定性候选 (pair0 39.29dB CI 10/10; pair1 34.13dB), spectral_slope + wiener_kernel MATCH; 但剥离后残差 std=2.5 且平滑 (spatial_corr 0.99), 无法由 blur 解释"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 3},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "function_family": "noise_speckle (low confidence)",
+      "stats": {"verdict": "PARTIAL", "peeled_residual_std_sim": 4.6, "cross_ch_sim": 0.62, "cross_ch_target": 0.27},
+      "evidence": "§B vm_slope=0.063 (>0.01) 提示乘性噪声, 但仿真与 target 不符: 残差 std 4.6 vs 2.5, cross_ch 0.62 vs 0.27; 通道均匀性 (rgb_ratio 1.06) 更支持 RGB 加性噪声"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "10/10",
+    "mode": "SIGNAL (noise-before-blur coupling; PSNR only used for the deterministic blur step)",
+    "rationale": "blur_gaussian:4 为确定性部分: pair0 PSNR=39.29dB CI=10/10, signal 模式 spectral_slope + wiener_kernel MATCH (pair0-4 全部 5 对); sev3(32.79)/sev5(34.66)/lens:4(33.86)/motion:4(21.73) 均更差; JPEG 排除 (block_boundary=0.998<1.1, 叠加后 35.95dB 且 block 边界失配 102%); contrast_weaken_scale:1 (26.23) / stretch:1 (16.84) / brightness (mean_shift -1.7) / quantization (unique_G=223) 排除. 剥离 blur:4 后残差 std=2.5、平滑 (spatial_corr 0.9915)、通道均匀 (R2.4/G2.6/B2.5, rgb_ratio 1.06)、cross_ch 0.274, 与 noise_gaussian_RGB(blur 前)+blur:4 仿真统计一致 (cross_ch 0.279, rgb_ratio 1.05) → blur 前存在加性 RGB 噪声; 因 noise→blur 顺序下噪声类型统计不可完全判别且幅度介于 sev2/3 (σ≈31), 噪声步 UNCERTAIN, overall=UNCERTAIN."
+  }
+}

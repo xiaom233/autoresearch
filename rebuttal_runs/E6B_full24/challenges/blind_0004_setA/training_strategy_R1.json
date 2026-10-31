@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "full_analysis step3 blur: FFT anisotropy=0.00, PCA=0.0 → 未达 OCAB 门控 anisotropy_ratio>1.7（finetune_strategy §七 Tier A 0%FP 条件不成立），且 severity=1（<5）、该步骤 verdict=UNCERTAIN → 不启用 OCAB",
+    "predicted_params: blur_motion sev=1 为唯一候选，Wiener kernel corr 0.828-0.87 vs gaussian 0.707/lens 0.699/glass 0.653；motion:1 仿真指纹 gm_ratio 0.572 vs 目标 0.582、spectral_slope -1.377 vs -1.363、ratio 1.051 vs 1.041；support pairs CI 9-10/10，gaussian:2 对照仅 6/10 → blur 类别信号属 Tier B（motion 子类清晰但 verdict UNCERTAIN）→ 纯 Swin 基线",
+    "full_analysis step4 global: variance_ratio=0.9919（≈1.0）、mean_shift=-0.4、contrast_spread_ratio=0.9937、saturation_chroma_ratio=0.9921 → 无 Tier A variance_ratio 信号 → 不启用 ColorPre / FiLM-GCM（禁用条件：contrast 信号不满足）",
+    "full_analysis step1 compression: block_boundary=0.9873 < 1.1、unique_G 238/254（>200）→ 无 Tier S JPEG 信号 → 无结构化局部退化 → FiLM-GCM 的 contrast+结构化门控不成立",
+    "reflection noise_6step_check: wavelet sigma=0.74 < 2、spatial_corr=0.9822、rgb_ratio=1.0322，诊断为 NO_NOISE（全部由 blur 残差解释）→ 不加噪声相关组件",
+    "单步管线无多退化梯度干扰 → Direct（Step 1: 纯局部单步不触发 RandomCurric）；SimpleGate 默认常开（exp39: -32K，8/9 退化安全，仅 S5 三退化 -0.86）"
+  ],
+  "rationale": "本挑战为单步 blur_motion:1（UNCERTAIN，随机角度导致 PSNR 上限 ~34.5dB）。唯一 Tier A 门控信号（anisotropy>1.7）在 full_analysis 中实测为 0.00，不满足 OCAB 启用条件，且 severity=1 远低于 OCAB 推荐的 motion sev≥5；无 contrast（variance_ratio=0.992）、无 JPEG（block_boundary=0.987）、无噪声（NO_NOISE）→ ColorPre/FiLM-GCM/CSN 等组件全部无信号依据。按 finetune_strategy §七 决策规则（Tier B 模糊 → Swin 基线；单步局部 → Direct），选择纯 Swin + SimpleGate + Direct 从零训练，lr=5e-4，EPOCH=2，batch=16，与基线预算一致。"
+}

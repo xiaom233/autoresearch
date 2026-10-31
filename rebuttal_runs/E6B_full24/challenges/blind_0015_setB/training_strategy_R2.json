@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "R1 pipeline = blur_motion:1 + brightness_darken_shfit_RGB:3（两步均 LIKELY）；5 对 support 仿真 PSNR 43.01/58.91/inf(bit-exact)/36.66/37.56 dB，CI 10/10 全对 —— 管线本身置信度高，但架构组件需按各步骤信号门控独立判断",
+    "motion 步骤信号：pair1 剥离 brightness_darken_shfit_RGB:3 后 residual_anisotropy=2.198（>1.7，Tier A，0% FP），该残差自身 verdict=MOTION_BLUR；但 severity=1（radius=5, sigma=3, gm_ratio=0.637 轻中度），不满足 §六 Step2 'LIKELY + motion sev≥5 → OCAB' 门控，也非 CLAUDE.md 规则10 所指'严重 motion blur → OCAB+ws16'；且 OCAB 参数公平性强制 EMBED_DIM=30（§五，否则 2.1M/4.7× 基线，训练慢 47%），为 sev1 弱方向模糊牺牲一半网络容量不划算，OCAB +1.19 的收益来自 exp10 GT 已知的高强度结构化 motion",
+    "CLAUDE.md 规则10 '全局退化 → 只用 Swin（避免 MDTA/OCAB）'：管线含 brightness_darken_shfit_RGB:3（§二 全局退化清单）；§五 注意力表同列 'brightness+blur → Swin 基线，MDTA/OCAB 无优势' —— 与 exp10 L1(blur+brightness_HSV) 一致，故禁用 OCAB，保持 Swin ws=8 dim=64",
+    "brightness 步骤：additive RGB shift sev3（c=0.2=51 级；5 对 mean_shift 随 clipped_fraction 单调 0.494→-36.3, 0.357→-43.9, 0.242→-46.1, 0.132→-49.0, 0.103→-49.3，unique_G=202-203/通道）；§五 'brightness 无专用组件'（exp38 BS 行 FiLM -0.02、ColorPre +0.03 太简单），禁用 FiLM-GCM/ColorPre/ColorMLP",
+    "contrast 门控不成立：full_analysis_R1 step4 variance_ratio=0.6574 但 contrast_from_variance=false 且 brightness_clip_explains_variance=true（方差下降由暗化+零截断解释）；无 contrast 步骤 → variance_ratio Tier A 的 ColorPre 与 'contrast+结构化' 的 FiLM-GCM 均不触发；block_boundary=0.9935 (<1.05) 无 JPEG 结构化项，亦不满足 FiLM-GCM 的 motion/jpeg 结构化条件",
+    "SimpleGate 默认常开：-32K 参数，exp39 8/9 退化安全（唯一负例 S5 三退化 motion×3 -0.86 dB；本挑战为 blur_motion:1 单步 + 全局 brightness，不触发该情形）",
+    "策略 Direct：exp37/38 True Ft ≈ Direct（±0.05 dB）、CLAUDE.md 规则8 全局退化不用 Ft；brightness(additive shift) 梯度干扰小（§二 RandomCurric +0.41 但 Direct 最安全），motion sev=1 < 3 不满足 Curric(Fwd) 可靠场景（4/4 案例均为 motion P1 sev≥3）——2-epoch 预算下 Direct 最稳且与 R0 配置一致，仅变更预测管线以隔离 R1 效果"
+  ],
+  "rationale": "R1 管线 = blur_motion:1 + brightness_darken_shfit_RGB:3。motion 虽由 Tier A 的 residual_anisotropy=2.198 确认（0% FP），但 severity 仅 1（轻度方向模糊），未达 §六 Step2 的 sev≥5 OCAB 门控；且管线含全局 brightness（CLAUDE.md 规则10 全局退化只用 Swin；§五 明确 brightness+blur 下 MDTA/OCAB 无优势），启用 OCAB 还需按参数公平性降到 dim=30，代价大于 +1.19 的预期收益（且该收益来自高强度 motion）。brightness 为 additive shift，无专用组件且 variance_ratio 由暗化+截断解释而非 contrast，FiLM-GCM/ColorPre/ColorMLP 门控均不成立；无 JPEG 结构化项。故纯 Swin(dim=64, ws=8) + SimpleGate + Direct，LR=5e-4，2 epoch，与 R0 架构一致，使 R1 对比仅反映预测管线修正。备注：训练时 blur_motion 的角度按 x_distortion 随机抽取（仿真中 5/6 次命中 GT 等效核），这是该函数的固有随机性，不属于架构问题。"
+}

@@ -1,0 +1,30 @@
+{
+  "challenge_id": "blind_0012_setB",
+  "pipeline": [
+    {"function": "blur_motion", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 3}, {"function": "compression_jpeg", "severity": 4}],
+      "psnr": 20.52,
+      "ci_pass": "8/10",
+      "function_family": "blur_gaussian",
+      "note": "跨族对照: 各向同性 blur; 但 FFT anisotropy=1.78>1.7 + PCA=4.06>2.5 支持 motion"
+    },
+    {
+      "pipeline": [{"function": "blur_motion", "severity": 4}, {"function": "compression_jpeg", "severity": 4}],
+      "psnr": 22.54,
+      "ci_pass": "7/10",
+      "function_family": "blur_motion",
+      "note": "motion severity 上探; 因 motion 核随机, PSNR 方差 ~5dB, sev3 来自 gm_ratio=0.535 估计"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "7/10",
+    "mode": "PSNR (sigma=0.74<2 → 无噪声; 但 blur_motion 核随机, 同管线重跑 PSNR 23.71→18.62, PSNR 仅作一致性参考)",
+    "rationale": "block_boundary=2.792 (0%FP) → JPEG 确定, unique_G=256 排除量化, dct_zero=0.897 支持强压缩, sev4 处 block_boundary 差 7-8%; residual_anisotropy=1.782>1.7 + blur_pca=4.06>2.5 (0%FP) + gm_ratio=0.535 → motion blur, sev3 (gm_ratio 估计); noise_prior sigma=0.74 (剥离后 0.99) <2 → NO_NOISE, §B IMPULSE(48.9%)/SPECKLE(vm_slope=0.46) 为 JPEG/blur 伪影假阳性; global NO_GLOBAL (mean_shift=-0.2, contrast_spread_ratio=0.958). 物理顺序 blur→JPEG (block_boundary 保持锐利 2.79 表明 JPEG 在最后). 5 对复核 PSNR 18.6-25.2 dB, CI 7-8/10, 一致但未达 40dB 阈值, 主因 motion 核方向随机不可复现, 故 UNCERTAIN 而非 LIKELY"
+  }
+}

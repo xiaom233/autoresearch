@@ -1,0 +1,64 @@
+{
+  "challenge_id": "blind_0016_setB",
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 3,
+      "order": 1,
+      "verdict": "UNCERTAIN",
+      "evidence": {
+        "signal_source": "run_full_analysis: gm_ratio=0.4225 (<0.85), spectral_slope -1.359 vs -1.127 (ratio 1.206>1.08), residual_anisotropy=3.61, glass_score=0.8336, pca_ratio=2.484 (borderline<2.5)",
+        "psnr_scan": "motion sev2=24.93, sev3=31.27, sev4=24.48, sev5=25.39 (JPEG:3 fixed) -> unique peak at sev3 (+5.9~6.8 dB)",
+        "type_ablation": "at best severity, gaussian:3=24.50, glass:4=24.53 (gaussian:4=24.70) -> motion +6.8 dB over best cross-family",
+        "ci_evidence": "motion:3+jpeg:3 CI=9/10, unique_R/G/B diff 0%, hf_lf_ratio diff 1%, impulse 8%",
+        "repeat_check": "same pipeline repeated on pair0: 31.27 / 31.67 dB (motion kernel random per call; ±0.4 dB same-image variance)"
+      }
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 3,
+      "order": 2,
+      "verdict": "UNCERTAIN",
+      "evidence": {
+        "signal_source": "block_boundary=2.1051 (>1.1, 0% FP, strongest compression signal) + dct_zero_ratio=0.8915; unique_G target 250 vs clean 242",
+        "psnr_scan": "JPEG alone: sev3=21.92 > sev4=21.73 > sev5=21.30; joint with motion:3: jpeg2=21.48, jpeg3=31.27, jpeg4=25.11 -> sharp optimum at sev3",
+        "order": "blur_motion -> compression_jpeg (physical constraint: storage last)"
+      }
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 24.50,
+      "function_family": "blur_gaussian",
+      "note": "cross-family backup required by SKILL (best=31.27, gap=6.8dB<10dB); PSNR<30 -> low confidence; lens is MTF-indistinguishable from gaussian"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "ci_pass_rate": "9/10",
+    "mode": "PSNR (sigma=0.99<2 -> NO_NOISE; no signal mode needed)",
+    "rationale": "2-step deterministic pipeline: motion blur (sev3) -> JPEG (sev3). JPEG existence is high-confidence from block_boundary=2.1051 (0%FP) and dct_zero_ratio=0.8915; joint PSNR optimum at jpeg:3 (31.27 vs 21.48/25.11 for 2/4). Blur type motion from FFT anisotropy=3.61/gm_ratio=0.4225, confirmed by PSNR ablation (+6.8 dB over gaussian/glass at same severity) and hf_lf ratio match (0-2%). Noise ruled out (noise_prior sigma=0.99<2; gamma/YCrCb risk attributed to JPEG-blocking residual pollution). Global ruled out (mean_shift=0, variance_ratio=0.951, saturation_chroma_ratio=0.972). Verdict kept at UNCERTAIN because joint PSNR=31.27 falls in 30-40 band (SKILL: 30-40 -> UNCERTAIN), though severity scans on both steps show a single sharp optimum. Cross-validation on 4 held-out pairs: PSNR 22.40/22.62/24.25/27.07 dB (mean 24.1), CI 8-9/10, unique_R/G/B within 0-2%, hf_lf <=2%, block_boundary diff 5-12% consistent -> same degradation transfers across the support set (PSNR spread attributed to content-dependent motion-kernel/JPEG interaction). Qwen noise gate skipped (API unavailable; not needed since sigma=0.99<2). Peeled_noise_check skipped per protocol Step 3 (sigma<2 -> NO_NOISE)."
+  },
+  "cross_validation": {
+    "pipeline": "blur_motion:3,compression_jpeg:3",
+    "pairs": [
+      {"pair": 0, "psnr_rgb": 31.27, "ci": "9/10", "repeat_psnr_rgb": 31.67},
+      {"pair": 1, "psnr_rgb": 27.07, "ci": "9/10"},
+      {"pair": 2, "psnr_rgb": 22.40, "ci": "9/10"},
+      {"pair": 3, "psnr_rgb": 22.62, "ci": "8/10"},
+      {"pair": 4, "psnr_rgb": 24.25, "ci": "8/10"}
+    ],
+    "note": "CI statistics (unique_R/G/B <=2%, hf_lf <=2%, block_boundary 5-12%) consistent across all 5 pairs"
+  },
+  "verification": {
+    "run_full_analysis_calls": 1,
+    "peeled_noise_check_calls": 0,
+    "test_candidate_calls": 17,
+    "qwen_noise_gate": "skipped (API unavailable; not triggered: sigma=0.99<2)"
+  }
+}

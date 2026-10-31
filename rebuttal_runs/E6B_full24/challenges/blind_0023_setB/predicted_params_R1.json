@@ -1,0 +1,55 @@
+{
+  "challenge_id": "blind_0023_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 5], ["contrast_weaken_scale", 1], ["compression_jpeg", 4]],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "contrast_weaken_scale", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "stats": {
+        "support_psnr": [25.53, 25.50, 25.77, 25.16, 24.85],
+        "support_psnr_mean": 25.36,
+        "support_ci": ["10/10", "10/10", "8/10", "8/10", "7/10"],
+        "signal_verification": "5 对 support PSNR 与 R0 基线完全持平 (均值 25.36 vs 25.36, Δ+0.006 dB, glass 随机 shuffle 主导); 但 CI 内容无关指标 43/50 vs R0 38/50 (5/5 对不劣), 提示 glass4×contrast1 联合严重度更贴近 target 确定性统计 (vr 目标 0.7047 介于无全局 0.87-0.94 与 contrast1≈0.505 之间); 未达 +2 dB CHANGE 门槛, 保留为 alternative"
+      },
+      "function_family": "blur(glass sev4)+contrast(sev1)+jpeg(sev4) 联合严重度"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 24.09,
+      "stats": {
+        "support_psnr": [25.25, 24.18, 23.71, 24.90, 22.42],
+        "support_ci": ["7/10", "7/10", "7/10", "7/10", "7/10"],
+        "signal_verification": "variance_ratio 0.87-0.94 vs target 0.59-0.70 (gap); 无全局步骤",
+        "support_psnr_mean": 24.09
+      },
+      "function_family": "blur(glass)+jpeg (无全局)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "8/10 (5-pair: 9/10, 9/10, 6/10, 7/10, 7/10)",
+    "mode": "PSNR + 信号交叉验证 (sigma 1.61-2.35, 判定 NO_NOISE; glass 随机性使 PSNR 上限 ~25.5-25.8 dB)",
+    "signal_sources": {
+      "compression": "block_boundary=6.875 (pair0)/6.165 (pair2), unique_G=221/244, dct_zero_ratio=0.92 -> JPEG 确认; jpeg4 模拟 bb 5.93/5.95 最接近 (jpeg5=9.01 偏强), 8-13% 内是离散档位最佳",
+      "blur": "gm_ratio=0.189/0.136, spectral_slope_ratio=1.334/1.336, anisotropy=1.339/1.643 (<1.7), glass_score=1.449/1.574, flatness=0.3949 -> glass 模糊确认; glass5 与 glass4 在 5 对 support 上 PSNR 持平",
+      "global": "variance_ratio=0.7047/0.5898, contrast_spread_ratio=0.8428/0.7217, mean_shift=-2.0/0.0, clipped_fraction=0, chroma_ratio=1.0159/0.8864 -> 均值保持的轻度方差压缩; contrast_weaken_scale:1 方向一致但强度略强 (sim vr≈0.505), 库内无中间档",
+      "noise": "raw noise_prior sigma 目标与无噪模拟逐图完全相等 (1.61=1.61, 2.35=2.35); peeled 残差 (R0 pipeline) spatial_corr=0.978, residual_std=13.5, ch_stds=12.9/14.2/12.8, rgb_ratio=1.109 -> 确定性错配结构 (glass 随机 shuffle), NO_NOISE 维持"
+    },
+    "r1_summary": "信号重释未发现新的、可表征的退化步骤: variance 缺口经 quantization_median:4/2 测试被否定 (pair0 24.18/25.34); 各向异性阈值边界经 motion5 测试被强否定 (pair2 20.48); glass4×contrast1 联合严重度 5 对 PSNR 持平 (Δ+0.006 dB) 但 CI 更优 (43/50 vs 38/50), 未达 CHANGE 门槛, 列为 alternative。R1 新候选均未超过 R0 基线, PSNR 天花板由 glass 随机 pixel-shuffle realization 决定。",
+    "rationale": "按 REFLECT_INSTRUCTIONS 判据 (确定性候选需 >40 dB 或相对上一轮 +2 dB), 8 次 test_candidate 均未达标; 最佳 glass4 变体仅 +0.006 dB, 故 NO_CHANGE。R0 pipeline 的三大证据链在 R1 重跑中逐字复现 (block_boundary=6.8747, gm_ratio=0.189, spectral_slope_ratio=1.3339, variance_ratio=0.7047, residual_intensity_corr=-0.1959), 无被忽略步骤。训练 support PSNR 21.20 dB 落在 glass5+jpeg4+轻微 contrast 的合理恢复区间, 最终仍由 GT/训练仲裁。"
+  }
+}

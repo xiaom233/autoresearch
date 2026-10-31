@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "per_step_verdict: blur_gaussian:1=UNCERTAIN, brightness_darken_shfit_RGB:3=LIKELY; overall UNCERTAIN (PSNR 28.22, gap 1.75)",
+    "OCAB 不触发: FFT_anisotropy=0.00, PCA=0.0, 无 motion blur (blur gaussian/lens/glass sev1 PSNR 28.22/28.16/28.97 差<0.8dB) -> anisotropy>1.7 不满足",
+    "FiLM-GCM 不触发: full_analysis contrast_from_variance=false 且 brightness_clip_explains_variance=true (variance_ratio=0.7479 由 -47.5 均值偏移+21.5% 裁剪导致, 非 contrast), 且无 motion/jpeg 结构化局部 -> contrast+结构化双条件均不满足",
+    "ColorPre 不触发: variance_ratio 归因于 brightness 裁剪而非 contrast (per-step verdict=brightness_darken_shfit_RGB:3, LIKELY; mean_shift -47.5 vs -46.7, clipped_fraction 0.215 vs 0.215), 非 contrast Tier A 场景",
+    "结构化局部排除: block_boundary=1.0011 (NO_COMPRESSION), JPEG 两个位置 PSNR 27.36/27.47 < 基线 28.22, 已排除",
+    "SimpleGate 默认常开 (exp39 8/9 退化安全, -32K)"
+  ],
+  "rationale": "本挑战为两步退化 (轻 gaussian blur sev1 UNCERTAIN + RGB 减性变暗 sev3 LIKELY)，overall UNCERTAIN。全局步骤是 brightness shift (加性偏移+底部裁剪)，按 finetune_strategy.md §七 属纯 Swin 低难度场景: 方差比信号由裁剪解释而非 contrast，故 ColorPre/FiLM-GCM 均无信号依据；blur 子类型 gaussian/lens/glass 无法区分 (PSNR 差<0.8dB) 且无各向异性证据，OCAB 不启用；DualBranch/CSN/SCA/GDFN/FPro 按指令不使用。采用纯 Swin + SimpleGate + Direct 从零训练，lr=5e-4, EPOCH=2, batch=16，安全兜底。"
+}

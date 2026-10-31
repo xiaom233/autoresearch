@@ -1,0 +1,833 @@
+{
+  "challenge_id": "blind_0022_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED high: block_boundary=1.649, unique_G=234, dct_zero_ratio=0.846",
+      "blur": "GLASS_BLUR medium: glass_score=0.615, gm_ratio=0.254, spectral_slope_ratio=1.165, anisotropy=1.501",
+      "noise": "GAUSSIAN_YCrCb high but sigma=2.22 boundary: cross_ch_corr=0.979, spatial_corr=0.645, impulse_zero_ratio=0.096; FP risk from blur/JPEG",
+      "global": "NO_GLOBAL: mean_shift=-0.2, variance_ratio=0.78 (contrast_from_variance=false), spread_ratio=0.934, saturation=0.910"
+    },
+    "mode": "SIGNAL (sigma=2.22)",
+    "qwen_gate": {
+      "available": false
+    }
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py on blur_glass:3,compression_jpeg:1 (peeled_noise_jpeg1.json)",
+    "extreme_pct": 55.24,
+    "vm_slope": 1.1113,
+    "var_slope": 0.0028,
+    "spatial_corr": 0.9612,
+    "rgb_ratio": 1.0629,
+    "cross_ch_corr": 0.8914,
+    "noise_prior_sigma_peeled": 3.95,
+    "noise_prior_sigma_target": 2.22,
+    "diagnosis": "IMPULSE (extreme_pct>0.3%) auto-verdict IGNORED per known-FP rule (extreme_pct>50% AND sigma<5 -> JPEG/blur artifact). vm_slope=1.11 would suggest speckle, but spatial_corr=0.96 shows residual is structured (glass pixel-shuffle nondeterminism), invalidating noise-type stats. rgb_ratio=1.06 (not YCrCb), cross-ch high likely JPEG chroma subsampling. sigma 3.95 < sev1 library sigma 12.75; peeled checker advises NO_NOISE when sigma<5. Residual std stays ~9.3-9.7 across all deterministic strips (glass2/3/4, gaussian3, jpeg1/2) and PSNR 28.38 matches glass nondeterminism. Conclusion: no separate noise step; residual high-frequency floor = glass shuffle + JPEG artifacts."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "block_boundary=1.649>1.1 0%FP + unique_G=234 + dct_zero_ratio=0.846 -> JPEG; severity unknown, probe mid sev=3; sigma=2.22 -> signal mode"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=10%)"
+        ],
+        "pipeline": "compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "JPEG sev3 gave block_boundary diff 10% (>8%); sev3 quality=15. Probe sev5 (quality=7) direction check: if stronger blockiness reduces diff, target bb higher than sim; if worsens, go lower."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=38%)"
+        ],
+        "pipeline": "compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "sev5 diff=38% worse than sev3 diff=10% -> target blockiness lower than sev3; severity scan downward to sev2 (quality=18)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=21%)"
+        ],
+        "pipeline": "compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "thinking": "Blur: anisotropy=1.50<1.7 rules out motion; glass_score=0.615>0.25 + sigma=2.22<3 -> glass per DT; gm_ratio=0.254 -> sev5. JPEG sev3 best from bb scan (2:21%,3:10%,5:38%). Test glass+jpeg combo; blur attenuates bb so pair jointly."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.306)",
+          "compression:block_boundary (diff=58%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:3",
+        "thinking": "Glass:5 overshot spectral_slope (diff=0.306), blur too strong. Severity scan down glass 5->3 per WEAK protocol; keep jpeg3 best-alone. If slope diff shrinks toward <0.08, glass sev3 correct."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=29%)"
+        ],
+        "pipeline": "blur_glass:3,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:5",
+        "thinking": "Glass:3+jpeg:3 PARTIAL: blur signals match, bb diff 29% -> JPEG severity likely under/over. Probe jpeg5 (quality=7): if bb diff shrinks, target blockiness higher than jpeg3; if grows, go jpeg2."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=117%)"
+        ],
+        "pipeline": "blur_glass:3,compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:2",
+        "thinking": "Glass:3+jpeg:5 bb diff=117% (sim blockiness far above target) -> lower JPEG. Scan jpeg3->2 (quality 18): expect bb diff to shrink if target blockiness matches milder JPEG."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_glass:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_glass:3,compression_jpeg:2",
+        "thinking": "Peeled residual: extreme 52.9% but noise_prior sigma=3.95<5 -> known JPEG/blur FP, ignore impulse; rgb_ratio=1.09, flat slope -> Gaussian RGB; sigma(lower bound) 4-10 -> try sev1 (min). Challenge order noise->blur->jpeg. Verify noise sigma/residual autocorr/spatial_corr."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=4.0px)",
+          "compression:block_boundary (diff=9%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,blur_glass:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:2",
+        "thinking": "Noise presence ambiguous: peeled extreme_pct FP rule (52.9%, sigma<5) + spatial_corr 0.957 + noise_prior sigma below sev1 -> possibly no additive noise. PSNR check of deterministic-only pipeline: noise-free exact match should give high PSNR; a true noise floor (sigma>=4) caps PSNR ~<36dB."
+      },
+      "test_result": {
+        "psnr_rgb": 28.38,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_glass:3,compression_jpeg:2",
+        "thinking": "Peeled vm_slope=0.952>>0.01 -> speckle signal per mapping table; structured residual (spatial_corr 0.957) + residual std 9.7 consistent with signal-correlated multiplicative noise. Test speckle sev1 (min, c=0.14) with noise->blur->jpeg."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=4.0px)",
+          "compression:block_boundary (diff=11%)"
+        ],
+        "pipeline": "noise_speckle:1,blur_glass:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:2",
+        "thinking": "Support pair1 cross-check of pair0 candidate: glass:3+jpeg:2. Per-channel sigma ratio 1.09 + sigma<5 + structured residual -> treating noise as JPEG/glass artifact (NO_NOISE). Verify blur+jpeg signals on different content."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=13%)"
+        ],
+        "pipeline": "blur_glass:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "Support pair1: glass:3+jpeg:2 PARTIAL with bb diff 13% -> scan JPEG severity downward (jpeg1 quality=25). If bb diff<8% on support1, jpeg1 may be the true severity; then recheck pair0."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "Support1 matched glass:3+jpeg:1 (jpeg2 was PARTIAL bb 13%). Recheck pair0 with jpeg1: if bb diff also <8%, adopt jpeg1 across scenario; jpeg2 pair0 match may be coincidental content adaptation."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "Support pair2 cross-check of adopted scenario candidate glass:3+jpeg:1 (matched pair0+pair1). Verify both blur signals and bb on different content."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "Support pair3 cross-check of glass:3+jpeg:1 (MATCH pair0/1/2)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "Support pair4 cross-check of glass:3+jpeg:1 (MATCH pair0/1/2/3)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "R1 baseline (R0 pipeline) on support pair0: establish simulation PSNR reference for CHANGE(+2dB) rule. Signal basis: block_boundary=1.6491 (Tier S JPEG), glass_score=0.6153>0.25, spectral_slope target=-1.2159; glass shuffle is stochastic (shuffle_pixels_njit, unseeded) so residual floor std~9.3 -> PSNR~28.8 dB is the expected ceiling, not 40 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 28.71,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,compression_jpeg:1",
+        "thinking": "R1 screen, missed-signal hypothesis: R0 only cross-tested blur_gaussian:3 (sigma=3, peeled residual 12.5 > glass:3 9.7) but glass:3's effective smoothing is gaussian sigma~1.2 twice + shuffle (effective sigma~1.7-2), so the severity-matched deterministic competitor is gaussian:2 (sigma=2), never tested. Signal basis: gm_ratio=0.2543 (run_full_analysis severity_source=gm_ratio, est sev5) conflicts with spectral_slope target=-1.2159 (matched glass:3 within 0.08; glass:5 overshot 0.306). If true blur is deterministic gaussian, PSNR must jump above the 28.8 dB glass shuffle floor (>>35 dB); if it stays ~28-29 dB, glass (stochastic) is confirmed."
+      },
+      "test_result": {
+        "psnr_rgb": 25.43,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_lens:3,compression_jpeg:1",
+        "thinking": "R1 screen, untested blur family: R0 never tested blur_lens although lens vs gaussian MTF is documented indistinguishable and lens is not in R0's alternatives. Signal basis: radial disk radius 4 (sev3) has first MTF zero ~0.25 c/px, closest deterministic match to glass:3 effective sigma~1.7-2; glass_score=0.6153 is above the lens(2-4) calibration 0.08-0.20, but JPEG blocking may inflate it. Decisive: if lens, deterministic fit should exceed the 28.71 dB glass floor by >2 dB; if ~28-29 dB or lower, lens family is ruled out."
+      },
+      "test_result": {
+        "psnr_rgb": 25.67,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "thinking": "R1 screen, severity reinterpretation: run_full_analysis severity_source=gm_ratio=0.2543 -> est sev5, and glass_score=0.6153 exceeds glass(2-4) calibration 0.19-0.41, both suggesting R0's glass:3 may be too weak. BUT residual-std severity selection is biased for glass: higher severity = larger shuffle shift (sev3 shift=2, sev4 shift=3), which mechanically adds shuffle noise, so residual std minimization favors low severity. gm_ratio is also confounded because shuffle re-injects high-frequency gradients. Decisive test: PSNR vs the 28.71 dB glass:3 baseline on the same content; CHANGE requires >+2 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 27.56,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "R1 support-pair1 baseline of R0 pipeline (5-pair validation, same-pair +2dB reference). Signal basis identical to pair0: block_boundary=1.6491 (Tier S), glass_score=0.6153, spectral_slope=-1.2159; R0 signal MATCH 5/5. Glass shuffle stochastic -> expected PSNR floor ~28-29 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 31.24,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "R1 support-pair2 baseline of R0 pipeline (5-pair validation, same-pair +2dB reference). Signal basis: block_boundary Tier S + glass_score=0.6153 + spectral_slope; R0 signal MATCH 5/5 on this pair. Glass shuffle stochastic -> expected PSNR floor ~28-29 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 28.92,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "R1 support-pair3 baseline of R0 pipeline (5-pair validation, same-pair +2dB reference). Signal basis: block_boundary=1.6491 Tier S JPEG, glass_score=0.6153, spectral_slope target=-1.2159; R0 signal MATCH 5/5. Glass stochastic -> PSNR floor."
+      },
+      "test_result": {
+        "psnr_rgb": 30.31,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "R1 support-pair4 baseline of R0 pipeline (5-pair validation, same-pair +2dB reference). Signal basis: block_boundary=1.6491 Tier S JPEG, glass_score=0.6153, spectral_slope target=-1.2159; R0 signal MATCH 5/5. Glass stochastic -> PSNR floor."
+      },
+      "test_result": {
+        "psnr_rgb": 32.23,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "thinking": "R1 support-pair1, glass:4 severity candidate vs same-pair glass:3 baseline 31.24 dB (+2 dB rule). Signal basis: gm_ratio=0.2543 est sev5 and glass_score=0.6153 above glass(2-4) calibration; but residual-std severity pick is biased by shuffle shift (sev4 shift=3 vs sev3 shift=2). CHANGE only if +2 dB over same-pair baseline."
+      },
+      "test_result": {
+        "psnr_rgb": 29.83,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "thinking": "R1 support-pair2, glass:4 severity candidate vs same-pair glass:3 baseline 28.92 dB (+2 dB rule). Signal basis: gm_ratio=0.2543 est sev5, glass_score=0.6153 high; residual-std severity pick biased by larger shuffle shift at sev4. CHANGE only if +2 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 27.92,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "thinking": "R1 support-pair3, glass:4 severity candidate vs same-pair glass:3 baseline 30.31 dB (+2 dB rule). Signal basis: gm_ratio=0.2543 est sev5, glass_score=0.6153; residual-std severity pick biased by shuffle shift. CHANGE only if +2 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 29.09,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "thinking": "R1 support-pair4, glass:4 severity candidate vs same-pair glass:3 baseline 32.23 dB (+2 dB rule). Signal basis: gm_ratio=0.2543 est sev5, glass_score=0.6153; residual-std severity pick biased by shuffle shift. CHANGE only if +2 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 31.53,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,compression_jpeg:1",
+        "thinking": "R1 cross-content subtype confirmation (pair1, portrait): pair0 gaussian:2 scored 25.43 vs glass:3 28.71 (-3.28 dB). Severity-matched deterministic competitor (effective sigma~2 equals glass:3's gaussian 1.2 twice); gm_ratio/glass_score signals are confounded by shuffle + JPEG. Same-pair baseline 31.24 dB; CHANGE only if +2 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 27.77,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "blur_lens:3,compression_jpeg:1",
+        "thinking": "R1 cross-content subtype confirmation (pair1, portrait): pair0 lens:3 scored 25.67 vs glass:3 28.71 (-3.04 dB); lens(2-4) glass_score calibration 0.08-0.20 is far below target 0.6153 although JPEG may inflate it. Same-pair baseline 31.24 dB; CHANGE only if +2 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 27.92,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "thinking": "R1 severity sweep -1 (pair0): complete glass severity scan per SKILL (sev-1 vs sev+1 glass:4 mean -1.10 dB over 5 pairs). R0 peeled residual pair0 glass2=12.7 > glass3=9.7, but that metric is biased by shuffle shift (sev2 shift=2/iter=1 vs sev3 shift=2/iter=2); direct same-pair PSNR vs glass:3 28.71 dB is decisive. CHANGE only if +2 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 26.2,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:1",
+      "psnr_rgb": 32.23,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:1",
+      "psnr_rgb": 31.53,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 28
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:1",
+      "psnr_rgb": 31.24,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:1",
+      "psnr_rgb": 30.31,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:1",
+      "psnr_rgb": 29.83,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:1",
+      "psnr_rgb": 29.09,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 27
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:1",
+      "psnr_rgb": 28.92,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:1",
+      "psnr_rgb": 28.71,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:2",
+      "psnr_rgb": 28.38,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:1",
+      "psnr_rgb": 27.92,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 26
+    },
+    {
+      "pipeline": "blur_lens:3,compression_jpeg:1",
+      "psnr_rgb": 27.92,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 30
+    },
+    {
+      "pipeline": "blur_gaussian:2,compression_jpeg:1",
+      "psnr_rgb": 27.77,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 29
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:1",
+      "psnr_rgb": 27.56,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_glass:2,compression_jpeg:1",
+      "psnr_rgb": 26.2,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 31
+    },
+    {
+      "pipeline": "blur_lens:3,compression_jpeg:1",
+      "psnr_rgb": 25.67,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_gaussian:2,compression_jpeg:1",
+      "psnr_rgb": 25.43,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_glass",
+        "severity": 3,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 1,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "alternatives": [
+      "blur_gaussian:3 + compression_jpeg:1 (MTF indistinguishable; glass_score=0.615 + lower peeled residual favor glass)",
+      "compression_jpeg:2 + blur_glass:3 (pair0 ok, support1 bb diff 13%)",
+      "noise_gaussian_RGB:1 + blur_glass:3 + compression_jpeg:1 (only if hidden low-sigma noise under strong glass attenuation; negative evidence in noise_6step_check)"
+    ],
+    "rationale": "5/5 pairs signal MATCH on both deterministic steps (slope, wiener kernel, block_boundary). Blur severity 3 minimizes residual std; JPEG sev1 is the only severity matching all supports. Noise rejected as JPEG/glass artifact (known FP rule + sigma<5 + RGB per-channel ratio 1.06 + structured residual). UNCERTAIN reserved for glass-vs-gaussian MTF ambiguity and possible hidden low-sigma noise after strong glass blur."
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (support PSNR 23.08 dB)",
+    "start_utc": "2026-10-30T12:28:47Z",
+    "end_utc": "2026-10-30T12:40:16Z",
+    "signal_reinterpretation": [
+      {
+        "signal": "variance_ratio=0.7802, contrast_spread_ratio=0.9343, mean_shift=-0.2 (255 scale), clipped_fraction=0.0",
+        "conclusion": "NO_GLOBAL maintained",
+        "evidence": "contrast_weaken calibration 0.08-0.40; contrast_from_variance threshold <0.55; spread_ratio 0.9343>0.80; variance drop is consistent with strong blur (gm_ratio=0.2543). No contrast/brightness/gamma step added."
+      },
+      {
+        "signal": "gm_ratio=0.2543 (run_full_analysis severity_source -> est sev5) vs spectral_slope target=-1.2159 (glass:3 diff<0.08, glass:5 diff 0.306)",
+        "conclusion": "est sev5 rejected; glass:3 severity maintained",
+        "evidence": "gm_ratio and residual-std severity selection are both biased for glass: higher severity uses larger shuffle shift/iteration, mechanically adding shuffle noise and re-injecting high-frequency gradients. Direct same-pair PSNR: glass2 pair0 26.20 (-2.51 dB), glass3 28.71 (ref), glass4 pair0 27.56 (-1.15 dB); glass4 over 5 pairs 27.56/29.83/27.92/29.09/31.53 = mean -1.10 dB, worse on 5/5 supports."
+      },
+      {
+        "signal": "glass_score=0.6153 (above glass(2-4) calibration 0.19-0.41) + documented glass-vs-gaussian MTF ambiguity; R0 only compared gaussian:3 (sigma=3, too strong)",
+        "conclusion": "glass family confirmed; deterministic gaussian/lens families rejected",
+        "evidence": "Severity-matched deterministic competitor gaussian:2 (effective sigma~2 = glass:3 gaussian 1.2 twice): pair0 25.43 (-3.28 dB), pair1 27.77 (-3.47 dB). Lens:3 (never tested in R0): pair0 25.67 (-3.04 dB), pair1 27.92 (-3.32 dB). Deterministic blurs cannot reproduce the shared stochastic shuffle residual floor (glass3 baseline 28.71-32.23 dB, mean 30.28)."
+      },
+      {
+        "signal": "block_boundary=1.6491 (Tier S, 0% FP), unique_G 234/252=0.93, dct_zero_ratio=0.8457",
+        "conclusion": "JPEG confirmed; compression_jpeg:1 maintained",
+        "evidence": "R0 matched jpeg:1 on 5/5 supports (jpeg:2 pair1 bb diff 13%; jpeg:3/5 MISMATCH 10%/38%). R1 baseline reproduces block_boundary CI diff 4-5% on all 5 pairs."
+      },
+      {
+        "signal": "noise_prior sigma=2.22 target, peeled sigma=3.95; peeled extreme_pct=55.24, vm_slope=1.11, spatial_corr=0.9612, rgb_ratio=1.0629",
+        "conclusion": "no noise step; not representable",
+        "evidence": "x_distortion minimum additive noise is sev1 sigma=12.75 (RGB and YCrCb luma), 3.2x above peeled 3.95. extreme_pct>50% with sigma<5 is a known JPEG/blur FP; structured residual (spatial_corr 0.96) reflects glass pixel-shuffle non-determinism. No-noise pipeline already verify_signals MATCH 5/5; adding noise cannot improve a MATCH, and noise:sigma would match trivially under the stochastic glass floor (non-discriminating)."
+      }
+    ],
+    "candidates_ranked": [
+      {
+        "rank": 1,
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "role": "baseline (R0 pipeline)",
+        "support_psnr": {"pair0": 28.71, "pair1": 31.24, "pair2": 28.92, "pair3": 30.31, "pair4": 32.23},
+        "mean": 30.28,
+        "ci": "7-8/10",
+        "decision": "KEEP"
+      },
+      {
+        "rank": 2,
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "role": "severity +1",
+        "support_psnr": {"pair0": 27.56, "pair1": 29.83, "pair2": 27.92, "pair3": 29.09, "pair4": 31.53},
+        "mean": 29.19,
+        "delta_by_pair": [-1.15, -1.41, -1.00, -1.22, -0.70],
+        "decision": "REJECT"
+      },
+      {
+        "rank": 3,
+        "pipeline": "blur_lens:3,compression_jpeg:1",
+        "role": "lens family (untested in R0)",
+        "support_psnr": {"pair0": 25.67, "pair1": 27.92},
+        "delta_by_pair": [-3.04, -3.32],
+        "decision": "REJECT"
+      },
+      {
+        "rank": 4,
+        "pipeline": "blur_gaussian:2,compression_jpeg:1",
+        "role": "gaussian family, severity-matched",
+        "support_psnr": {"pair0": 25.43, "pair1": 27.77},
+        "delta_by_pair": [-3.28, -3.47],
+        "decision": "REJECT"
+      },
+      {
+        "rank": 5,
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "role": "severity -1 (pair0 only, severity sweep)",
+        "support_psnr": {"pair0": 26.20},
+        "delta_by_pair": [-2.51],
+        "decision": "REJECT"
+      }
+    ],
+    "support_validation": {
+      "mode": "PSNR on 5 support pairs for pure-deterministic candidates (no noise function in pipeline)",
+      "change_criterion": ">40 dB or +2 dB vs R0 pipeline on the same pair; 40 dB is unreachable for glass because shuffle_pixels_njit is unseeded stochastic, so the same-pair +2 dB rule was applied",
+      "baseline_by_pair": [28.71, 31.24, 28.92, 30.31, 32.23],
+      "glass4_delta_by_pair": [-1.15, -1.41, -1.00, -1.22, -0.70],
+      "no_candidate_passed": true,
+      "noise_candidate_note": "No signal-mode 5-pair run for noise: every deterministic signal already MATCH 5/5 and the noise:sigma check would match trivially under the glass shuffle floor, so there is no possible WEAK->PARTIAL/MATCH improvement; the minimum representable noise (sigma 12.75) is also 3.2x the peeled estimate (3.95)."
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "blur_glass", "severity": 3},
+        {"function": "compression_jpeg", "severity": 1}
+      ],
+      "reason": "No signal re-interpretation or support-PSNR test supports any change. Subtype ambiguity resolved in favor of glass (gaussian:2 -3.3 dB, lens:3 -3.2 dB on two contents); severity 3 confirmed by +/-1 sweep (glass2 -2.51 dB pair0; glass4 -1.10 dB mean over 5/5 worse); JPEG sev1 and no-noise conclusion unchanged. Overall UNCERTAIN remains only for the inherent stochastic glass ceiling and unrepresentable hidden low-sigma noise."
+    }
+  }
+}

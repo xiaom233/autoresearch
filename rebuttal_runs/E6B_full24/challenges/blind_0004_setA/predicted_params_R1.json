@@ -1,0 +1,69 @@
+{
+  "challenge_id": "blind_0004_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 1]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 1,
+      "verdict": "UNCERTAIN",
+      "evidence": "R1 signal re-interpretation + fresh support validation. (1) A noiseless blur_motion:1 simulation reproduces EVERY step-level signal of the target: block_boundary 0.990 vs 0.987 (clean 0.983), unique_G 238 vs 238 (clean 254), dct_zero_ratio 0.568 vs 0.521 (clean 0.279), wavelet sigma 0.74 vs 0.74, spatial_corr 0.813 vs 0.819, cross_ch 0.947 vs 0.949, residual_intensity_corr -0.272 vs -0.281, gm_ratio 0.573 vs 0.582, spectral_slope -1.354 vs -1.363, ratio 1.034 vs 1.041, variance_ratio 0.992 vs 0.992, mean_shift -0.3 vs -0.4. (2) R1 pair3 test hit 65.91 dB / CI 10/10 with blur_motion:1 when the random angle happened to align -> near pixel-exact reproduction, proving subtype+severity and excluding any extra step (JPEG/noise/global). Other pairs' lower PSNR (25-37 dB) is pure random-angle mismatch (same function, same pair3 gave 22.69 dB in R0). (3) 'BLUR_UNLIKELY' and 'FFT_anisotropy=0.00/PCA=0.0' in the R0 report were artifacts: run_full_analysis sets has_noise from the step2 verdict string (low-confidence GAUSSIAN_YCrCb, sigma=0.74), which forces the slope_ratio branch (1.041<1.08) instead of gm_ratio<0.62; step3 returns early before computing residual_anisotropy/PCA, so those 0.00 values were never measured. Verdict stays UNCERTAIN per SKILL C4 because motion samples a random angle per call, so PSNR cannot always exceed 40 dB even when correct."
+    }
+  ],
+  "alternatives": [
+    {
+      "function": "blur_motion",
+      "severity": 2,
+      "psnr": 29.98,
+      "stats": {"ci_pass": "10/10", "gm_ratio_sim": 0.488, "spectral_slope_ratio_sim": 1.124},
+      "function_family": "blur_motion",
+      "note": "same-family severity alternative; fingerprint over-blurs vs target (gm 0.488 vs 0.582) - rejected in R0"
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 2,
+      "psnr": 32.21,
+      "stats": {"ci_pass": "7/10", "wiener_kernel_corr": 0.707},
+      "function_family": "blur_gaussian",
+      "note": "deterministic isotropic runner-up; deterministic PSNR ceiling 32.21 dB (<40) rules out an exact gaussian match; CI 6-7/10"
+    },
+    {
+      "function": "blur_lens",
+      "severity": 2,
+      "psnr": 32.15,
+      "stats": {"ci_pass": "7/10", "wiener_kernel_corr": 0.699},
+      "function_family": "blur_lens",
+      "note": "deterministic disk-kernel runner-up; ceiling 32.15 dB (<40) rules out exact lens match"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR + content-independent CI + full step-fingerprint reproduction (sigma=0.74 < 2 -> PSNR usable; blur_motion angle non-deterministic)",
+    "r1_support_validation": {
+      "pair0": {"psnr_rgb": 33.04, "ci_pass": "10/10"},
+      "pair1": {"psnr_rgb": 37.31, "ci_pass": "10/10"},
+      "pair2": {"psnr_rgb": 29.35, "ci_pass": "10/10"},
+      "pair3": {"psnr_rgb": 65.91, "ci_pass": "10/10"},
+      "pair4": {"psnr_rgb": 25.44, "ci_pass": "7/10"},
+      "mean_psnr": 38.21,
+      "note": "single random-angle draw per pair; pair3 65.91 dB (>40) at an aligned angle confirms the pipeline"
+    },
+    "support_psnr_r0": 34.7,
+    "best_validation": {"pipeline": "blur_motion:1", "pair": "pair3", "psnr_rgb": 65.91, "ci_pass": "10/10"},
+    "steps_detected": 1,
+    "signal_reinterpretation": [
+      "gm_ratio=0.582 (<0.62 pure-blur threshold) with sigma=0.74 (<2) -> blur present; BLUR_UNLIKELY was a verdict-string coupling artifact (has_noise=True from low-confidence GAUSSIAN_YCrCb label)",
+      "FFT_anisotropy=0.00 and PCA=0.0 in R0 were uncomputed defaults (step3 early return), not measurements - they never contradicted motion",
+      "dct_zero_ratio target 0.521 (clean 0.279) is explained by blur alone: noiseless motion:1 sim gives 0.568; block_boundary 0.987 <= clean 0.983, no 8x8 grid -> no JPEG",
+      "unique_G 238 target == 238 noiseless sim (clean 254) -> colour-pair merging from blur averaging, no quantization",
+      "noise-step fingerprint (sigma 0.74, spatial_corr 0.819, cross_ch 0.949, ric -0.281) fully reproduced by noiseless motion:1 sim (0.74, 0.813, 0.947, -0.272) -> NO_NOISE; R1 peel: extreme_pct 63.6% known FP (>50% & sigma<5), vm_slope 2.54/spatial_corr 0.975 structured residual, rgb_ratio 1.030 (equal ch stds) -> not speckle/YCrCb/Poisson",
+      "variance_ratio 0.992/spread 0.994/chroma 0.992/mean_shift -0.4 matched by sim (0.992/0.994/0.991/-0.3) -> NO_GLOBAL; ric -0.28 + gamma_suspect is blur edge residual",
+      "gm_ratio 0.582 vs slope_ratio 1.041 joint signature is only achievable by anisotropic/stochastic blur: deterministic gaussian/lens ceilings <40 dB; motion family Wiener kernel corr 0.83-0.87 vs gaussian 0.707/lens 0.699/glass 0.653"
+    ]
+  }
+}

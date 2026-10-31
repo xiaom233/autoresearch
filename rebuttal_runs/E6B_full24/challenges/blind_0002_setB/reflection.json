@@ -1,0 +1,540 @@
+{
+  "challenge_id": "blind_0002_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=0.9956 (<1.1), unique_G=256, dct_zero_ratio=0.0197",
+      "blur": "BLUR_UNLIKELY: spectral_slope target=-1.1123 vs clean=-1.1198 (ratio 0.9933 < 1.08); gm_ratio=4.79 unusable (noise-inflated); FFT_anisotropy=0.00",
+      "noise": "GAUSSIAN_YCrCb sigma=15.8 (channel-mean wavelet); residual channel stds R=33.2 G=23.1 B=39.7 (G lowest = chroma-noise signature)",
+      "global": "variance_ratio=1.2596, chroma_ratio=1.4682, mean_shift=-0.5/255, clipped_fraction=0.0524 — hypothesized noise-inflated; arbitrated by simulation control (saturation control failed decisively)"
+    },
+    "mode": "SIGNAL (sigma=15.8)",
+    "qwen_gate": {
+      "available": false
+    },
+    "pair0_reasoning": "Strong noise evidence (sigma 15.8>10). No compression (block_boundary 0.996, unique_G 256). No blur (spectral_slope identical to clean; FFT_anisotropy 0.00). Global variance/chroma inflation explained analytically by YCrCb chroma noise: theory for YCrCb sev2 predicts per-channel noise stds R=34.7 G=23.3 B=42.2, matching measured residual stds R=33.2 G=23.1 B=39.7 within ~6%; chroma noise raises R/B variance while G partially cancels (lowest std). Tested noise-only first, then cross-type controls and a saturation control."
+  },
+  "noise_6step_check": {
+    "note": "Values on raw residual (target-clean, no deterministic peel needed after ruling out compression/blur/global) and on peeled difference residual (target - simulate(clean,YCrCb:2)).",
+    "raw_residual": {
+      "extreme_pct": 51.34,
+      "vm_slope": -7.016,
+      "var_slope": 0.4403,
+      "spatial_corr_boxfilter": 0.3424,
+      "rgb_ratio": 1.7221,
+      "cross_ch_corr": 0.3132,
+      "ch_stds": [
+        33.2,
+        23.1,
+        39.7
+      ],
+      "residual_std": 32.7
+    },
+    "peeled_on_best_candidate": {
+      "pipeline_stripped": "noise_gaussian_YCrCb:2",
+      "extreme_pct": 50.92,
+      "vm_slope": 3.3837,
+      "var_slope": -0.1078,
+      "spatial_corr_boxfilter": 0.3325,
+      "rgb_ratio": 1.717,
+      "cross_ch_corr": 0.3161,
+      "ch_stds": [
+        46.9,
+        32.6,
+        55.9
+      ],
+      "residual_std": 46.2
+    },
+    "extreme_pct": 51.34,
+    "vm_slope": -7.016,
+    "var_slope": 0.4403,
+    "spatial_corr": 0.3424,
+    "rgb_ratio": 1.7221,
+    "cross_ch_corr": 0.3132,
+    "diagnosis": "extreme_pct~51% is a zero-mean-residual false positive (res<=0 counts half of pixels; no salt&pepper present); spatial_corr 0.342 on the box-filter estimator is exactly the iid-noise expectation (corr=1/3), so no spatial structure remains; var_slope=0.44 (<1.0) rules out Poisson; vm_slope negative rules out speckle; rgb_ratio=1.72 + G-lowest channel std + cross_ch_corr 0.31 (theory: max|corr(G,B)|~0.40) -> gaussian_YCrCb. Peeled difference stds 46.9/32.6/55.9 = sqrt(2) x 33.2/23.1/39.7 (measured 46.9/32.6/55.9 vs predicted 47/33/56), i.e., residual after removing YCrCb:2 simulation is a pure independent noise difference -> no deterministic remainder. Severity: YCrCb sev2 (sigma_l=15.3, sigma_chroma=22.2) predicts channel stds 34.7/23.3/42.2, matching measurement; sev1 is isotropic 12.75 (rejected), sev3 predicts 51.1/34.3/62.2 (too high)."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1: full_analysis sigma=15.8>10, residual channel stds R33/G23/B40 (G lowest) + rgb_ratio=1.72 -> YCrCb Gaussian noise; estimated sev2 (sigma_l=15.3, sigma_c=22.2). Test noise-only first to check whether global variance/chroma inflation is explained by noise alone"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1",
+        "thinking": "R2 cross-type control: isotropic RGB gaussian sev1 (sigma=12.75) is the closest-sigma RGB alternative; if channel stds are isotropic the target residual (R33/G23/B40, G lowest) should not match"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=58%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2",
+        "thinking": "R2 cross-type control 2: isotropic RGB sev2 (sigma=25.5) matches channel-mean sigma of target (~30) better than RGB:1; if it also passes sigma, discrimination must rest on per-channel fingerprint (target residual G=23 lowest vs isotropic)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=21%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1",
+        "thinking": "R2 cross-type coverage: SKILL requires impulse candidate when sigma>5; impulse sev1 (1% salt&pepper) is sparse and isotropic - target residual shows dense noise (51% extreme is zero-mean FP, not salt&pepper) so expect sigma/structure mismatch"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=95%)"
+        ],
+        "pipeline": "noise_impulse:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+        "thinking": "R2 global control: full_analysis flagged SATURATION (chroma_ratio 1.468, variance_ratio 1.260) but noise alone theoretically inflates both; add mildest saturation after noise - if chroma/variance signals improve the global is real, otherwise leave as noise-only"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=47%)",
+          "global:mean_shift (diff=0.1317)",
+          "global:variance_ratio (diff=200%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "Support verification pair 1 (image 0529): full_analysis NO_COMPRESSION(bb=1.003)/BLUR_UNLIKELY(slope ratio 0.993)/GAUSSIAN_YCrCb sigma=13.5/NO_GLOBAL; same candidate must transfer"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "Support verification pair 2 (image 0170): full_analysis NO_COMPRESSION(bb=0.994)/BLUR_UNLIKELY(slope ratio 1.001)/GAUSSIAN_YCrCb sigma=13.5/NO_GLOBAL(vr=0.985)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "Support verification pair 3 (image 0047): full_analysis NO_COMPRESSION(bb=0.997)/BLUR_UNLIKELY(slope ratio 0.991)/GAUSSIAN_YCrCb sigma=15.9/NO_GLOBAL(vr=1.274, same noise-inflated pattern as pair0)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "Support verification pair 4 (image 0485): full_analysis NO_COMPRESSION(bb=1.002)/BLUR_UNLIKELY(slope ratio 0.990)/GAUSSIAN_YCrCb sigma=15.2/NO_GLOBAL(vr=1.212)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1 baseline re-verification: run_full_analysis_R1 sigma=15.81(>10) -> noise present; raw residual ch_stds 33.2/23.1/39.7 match YCrCb sev2 theory (sigma_l=15.3,sigma_chroma=22.2 -> 34.7/23.3/42.2; sev3 -> 50.8/34.2/62.6, too high); block_boundary=0.9956(<1.05) + unique_G 256/256 -> no compression; spectral_slope_ratio=0.9933 -> no blur; residual_intensity_corr=0.0013 -> no gamma; mean_shift=-0.5/255 -> no brightness. Expect MATCH on sigma+clean_residual."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,contrast_strengthen_scale:1",
+        "thinking": "R1 reinterpretation of ignored/borderline signal: variance_ratio=1.2596, contrast_spread_ratio=1.203(raw contrast_detected=true), clipped_fraction=5.24(heavy_clipping=true) could hide a mild contrast_strengthen that R0 only controlled via saturation. Arithmetic: noise explains vr=1+1071/4125=1.26 (mean residual noise var=(33.2^2+23.1^2+39.7^2)/3=1071); mildest contrast_strengthen_scale sev1=1.4x -> simulated vr~1.4^2*V+1.4^2*noise -> ~2.4, far above target; if global:variance_ratio mismatches, contrast is ruled out. Order noise->contrast per sensor->ISP physics."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=285%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,contrast_strengthen_scale:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "thinking": "R1 missed-compression check: block_boundary=0.9956(<1.05, 0%FP JPEG) + unique_G 256/256 + dct_zero_ratio 0.0197 argue against JPEG, but noise+JPEG can mask 8x8 structure when JPEG is last (noise+blur<JPEG physics). Mild JPEG:1 after the YCrCb:2 noise: if target carried JPEG:1, simulated block_boundary should approach target (0.9956, diff<8%); if simulated bb is elevated, JPEG ruled out."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=92%)",
+          "compression:block_boundary (diff=42%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:1",
+        "thinking": "R1 FP_blur check: full_analysis BLUR_UNLIKELY (spectral_slope_ratio 0.9933<1.08; FFT anisotropy 0.00 rules out motion/glass) but gm_ratio=4.79 was noise-destroyed and SKILL flags FP_blur_risk. Physical order noise->blur (sensor noise before optics): a real blur would also spatially correlate the noise (peeled residual box-filter spatial_corr 0.3424 = iid 1/3 expectation, arguing against blur). Test mild blur_gaussian:1 after noise; if simulated spectral_slope diff>0.08 and/or residual structure appears, blur is ruled out."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=93%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1 support pair1 verification of unchanged R0 pipeline: YCrCb:2 noise-only, signal mode (sigma>2). R0 got MATCH 2/2 on this pair; R1 re-confirms reproducibility of noise:sigma + noise:clean_residual."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1 support pair2 verification of unchanged R0 pipeline: YCrCb:2 noise-only, signal mode (sigma>2). R0 got MATCH 2/2; R1 re-confirms."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1 support pair3 verification of unchanged R0 pipeline: YCrCb:2 noise-only, signal mode (sigma>2). R0 got MATCH 2/2; R1 re-confirms."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1 support pair4 verification of unchanged R0 pipeline: YCrCb:2 noise-only, signal mode (sigma>2). R0 got MATCH 2/2; R1 re-confirms."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_YCrCb",
+        "severity": 2,
+        "verdict": "UNCERTAIN",
+        "evidence": "verify_signals MATCH on pair0 and all 4 support pairs (noise:sigma, noise:clean_residual); per-channel residual stds match YCrCb sev2 theory within 6%; peeled difference = sqrt(2) x single noise (no deterministic remainder); noise verdict can never be LIKELY (random seed mismatch)"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Single-step degradation: additive YCrCb-space Gaussian noise sev2. Compression ruled out (block_boundary 0.996/unique_G 256; also 0.994-1.003 on support). Blur ruled out (spectral_slope_ratio 0.993; 0.990-1.001 on support; FFT anisotropy 0.00). Global ruled out by saturation control (added saturate_strengthen_HSV:1 => variance_ratio diff +200%, mean_shift diff 0.13; the variance_ratio 1.26 / chroma_ratio 1.47 flags are fully explained by chroma noise). Noise type arbitration: YCrCb:2 MATCH vs RGB:1 (sigma -58%), RGB:2 (-21%), impulse:1 (-95%) all WEAK. Severity 2 is the only member whose predicted channel stds (34.7/23.3/42.2) match measurement (33.2/23.1/39.7).",
+    "support_verification": {
+      "pair1": {
+        "image_id": "0529",
+        "full_analysis": "NO_COMPRESSION bb=1.003; BLUR_UNLIKELY slope_ratio=0.993; GAUSSIAN_YCrCb sigma=13.5; NO_GLOBAL vr=1.058",
+        "test_candidate": "MATCH (2/2)"
+      },
+      "pair2": {
+        "image_id": "0170",
+        "full_analysis": "NO_COMPRESSION bb=0.994; BLUR_UNLIKELY slope_ratio=1.001; GAUSSIAN_YCrCb sigma=13.5; NO_GLOBAL vr=0.985",
+        "test_candidate": "MATCH (2/2)"
+      },
+      "pair3": {
+        "image_id": "0047",
+        "full_analysis": "NO_COMPRESSION bb=0.997; BLUR_UNLIKELY slope_ratio=0.991; GAUSSIAN_YCrCb sigma=15.9; NO_GLOBAL vr=1.274",
+        "test_candidate": "MATCH (2/2)"
+      },
+      "pair4": {
+        "image_id": "0485",
+        "full_analysis": "NO_COMPRESSION bb=1.002; BLUR_UNLIKELY slope_ratio=0.990; GAUSSIAN_YCrCb sigma=15.2; NO_GLOBAL vr=1.212",
+        "test_candidate": "MATCH (2/2)"
+      }
+    },
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "noise_gaussian_RGB",
+            "severity": 2
+          }
+        ],
+        "function_family": "noise_gaussian_RGB",
+        "evidence": "closest isotropic alternative by channel-mean sigma; verify_signals WEAK (sigma diff 21%); per-channel fingerprint contradicts isotropy (G 23.1 far below mean)",
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "test_candidate_count": 9,
+    "qwen_gate": {
+      "available": false
+    }
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (noise step can never be LIKELY due to random seed)",
+    "r0_support_psnr": 31.1,
+    "mode": "SIGNAL (sigma=15.81)",
+    "signal_reinterpretation": [
+      {
+        "signal": "variance_ratio=1.2596 / contrast_spread_ratio=1.203 / clipped_fraction=0.0524 (heavy_clipping=true)",
+        "r0_treatment": "Attributed to chroma-noise variance inflation; only a saturation control was run, no direct contrast control",
+        "r1_check": "Mean residual noise variance=(33.2^2+23.1^2+39.7^2)/3=1071; to reach vr=1.2596 clean per-channel variance ~1071/0.2596~4125, plausible for a natural image. Mildest contrast_strengthen_scale sev1=1.4x (x_distortion table) would give simulated vr~1.4^2*1.2596~2.47. R1 test noise_gaussian_YCrCb:2,contrast_strengthen_scale:1 -> PARTIAL (3 matched / 1 mismatched), global:variance_ratio diff=285%",
+        "conclusion": "Contrast strengthen rejected. Contrast weaken (0.75x) arithmetically gives vr~0.82 << 1.26, and pairing a weaken with a higher noise severity (YCrCb:3) contradicts the measured channel fingerprint. clipped_fraction is noise-induced clipping on an image whose bright/dark regions sit near the bounds."
+      },
+      {
+        "signal": "block_boundary=0.9956 / unique_G target=clean=256 / dct_zero_ratio=0.0197",
+        "r0_treatment": "NO_COMPRESSION, no JPEG candidate tested",
+        "r1_check": "Missed-compression edge case: JPEG applied after strong noise can mask 8x8 structure. R1 test noise_gaussian_YCrCb:2,compression_jpeg:1 (JPEG last per storage-last physics) -> WEAK (1/2), compression:block_boundary diff=42%, noise:sigma diff=92%",
+        "conclusion": "JPEG rejected: the simulation raises block boundary far above target and smooths the noise; target shows no block structure."
+      },
+      {
+        "signal": "spectral_slope_ratio=0.9933 (target -1.1123 vs clean -1.1198) / FFT anisotropy=0.00 / gm_ratio=4.789 (noise-destroyed)",
+        "r0_treatment": "BLUR_UNLIKELY, no blur candidate tested (FP_blur_risk noted)",
+        "r1_check": "Residual box-filter spatial_corr=0.3424 equals the iid-noise expectation 1/3, i.e. no spatial structure from a blur-after-noise. R1 test noise_gaussian_YCrCb:2,blur_gaussian:1 (noise->blur per sensor-noise-before-optics physics) -> PARTIAL (3/1), noise:sigma diff=93%: blur smoothing collapses the wavelet sigma, which is incompatible with the target sigma=15.8 that noise-only reproduces",
+        "conclusion": "Blur rejected (mild blur:1 cannot be present after the noise; spectral slope rules it out directly)."
+      },
+      {
+        "signal": "noise_prior_sigma=15.81; raw residual ch_stds 33.2/23.1/39.7; residual_intensity_corr=0.0013; cross_channel_corr=0.1782; rgb_ratio=1.7221",
+        "r0_treatment": "GAUSSIAN_YCrCb sev2 by theory fingerprint",
+        "r1_check": "x_distortion noise_gaussian_YCrCb severity table: sigma_l=[0.05,0.06,0.07,0.08,0.09], chroma ratio=[1,1.45,1.9,2.35,2.8]; sev2 -> sigma_l=15.3, sigma_chroma=22.185 -> channel stds 34.7/23.3/42.2, matching measurement within 6%. sev3 -> 50.8/34.2/62.6 (too high); sev1 is isotropic 12.75 (wrong G-lowest fingerprint). residual_intensity_corr=0.0013 (~0) rules out gamma; var_slope=0.4403<1.0 rules out poisson; vm_slope=-7.016<0 rules out speckle; extreme_pct=51.34 is the zero-mean-residual false positive, not salt-and-pepper",
+        "conclusion": "Noise type and severity 2 confirmed; noise step remains UNCERTAIN by rule."
+      },
+      {
+        "signal": "mean_shift=-0.5/255=0.002",
+        "r0_treatment": "brightness_detected_raw=false",
+        "r1_check": "0.002 < 0.005 noise-robust threshold; the R1 contrast control also matched global:mean_shift",
+        "conclusion": "Brightness rejected."
+      }
+    ],
+    "candidates_ranking": [
+      {
+        "rank": 1,
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal",
+        "pair0": "MATCH (2/2)",
+        "support": "MATCH on pairs 1-4 (2/2 each)",
+        "outcome": "BEST / RETAINED"
+      },
+      {
+        "rank": 2,
+        "pipeline": "noise_gaussian_YCrCb:2,contrast_strengthen_scale:1",
+        "mode": "signal",
+        "pair0": "PARTIAL (3/1), global:variance_ratio diff=285%",
+        "outcome": "REJECT (contrast absent)"
+      },
+      {
+        "rank": 3,
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:1",
+        "mode": "signal",
+        "pair0": "PARTIAL (3/1), noise:sigma diff=93%",
+        "outcome": "REJECT (blur absent)"
+      },
+      {
+        "rank": 4,
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "mode": "signal",
+        "pair0": "WEAK (1/2), block_boundary diff=42%, noise:sigma diff=92%",
+        "outcome": "REJECT (compression absent)"
+      }
+    ],
+    "support_verification": {
+      "pair0": "MATCH (2/2: noise:sigma, noise:clean_residual)",
+      "pair1": "MATCH (2/2)",
+      "pair2": "MATCH (2/2)",
+      "pair3": "MATCH (2/2)",
+      "pair4": "MATCH (2/2)",
+      "summary": "5/5 support pairs MATCH for the unchanged R0 pipeline in R1"
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {
+          "function": "noise_gaussian_YCrCb",
+          "severity": 2,
+          "verdict": "UNCERTAIN"
+        }
+      ],
+      "reason": "No R1 candidate improved over the R0 baseline; all three deterministic controls (contrast, JPEG, blur) produced signal mismatches. R0's borderline global signals are quantitatively explained by the chroma noise. Noise verdict remains UNCERTAIN per SKILL."
+    },
+    "budget": {
+      "test_candidate_calls": 8,
+      "candidates": 4,
+      "note": "1 baseline pair0 + 3 controls pair0 + 4 baseline support pairs; iteration rounds 10-17 in reflection.json"
+    },
+    "termination": "Signal reinterpretation completed with no evidence for CHANGE; <=15 test_candidate calls and <=5 candidates respected."
+  }
+}

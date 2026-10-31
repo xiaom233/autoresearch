@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "per-step pipeline: blur_motion:3 (UNCERTAIN) -> compression_jpeg:2 (LIKELY)",
+    "compression_jpeg LIKELY: block_boundary=2.1245 (>1.1, Tier S, 0% FP), dct_zero_ratio=0.851, unique_G=256; JPEG has no enabled special component in allowed set -> Swin",
+    "motion blur: residual_anisotropy=1.7012, only +0.0012 above the 1.7 OCAB gate (not a clear Tier A margin), per-step verdict UNCERTAIN, severity=3 (<5). finetune_strategy.md sec.6 Step2 OCAB rule requires LIKELY + motion sev>=5 -> OCAB not enabled (also would need embed_dim=30 for parameter fairness, conflicting with 454K Swin baseline dim=64)",
+    "NO_GLOBAL: variance_ratio=0.8182 but contrast_from_variance=false; reflection confirms noiseless sim variance_ratio 0.798 ~ target 0.818 (blur-induced) -> no Tier A contrast signal -> no ColorPre / FiLM-GCM",
+    "NO_NOISE: noise_prior_sigma=1.11 (<2), peeled residual structured (spatial_corr=0.978, extreme_pct=62.6% false impulse per documented FP rule); noiseless sim reproduces target noise signals -> no noise-specific handling",
+    "SimpleGate default-on: exp39 8/9 degradations safe (-32K params); only adverse case is S5 triple-motion (-0.86), this challenge is single motion sev=3 + JPEG",
+    "Direct from scratch: exp37/38 True Ft ~= Direct (-0.04 dB) and pure Swin best in blind scenario (23/24 vs components 0/24)"
+  ],
+  "rationale": "Two-step local pipeline blur_motion:3 -> compression_jpeg:2. JPEG is high-confidence (Tier S block_boundary), but motion per-step verdict is UNCERTAIN with anisotropy only marginally at threshold and sev 3, so no component gate is decisively satisfied: OCAB gate not clear (and requires dim=30 alignment), no contrast signal for ColorPre/FiLM-GCM, no noise. Safest choice per exp37 is pure Swin + SimpleGate, Direct training at lr 5e-4, 2 epochs, batch 16."
+}

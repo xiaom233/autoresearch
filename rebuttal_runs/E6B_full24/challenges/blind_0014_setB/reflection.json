@@ -1,0 +1,452 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=1.6353 (>1.1, 0%FP) + unique_G 213→181 + dct_zero_ratio=0.798 → JPEG 确认",
+      "blur": "BLUR_UNLIKELY: spectral_slope_ratio=0.951 (<1.08); gm_ratio=0.677 低但可由 JPEG 块内平滑 + 大面积裁剪解释，非 blur 证据",
+      "noise": "noise_prior sigma=0.49 (<2) → NO_NOISE；step2 GAUSSIAN_YCrCb(low) 为残留与强度相关(r=-0.91)的 clipping/gamma 伪信号",
+      "global": "mean_shift=+47.9/255(三通道同向), clipped_fraction=45.1%, variance_ratio=0.484, spread_ratio=0.698, chroma_ratio=1.28；brightness 被 brightness_from_jpeg 的 block_uniformity>0.1 规则误抑制，+47.9 均值偏移不可能由 JPEG 产生 → brightness 主导"
+    },
+    "mode": "PSNR (sigma=0.49)",
+    "qwen_gate": "SKIPPED: sigma<2 不触发门控；Qwen/API 不可用",
+    "suspected": [
+      "brightness_brighten (mean_shift=+47.9, clipped=45.1%, residual_intensity_corr=-0.913)",
+      "compression_jpeg (block_boundary=1.635)",
+      "contrast_weaken 或 saturation 为次要待验证项 (variance_ratio=0.484 / chroma_ratio=1.28)"
+    ],
+    "ruled_out": [
+      "noise (sigma=0.49<2)",
+      "blur (spectral_slope_ratio=0.951)",
+      "motion/glass (无对应信号)"
+    ]
+  },
+  "noise_6step_check": {
+    "applicable": false,
+    "reason": "sigma=0.49<2 → SKILL Step 3 明确 NO_NOISE 分支，peeled_noise_check 不执行；最终管线在 5/5 对 PSNR=inf，无任何未解释残差（若存在噪声必然不可能 inf）",
+    "available_signals_from_full_analysis": {
+      "noise_prior_sigma": 0.49,
+      "impulse_zero_ratio": 0.0012,
+      "spatial_corr": 0.8539,
+      "cross_channel_corr": 0.9839,
+      "residual_intensity_corr": -0.9137,
+      "extreme_pct": null,
+      "vm_slope": null,
+      "var_slope": null,
+      "rgb_ratio": null
+    },
+    "diagnosis": "NO_NOISE — 高 spatial_corr(0.85)/cross_ch_corr(0.98)/|residual-intensity|(0.91) 是确定性 brightness 裁剪残差结构，非随机噪声"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:4,compression_jpeg:3",
+        "thinking": "R1: mean_shift=+47.9(三通道同向)+clipped_fraction=45.1% → brightness brighten sev~4 (sev=int(0.188/0.07)+1=3, 裁剪导致测量偏移偏低故取4); block_boundary=1.635(0%FP)+dct_zero=0.798 → JPEG 存在, 中值 sev3 起步; 物理顺序 brightness(priority0)→JPEG(priority2)"
+      },
+      "test_result": {
+        "psnr_rgb": 23.12,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:5,compression_jpeg:3",
+        "thinking": "R1 severity 扫描: sev4+jpeg3 仅 23.12dB 但 CI 10/10, impulse_pct_255 diff=-3.57% 提示 target 亮部裁剪更多 → brightness 偏弱, 上调至 sev5"
+      },
+      "test_result": {
+        "psnr_rgb": 18.05,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:3",
+        "thinking": "R1 severity 扫描: sev5(18.05)<sev4(23.12), impulse_pct_255 diff=-7.89% 表明 sim 裁剪已多于 target → 下调 sev3, 期望 23-28dB 区间"
+      },
+      "test_result": {
+        "psnr_rgb": 30.13,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:2,compression_jpeg:3",
+        "thinking": "R1 severity 扫描下界: sev3+jpeg3=30.13dB 明显优于 sev4/5, impulse_pct_255 误差仅1% → 检查 sev2 是否更优 (brightness 曲线凸性确认)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.87,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:2,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:4",
+        "thinking": "R1 JPEG severity 扫描: 固定 brightness:3 (30.13dB), block_boundary_ratio diff=-0.027(5%) → 尝试 jpeg:4 判断压缩强度方向"
+      },
+      "test_result": {
+        "psnr_rgb": 28.11,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 JPEG severity 扫描下界: jpeg4=28.11(jpeg3=30.13) → 尝试 jpeg:2 确认 sev3 为局部最优"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "pair1 复核: pair0 上该管线 PSNR=inf 完全复现, 在其余 support 对上独立验证"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "pair2 复核: pair0 上该管线 PSNR=inf 完全复现, 在其余 support 对上独立验证"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "pair3 复核: pair0 上该管线 PSNR=inf 完全复现, 在其余 support 对上独立验证"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "pair4 复核: pair0 上该管线 PSNR=inf 完全复现, 在其余 support 对上独立验证"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 support复核 pair0: 重跑 run_full_analysis 信号与 R0 一致 (block_boundary=1.635, mean_shift=+47.9, clipped=45.1%, sigma=0.49<2); R0 声称该管线 5/5 PSNR=inf, 先在本对独立复现, 检验 R0 是否真实完全复现而非偶然"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 support复核 pair1: pair0 上该管线已独立复现 PSNR=inf (10/10 CI 全零差); 逐对检验是否 5/5 完全复现, 若是则管线为像素级精确匹配, 低 support PSNR 只能归因于 brightness 裁剪 (clipped_fraction=45.1%) 造成的信息不可逆损失"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 support复核 pair2: pair0 上该管线已独立复现 PSNR=inf (10/10 CI 全零差); 逐对检验是否 5/5 完全复现, 若是则管线为像素级精确匹配, 低 support PSNR 只能归因于 brightness 裁剪 (clipped_fraction=45.1%) 造成的信息不可逆损失"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 support复核 pair3: pair0 上该管线已独立复现 PSNR=inf (10/10 CI 全零差); 逐对检验是否 5/5 完全复现, 若是则管线为像素级精确匹配, 低 support PSNR 只能归因于 brightness 裁剪 (clipped_fraction=45.1%) 造成的信息不可逆损失"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 support复核 pair4: pair0 上该管线已独立复现 PSNR=inf (10/10 CI 全零差); 逐对检验是否 5/5 完全复现, 若是则管线为像素级精确匹配, 低 support PSNR 只能归因于 brightness 裁剪 (clipped_fraction=45.1%) 造成的信息不可逆损失"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:3",
+      "psnr_rgb": 30.13,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:4",
+      "psnr_rgb": 28.11,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:4,compression_jpeg:3",
+      "psnr_rgb": 23.12,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:2,compression_jpeg:3",
+      "psnr_rgb": 22.87,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:5,compression_jpeg:3",
+      "psnr_rgb": 18.05,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "brightness_brighten_shfit_HSV",
+        "severity": 3,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 2,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "rationale": "pair0 PSNR=inf (RMSE=0, CI 10/10 全零差) 完全像素级复现；其余 4 个 support 对同管线亦全部 PSNR=inf。brightness 由 mean_shift=+47.9/255、clipped_fraction=45.1% 定位（sev3 为凸最优点：sev2=22.87, sev4=23.12, sev5=18.05）；JPEG 由 block_boundary=1.6353(0%FP)+dct_zero_ratio=0.798 确认，sev2 完全匹配而 sev3=30.13、sev4=28.11。variance_ratio=0.484 与 chroma_ratio=1.28 是 HSV 亮度提升+亮部裁剪的派生效应，无需独立 contrast/saturation 步骤（inf 匹配排除任何额外步骤）。blur/noise 均无信号且被像素级完全匹配排除。",
+    "cross_pair_verification": "pair0/1/2/3/4 全部 PSNR=inf, CI=10/10"
+  },
+  "reflection_R1": {
+    "trigger": "R0 verdict=LIKELY but support PSNR=26.44 < 35",
+    "r0_analysis_reproducibility": "run_full_analysis_R1 (full_analysis_R1.json) 与 R0 full_analysis.json 逐字段一致 (仅 residual_intensity_corr -0.9137→-0.912 浮点差异), R0 信号读数可复现",
+    "signal_reanalysis": [
+      {"signal": "block_boundary=1.635 (>1.1)", "interpretation": "JPEG 确认 (0% FP); 无被忽略项"},
+      {"signal": "dct_zero_ratio=0.798, unique_G_target=181 (<200, clean=213)", "interpretation": "压缩/量化确认; 与 JPEG 一致"},
+      {"signal": "mean_shift=+47.9/255 (三通道同向), clipped_fraction=45.1%, residual_intensity_corr=-0.912", "interpretation": "brightness_brighten 主导; 45.1% 像素饱和到 255 → 亮部信息被不可逆裁剪, 这是 support PSNR 上限低的物理根因, 不是盲识别错误"},
+      {"signal": "variance_ratio=0.484, contrast_spread_ratio=0.698, chroma_ratio=1.28", "interpretation": "边界/潜在误判项 (曾疑 contrast_weaken/saturation_strengthen): 亮度提升+大面积裁剪本身会压缩方差并抬高 chroma 比; 且 R0 管线在 5/5 support 对像素级精确复现, 任何额外步骤都会破坏 inf → 判为派生效应, 不追加步骤"},
+      {"signal": "gm_ratio=0.677 但 spectral_slope_ratio=0.951 (<1.08), FFT anisotropy=0.00", "interpretation": "blur 排除; gm 下降由 JPEG 块内平滑 + 大面积裁剪造成, 非 blur 证据"},
+      {"signal": "noise_prior sigma=0.49 (<2), spatial_corr=0.854, cross_ch_corr=0.984", "interpretation": "NO_NOISE; 高空间/通道相关是确定性 clipping 残差结构, 非随机噪声"}
+    ],
+    "support_verification": [
+      {"pair": 0, "image_id": "0643", "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2", "mode": "psnr", "psnr_db": "inf", "ci": "10/10", "ci_diff": "全 10 项 diff=0.000"},
+      {"pair": 1, "image_id": "0030", "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2", "mode": "psnr", "psnr_db": "inf", "ci": "10/10"},
+      {"pair": 2, "image_id": "0606", "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2", "mode": "psnr", "psnr_db": "inf", "ci": "10/10"},
+      {"pair": 3, "image_id": "0471", "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2", "mode": "psnr", "psnr_db": "inf", "ci": "10/10"},
+      {"pair": 4, "image_id": "0644", "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2", "mode": "psnr", "psnr_db": "inf", "ci": "10/10"}
+    ],
+    "support_psnr_interpretation": "5/5 support 对 PSNR=inf (RMSE=0) 证明预测管线与 target 像素级完全一致, 在 5 张独立图像上不可能由错误管线偶然产生 → R0 盲识别精确命中退化管线。support PSNR=26.44 低于 35 的根因是 brightness_brighten_shfit_HSV:3 的 clipped_fraction=45.1%: 亮部原值被裁剪到 255 后不可逆丢失, 任何 restoration 模型都无法恢复, 该挑战存在信息论上限。此为退化固有可逆性限制, 非盲识别错误, 修改管线只会破坏与 target 的精确一致性。",
+    "candidate_ranking": [
+      {"rank": 1, "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2", "psnr": "inf (5/5 pairs)", "ci": "10/10", "verdict": "LIKELY"},
+      {"rank": 2, "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:3", "psnr": 30.13, "note": "R0 中次优, 低于精确匹配"},
+      {"rank": 3, "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:4", "psnr": 28.11, "note": "R0 中第三"}
+    ],
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "brightness_brighten_shfit_HSV", "severity": 3, "verdict": "LIKELY"},
+        {"function": "compression_jpeg", "severity": 2, "verdict": "LIKELY"}
+      ],
+      "rationale": "R1 信号重释未发现被忽略/误判的信号: 重跑分析逐字段复现 R0; variance_ratio/chroma_ratio 被 5/5 像素级精确复现排除为独立步骤; noise(sigma=0.49) 与 blur(slope_ratio=0.951, anisotropy=0) 均无证据。新候选无任何可能超越 inf, 依协议 (纯确定性候选需 >40dB 或 +2dB 才可 CHANGE) 判 NO_CHANGE。support PSNR=26.44 归因于 45.1% 亮部裁剪的信息不可逆损失。"
+    }
+  }
+}

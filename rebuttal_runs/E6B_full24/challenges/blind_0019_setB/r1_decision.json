@@ -1,0 +1,42 @@
+{
+  "challenge_id": "blind_0019_setB",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["blur_glass", 4],
+    ["compression_jpeg", 4],
+    ["saturate_weaken_HSV", 5]
+  ],
+  "r1_pipeline": [
+    ["blur_lens", 4],
+    ["compression_jpeg", 4],
+    ["saturate_weaken_HSV", 5]
+  ],
+  "support_psnr_r0": 19.33,
+  "candidates_tested": [
+    {"pipeline": "blur_glass:4,compression_jpeg:4,saturate_weaken_HSV:5", "role": "R0 incumbent", "support_psnr": {"pair0": 27.65, "pair1": 27.14, "pair2": 28.40, "pair3": 28.91, "pair4": 26.92}, "mean_psnr": 27.40, "ci": ["10/10", "10/10", "8/10", "9/10", "9/10"], "verdict": "REJECTED (wrong blur subtype)"},
+    {"pipeline": "blur_gaussian:5,compression_jpeg:4,saturate_weaken_HSV:5", "role": "full_analysis boundary alternative", "support_psnr": {"pair0": 29.57}, "ci": ["6/10"], "verdict": "REJECTED"},
+    {"pipeline": "blur_lens:5,compression_jpeg:4,saturate_weaken_HSV:5", "role": "full_analysis auto verdict LENS_BLUR sev5", "support_psnr": {"pair0": 31.14, "pair1": 30.17, "pair2": 32.61, "pair3": 33.30, "pair4": 30.49}, "mean_psnr": 31.54, "ci": ["7/10", "10/10", "7/10", "9/10", "7/10"], "verdict": "REJECTED (over-smoothing; lens:4 is pixel-exact)"},
+    {"pipeline": "blur_lens:4,compression_jpeg:4,saturate_weaken_HSV:5", "role": "R1 change candidate", "support_psnr": {"pair0": "inf (pixel-exact)", "pair1": "inf (pixel-exact)", "pair2": "inf (pixel-exact)", "pair3": "inf (pixel-exact)", "pair4": "not tested (15-call budget)"}, "ci": ["10/10", "10/10", "10/10", "10/10"], "verdict": "ACCEPTED"}
+  ],
+  "test_candidate_calls": 15,
+  "best_validation": {
+    "pipeline": "blur_lens:4,compression_jpeg:4,saturate_weaken_HSV:5",
+    "method": "PSNR on supports (deterministic pipeline)",
+    "pair0_psnr_db": "inf (MSE=0; all 10 CI metric diffs=0.000)",
+    "pair1_psnr_db": "inf (MSE=0; all CI diffs=0.000)",
+    "pair2_psnr_db": "inf (MSE=0; all CI diffs=0.000)",
+    "pair3_psnr_db": "inf (MSE=0; all CI diffs=0.000)",
+    "pair4": "not tested due to 15-call budget; single fixed pipeline applied to all supports -> 4/5 pixel-exact is conclusive",
+    "criterion": ">40 dB (pixel-exact) satisfied; CHANGE allowed"
+  },
+  "signal_sources": [
+    "full_analysis_R1 step3: auto verdict LENS_BLUR (medium), blur_pca_ratio=1.066, estimated_severity=5 (severity_source=gm_ratio=0.154), glass_score=1.466 (FP for lens blur)",
+    "borderline clip signal: target impulse_total_pct > lens:5 sim on 4/5 supports (+0.019/+0.006/+0.203/+0.099) -> lens:5 too blurry, true kernel weaker (lens:4 disk r=6)",
+    "support PSNR sweep: glass:4 mean 27.40; lens:5 mean 31.54; lens:4 pixel-exact (inf) on pairs 0-3",
+    "noise ruled out: peeled residual structure-dominated (extreme_pct=72.0%, spatial_corr=0.962, rgb_ratio=1.0, cross_ch=1.0); wavelet sigma=5.68 is lower bound; noise-before-blur attenuation ~14x for lens r=6",
+    "global: saturation_chroma_ratio=0.0 (exact grayscale); brightness_mean_shift=+30.5/255 matches HSV V=max path, not YCrCb luma (~+6)",
+    "compression: block_boundary=4.388 (0% FP), dct_zero_ratio=0.902; exact reproduction confirms jpeg:4 and order blur->jpeg->sat"
+  ],
+  "reason": "R0 的 blur_glass:4 被确定性 PSNR 推翻：blur_lens:4 -> compression_jpeg:4 -> saturate_weaken_HSV:5 在 clean 上施加后与 degraded 像素完全一致（pairs 0-3 均 PSNR=inf，全部 CI 指标差异为 0）。glass_score=1.466 是 lens 模糊的假阳性；R0 的 SIGNAL 复核（23/25）只验证了聚合信号（谱斜率/Wiener 核/块边界/均值），无法区分 glass 与 lens 核。R0 support PSNR 19.33 dB 的根因是 blur 子类型错误（灰度化另带来色度信息上限）。"
+}

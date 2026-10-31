@@ -79,6 +79,35 @@
 
 **因此**：论文不能把“5 GPU-h/场景”写成完整端到端成本；必须写“训练预算 4.25 GPU-h/场景 + 在线 API/候选/评测/离线开发另列”，并把缺失项标 UNKNOWN。E7 起按 §3 强制记录；**不回溯编造**。
 
+## 2.6 E6-A / E6-B 新实验的实测分段时间（2026-10-30）
+
+E6-A full24 / E6-B full24 对每条链写入 `agent_timing*.json`（agent 墙钟、候选次数）、`timing*.json`（训练秒数）与评测 wrapper 日志，是第一批可引用的 DC/RS/CLR 实测值，可补上 exp41 的 UNKNOWN 缺口（exp41 本身仍是 UNKNOWN，不能用新实验回填）。
+
+| 阶段 | 实测值 | 口径/来源 |
+|---|---:|---|
+| DC 盲识别（E6-B，48 run） | mean **19.4 min** / median 14.0 / range 2.0–100.9；mean 17.1 次 `test_candidate` | `E6B_full24/challenges/*/agent_timing.json`；墙钟含 Skill/API 与候选模拟 |
+| DC 盲识别（E6-A，48 run） | mean **18.6 min** / median 16.3 / range 2.0–82.7；mean 17.0 次 | `E6A_full24/challenges/*/agent_timing.json` |
+| RS 策略选择 | ~**0.3–1.5 min**/链 | 本会话策略子 Agent 实测（未单独持久化） |
+| R0 训练（E6-B，40 run） | mean **1.477 GPU-h** / median 1.424 / max 1.965 | `timing.json` 的 `train_seconds` |
+| R0 训练（E6-A，48 run） | mean **1.414 GPU-h**（合计 67.86 GPU-h） | 训练日志 `training_seconds` |
+| support eval / checkpoint 选择（exp41） | R0 **2.42** / R1 **3.00** / R2 **3.98** min per task | `reeval_R*_gpu*.log` birth→mtime；E6-A/E6-B 为训练内验证，已含在 `train_seconds` |
+| CLR 反思（E6-B，29 run） | mean **9.7 min** / median 5.4 / range 1.25–87；mean 8.6 次候选 | `agent_timing_R1.json`；含信号重释与候选模拟 |
+| CLR 反思（E6-A，46 run） | mean **18.1 min** / median 15.2 / range 4.1–45.0；mean 10.6 次候选 | 同上 |
+| R1 训练（仅 CHANGE） | exp41 mean **1.410 GPU-h**（23 run）；E6-A mean 1.412（9 run） | 训练日志 |
+| R2 训练（仅 R1 +>2 dB） | exp41 mean **1.451 GPU-h**（24 run） | 训练日志 |
+| 最终 test（E6-A） | 48 模型 ×350 图：8 卡 **23.3 min** = 3.11 GPU-h；**0.065 GPU-h/模型**；fixed-LQ 复评 14 模型 8 卡 5.5 min | `eval_final_gpu*.log` birth→mtime |
+| API token / 费用 | **UNKNOWN** | 未记录；只报告 agent 墙钟 |
+
+**分项合计（GPU 计算与 agent 墙钟分开）**：
+
+| 实验 | GPU 计算/场景 | agent 墙钟/场景 | 说明 |
+|---|---:|---:|---|
+| exp41（24 场景） | 训练 4.248 + support eval 0.157 + test 0.065 ≈ **4.47 GPU-h** | DC ~26.7 min（exp40 代理）+ 策略 ~1 min + 反思实测代理 10–18 min/轮（最多 2 轮）≈ **0.6–1.1 h** | 串行端到端约 **5.0–5.6 h/场景**；71 次训练/101.95 GPU-h |
+| E6-A（48 链） | R0 1.414 + R1 0.265（9/48 平均）+ test 0.065 ≈ **1.74 GPU-h/链**；每场景（2 链）≈ **3.5 GPU-h** | DC 18.6 min + 策略 ~1 min + CLR 18.1 min（46/48）≈ **0.63 h/链**；每场景 ≈ **1.25 h** | R1 反思 46/48 触发，9/48 CHANGE |
+| E6-B（40/48 R0 完成） | R0 1.477 + R1 0.118（4/48 平均）+ test 0.065 ≈ **1.66 GPU-h/链**；每场景（2 链）≈ **3.3 GPU-h** | DC 19.4 min + 策略 ~0.7 min + CLR 9.7 min（29/48 触发）≈ **0.44 h/链**；每场景 ≈ **0.9 h** | 25/29 反思 NO_CHANGE，R1 训练显著少于 exp41 |
+
+**结论口径**：exp41 的 4.248 GPU-h/场景是**三次训练（R0–R2）实测总和**（71 次，均值 1.44 h/次），不是“5 h 含一切”；加上 support eval 与最终 test 约 4.47 GPU-h，加上 DC/CLR agent 墙钟约 0.6–1.1 h，串行端到端约 5–5.6 h/场景。新实验（E6-A/E6-B）用逐阶段计时给出完整在线成本；API token/费用与离线框架开发（723+ 训练、3,840-case 校准、DFPIR 预训练）仍单列/UNKNOWN，不摊入每场景。
+
 ## 3. DC/RS/CLR 每轮计时规范（E7 起强制执行）
 
 ### 3.1 文件与字段

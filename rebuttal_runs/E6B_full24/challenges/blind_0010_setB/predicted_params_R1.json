@@ -1,0 +1,31 @@
+{
+  "challenge_id": "blind_0010_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 1],
+    ["brightness_darken_gamma_HSV", 5]
+  ],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 1, "verdict": "LIKELY"},
+    {"function": "brightness_darken_gamma_HSV", "severity": 5, "verdict": "LIKELY"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "trigger": "R0 verdict=LIKELY but support PSNR=30.57 < 35",
+    "mode": "PSNR",
+    "tier": 1,
+    "verdict": "LIKELY",
+    "support_validation": "R1 re-verified 5/5 support pairs: simulated == target exactly (PSNR=inf, CI=10/10 on pair0..pair4)",
+    "signal_rationale": [
+      "block_boundary=0.9874 (<1.05) + unique_G=242 (>200) -> no JPEG; exact 5/5 replay without JPEG rules it out decisively",
+      "noise_prior sigma=1.11 (<2); spatial_corr=0.958 structured residual (blur/gamma artifact); residual_intensity_corr=0.708 + gamma_suspect_from_noise=true -> gamma-type global, no random noise",
+      "spectral_slope target-clean diff=0.119 (ratio=1.1049) + anisotropy=1.8865 (<4.0 motion threshold) -> mild blur, gaussian sev1 exact",
+      "mean_shift=-49.0 + variance_ratio=0.4843 + chroma_ratio=0.4829 + clipped_fraction=0.5774 + residual_intensity_corr=0.708 -> single-step gamma darken sev5, not brightness shift + saturation",
+      "analyzer verdicts (glass / YCrCb noise / brightness+sat) are known false positives induced by gamma clipping (3/3 false_positive_checks true)"
+    ],
+    "order": "blur -> brightness_darken_gamma (exact pixel match confirms order)",
+    "support_psnr_r0": 30.57,
+    "note": "Low support PSNR is a training/capacity issue, not a blind-ID error: clipped_fraction=0.5774 means GT gamma darkening crushes 57.7% of pixels to 0, limiting invertibility. No pipeline change can exceed the exact pixel-level replay."
+  }
+}

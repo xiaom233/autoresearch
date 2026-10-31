@@ -1,0 +1,62 @@
+{
+  "challenge_id": "blind_0015_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "brightness_darken_shfit_RGB", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "pipeline_string": "blur_gaussian:1,brightness_darken_shfit_RGB:3",
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 1},
+        {"function": "blur_gaussian", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "pipeline_string": "noise_gaussian_RGB:1,blur_gaussian:1,brightness_darken_shfit_RGB:3",
+      "function_family": "noise:gaussian_RGB",
+      "validation": "signal mode on 5 support pairs: PARTIAL x4 + WEAK x1; noise:sigma MATCH on pairs 1/3/4 but structured_residual FWHM=4.0px and wiener 0.750-0.768 persist; 0/5 verdict improvement vs no-noise baseline -> kept as alternative only"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "pipeline_string": "blur_glass:1,brightness_darken_shfit_RGB:3",
+      "function_family": "blur:glass",
+      "validation": "PSNR pairs 0-2: 28.97/26.72/26.47 vs baseline 28.22/29.15/28.78 (mean -1.33 dB); dominated on 2/3 pairs, pairs 3-4 not spent; glass is seeded/non-deterministic"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "pipeline_string": "blur_lens:1,brightness_darken_shfit_RGB:3",
+      "function_family": "blur:lens",
+      "validation": "R0 pair0 PSNR 28.16 (< gaussian 28.22); MTF-indistinguishable; not retested in R1"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (noise candidates; sigma gate 1.24<2 judged unreliable under blur) + PSNR (deterministic candidates)",
+    "support_psnr_r0": 18.92,
+    "psnr": {"pair0": 28.22, "pair1": 29.15, "pair2": 28.78, "pair3": 26.10, "pair4": 27.66},
+    "per_step_verdict": {
+      "blur_gaussian:1": "UNCERTAIN",
+      "brightness_darken_shfit_RGB:3": "LIKELY"
+    },
+    "candidates_tested": [
+      "noise_gaussian_RGB:1,blur_gaussian:1,brightness_darken_shfit_RGB:3",
+      "noise_speckle:1,blur_gaussian:1,brightness_darken_shfit_RGB:3",
+      "blur_glass:1,brightness_darken_shfit_RGB:3"
+    ],
+    "test_candidate_calls": 14,
+    "rationale": "NO_CHANGE. Brightness_darken_shfit_RGB:3 stays exactly pinned (mean_shift -47.5 vs -46.7, variance_ratio 0.748 vs 0.746, clipped_fraction 0.215 vs 0.215, spread 0.796 vs 0.794, saturation 1.0066 vs 1.0057, unique_G 197 vs 198; gamma cannot produce 21.5% bottom clipping). Blur presence LIKELY (gm_ratio 0.429 vs 0.876 no-blur) but subtype is not improvable: wiener kernel mismatch (0.750-0.768) is systematic on all 5 pairs, yet glass sev1 is dominated (-1.33 dB mean on pairs 0-2), lens is below baseline, motion is excluded by FFT anisotropy=0.00, and gaussian sev1 is the severity floor. The R0 sigma-gate exclusion of light noise was re-opened (SKILL: sigma estimate unreliable under blur; peeled sigma=2.72), but pre-blur noise_gaussian_RGB:1 does not improve verify_signals verdicts on any of the 5 support pairs (0/5 improved, 1/5 regressed PARTIAL->WEAK; structured_residual stays FWHM=4.0px) and noise_speckle:1 is worse (sigma diff 100% vs 50%). No evidence meets the CHANGE thresholds (>40 dB or +2 dB deterministic; majority WEAK->PARTIAL/MATCH noise), so R1 equals R0 item-for-item."
+  }
+}

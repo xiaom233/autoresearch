@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "管线判定: 单步 compression_jpeg:1, verdict=LIKELY, Tier 1, PSNR 模式, 5/5 support pairs 均为 bit-exact 复现 (PSNR=inf, CI 10/10), 无 alternatives",
+    "block_boundary_target=1.2587 > 1.1 (Tier S, 0% FP) → JPEG 确认, 仅验证预测正确, 无对应独立组件可启用",
+    "variance_ratio=0.9911 ≈ 1.0 (mean_shift=0.1, contrast_spread_ratio=1.0023) → contrast 未检出, Tier A 不触发 → 不启用 ColorPre / FiLM-GCM",
+    "无结构化局部退化: FFT anisotropy=0.00 < 1.7, gm_ratio=0.942, spectral_slope_ratio=0.994 (BLUR_UNLIKELY) → 不启用 OCAB; 故 FiLM-GCM 所需的 contrast+结构化(motion/jpeg) Tier A 组合不成立",
+    "噪声被排除: noise_prior_sigma=0.62 < 2, 剥离 compression_jpeg:1 后 residual std=0.0 (逐通道全 0), §B IMPULSE extreme_pct=100% 为零残差退化伪信号 → 无 noise 梯度干扰, RandomCurric 无收益场景",
+    "saturation_chroma_ratio=0.9827 (≈1.0) → 无 saturation, ColorPre 禁用场景",
+    "SimpleGate: exp39 -32K, 8/9 退化安全 (D3 JPEG+blur +0.02, L2 +0.78), 唯一负例需 motion×3 (S5 -0.86), 本挑战无 motion → 默认常开",
+    "full_analysis 建议的 DualBranch 被否决: exp37 盲识别场景 0/24 胜, finetune_strategy.md §七 明确盲识别不推荐"
+  ],
+  "rationale": "盲识别为单步确定性 JPEG (severity 1, block_boundary=1.259 Tier S 0%FP, 5/5 bit-exact 复现), 期望退化已知且高置信, 属 Step 0 低难度档 (JPEG sev≤2)。finetune_strategy.md §七 门控逐项检查: variance_ratio=0.991≈1.0 不满足 ColorPre/FiLM-GCM 的 Tier A 条件; anisotropy=0.00, 无 motion/jpeg 结构化组合; 故不加任何条件组件。策略选 Direct: 单步退化无多步梯度干扰, RandomCurric 无收益 (RandomCurric 仅对 ≥2 步有效); True Ft 在 2-epoch 预算下 ≈ Direct (+0.03~0.04, exp37/38 双重确认) 且盲预训练对 JPEG sev1 覆盖良好, 无迁移增益。架构保持纯 Swin(ws=8)+SimpleGate, embed_dim=64, Direct 从头训练。"
+}

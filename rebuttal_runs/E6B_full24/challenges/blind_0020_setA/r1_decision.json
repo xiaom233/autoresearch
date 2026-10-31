@@ -1,0 +1,50 @@
+{
+  "challenge_id": "blind_0020_setA",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 1},
+    {"function": "blur_gaussian", "severity": 3},
+    {"function": "contrast_weaken_scale", "severity": 5}
+  ],
+  "r1_pipeline": [
+    {"function": "blur_glass", "severity": 3},
+    {"function": "contrast_weaken_stretch", "severity": 4}
+  ],
+  "support_psnr_r0": 13.61,
+  "candidates_tested": [
+    "blur_gaussian:3,contrast_weaken_scale:5",
+    "blur_gaussian:3,contrast_weaken_scale:3",
+    "brightness_brighten_gamma_RGB:1,blur_gaussian:3,contrast_weaken_scale:3",
+    "brightness_brighten_gamma_RGB:1,blur_glass:3,contrast_weaken_scale:3",
+    "brightness_brighten_gamma_RGB:1,blur_glass:3,contrast_weaken_scale:2",
+    "brightness_brighten_gamma_HSV:1,blur_glass:3,contrast_weaken_scale:3",
+    "blur_glass:3,contrast_weaken_stretch:5",
+    "blur_glass:3,contrast_weaken_stretch:4",
+    "noise_gaussian_RGB:1,blur_glass:3,contrast_weaken_stretch:4",
+    "blur_gaussian:3,contrast_weaken_stretch:4"
+  ],
+  "test_candidate_calls": 15,
+  "best_validation": {
+    "pipeline": "blur_glass:3,contrast_weaken_stretch:4",
+    "mode": "PSNR",
+    "pair_psnr": {"pair0": 35.25, "pair1": 42.55, "pair2": 33.58, "pair3": 39.42, "pair4": 37.31},
+    "mean_psnr": 37.42,
+    "ci_pass": {"pair0": "8/10", "pair1": "9/10", "pair2": "8/10", "pair3": "9/10", "pair4": "8/10"},
+    "signal_matches_pair0": ["blur:wiener_kernel (>0.85)", "global:mean_shift (<0.005)", "global:variance_ratio (<8%)"],
+    "signal_mismatches_pair0": ["blur:spectral_slope (diff=0.126)", "noise:sigma (diff=124%, 仅噪声变体)", "noise:structured_residual (FWHM=6.0px)"],
+    "baseline_comparison": "R0 确定性部分 blur_gaussian:3+contrast_weaken_scale:5 在 pair0 为 23.17 dB; 新管线 pair0=35.25 dB (+12.08 dB); pair1=42.55 dB > 40 dB"
+  },
+  "signal_sources": [
+    "contrast_spread_ratio=0.3757 → 线性对比度缩放 c≈0.38-0.45 (contrast_weaken_scale:3 的 c=0.45 接近; sev5 的 c=0.2 会使 spread≈0.19, 不符)",
+    "saturation_chroma_ratio=0.5281 → 对 contrast_weaken_scale 直接读作通道缩放 c (其逐通道向灰度均值收缩), 与 c=0.2 矛盾; 指向非线性 stretch 族",
+    "variance_ratio=0.1184 + mean_shift=+0.0518 → contrast_weaken_stretch 的 0->0、向 0.5 压缩曲线可同时满足方差压缩与提亮; 实测 signal 模式 global:variance_ratio 与 global:mean_shift 同时匹配",
+    "CI impulse_pct_zero target-sim=+0.010 (线性 contrast 版本) → 目标保留约 1% 纯黑, 只有 stretch 族满足 f(0)=0 (scale 族把黑场抬到 mean*(1-c)≈0.2)",
+    "unique_G target=105 vs contrast_weaken_scale 版本 163 (+58) / contrast:3 版本 99-111 → stretch:4 版本差 1 (1%), 值压缩幅度正确",
+    "glass_score=0.2854 + mtf_roughness=2.6964 (>0.25 阈值, 非平滑 MTF) + R0 只测 glass:5 未扫 severity → 扫 glass:3: wiener kernel corr>0.85 匹配, PSNR 35.25 vs gaussian:3 34.57, overshoot 偏差 1% vs 23%",
+    "block_boundary=0.9899 (<1.1) → 无 JPEG; unique_G 降低由 stretch 量化解释 (模拟 unique_G 与目标差 1-2)",
+    "noise_prior sigma=2.22 + peeled residual: 用最终确定性管线剥离后 residual_std=4.4, spatial_corr=0.9889 (结构化, 非白噪声), §B extreme_pct=56.95% 属 sigma<5 已知假阳性; noise_gaussian_RGB:1 变体 signal noise:sigma diff=124% → 排除噪声步 (NO_NOISE)"
+  ],
+  "reason": "R0 的全局退化判断存在方向性误读: variance_ratio 差值实为 sim 偏低而非偏高, 且 contrast_weaken_scale:5 (c=0.2) 与 chroma_ratio=0.528、spread_ratio=0.376 及黑场保留信号矛盾. 信号重释指向 contrast_weaken_stretch (0->0, 非线性压向 0.5), 5 对 support PSNR 33.58-42.55 dB (mean 37.42), 其中 pair1 42.55 dB>40 dB, pair0 相对 R0 确定性基线 +12.08 dB, signal 模式 global mean_shift 与 variance_ratio 同时匹配; blur 由 gaussian:3 修正为 glass:3 (wiener>0.85, overshoot 1%). 噪声被信号证据排除 (最小 sev1 噪声仍过强, peeled residual 结构化). 依据 REFLECT 判据 (>40 dB 或 +2 dB) 判定 CHANGE.",
+  "notes": "候选探索超出建议的 5 个 (共 10 条不同管线), 但全部为信号驱动 (contrast spread/chroma 双约束 → stretch; R0 未扫描的 glass severity; brightness 名称解析后验证), 且测试次数严格控制在 15 次上限内. 未修改 predicted_params.json."
+}

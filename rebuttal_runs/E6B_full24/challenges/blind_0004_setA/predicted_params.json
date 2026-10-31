@@ -1,0 +1,53 @@
+{
+  "challenge_id": "blind_0004_setA",
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 1,
+      "verdict": "UNCERTAIN",
+      "evidence": "Anisotropic motion blur (x_distortion radius=5, gaussian-weighted sigma=3, random angle). Wiener kernel corr 0.828-0.87 (gaussian 0.707, lens 0.699, glass 0.653); motion:1 simulation reproduces target blur fingerprint gm_ratio 0.572 (target 0.582), spectral_slope -1.377 (target -1.363), ratio 1.051 (target 1.041); CI 10/10 pair0 x2, 10/10 pairs2-4, 9/10 pair1. PSNR 22.7-34.5 dB is angle-limited (non-deterministic angle per call)."
+    }
+  ],
+  "alternatives": [
+    {
+      "function": "blur_motion",
+      "severity": 2,
+      "psnr": 29.98,
+      "stats": {"ci_pass": "10/10", "gm_ratio_sim": 0.488, "spectral_slope_ratio_sim": 1.124},
+      "function_family": "blur_motion",
+      "note": "same-family severity alternative; signal fingerprint over-blurs vs target (gm 0.488 vs 0.582)"
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 2,
+      "psnr": 32.21,
+      "stats": {"ci_pass": "7/10", "wiener_kernel_corr": 0.707},
+      "function_family": "blur_gaussian",
+      "note": "isotropic cross-family runner-up; fails overshoot/zc CI metrics on pair0 and pair3 (6/10)"
+    },
+    {
+      "function": "blur_lens",
+      "severity": 2,
+      "psnr": 32.15,
+      "stats": {"ci_pass": "7/10", "wiener_kernel_corr": 0.699},
+      "function_family": "blur_lens",
+      "note": "disk-kernel cross-family runner-up; no better than gaussian in CI"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR + content-independent CI + signal fingerprint (sigma=0.74 < 2 -> PSNR usable; blur angle non-deterministic)",
+    "rationale": "Pair0 signal analysis: block_boundary=0.987 (<1.05, no JPEG), unique_G 238/254 (no quantization), variance_ratio=0.992 + mean_shift=-0.4 (no global), wavelet sigma=0.74 and peeled 6-step all explained by structured blur residual (NO_NOISE). gm_ratio=0.582 vs spectral_slope_ratio=1.041 is inconsistent with isotropic blur (which would need sev>=3 for gm 0.58 and would steepen slope more); gaussian/lens severity scans plateaued at 31.5-32.2 dB with CI 5-8/10, while the anisotropic motion family matched the Wiener kernel (0.83-0.87 vs 0.65-0.71) and blur_motion:1 reproduces the target fingerprint almost exactly (gm 0.572 vs 0.582; slope -1.377 vs -1.363) with CI 10/10 on pair0 (x2) and support pairs 2/3/4 (9/10 pair1). Control: gaussian:2 on pair3 only reaches CI 6/10. Verdict is UNCERTAIN per SKILL rules (blur PSNR 30-40 dB band; blur_motion draws a random angle each call so PSNR cannot reach >40 dB even when correct, best 34.49 dB).",
+    "support_validation": {
+      "pair0": {"psnr_rgb": [34.49, 31.94], "ci_pass": ["10/10", "10/10"]},
+      "pair1": {"psnr_rgb": [27.74], "ci_pass": ["9/10"]},
+      "pair2": {"psnr_rgb": [30.85], "ci_pass": ["10/10"]},
+      "pair3": {"psnr_rgb": [22.69], "ci_pass": ["10/10"]},
+      "pair4": {"psnr_rgb": [24.99], "ci_pass": ["10/10"]}
+    },
+    "steps_detected": 1,
+    "qwen_gate": {"available": false}
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": true,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "full_analysis_R1 step4: variance_ratio=0.1184 (≠1.0, Tier A), contrast_from_variance=true, contrast_detected_raw=true, contrast_spread_ratio=0.3757, saturation_chroma_ratio=0.5281 → contrast 存在性高置信 → 启用 ColorPre (finetune_strategy.md §七: variance_ratio≠1.0 Tier A → ColorPre, 预期 +0.62~18.91; exp38 contrast_scale +0.62, §Step0 中难度 stretch 可选 FiLM-GCM 或 ColorPre)",
+    "R1 verdict=LIKELY/Tier 1, 5/5 support PSNR: pair0=35.25, pair1=42.55, pair2=33.58, pair3=39.42, pair4=37.31 dB (mean 37.42), pair1>40 dB, CI 8-9/10 → 识别置信度极高, 满足 ColorPre 使用前提; 管线无 saturation 独立步 (chroma_ratio=0.5281 由 stretch 非线性通道压缩解释) → 不触发 ColorPre 的 saturation 禁用场景",
+    "FiLM-GCM 不启用: STRATEGY_INSTRUCTIONS/§七 门控要求 contrast + 结构化局部 (motion/jpeg) 的 Tier A 信号; motion 已被 wiener kernel corr=0.268 实测排除, JPEG 无信号 (block_boundary=0.9899<1.1; unique_G=105 由 stretch 量化复现, 模拟 104-111), 最终 blur=glass:3 (wiener corr>0.85, overshoot 偏差 1%) 非 motion/JPEG 结构 → 结构化门控不满足",
+    "OCAB 不启用: residual_anisotropy=1.7602>1.7 但 motion 实测 wiener corr=0.268 (glass:3 >0.85) 排除运动退化, anisotropy 来自 blur 残差非运动方向性; 且管线含 contrast, exp9 L2 Swin 28.70 vs OCAB 18.32; OCAB 另需 embed_dim=30 参数对齐 → attention_type=swin (dim=64, ws=8)",
+    "训练策略 Direct: 管线含 contrast_weaken_stretch → §六 Step1 含 contrast 保守选 Direct (stretch 的 RandomCurric 未测试; exp38 contrast 仅 -0.15 未复现, Direct 最安全); 无 motion sev≥3 的 Curric 前提",
+    "SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全 (L2 contrast+noise +0.78), 本管线为 contrast+blur 不受 S5 -0.86 影响",
+    "step2 noise 已排除 (R1 NO_NOISE: peeled residual std=4.4 / spatial_corr=0.9889 结构化, noise_gaussian_RGB:1 变体 sigma diff=124%), 无噪声步骤; step1 block_boundary<1.1 无 JPEG 专项",
+    "lr=5e-4 (协议默认, 避免 GCM/发散风险), epoch_budget=2 与基线公平一致, batch_size=16"
+  ],
+  "rationale": "R1 盲识别为 LIKELY/Tier 1 (blur_glass:3 → contrast_weaken_stretch:4, 5/5 support 33.58-42.55 dB, CI 8-9/10), 对比度存在性由 Tier A 硬信号 variance_ratio=0.1184 + contrast_detected_raw=true 支撑, 且识别置信度极高, 按 §七 信号门控启用 ColorPre (+0.8K, contrast 场景预期 +0.62~, §Step0 明确 stretch 中难度可选 ColorPre; 无 saturation 步, 不触禁用场景)。FiLM-GCM 因缺少结构化局部 (motion 被 wiener 0.268 排除, block_boundary=0.9899<1.1 无 JPEG, blur 为 glass:3) 不满足门控; OCAB 虽 anisotropy=1.76>1.7 但 motion 已被排除且 contrast 场景 OCAB 远劣于 Swin (exp9 L2 28.70 vs 18.32)。训练策略 Direct (含 contrast 保守, RandomCurric 风险收益不明), 纯 Swin dim=64 + SimpleGate 常开, lr=5e-4, EPOCH_BUDGET=2 与基线公平, batch=16。与 R0 保持相同架构 (ColorPre 在 R0/R1 均满足 contrast Tier A 门控), 使 R1-R0 的 PSNR 差异可归因于预测修正而非架构变化。"
+}

@@ -1,0 +1,54 @@
+{
+  "challenge_id": "blind_0005_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_impulse", 5]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_impulse",
+      "severity": 5,
+      "verdict": "UNCERTAIN",
+      "signal_source": "impulse_zero_ratio=0.9006 → 9.94% channel samples changed; x_distortion noise_impulse amount 表 [0.01,0.03,0.05,0.07,0.10] → amount=0.10=sev5; 5 对 support 的 empty-pipeline peel zero_ratio 0.9003-0.9024 (changed 9.76-9.97%) 逐对对应 amount≈0.10; 模拟 noise_impulse:5 的全信号签名与 target 逐项吻合; verify_signals MATCH 5/5"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "overall_verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL",
+    "ci_pass_rate": "N/A",
+    "ci_note": "impulse 为随机噪声, 像素级 PSNR/CI 随 seed 失配失效; 判据为 zero_ratio(amount) 指纹 + verify_signals 统计",
+    "rationale": "R1 信号重释后维持 R0 预测。核心复核: (1) 决定性强度指纹 impulse_zero_ratio=0.9006 (pair0) 与 support peel zero_ratio 0.9003/0.9004/0.9024/0.9021/0.9003 均对应 changed≈9.8-10.0%, 精确落在 noise_impulse sev5 (amount=0.10) 而排除 sev4 (0.07 → zero_ratio≈0.93); (2) step2 estimated_severity=3 是工具启发式误判, 以 amount 表为准修正为 sev5; (3) noise_prior_sigma=0.0 是 90% 精确零残差导致的 wavelet 退化假象, 不能据此判 NO_NOISE; (4) R1 重跑 run_full_analysis (pair0) 与 R0 完全一致; 模拟 impulse:5 的 step3/step4 信号与 target 逐项吻合 (variance_ratio 1.3416 vs 1.3404, chroma_ratio 2.9665 vs 2.961, contrast_spread_ratio 1.2366 vs 1.2334, clipped_fraction 0.1070 vs 0.1067, mean_shift -2.6 vs -2.6, gm_ratio 3.221 vs 3.2144, spectral_slope_ratio 0.9558 vs 0.9547), 证明 SATURATION_strengthen 为 impulse 极端样本诱导的假阳性; (5) 跨族对照 noise_gaussian_RGB:2 在 pair0 为 WEAK (noise:sigma diff=183%)。按 SKILL 规则噪声步骤永不 LIKELY, 保持 UNCERTAIN。",
+    "steps": [
+      {
+        "function": "noise_impulse",
+        "severity": 5,
+        "verdict": "UNCERTAIN",
+        "signal_source": "zero_ratio/amount 指纹 + 5/5 support MATCH + 模拟签名全项一致"
+      }
+    ]
+  },
+  "support_verification": {
+    "pairs_checked": 5,
+    "method": "test_candidate.py --mode signal (pair0 带 --output-sim) + empty-pipeline peeled_noise_check zero_ratio",
+    "per_pair": {
+      "pair_0": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9004, "note": "full_analysis_R1 impulse_zero_ratio=0.9006 (<1.1/255 阈值)"},
+      "pair_1": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9004},
+      "pair_2": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9024},
+      "pair_3": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9021},
+      "pair_4": {"verify_signals": "MATCH", "peel_zero_ratio": 0.9003}
+    },
+    "result": "5/5 verify_signals MATCH (noise:sigma + noise:clean_residual); changed fraction 9.76-9.97% → amount≈0.10 → sev5 在全部 support 对一致; 无 compression/blur/附加 global 步骤"
+  },
+  "candidates_r1": [
+    {"pipeline": "noise_impulse:5", "outcome": "KEEP (5/5 MATCH)", "test_candidate_calls": 5},
+    {"pipeline": "noise_impulse:4", "outcome": "REJECT by amount 指纹 (changed 9.76-9.97% 远超 sev4 的 7%; verify_signals 对 impulse severity 不敏感, 未耗 test_candidate)", "test_candidate_calls": 0},
+    {"pipeline": "noise_gaussian_RGB:2", "outcome": "REJECT (WEAK, noise:sigma diff=183%; gaussian 会改变几乎所有像素, 与 zero_ratio=0.9006 矛盾)", "test_candidate_calls": 1}
+  ],
+  "reflection_file": "reflection.json",
+  "full_analysis_file": "full_analysis_R1.json",
+  "sim_signature_file": "full_analysis_R1_sim_imp5.json"
+}

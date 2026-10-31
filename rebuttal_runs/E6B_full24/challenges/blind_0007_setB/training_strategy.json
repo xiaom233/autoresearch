@@ -1,0 +1,35 @@
+{
+  "challenge_id": "blind_0007_setB",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "单步管线: noise_speckle:1 (UNCERTAIN, 指纹复现近确证: pair0/pair1 sigma 5.81/3.09, ivc 0.816/0.971, izr 0.200/0.261 全部复现)",
+    "compression ABSENT: block_boundary=0.9879 < 1.1 (Tier S 未触发), unique_G=256, dct_zero=0.08",
+    "blur ABSENT: spectral_slope -1.2573 vs clean -1.2579 (ratio 0.9995), gm_ratio 2.3814 由 speckle-only 仿真完整复现",
+    "global ABSENT: variance_ratio=1.0637 偏差被 speckle 仿真精确复现 (sim 1.0642), contrast_detected_raw=false → 非 Tier A contrast, 不启用 ColorPre/FiLM-GCM",
+    "anisotropy_ratio 未触发 (>1.7 需 motion): 无 motion blur 信号, 不用 OCAB",
+    "saturation_chroma_ratio=1.4604 为噪声假阳性: speckle sim 复现 1.4601, 不加组件",
+    "noise 步骤 UNCERTAIN: 按 §七 该步骤不加专项组件, 纯 Swin 兜底",
+    "simple_gate: exp39 默认常开, N(noise) 上 -0.01 dB 安全"
+  ],
+  "rationale": "finetune_strategy.md §七: 无 Tier S/A 信号 (block_boundary<1.1, variance_ratio 偏差由 speckle 仿真解释, 无 anisotropy/motion), 唯一退化步骤 noise 为 UNCERTAIN → 按 Tier C 兜底: 纯 Swin + SimpleGate + Direct, 不启用任何专项组件。§六 Step1: 单步纯局部噪声无梯度干扰, Direct 即可, True Ft 不推荐 (exp37/38 ≈ Direct)。full_analysis 建议的 DualBranch 被否决: 任务约束排除, 且 exp37 盲识别场景 0/24 胜。预测为噪声主导弱退化 (sigma=5.81, sev1), §九 提示纯 Swin 在预测严重错误时可能后期发散 → 评估取 best ckpt (best≠last 时)。VAL 使用预测管线 (noise_speckle:1), GT 仅最终评估。"
+}

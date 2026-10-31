@@ -1,0 +1,31 @@
+{
+  "challenge_id": "blind_0001_setA",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_poisson", 3], ["quantization_hist", 2]],
+  "previous_pipeline": [{"function": "noise_poisson", "severity": 5}],
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 5, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "title": "R2 re-check of R1 pipeline; signals re-derived from scratch, no new evidence",
+    "mode": "SIGNAL (sigma=10.5)",
+    "ci_pass_rate": "10/10 (pair0, R1)",
+    "support_psnr_r0": 20.63,
+    "support_psnr_r1": 30.82,
+    "rationale": "R2 重跑 run_full_analysis（pair0）所得 15 项信号与 R1 完全一致，无新信号可改判。为检验剩余唯一自由度（severity），用 test_candidate 对最近邻 noise_poisson:4 做边界复检：signal 模式 MATCH（noise:sigma 与 clean_residual 容差 <20% 无法区分 sev4/5），但 psnr 诊断指纹 unique_R/G/B diff=-10（sim 26 级 vs target 16 级）且裁剪指纹失配 21%/21%/22% → sev4 被离散不变量排除，sev5 保持。进一步把 sim(clean, poisson:5) 与 target 做逐信号比对：block_boundary 0.999 vs 1.001、unique=[16,16,16] 相同、dct_zero 0.0482 vs 0.048、sigma 10.38 vs 10.5、impulse_zero_ratio 0.1337 vs 0.1336、spatial_corr 0.0284 vs 0.0294、cross_ch 0.0152 vs 0.0153、ivc 0.9106 vs 0.9087、scaled_var_corr -0.6363 vs -0.6457、slope_ratio 0.9945 vs 0.9948、mean_shift -1.7 vs -1.7、clipped_fraction 0.3318 vs 0.3318、variance_ratio 1.0815 vs 1.0815、contrast_spread 1.0408 vs 1.0408、saturation_chroma_ratio 1.4856 vs 1.4856 —— 单步 poisson:5 即完整解释全部信号（含被标记为 noise-FP 的 saturation 与边界 variance_ratio），无需新增 global/blur/compression 步骤。5 对 support signal 复核 MATCH 5/5（每对 2✓/0✗）。无证据支持 CHANGE → NO_CHANGE（噪声步骤按协议永不 LIKELY，verdict=UNCERTAIN）。",
+    "key_evidence": [
+      "R2 full_analysis 与 R1 逐项一致：unique=[16,16,16], block_boundary=1.001, sigma=10.5, slope_ratio=0.9948, variance_ratio=1.0815, mean_shift=-1.7, clipped=0.3318",
+      "noise_poisson:4 边界复检：signal MATCH 但 unique diff=-10（26 级 vs target 16 级）+ clip 指纹失配 21/21/22% → severity 被离散级数唯一锁定为 5（c=15, 17k）",
+      "sim(clean, poisson:5) 的 15 项信号与 target 逐一相等（variance_ratio 1.0815、mean_shift -1.7、clipped 0.3318、saturation_chroma 1.4856 等），单步管线已完整解释所有原疑似 global 信号",
+      "5 对 support poisson:5 signal 验证 MATCH 5/5（2✓/0✗）",
+      "block_boundary=1.001 + dct_zero=0.048 排除 JPEG；spectral_slope_ratio=0.9948 + anisotropy=0 排除模糊"
+    ],
+    "support_signal_check": "noise_poisson:5: MATCH 5/5（每对 2✓/0✗: noise:sigma + noise:clean_residual）",
+    "alternatives_note": "留空：库内能产生 16 级均匀电平（级距 17=255/15，逐通道独立）的仅 noise_poisson:5；最近邻 sev4 已实测 26 级被排除，gaussian/speckle 无法产生离散 16 级电平。按 alternatives 质量要求不保存低质量候选。",
+    "residual_risk": "噪声 seed 失配使 PSNR 不构成判据；R1 support PSNR 30.82 dB 的剩余差距应为随机噪声不可约误差与模型容量所限，而非退化族/步骤误判。若后续仍需提升，可考虑训练侧（更充分预算），而非改判退化。"
+  }
+}

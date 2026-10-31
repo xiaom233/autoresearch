@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "ocab",
+    "window_size": 16,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 30
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "blur 步 (blur_motion sev3, order 1): residual_anisotropy=3.6124 > 1.7 (Tier A, 0% FP) + blur_subtype=blur_motion → OCAB 门控满足 (finetune_strategy.md §七 信号分层表 + 全组件启用条件表)",
+    "motion 子类型经确定性 PSNR 消融确认: joint motion:3=31.27 dB vs gaussian:3=24.50 / gaussian:4=24.70 / glass:4=24.53 (+6.6~6.8 dB cross-family); 严重度扫描 sev2/3/4/5 = 24.93/31.27/24.48/25.39 单一尖峰于 sev3; CI=9/10 (predicted_params.json evidence.psnr_scan / type_ablation; reflection.json iterations round2)",
+    "compression 步 (compression_jpeg sev3, order 2): block_boundary=2.1051 > 1.1 (Tier S, 0% FP) + dct_zero_ratio=0.8915 → JPEG 确认, 构成结构化局部; JPEG 无对应架构组件, 仅作为 FiLM-GCM 结构化条件之一且该条件未触发 (full_analysis.json step1_compression)",
+    "全局步: variance_ratio=0.9509 (接近 1), mean_shift=-0.0, contrast/saturation_detected_raw=false, NO_GLOBAL → 不启用 ColorPre/FiLM-GCM (full_analysis.json step4_global)",
+    "噪声: noise_prior_sigma=0.99 < 2 → NO_NOISE, 不触发任何噪声相关处理 (full_analysis.json step2_noise / predicted_params.json analysis.mode)",
+    "参数公平性: OCAB 采用 embed_dim=30 → ~467K 参数 (+2.9% vs Swin dim64 454K), 满足 ≤1.05× 基线限制; 避免 OCAB dim64 膨胀至 2.1M (4.7×) 导致对比无效 (finetune_strategy.md §五 参数公平性规则)"
+  ],
+  "rationale": "管线为两步纯局部退化 (motion sev3 → JPEG sev3), 无 contrast/全局退化, 采取 Direct 从头训练 (finetune_strategy.md §六 Step1: 纯局部允许 Direct; exp37/38 证明 2-epoch 预算下 True Ft ≈ Direct, 不加载 ckpt)。motion 方向性信号极强 (residual_anisotropy=3.61, 0%FP Tier A) 且经 PSNR 消融确认 (+6.8 dB over 最强跨族), 虽 verdict=UNCERTAIN (仅因 joint PSNR 31.27 落在 30-40 band), 按 §七 规则 Tier S/A 信号可覆盖 UNCERTAIN verdict → 启用 OCAB + window_size=16 匹配方向性结构, 并用 embed_dim=30 做参数对齐。SimpleGate 默认常开 (exp39: -32K, 8/9 退化安全)。FiLM-GCM/ColorPre 因无 contrast (variance_ratio≈1, NO_GLOBAL) 关闭; DualBranch/CSN/SCA/FPro/GDFN/FreqMod 按协议不使用; brightness 相关组件不适用。JPEG (Tier S) 已确认但无对应组件, 通过 OCAB 的空间注意力同时覆盖块状伪影的局部修复。"
+}

@@ -1,0 +1,35 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "单步纯局部退化: predicted_params.json pipeline=[blur_glass:2], per_step_verdict=UNCERTAIN, overall_verdict=UNCERTAIN (无 contrast/noise/compression 步骤) → Direct 训练, 无多步梯度干扰 (finetune_strategy.md §六 Step 1)",
+    "step3_blur: glass_score=0.504>0.25, gm_ratio=0.2986 (强梯度衰减), spectral_slope_ratio=1.094, mtf_roughness=0.9556, blur_pca_ratio=1.056 → blur_glass 子类型; 5/5 support 对 CI=10/10 + hf_lf_ratio_diff=0.0% 一致性支持该模糊族",
+    "FFT anisotropy_ratio=1.20 < 1.7 (Tier A 0%FP 门控未触发) → 排除 motion blur, 不启用 OCAB (§七 anisotropy>1.7 才启用; 且 OCAB 需 AR_EMBED_DIM=30 参数对齐)",
+    "step4_global verdict=NO_GLOBAL: contrast_from_variance=false, contrast_spread_ratio=0.9197 (≈1.0), variance_ratio=0.8688 但被归因于模糊导致的方差收缩而非 contrast, mean_shift=-0.5, saturation_chroma_ratio=0.9659, clipped_fraction=0.0 → 无 contrast Tier A 信号, 不启用 ColorPre / FiLM-GCM (FiLM-GCM 还需 motion/jpeg 结构化, 亦不满足)",
+    "step1_compression: block_boundary=0.9996 < 1.1 (Tier S 未触发), unique_G=212 > 200, dct_zero_ratio=0.507 → 无 JPEG/结构化伪影, 进一步排除 FiLM-GCM 的结构化前提",
+    "step2_noise: noise_prior_sigma=1.48 < 2; peeled extreme_pct=58.26% 为 SKILL 已知 blur 伪影 FP (residual_std=4.7 远小于 noise_gaussian_RGB sev1 sigma=12.75) → 无真实噪声, 不需要噪声相关处理",
+    "per-step verdict=UNCERTAIN (blur_glass 内置无种子随机 pixel shuffle, PSNR 理论上限<40dB) → 该步骤不启用组件, 走 §七 Tier C 安全兜底: 纯 Swin + Direct",
+    "SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全 (仅 S5 三退化 motion -0.86, 本挑战为单步 glass blur 不适用)",
+    "True Ft (AR_LOAD_CKPT) 在 1.5h/2-epoch 预算下 ≈ Direct (exp37 -0.04 dB, exp38 双重确认) → 不用 ckpt 微调"
+  ],
+  "rationale": "本挑战为单步 blur_glass(sev2) 纯局部模糊, 无 noise/compression/global。所有组件触发信号均未满足: anisotropy=1.20<1.7 (排除 OCAB/motion), 无 contrast (variance_ratio=0.869 为模糊方差收缩, contrast_from_variance=false, 排除 ColorPre/FiLM-GCM), 无 JPEG/motion 结构化 (FiLM-GCM 另一前提不满足)。blur_glass 为无种子随机 pixel shuffle 的确定性不可完全复现退化, per-step verdict=UNCERTAIN, 按 finetune_strategy.md §七 只有 Tier S/A 信号明确时才启用组件, 本例不满足 → 纯 Swin + SimpleGate + Direct 兜底。单步退化无梯度干扰, Direct 已足够; True Ft 与 Direct 持平故不加载预训练 ckpt。LR=5e-4, EPOCH=2, batch=16 保持与基线一致的公平预算。"
+}

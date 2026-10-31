@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted_params.json: single-step pipeline blur_gaussian sev4, per_step_verdict=UNCERTAIN (pair0 PSNR 37.02 dB; cross-pair 33.41-41.60 dB mean 37.4; alternatives lens:4 31.64 / gaussian:3 30.82)",
+    "full_analysis step3 blur: residual_anisotropy=3.1659 (>1.7), but reflection rounds 7-8 show a noise-free blur_gaussian:4 simulation reproduces anisotropy 3.25 => motion not supported; motion:5 kernel corr 0.492 < 0.8, spectral_slope diff 0.143; DT motion is a blur-content FP. OCAB gate (anisotropy>1.7 + motion) NOT satisfied",
+    "full_analysis step4 global: variance_ratio=0.5732, saturation_chroma_ratio=0.7952, mean_shift=-2.5; reflection final_decision shows blur-only sim reproduces variance_ratio 0.6049 and chroma 0.7936 => blur-induced FP, not contrast/saturation Tier A. FiLM-GCM/ColorPre gate NOT satisfied",
+    "full_analysis step2 noise: noise_prior_sigma=3.09 but peeled residual spatial_corr=0.9928 and noise-free blur sim reproduces sigma 3.09 => no real noise step",
+    "compression ruled out: block_boundary=1.001 (<1.1); adding JPEG:1 after blur moves bb by 73% (round 5 PARTIAL)",
+    "finetune_strategy.md §七: UNCERTAIN step verdict + no Tier S/A signal => pure Swin; SimpleGate default-on (exp39, -32K, 8/9 safe); contrast step null => Direct (no RandomCurric needed for single deterministic blur)"
+  ],
+  "rationale": "单一确定性 gaussian blur(sev4)，UNCERTAIN 且运动/全局/压缩/噪声信号均已被反射阶段证伪（各为 blur 诱发的 FP）。无 Tier S/A 门控触发：anisotropy=3.17 无 motion 支撑不加 OCAB；variance_ratio=0.573 为 blur 伪影不加 FiLM-GCM/ColorPre。按 §七 默认纯 Swin + SimpleGate + Direct，lr=5e-4，EPOCH=2。"
+}

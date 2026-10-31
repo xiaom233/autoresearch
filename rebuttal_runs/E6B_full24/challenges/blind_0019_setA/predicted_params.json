@@ -1,0 +1,72 @@
+{
+  "challenge_id": "blind_0019_setA",
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN",
+      "evidence": "gm_ratio 0.190 vs target 0.193; spectral_slope_ratio 1.393 vs 1.397; variance_ratio 0.228 vs 0.232; anisotropy 1.26 (<1.7, not motion); blur_lens:3 PSNR 28.36 < gaussian3 30.34. Severity 3 vs 4 ambiguous (g4 PSNR 30.72 but slope 1.649 vs target 1.397 -> over-blurred)"
+    },
+    {
+      "function": "saturate_weaken_HSV",
+      "severity": 5,
+      "verdict": "LIKELY",
+      "evidence": "chroma_ratio = 0.000 on all 5 pairs (S=0 -> grayscale); HSV S=0 -> gray=V=max explains mean_shift +38.6 (sim 39.2); YCrCb variant would give luma mean, far below observed"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 3,
+      "verdict": "LIKELY",
+      "evidence": "block_boundary 4.899 (>1.05, 0%FP signal); dct_zero_ratio 0.876; q12 sim bb 3.10/unique match vs q8 6.57 (too strong) and q18 2.23 (too weak); CI 7/10 at q12 vs 4/10 at q18"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 30.72,
+      "ci_pass": "8/10",
+      "function_family": "gaussian blur (severity +1)",
+      "note": "Highest raw PSNR, but signals over-blurred (gm 0.139 vs 0.193, slope 1.649 vs 1.397); kept as severity alternative"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": 30.52,
+      "ci_pass": "4/10",
+      "function_family": "jpeg (severity -1, q18)",
+      "note": "PSNR tied within noise; block_boundary 2.23 farther from target 4.90"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 3},
+        {"function": "saturate_weaken_HSV", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 28.36,
+      "ci_pass": "4/10",
+      "function_family": "lens blur (cross-family)",
+      "note": "Analyzer's initial LENS_BLUR verdict / glass_score flag; PSNR lower, ringing over-shoots extremes (impulse_pct errors 162-358%)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "7/10",
+    "mode": "PSNR",
+    "rationale": "Three deterministic steps, no noise. Deterministic-segment PSNR 30.34 dB (30-40 band -> UNCERTAIN per SKILL verdict rule) although all content-independent signals match: block_boundary JPEG 0%FP, chroma_ratio 0.000 (S=0), gm_ratio 0.190/0.193, spectral_slope_ratio 1.393/1.397, variance_ratio 0.228/0.232, mean_shift 39.2/38.6. Contrast weaken and brightness are absent (variance algebra: a c=0.6 contrast step would give var_ratio 0.14 << target 0.232; mean shift fully explained by HSV S=0). Noise judged absent (sigma_prior 1.98 boundary; Qwen gate unavailable -> skipped; peeled residual spatial_corr 0.95 indicates structured/JPEG artefact rather than random noise; adding noise_gaussian_RGB:2 reduced PSNR/CI). Blur subtype gaussian chosen over lens (28.36 dB) and glass; motion excluded by anisotropy. Residual RMSE 7.7 dB floor likely from the stochastic/support-image content, same pipeline scores 27.0-30.5 dB on all 5 pairs.",
+    "five_pair_validation": {
+      "pair0": {"psnr": 30.34, "ci_pass": "7/10"},
+      "pair1": {"psnr": 27.03, "ci_pass": "6/10", "note": "g1 25.77 / g2 26.62 also lower -> g3 still best"},
+      "pair2": {"psnr": 29.35, "ci_pass": "7/10"},
+      "pair3": {"psnr": 29.34, "ci_pass": "7/10"},
+      "pair4": {"psnr": 30.51, "ci_pass": "8/10"}
+    }
+  }
+}

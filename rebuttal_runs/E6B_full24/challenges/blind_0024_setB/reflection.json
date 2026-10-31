@@ -1,0 +1,1077 @@
+{
+  "challenge_id": "blind_0024_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=1.0026 (0% FP signal) -> no JPEG. unique_G=174(<200) attributed to global/quantization-like value mapping, not JPEG blocks",
+      "blur": "BLUR_UNLIKELY by DT: gm_ratio=0.7634 but spectral_slope_ratio=0.783 (<1.08), anisotropy=0 -> gm drop likely caused by contrast/gamma remapping, not convolution; blur to be tested only if deterministic global leaves residual texture",
+      "noise": "noise_prior_sigma=0.74 (<2) -> PSNR mode. BUT residual_intensity_corr=0.9646 (very high) + gamma_suspect=True -> residual is an intensity remap (gamma), not additive noise. chroma_ratio=3.1 suggests saturation boost amplification of clean-image chroma, not synthesized noise",
+      "global": "variance_ratio=0.6155, mean_shift=-18.1, clipped_fraction=0.2874, contrast_spread_ratio=0.5868, saturation_chroma_ratio=3.108. Visual: image strongly darker + more saturated (orange/red). Gamma-darkening can explain all: dark -> mean down, darks compressed -> variance down + clipping up, relative chroma amplified -> saturation look"
+    },
+    "mode": "PSNR (sigma=0.74)",
+    "suspected": [
+      "brightness_darken_gamma_RGB (residual_intensity_corr=0.96 gamma signature)",
+      "saturate_strengthen_HSV/YCrCb (chroma_ratio=3.1)",
+      "contrast_weaken_scale (variance_ratio=0.62)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary=1.0026)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false
+  },
+  "noise_6step_check": {
+    "method": "peeled_noise_check.py (strip contrast_weaken_scale:1,saturate_strengthen_HSV:2)",
+    "extreme_pct": 40.14,
+    "vm_slope": 1.0084,
+    "var_slope": 0.3558,
+    "spatial_corr": 0.9391,
+    "rgb_ratio": 1.1474,
+    "cross_ch_corr": 0.135,
+    "ch_stds": {
+      "R": 13.1,
+      "G": 13.7,
+      "B": 12.0
+    },
+    "noise_prior_sigma_peeled": 1.48,
+    "diagnosis": "extreme_pct 为已知假阳性(饱和把低通道压到0 + 模型残差), 按 SKILL 规则忽略; vm_slope≈1.0 提示稀疏脉冲类; 三通道 std 接近(R13.1/G13.7/B12.0) 且 rgb_ratio=1.15<1.4 → 非 YCrCb; wavelet sigma 0.74-1.48 很小 → 加性高斯被排除(在相同估计器下 noise_gaussian_RGB:1 模拟读数为 5.6, YCrCb:2 读数更高). 综合: 稀疏彩色脉冲(逐通道 s&p) 最符合: 稀疏离群点使鲁棒 sigma 估计保持低值, 但视觉/谱斜率显示存在颗粒"
+  },
+  "support_checks": [
+    {
+      "pair": 1,
+      "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+      "verdict": "WEAK",
+      "matched": [
+        "noise:clean_residual"
+      ],
+      "note": "noise:sigma 600% (模拟过噪), mean_shift 0.0167, var 70%"
+    },
+    {
+      "pair": 2,
+      "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+      "verdict": "WEAK",
+      "matched": [
+        "noise:clean_residual",
+        "global:mean_shift"
+      ],
+      "note": "noise:sigma 900% (模拟过噪), var 207%"
+    },
+    {
+      "pair": 3,
+      "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+      "verdict": "WEAK",
+      "matched": [
+        "noise:clean_residual"
+      ],
+      "note": "noise:sigma 600%, mean_shift 0.0084, var 82%"
+    },
+    {
+      "pair": 4,
+      "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+      "verdict": "WEAK",
+      "matched": [
+        "noise:clean_residual"
+      ],
+      "note": "noise:sigma 1150%, mean_shift 0.0135, var 57%"
+    }
+  ],
+  "support_consistency": "5 对一致信号: block_boundary≈1.0 无 JPEG(0%FP); mean_shift 全部强负(-18.1~-47.2); chroma_ratio 全部>1.4 (1.43~3.82); wavelet sigma 全部<2.2 且 ric 高(0.38~0.96) → 全局饱和度增强是共同退化; 均值为负可由饱和度把低通道截断至0解释. 4 对 support 复核同为 WEAK (残余为过噪), 指示噪声严重度应低于 <3",
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:3",
+        "thinking": "信号: residual_intensity_corr=0.9646 + gamma_suspect=True (残差随强度变化→gamma), mean_shift=-18.1, variance_ratio=0.6155, clipped_fraction=0.287 (暗端截断). 假设: RGB gamma 暗化 sev3 (gamma=2.1)"
+      },
+      "test_result": {
+        "psnr_rgb": 17.58,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:3",
+        "thinking": "信号: saturation_chroma_ratio=3.108 (色度约3倍), 视觉强橙红. 假设: HSV 饱和度增强 sev3 (scale=12, 色度放大) 单独作用"
+      },
+      "test_result": {
+        "psnr_rgb": 24.84,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:5",
+        "thinking": "信号: 视觉极端橙红+深色背景彩色斑点, S通道缩放可同时解释 mean_shift=-18 (小通道截断至0) 与 chroma_ratio=3.1. 若 sev3 (scale12) PSNR=24.84 提升有限, 试 sev5 (scale=64)"
+      },
+      "test_result": {
+        "psnr_rgb": 24.8,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:1,saturate_strengthen_HSV:3",
+        "thinking": "信号: 纯 saturate 收敛在 24.8dB 且 simulated zero_pixel 比 target 少 21.8% (76%) → target 更暗, 缺暗化步. mean_shift=-18.1 ≈ sev1 shift (-25.5) 量级. 假设: brightness_darken_shfit_RGB:1 + saturate_strengthen_HSV:3"
+      },
+      "test_result": {
+        "psnr_rgb": 22.61,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:1,saturate_strengthen_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:3",
+        "thinking": "信号: 视觉彩色斑点实为近阈值像素翻转(0/饱和色), clipped_fraction=0.287 暗端, residual_intensity_corr=0.9646. contrast_strengthen_stretch 以各通道均值为阈值做 c 次幂拉伸 (sev3 c=6) → 低于均值压至0、高于均值拉满, 天然产生彩色阈值噪声与强橙红面部"
+      },
+      "test_result": {
+        "psnr_rgb": 6.6,
+        "ci_pass": "1/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "severity 扫描: sev3/sev5 均收敛 24.8dB, 说明 sev3 以上 S 已饱和不可分辨; 试 sev2 (scale=6) 看是否为中等饱和"
+      },
+      "test_result": {
+        "psnr_rgb": 24.89,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:1",
+        "thinking": "severity 扫描延续: sev2-5 信号几乎一致(mean_shift~-24, var_ratio~0.68) 但 target 为 mean_shift=-18.1 → 试最小 sev1 (scale=3), 检查暗化是否减轻"
+      },
+      "test_result": {
+        "psnr_rgb": 21.72,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,saturate_strengthen_HSV:2",
+        "thinking": "信号: 饱和模拟无法解释 target 的 zero_crossing +0.17, 谱斜率更平(slope_ratio 0.783 vs 0.914), 背景彩色斑点; noise_prior sigma=0.74 提示轻微噪声. 物理顺序 noise→saturation. 假设 noise_gaussian_RGB:1 + saturate:2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=5560%)",
+          "global:variance_ratio (diff=28%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "contrast_weaken_scale:1,saturate_strengthen_HSV:2",
+        "thinking": "信号: target mean_shift=-18.1 比纯 saturate(-24) 亮 6 灰阶, variance_ratio=0.6155 比 sat2(0.683) 低 → 需一步轻度降对比(拉向灰度均值, 同时抬升暗背景). 假设 contrast_weaken_scale:1(0.75) 先于饱和"
+      },
+      "test_result": {
+        "psnr_rgb": 24.29,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_weaken_scale:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2,contrast_weaken_scale:1",
+        "thinking": "反向顺序: 先饱和再降对比. 饱和暗化至 -24 后, contrast_weaken(0.75) 拉向均值同时抬暗背景(黑背景→0.25×均值), 可能同时解释 mean_shift 变亮与 variance 降低"
+      },
+      "test_result": {
+        "psnr_rgb": 23.72,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:2",
+        "thinking": "信号: 面部/背景颗粒呈彩色, wavelet Y sigma 小(0.74) 而 chroma 结构显著; 验证 YCrCb 色度噪声(sev2) + 饱和(sev2) 组合是否解释彩色颗粒"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=13714%)",
+          "global:mean_shift (diff=0.0309)",
+          "global:variance_ratio (diff=72%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:1,saturate_strengthen_HSV:2",
+        "thinking": "信号: target 比纯饱和亮 6 灰阶 (mean_shift -18.1 vs -23.9), variance 更低, 谱更平. 假设亮度先抬升(gamma 0.8)再饱和, 抬升暗背景后可保留干净图色度纹理 → 彩色斑点"
+      },
+      "test_result": {
+        "psnr_rgb": 23.9,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:5",
+        "thinking": "信号: wavelet Y sigma 极小(0.74) 但彩色颗粒明显 + 谱更平; YCrCb 饱和度只放大 Cr/Cb(×16), Y 近似不变, RGB 转换截断可造成 mean_shift 与彩色噪声, 且不引入亮度噪声. 假设 sev5"
+      },
+      "test_result": {
+        "psnr_rgb": 12.49,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_YCrCb:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:1,saturate_strengthen_HSV:2",
+        "thinking": "信号: target unique 颜色数全面低于饱和模拟 (B: 185 vs 218), 说明存在值域压缩; gamma 暗化(1.4)既降均值又压缩色阶, 与饱和组合可解释更暗更窄的色域. 物理顺序 brightness→saturation"
+      },
+      "test_result": {
+        "psnr_rgb": 22.68,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,saturate_strengthen_HSV:2",
+        "thinking": "信号: target 谱斜率更平(-1.089 vs 模拟-1.27) + zero_crossing +0.17 → 高频颗粒; 但 wavelet Y sigma 0.74 排除大 σ 加性噪声. 乘性散斑在亮部产生颗粒、暗部几乎无影响, 且被饱和放大会呈现彩色颗粒. 物理顺序 noise→saturation"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "noise:sigma (diff=618%)",
+          "noise:structured_residual (FWHM=38.0px)",
+          "global:mean_shift (diff=0.0093)",
+          "global:variance_ratio (diff=44%)"
+        ],
+        "pipeline": "noise_speckle:1,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:3",
+        "thinking": "信号: target clip=0.287 远低于 HSV 饱和模拟(0.5) — target 暗部保留细节; YCrCb 饱和只放大 Cr/Cb 而 Y 不变, 可保持暗背景与色阶, 仅 RGB 转换截断造成轻度均值下移. 假设 sev3 (scale=5)"
+      },
+      "test_result": {
+        "psnr_rgb": 15.04,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_YCrCb:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,saturate_strengthen_HSV:2",
+        "thinking": "信号: brightgamma+sat2 的 mean(-18.9)/chroma(3.34) 已接近 target, 但 var(0.817) 与 clip(0.414) 偏高; 均匀 +25.5 抬升可提高暗部 V, 降低饱和时的零截断, 并保持加性常数不改变方差结构"
+      },
+      "test_result": {
+        "psnr_rgb": 22.99,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2,brightness_brighten_gamma_RGB:1",
+        "thinking": "反向顺序假设: 先饱和(保持 V) 再 gamma 提亮 → 暗背景被抬升成带色低亮度区域(解释 target 背景可见彩色颗粒与较高均值), 面部高光被 gamma 压缩(降低方差). target var=0.616 低于 sat2=0.683 支持此序"
+      },
+      "test_result": {
+        "psnr_rgb": 23.64,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2,brightness_brighten_gamma_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_impulse:2,saturate_strengthen_HSV:2",
+        "thinking": "关键观察: pair2 天空/雪面出现红绿蓝彩色孤立点, wavelet 亮度 sigma 却极小(0.74/1.85) → 稀疏脉冲特征(鲁棒估计忽略离群点). skimage s&p 对 3 通道逐通道独立施加 → 产生彩色单通道点. 假设 noise_impulse:2(3%) + saturate:2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=247%)",
+          "global:mean_shift (diff=0.0097)",
+          "global:variance_ratio (diff=68%)"
+        ],
+        "pipeline": "noise_impulse:2,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5,saturate_strengthen_HSV:2",
+        "thinking": "severity 扫描: impulse:2 模拟的彩色点远比 target 稀疏, 而 sigma 差异(247%)显著小于高斯噪声(5560%) → 类型方向正确, 提高密度. 假设 impulse sev5 (10%/通道)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=741%)",
+          "global:mean_shift (diff=0.0205)",
+          "global:variance_ratio (diff=179%)"
+        ],
+        "pipeline": "noise_impulse:5,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_impulse:2,saturate_strengthen_HSV:2",
+        "thinking": "PSNR 复核信号优胜候选(impulse 类型信号匹配: slopeR 0.783 与 target 完全一致, sigma 0.86 vs 0.74). 用 PSNR 模式量化 impulse:2+sat2 的整体误差"
+      },
+      "test_result": {
+        "psnr_rgb": 17.63,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:2,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+        "thinking": "support 复核 pair1: 最终候选 impulse:3+sat2. 检查信号一致性(target sigma=0.74 ric=0.91 mean=-36.6 chroma=1.43)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=600%)",
+          "global:mean_shift (diff=0.0167)",
+          "global:variance_ratio (diff=70%)"
+        ],
+        "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+        "thinking": "support 复核 pair2: 同一候选 impulse:3+sat2. 该图叠加色噪肉眼最明显(sigma=1.85)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=900%)",
+          "global:variance_ratio (diff=207%)"
+        ],
+        "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+        "thinking": "support 复核 pair3: 同一候选 impulse:3+sat2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=600%)",
+          "global:mean_shift (diff=0.0084)",
+          "global:variance_ratio (diff=82%)"
+        ],
+        "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+        "thinking": "support 复核 pair4: 同一候选 impulse:3+sat2 (最后一次测试, 预算用尽)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=1150%)",
+          "global:mean_shift (diff=0.0135)",
+          "global:variance_ratio (diff=57%)"
+        ],
+        "pipeline": "noise_impulse:3,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_HSV:1,saturate_strengthen_HSV:2",
+        "thinking": "R1信号重释A: residual_intensity_corr=0.9646+gamma_suspect=True (残差随强度变化→色调曲线); target mean_shift=-18.1 比 sat2 模拟 -23.9 亮 5.8 灰阶; variance_ratio 0.6155<sat2 0.683; clipped_fraction 0.2874 < sat2 模拟~0.5 → 存在抬升暗部的 gamma 步. HSV-V gamma(0.7) 只改 V 不改 S, 物理顺序 brightness(priority0)→saturation(priority2)"
+      },
+      "test_result": {
+        "psnr_rgb": 23.06,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_HSV:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "contrast_weaken_stretch:2,saturate_strengthen_HSV:2",
+        "thinking": "R1信号重释B: clipped_fraction=0.2874 显著低于 sat2 模拟(~0.5), variance_ratio=0.6155 < sat2 0.683, mean_shift=-18.1 比 sat2 -23.9 亮; contrast_weaken_stretch:2(scale0.9,以中灰为枢轴) 压缩动态范围→暗端抬升减少clip、方差降低、均值保持, 再 saturate:2 放大色度; 与 R0 试过的 contrast_weaken_scale(以均值为枢轴) 不同"
+      },
+      "test_result": {
+        "psnr_rgb": 11.35,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_weaken_stretch:2,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "thinking": "R1验证R0外推severity: R0 从未直接测过 impulse:1 (仅测 sev2/3 均过噪 sigma +247%~+1150%). 信号: peeled(sat2) residual std=13.3 且呈离散彩色斑点(非边缘结构), wavelet sigma=0.74-1.48(<2), 5对 support sigma 0.74-2.10 → 稀疏彩色脉冲且强度极低. x_distortion impulse 最小 sev1=1%/通道 是唯一足够弱的噪声函数. 物理顺序 noise→saturation. 目的: 检验 WEAK→PARTIAL/MATCH"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=124%)",
+          "global:mean_shift (diff=0.0184)",
+          "global:variance_ratio (diff=35%)"
+        ],
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "R1 参考复测: 固定确定性核心 sat2 以获取模拟输出做逐区域对照; R0 记录 PSNR 24.89/CI 5/10. 目的: 检查 sim 缺失的纹理是确定性映射差异还是随机噪声成分"
+      },
+      "test_result": {
+        "psnr_rgb": 24.89,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1,saturate_strengthen_HSV:2",
+        "thinking": "R1信号重释C: 逐区域对照发现 sat2 模拟背景纯黑而 target 背景有 5-15px 多色斑块、面部有细颗粒 → 缺失成分在暗区产生块状色度扰动. target unique_G=174<200 (SKILL: compression 0%FP 存在判据, R0 曾将其归因于饱和裁剪而忽略) + dct_zero_ratio=0.4151; 背景色块与 JPEG 色度量化块(4:2:0)被饱和放大一致; 暗平滑区 luma 块边界可低于 block_boundary 阈值(1.0026). 顺序: JPEG 存储后二次编辑饱和(priority2 随机序). 假设 jpeg:1(q25)→sat2"
+      },
+      "test_result": {
+        "psnr_rgb": 24.56,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "quantization_median:1,saturate_strengthen_HSV:2",
+        "thinking": "R1信号重释D: R0 忽略了 unique_G=174<200 的 compression 0%FP 判据. 逐区域对照: target 在 clean 纯黑背景处出现 5-15px 低频彩色斑块, 而确定性 sat2 模拟背景纯黑 → 缺失算子必须在暗平坦区注入逐通道微小偏移. per-channel median-cut 量化(20级)+其后饱和×6 会把量化在暗区的 |ΔR,G,B|~1-3 放大为彩色斑块; 量化在平坦区产生的低频调色板台阶与 target 斑块尺度一致; 量化也解释 mean 偏移变浅(-18.1 vs sat2 -23.9, 暗值上取整). 顺序: quantization(priority2)→saturation(priority2)"
+      },
+      "test_result": {
+        "psnr_rgb": 24.39,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "quantization_median:1,saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "thinking": "R1 5对support验证 (pair1): R0 仅用 impulse:3 在该对测过(WEAK, sigma +600%). impulse:1=最小可用强度(1%/通道), 是唯一 wavelet sigma 可保持低值的噪声. 目标: 比较 WEAK→PARTIAL/MATCH. 该对 target sigma=0.74 ric=0.91 mean=-36.6 chroma=1.43"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=200%)",
+          "global:mean_shift (diff=0.0067)",
+          "global:variance_ratio (diff=40%)"
+        ],
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 33,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "thinking": "R1 5对support验证 (pair2): 该对 R0 视检色噪最明显(target sigma=1.85), impulse:3 曾 WEAK sigma +900%. 检验最小强度 impulse:1 是否把 sigma 误差压到可接受 (WEAK→PARTIAL/MATCH)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=233%)",
+          "global:mean_shift (diff=0.0097)",
+          "global:variance_ratio (diff=137%)"
+        ],
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 34,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "thinking": "R1 5对support验证 (pair3): R0 impulse:3 WEAK sigma +600%, mean diff 0.0084. 检验 impulse:1 最小强度是否令 sigma/mean 误差落入 PARTIAL 范围"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "noise:sigma (diff=250%)",
+          "noise:structured_residual (FWHM=6.0px)",
+          "global:mean_shift (diff=0.0083)",
+          "global:variance_ratio (diff=44%)"
+        ],
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 35,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "thinking": "R1 5对support验证 (pair4): R0 impulse:3 WEAK sigma +1150%、mean diff 0.0135. 最后一对, 用于判断 impulse:1 是否在多数 support 上 WEAK→PARTIAL/MATCH"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=550%)",
+          "global:mean_shift (diff=0.0055)",
+          "global:variance_ratio (diff=29%)"
+        ],
+        "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 36,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "R1 确定性核心跨support验证 (pair1): sat2 为 R0 主确定性分量; pair0=24.89dB. 检查 5 对是否一致达到高 PSNR(>40 才可确认确定性完整)"
+      },
+      "test_result": {
+        "psnr_rgb": 27.64,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 37,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "R1 确定性核心跨support验证 (pair2): 检查 sat2 在色噪最明显的一对上的 PSNR 上限"
+      },
+      "test_result": {
+        "psnr_rgb": 19.32,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 38,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "R1 确定性核心跨support验证 (pair3): 检查 sat2 在 support3 上的 PSNR 上限"
+      },
+      "test_result": {
+        "psnr_rgb": 21.51,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 39,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "thinking": "R1 确定性核心跨support验证 (pair4): 最后一对, 汇总 sat2 在 5 对 support 上的 PSNR 一致性"
+      },
+      "test_result": {
+        "psnr_rgb": 22.63,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 27.64,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 36
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 24.89,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 24.89,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 29
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:3",
+      "psnr_rgb": 24.84,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:5",
+      "psnr_rgb": 24.8,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 24.56,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 30
+    },
+    {
+      "pipeline": "quantization_median:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 24.39,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 31
+    },
+    {
+      "pipeline": "contrast_weaken_scale:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 24.29,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 23.9,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2,contrast_weaken_scale:1",
+      "psnr_rgb": 23.72,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2,brightness_brighten_gamma_RGB:1",
+      "psnr_rgb": 23.64,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_HSV:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 23.06,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 26
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 22.99,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:1,saturate_strengthen_HSV:2",
+      "psnr_rgb": 22.68,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 22.63,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 39
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:1,saturate_strengthen_HSV:3",
+      "psnr_rgb": 22.61,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:1",
+      "psnr_rgb": 21.72,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 21.51,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 38
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:2",
+      "psnr_rgb": 19.32,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 37
+    },
+    {
+      "pipeline": "noise_impulse:2,saturate_strengthen_HSV:2",
+      "psnr_rgb": 17.63,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:3",
+      "psnr_rgb": 17.58,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "saturate_strengthen_YCrCb:3",
+      "psnr_rgb": 15.04,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "saturate_strengthen_YCrCb:5",
+      "psnr_rgb": 12.49,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "contrast_weaken_stretch:2,saturate_strengthen_HSV:2",
+      "psnr_rgb": 11.35,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 27
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:3",
+      "psnr_rgb": 6.6,
+      "ci_pass": "1/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_impulse",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "saturate_strengthen_HSV",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma 0.74-2.10, PSNR 对噪声不可靠)",
+    "rationale": "确定性核心 = saturate_strengthen_HSV: pair0 chroma_ratio=3.11 与 sev2 模拟 3.06 精确吻合; HSV 族胜于 YCrCb(15.04dB 差且 unique 色数崩); 5 对全部 chroma>1.4、mean 强负、无 JPEG(bb≈1.0, 0%FP). 但纯确定性管线 PSNR 应>40dB, 实测封顶 24.89dB(RMSE 14.5) → 存在随机成分; 视觉颗粒/谱斜率更平(0.783 vs 模拟0.914)/zero-crossing 更高(vs 饱和模拟 +0.17)指向稀疏彩色脉冲(skimage s&p 逐通道独立→彩色点, 鲁棒 sigma 估计保持低值0.74). impulse:2/3 复核均过噪(sigma 247%-1150%) → 取最低 sev1 (外推, 未经单测). 饱和度 sev2-5 输出几乎不可分辨(24.89/24.84/24.80), 按 PSNR 取 sev2.",
+    "verification_summary": {
+      "test_candidate_calls": 25,
+      "pair0_best_psnr": {
+        "pipeline": "saturate_strengthen_HSV:2",
+        "psnr": 24.89,
+        "ci": "5/10"
+      },
+      "pair0_best_ci": {
+        "pipeline": "contrast_weaken_scale:1,saturate_strengthen_HSV:2",
+        "psnr": 24.29,
+        "ci": "7/10"
+      },
+      "support_pairs_checked": 4,
+      "support_result": "4/4 WEAK (同一残余模式: 模拟噪声一偏大; mean_shift 2/4 直接匹配)"
+    }
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN, R0 support PSNR=21.36 dB",
+    "signal_reinterpretation": [
+      {
+        "signal": "unique_G_target=174 (<200, SKILL 0%FP 压缩存在判据) + block_boundary=1.0026 + dct_zero_ratio=0.4151",
+        "r0_handling": "R0 将 unique_G<200 归因于饱和裁剪/值域压缩, 未测 JPEG/量化",
+        "r1_check": "compression_jpeg:1(q25)+sat2 模拟出现明显 8x8 块状量化而 target 为 1-2px 细颗粒, PSNR=24.56 < sat2 单独 24.89; quantization_median:1+sat2 的 unique_R/G/B 全面偏离 (121/38/55) 且 PSNR=24.39 → JPEG/量化均排除; clean 自身 unique_G 仅 210, 该 0%FP 判据在此内容上不适用"
+      },
+      {
+        "signal": "clipped_fraction=0.2874 / variance_ratio=0.6155 / mean_shift=-18.1 (vs sat2 模拟 mean=-23.9, var=0.683, 暗端裁剪更高)",
+        "r1_check": "target 更亮、方差更低、暗端裁剪更少; 测试 brightness_brighten_gamma_HSV:1+sat2 (PSNR 23.06) 与 contrast_weaken_stretch:2+sat2 (11.35) 均劣于 sat2 → 该修正方向排除"
+      },
+      {
+        "signal": "residual_intensity_corr=0.9646 + gamma_suspect=True",
+        "r1_check": "RGB gamma 已在 R0 否决 (gamma:1+sat2=22.68); HSV-V gamma 提亮本次否决 (23.06) → 色调曲线假设排除"
+      },
+      {
+        "signal": "逐区域对照 (pair0): target 在 clean 纯黑背景处出现 5-15px 低频彩色斑块, 面部 1-2px 细颗粒; sat2 模拟对应区域纯黑/平滑; 残差图呈彩色边缘条纹+致密斑点",
+        "r1_check": "纯黑区彩色斑块无法由饱和 (黑保持黑) 或亮度/对比/量化 (均匀变灰) 产生, 只能来自随机注入; 但 wavelet sigma 仅 0.74-1.48 (<2) 排除所有高斯/色度噪声 (库内最小 sigma≥12.75 灰阶), 唯一相容者为库内最弱 impulse:1 → 直接做 5 对 support 信号验证"
+      },
+      {
+        "signal": "peeled_noise_check (剥离 sat2): residual std=13.3, extreme_pct=45.0% (裁剪 FP), vm_slope=-0.474, var_slope=4.01, spatial_corr=0.946, rgb_ratio=1.24, wavelet sigma=1.48",
+        "r1_check": "与 R0 剥离 contrast1+sat2 时 §B 结果不一致 (var_slope 0.36, vm_slope 1.01) → 残差被饱和裁剪污染, 噪声类型不可靠; 依 SKILL 判据分离, 噪声候选只按 signal 验证判定"
+      }
+    ],
+    "candidates_ranked": [
+      {"rank": 1, "id": "C", "pipeline": "compression_jpeg:1,saturate_strengthen_HSV:2", "pair0_psnr": 24.56, "ci": "4/10", "verdict": "REJECT", "reason": "块状模拟与 target 细颗粒不符, PSNR 未超基线"},
+      {"rank": 2, "id": "D", "pipeline": "quantization_median:1,saturate_strengthen_HSV:2", "pair0_psnr": 24.39, "ci": "2/10", "verdict": "REJECT", "reason": "unique 通道计数全面偏离, PSNR 未超基线"},
+      {"rank": 3, "id": "A", "pipeline": "brightness_brighten_gamma_HSV:1,saturate_strengthen_HSV:2", "pair0_psnr": 23.06, "ci": "3/10", "verdict": "REJECT"},
+      {"rank": 4, "id": "E", "pipeline": "noise_impulse:1,saturate_strengthen_HSV:2", "pair0_psnr": null, "ci": null, "verdict": "REJECT", "reason": "5 对 support signal: 0/5 PARTIAL/MATCH (WEAK×4 + MISMATCH×1)"},
+      {"rank": 5, "id": "B", "pipeline": "contrast_weaken_stretch:2,saturate_strengthen_HSV:2", "pair0_psnr": 11.35, "ci": "5/10", "verdict": "REJECT"}
+    ],
+    "support_validation": {
+      "deterministic_core_sat2_psnr": {"pair0": 24.89, "pair1": 27.64, "pair2": 19.32, "pair3": 21.51, "pair4": 22.63, "mean": 23.20, "max": 27.64, "over_40db": false},
+      "impulse1_sat2_signal": [
+        {"pair": 0, "verdict": "WEAK", "matched": ["noise:clean_residual"], "sigma_diff_pct": 124, "mean_shift_diff": 0.0184, "variance_ratio_diff_pct": 35},
+        {"pair": 1, "verdict": "WEAK", "matched": ["noise:clean_residual"], "sigma_diff_pct": 200, "mean_shift_diff": 0.0067, "variance_ratio_diff_pct": 40},
+        {"pair": 2, "verdict": "WEAK", "matched": ["noise:clean_residual"], "sigma_diff_pct": 233, "mean_shift_diff": 0.0097, "variance_ratio_diff_pct": 137},
+        {"pair": 3, "verdict": "MISMATCH", "matched": [], "sigma_diff_pct": 250, "structured_residual_fwhm_px": 6.0, "mean_shift_diff": 0.0083, "variance_ratio_diff_pct": 44},
+        {"pair": 4, "verdict": "WEAK", "matched": ["noise:clean_residual"], "sigma_diff_pct": 550, "mean_shift_diff": 0.0055, "variance_ratio_diff_pct": 29}
+      ],
+      "r0_reference_impulse3_signal": "4/4 WEAK (pair1-4); pair0 impulse:2 WEAK (sigma +247%)",
+      "weak_to_partial_match_count": "0/5",
+      "note": "impulse:1 相比 R0 的 impulse:3 明显减小 sigma 误差 (600-1150% → 124-550%) 与 mean_shift 误差, 方向正确, 但 sev1 已是 x_distortion 最小强度, 无更弱档位可用"
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "noise_impulse", "severity": 1},
+        {"function": "saturate_strengthen_HSV", "severity": 2}
+      ],
+      "reason": "无候选满足 CHANGE 条件: (1) 确定性新候选 pair0 最高 24.56 dB < sat2 单独 24.89 dB, 无一 >40 dB 或 +2 dB; sat2 单独 5 对均值 23.20 dB (max 27.64, 全部<40), 较 R0 support PSNR 21.36 仅 +1.84 dB (<+2). (2) 含噪候选 impulse:1+sat2 在 5 对上 0/5 WEAK→PARTIAL/MATCH, 且 sev1 为库内最小强度, 无法再降. 维持 R0 管线, 残余不确定性交由训练 PSNR 仲裁."
+    }
+  }
+}

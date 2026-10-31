@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "管线唯一退化 = saturate_weaken_HSV sev4 (predicted_params, LIKELY): chroma_ratio=0.2027 精确等于 scale=0.2, 5 对 support 全部 0.201-0.204; pair0 仿真 PSNR=inf, 4 对 support 复核 PSNR=inf, CI 10/10",
+    "anisotropy=0 (full_analysis step3), 无 motion 信号 -> §七 anisotropy>1.7 未触发, 禁用 OCAB",
+    "block_boundary=1.0042 (<1.1), unique_G=256, spectral_slope_ratio=0.9999 -> 无 JPEG/结构化局部, FiLM-GCM 的 'variance_ratio + 结构化局部' 条件不成立",
+    "variance_ratio=0.9178 但 contrast_from_variance=false; 5 对 support variance_ratio=0.918/0.863/1.173/0.665/1.096 跨 1.0 双向波动 -> 系 HSV 饱和削弱+裁剪的副产物, 非 contrast 缩放 -> ColorPre 的 Tier A 'variance_ratio≠1.0' 门控不满足; 且 §七 明确 saturation 场景禁用 ColorPre (有害)",
+    "saturation/HSV 信号属 Tier C -> §七/§二 '不加组件', 纯 Swin + Direct; exp10 中该场景组件收益 ≈0 (FiLM +0.20 仅安全无益)",
+    "SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全 (非 S5 三退化场景), L2 +0.78",
+    "无 contrast 步骤 -> Direct (非 RandomCurric); True Ft (AR_LOAD_CKPT) 在 2-epoch 预算下 ≈ Direct 且不推荐 (exp37/38)",
+    "full_analysis.json 的 recommended_architecture 建议 DualBranch 为脚本通用启发式, 与 finetune_strategy.md §七 '盲识别场景 DualBranch 0/24 胜' 冲突, 不采纳"
+  ],
+  "rationale": "单步确定性全局退化 saturate_weaken_HSV:4, 已被 5 对 support 像素级 PSNR=inf 确认, 属 §七 Tier C (saturation/HSV) 场景: 不启用任何颜色/结构组件, 默认纯 Swin + SimpleGate + Direct。variance_ratio 波动由饱和削弱与裁剪耦合产生, 不构成 contrast Tier A 证据; 无 motion (anisotropy=0) 与结构化局部 (block_boundary=1.004), OCAB/FiLM-GCM/ColorPre 均不满足门控。全局退化按 §二 用 Direct; LR=5e-4, EPOCH=2, batch=16 与基线一致。"
+}

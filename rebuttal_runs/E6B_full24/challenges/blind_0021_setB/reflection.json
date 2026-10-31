@@ -1,0 +1,544 @@
+{
+  "challenge_id": "blind_0021_setB",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=7.744 (>1.1, 0%FP) + unique_G_target=214 (ratio 0.892) + dct_zero_ratio=0.930 -> JPEG compression confirmed",
+      "blur": "gm_ratio=0.200 (very low) + spectral_slope_ratio=1.184 + glass_score=1.567>0.25 + residual_anisotropy=1.559<1.7 -> glass blur candidate (gaussian as alternative)",
+      "noise": "noise_prior_sigma=0.62 (<2) -> likely NO_NOISE; spatial_corr=0.527 likely blur/JPEG residual structure",
+      "global": "variance_ratio=0.955, contrast_spread_ratio=1.016, saturation_ratio=0.955 -> NO_GLOBAL; mean_shift=24.0 raw flagged brightness_from_jpeg=true (low confidence, will test)",
+      "qwen_gate": {
+        "available": false
+      }
+    },
+    "mode": "PSNR (sigma=0.62)"
+  },
+  "noise_6step_check": {
+    "note": "两次 peeled 检查: (a) 早期估计管线 glass:5+jpeg:4 剥离后 residual std=8.5 (含未建模 brightness 的 24 偏移); (b) 最终精确管线 blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4 剥离后 residual std=0.0 (全 5 对 PSNR=inf), §B 数值退化 (zero_ratio=1.0 即残差全零导致的假 IMPULSE)。",
+    "extreme_pct": 0.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": 0.0,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": 0.0,
+    "noise_prior_sigma": 0.99,
+    "diagnosis": "NO_NOISE。sigma_prior=0.62(<2); 初剥离 residual std=8.5 但空间结构强 (spatial_corr=0.962, cross_ch=0.661) 为确定性失配; 精确管线剥离后残差恒等于 0, 且 PSNR=inf 在 5 对上完全复现, 证明不含任何随机噪声步骤。早期 §B IMPULSE(1.28%) 为 JPEG/blur 伪影假阳性 (SKILL 已知失败模式)。"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "thinking": "run_full_analysis: block_boundary=7.744(0%FP)->JPEG; gm_ratio=0.200,glass_score=1.567>0.25,anisotropy=1.559<1.7->glass blur; sigma=0.62<2->PSNR mode. Physical order blur->JPEG."
+      },
+      "test_result": {
+        "psnr_rgb": 19.8,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:5,compression_jpeg:4",
+        "thinking": "R1 residual: target.mean-clean.mean=+24.0 levels, variance_ratio=0.955 additive-like -> brightness_brighten_shfit_RGB sev1 (+25.5), priority0 = before blur. Keep glass:5(glass_score=1.567) + jpeg:4(block_boundary=7.744)."
+      },
+      "test_result": {
+        "psnr_rgb": 29.7,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "thinking": "Round2 cross-family: R2 glass PSNR=29.70 CI=9/10 but glass shuffle is nondeterministic (error floor). Test gaussian:5 as deterministic alternative to test whether blur subtype is gaussian (DT rule default when glass FP)."
+      },
+      "test_result": {
+        "psnr_rgb": 31.41,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:5",
+        "thinking": "Round3: JPEG severity scan. R1 target block_boundary=7.744; R2 jpeg:4 matched bb within 8-12%. Test jpeg:5 (stronger) with deterministic gaussian:5 to isolate JPEG severity."
+      },
+      "test_result": {
+        "psnr_rgb": 25.78,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:3",
+        "thinking": "R4 jpeg:5 worse (25.78/bb diff 24%) than jpeg:4 (31.41/bb diff 12%) -> scan downward jpeg:3 to bracket optimum."
+      },
+      "test_result": {
+        "psnr_rgb": 29.08,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Severity scan (mandatory): gaussian:5+jpeg:4 PSNR=31.41; test gaussian:4 (sigma=4) to check whether stronger-than-target blur is the residual source (hf_lf matched 0%, but gm_ratio target 0.200)."
+      },
+      "test_result": {
+        "psnr_rgb": 33.87,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:3,compression_jpeg:4",
+        "thinking": "Severity scan continues: gaussian4(33.87 CI9/10)>gaussian5(31.41), monotone trend -> test gaussian:3 (sigma=3) with jpeg:4."
+      },
+      "test_result": {
+        "psnr_rgb": 47.18,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Order test (generator allows brightness priority0 B->L->J or priority2 L->B->J / L->J->B). Deterministic exact-match candidate found (47.18dB, CI10/10). Test L->B->J ordering to see if PSNR rises (exact order)."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support pair1 validation of exact-match pipeline (pair0 PSNR=inf)."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support pair2 validation of exact-match pipeline (pair0/1 PSNR=inf)."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support pair3 validation of exact-match pipeline (pair0/1/2 PSNR=inf)."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Support pair4 validation of exact-match pipeline (pair0/1/2/3 PSNR=inf)."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1 pair0 复验: block_boundary=7.744(0%FP)->jpeg:4; gm_ratio=0.2004+spectral_slope_ratio=1.1844->blur 存在, glass_score=1.567 FP (blur_glass_noise_floor=25.3 由 JPEG 伪影抬高), anisotropy=1.559<1.7 排除 motion -> gaussian:3 (R0 扫描 47.18/inf); mean_shift=+24.0+variance_ratio=0.955 加性->brightness_shfit:1; sigma=0.62<2 无噪声"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1 pair1 复验 (R0 同一管线 pair0 复现 inf): 跨图一致性检验, 不改参数; 信号来源同 pair0 (bb=7.744, gm_ratio=0.200, mean_shift=+24.0)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1 pair2 复验 (pair0/1 均 inf): 跨图一致性; 信号来源 pair0 (bb=7.744 0%FP, gm_ratio=0.200, mean_shift=+24.0 加性, sigma=0.62 无噪声)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1 pair3 复验 (pair0/1/2 均 inf): 跨图一致性; 信号来源 pair0 (bb=7.744 0%FP, gm_ratio=0.200, mean_shift=+24.0 加性, sigma=0.62 无噪声)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1 pair4 复验 (pair0-3 均 inf): 跨图一致性; 信号来源 pair0 (bb=7.744 0%FP, gm_ratio=0.200, mean_shift=+24.0 加性, sigma=0.62 无噪声)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:3,compression_jpeg:4",
+      "psnr_rgb": 47.18,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 33.87,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": 31.41,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_glass:5,compression_jpeg:4",
+      "psnr_rgb": 29.7,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:3",
+      "psnr_rgb": 29.08,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_gaussian:5,compression_jpeg:5",
+      "psnr_rgb": 25.78,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4",
+      "psnr_rgb": 19.8,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=LIKELY 但 support PSNR=22.71 < 35",
+    "mode": "PSNR (sigma=0.62 < 2, 无噪声)",
+    "fresh_analysis": "run_full_analysis_R1.json (pair0 重跑): 与 R0 数值逐项一致 — block_boundary=7.7444, gm_ratio=0.2004, spectral_slope_ratio=1.1844, residual_anisotropy=1.5591, glass_score=1.5667, sigma=0.62, mean_shift=24.0, variance_ratio=0.955",
+    "signal_reinterpretation": [
+      {
+        "signal": "block_boundary=7.7444 + dct_zero_ratio=0.9304 + unique_G_ratio=0.8917",
+        "r0_read": "JPEG 存在, severity 4",
+        "r1_read": "确认; 5/5 对复验 PSNR=inf -> jpeg:4 精确正确",
+        "change": false
+      },
+      {
+        "signal": "glass_score=1.5667 (>0.25) vs residual_anisotropy=1.5591 (<1.7) + gm_ratio=0.2004 + blur_glass_noise_floor=25.3",
+        "r0_read": "DT 报 glass, PSNR severity 扫描纠正为 gaussian:3",
+        "r1_read": "glass_score 为假阳性: glass 校准 FP=723-898, noise_floor=25.3 表明高频残留由 JPEG 块伪影抬高; anisotropy<1.7 排除 motion; 确定性 gaussian:3 在 5/5 对精确复现 -> gaussian:3 确定, 不改",
+        "change": false
+      },
+      {
+        "signal": "mean_shift=+24.0 + variance_ratio=0.955 + contrast_spread_ratio=1.0162 + clipped_fraction=0.0103",
+        "r0_read": "加性 brightness_brighten_shfit_RGB:1 (global 分析标 NO_GLOBAL 且 brightness_from_jpeg=true, 被 PSNR 推翻)",
+        "r1_read": "确认加性亮度平移 (~+25.5 级), 非 contrast (方差近似不变) 亦非 gamma; 5/5 对精确复现 -> 不改",
+        "change": false
+      },
+      {
+        "signal": "noise_prior_sigma=0.62 + spatial_corr=0.527 + cross_channel_corr=0.5553 + residual_intensity_corr=-0.1869 (gamma_suspect=true)",
+        "r0_read": "NO_NOISE; §B 结构为确定性残余",
+        "r1_read": "sigma<2 且精确管线剥离后残差恒 0 -> NO_NOISE 确认; spatial_corr/ric/gamma_suspect 均为 JPEG+blur 中段残余假象, 无需 gamma 步骤",
+        "change": false
+      },
+      {
+        "signal": "顺序: blur->brightness->jpeg (inf) vs brightness->blur->jpeg (47.18)",
+        "r0_read": "blur 先于 brightness",
+        "r1_read": "5/5 对 inf 复现, 顺序确定",
+        "change": false
+      }
+    ],
+    "candidates": [
+      {"rank": 1, "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4", "validation": "5/5 对 PSNR=inf, CI=10/10 (全部 CI diff=0)", "verdict": "ACCEPT"}
+    ],
+    "new_candidates_tested": 0,
+    "support_validation": {
+      "pair0": {"psnr_rgb": "inf", "ci": "10/10"},
+      "pair1": {"psnr_rgb": "inf", "ci": "10/10"},
+      "pair2": {"psnr_rgb": "inf", "ci": "10/10"},
+      "pair3": {"psnr_rgb": "inf", "ci": "10/10"},
+      "pair4": {"psnr_rgb": "inf", "ci": "10/10"}
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "LIKELY"},
+        {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+      ],
+      "overall_verdict": "LIKELY",
+      "rationale": "仿真达到像素级精确复现 (5/5 inf) 即上界; 无新候选可改进; support PSNR=22.71 为训练预算/容量限制, 非盲识别误差"
+    }
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_gaussian",
+        "severity": 3,
+        "verdict": "LIKELY",
+        "evidence": "PSNR=inf (exact); hf_lf diff 0%, zero_crossing 0%, gm_ratio target 0.200"
+      },
+      {
+        "function": "brightness_brighten_shfit_RGB",
+        "severity": 1,
+        "verdict": "LIKELY",
+        "evidence": "target.mean-clean.mean=+24.0 级, variance_ratio=0.955 (加性), PSNR=inf exact"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 4,
+        "verdict": "LIKELY",
+        "evidence": "block_boundary=7.744 (0%FP), unique_G ratio 0.892; bb/unique CI diffs 0% at exact pipeline"
+      }
+    ],
+    "alternatives": [],
+    "overall_verdict": "LIKELY",
+    "rationale": "逐层剥离+信号驱动: block_boundary=7.744 确认 JPEG; 强制 severity 扫描 (gaussian 5->4->3: 31.41->33.87->47.18 dB) 纠正 blur DT 的 glass 假阳性 (glass_score=1.567 FP, real=gaussian:3); 未被 global 分析采纳的 mean_shift=+24.0 经加性/方差判断补入 brightness_brighten_shfit_RGB:1; 物理顺序约束 (blur->brightness->JPEG) 下 PSNR=inf。5/5 对 support 全部 PSNR=inf, CI=10/10, 像素级完全复现。无噪声 (sigma=0.62, 精确管线残差=0)。",
+    "support_pairs": {
+      "pair0": {
+        "psnr_rgb": "inf",
+        "ci": "10/10"
+      },
+      "pair1": {
+        "psnr_rgb": "inf",
+        "ci": "10/10"
+      },
+      "pair2": {
+        "psnr_rgb": "inf",
+        "ci": "10/10"
+      },
+      "pair3": {
+        "psnr_rgb": "inf",
+        "ci": "10/10"
+      },
+      "pair4": {
+        "psnr_rgb": "inf",
+        "ci": "10/10"
+      }
+    }
+  }
+}

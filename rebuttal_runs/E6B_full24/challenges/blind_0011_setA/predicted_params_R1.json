@@ -1,0 +1,112 @@
+{
+  "challenge_id": "blind_0011_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_gaussian",
+      4
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 5
+        }
+      ],
+      "psnr": 33.32,
+      "stats": {
+        "ci_pass_rate": "10/10",
+        "pair": "pair0"
+      },
+      "function_family": "blur_gaussian",
+      "note": "R1 new severity scan: PSNR 33.32 dB, below gaussian:4 by 3.7 dB; same-family severity +1 backup"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_lens",
+          "severity": 4
+        }
+      ],
+      "psnr": 31.64,
+      "stats": {
+        "ci_pass_rate": "8/10",
+        "pair": "pair0"
+      },
+      "function_family": "blur_lens",
+      "note": "cross-family backup; gaussian/lens MTF nearly indistinguishable"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 3
+        }
+      ],
+      "psnr": 30.82,
+      "stats": {
+        "ci_pass_rate": "8/10",
+        "pair": "pair0"
+      },
+      "function_family": "blur_gaussian",
+      "note": "severity -1 backup"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "10/10 (pair0, gaussian:4)",
+    "mode": "PSNR + SIGNAL",
+    "rationale": "R1 signal re-analysis on pair0 reproduced R0 signals exactly (block_boundary=1.001, unique_G=197, dct_zero=0.823, gm_ratio=0.0973, spectral_slope_ratio=1.6437, anisotropy=3.1659, glass_score=0.0748, variance_ratio=0.5732, contrast_spread=0.8333, mean_shift=-2.5, clipped=0.0143). Determinism insight: gaussian/lens/jpeg/quantization/global in x_distortion are deterministic, so a bit-exact GT function+severity would reproduce the support pair at ~inf dB; gaussian:4 gives 37.02/41.60/39.41/33.41/35.65 dB (mean 37.42) -> GT is not bit-exactly gaussian:4, it is the best available discrete approximation. R1 filled R0's mandatory severity scans: motion:4=20.69 dB, motion:3=20.19 dB (motion family sev3/4/5 all ~20 dB), lens:3=25.13 dB, gaussian:5=33.32 dB; none beats gaussian:4 by any margin. Blur signals MATCH 5/5 pairs (spectral_slope + Wiener kernel). R0's noise rejection rested on a post-blur additive-noise bound that does not apply to the generator's noise->blur order (sigma_k=4 attenuates pre-blur white noise ~14x); the re-checked peeled residual std across pairs is 3.0/2.0/2.6/4.9/3.2 (2.5x variation, content-dependent, with content-dependent negative bias -1..-4 DN; 3x3 spatial_corr 0.984-0.998), which matches content-dependent kernel mismatch rather than a stationary pre-blur noise field of constant sigma; peeled noise_prior sigma on pairs1-4 is 0.99-1.48 (<2). Quantization excluded (target unique_G=197 vs ~20-24 levels expected); JPEG excluded (bb=1.001, JPEG:1 after blur moves bb 73%); global excluded (smallest severities cost >10 dB; chroma/variance reproduced by blur-only sim). No candidate reached >40 dB or +2 dB over the R0 baseline => NO_CHANGE.",
+    "per_step_verdicts": [
+      {
+        "function": "blur_gaussian",
+        "severity": 4,
+        "verdict": "UNCERTAIN",
+        "evidence": "PSNR 37.02 dB pair0, cross-pair 33.41-41.60 (mean 37.42), CI 8-10/10; signal MATCH 5/5 pairs; nearest alternatives gaussian:5 33.32, lens:4 31.64, gaussian:3 30.82"
+      }
+    ],
+    "r1_evidence": {
+      "signal_mode_cross_pair": {
+        "pair0": "MATCH (R0)",
+        "pair1": "MATCH",
+        "pair2": "MATCH",
+        "pair3": "MATCH",
+        "pair4": "MATCH"
+      },
+      "peeled_residual_blur4": {
+        "residual_std": [
+          3.0,
+          2.0,
+          2.6,
+          4.9,
+          3.2
+        ],
+        "spatial_corr_3x3": [
+          0.9928,
+          0.9836,
+          0.9943,
+          0.9983,
+          0.9967
+        ],
+        "noise_prior_sigma_pairs1_4": [
+          1.24,
+          1.48,
+          0.99,
+          1.24
+        ],
+        "note": "smooth residuals, std varies 2.5x across supports -> content-dependent kernel mismatch; not a stationary pre-blur noise field"
+      }
+    }
+  }
+}

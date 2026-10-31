@@ -1,0 +1,79 @@
+{
+  "challenge_id": "blind_0017_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_gaussian", 3], ["contrast_weaken_scale", 1], ["compression_jpeg", 3]],
+  "r1_pipeline": [["blur_gaussian", 3], ["contrast_weaken_scale", 1], ["compression_jpeg", 3]],
+  "support_psnr_r0": 21.94,
+  "candidates_tested": [
+    {
+      "id": "C0",
+      "pipeline": "blur_gaussian:3,contrast_weaken_scale:1,compression_jpeg:3",
+      "role": "R0 复现 + sim 信号诊断 (signal mode)",
+      "result": "WEAK (3✓/2✗): matched blur:spectral_slope, blur:wiener_kernel, global:mean_shift; mismatched compression:block_boundary (22%), global:variance_ratio (65%)",
+      "sim_signals": {"gm_ratio": 0.1649, "variance_ratio": 0.4755, "block_boundary": 2.416, "unique_G": 221, "spectral_slope_ratio": 1.2576}
+    },
+    {
+      "id": "C1",
+      "pipeline": "blur_gaussian:3,compression_jpeg:4",
+      "support_psnr": {"pair0": 26.39, "pair1": 27.35, "pair2": 26.47, "pair3": 27.75, "pair4": 28.18},
+      "support_psnr_mean": 27.23,
+      "delta_vs_r0_db": {"pair0": 1.33, "pair1": 1.28, "pair2": 1.01, "pair3": 1.80, "pair4": 0.12},
+      "delta_mean_db": 1.11,
+      "ci_pass": {"pair0": "7/10", "pair1": "7/10", "pair2": "7/10", "pair3": "7/10", "pair4": "8/10"},
+      "sim_signals_pair0": {"gm_ratio": 0.2194, "variance_ratio": 0.8311, "block_boundary": 2.538, "unique_G": 256, "spectral_slope_ratio": 1.2569, "contrast_spread_ratio": 0.9732, "saturation_chroma_ratio": 0.9809, "clipped_fraction": 0.0416}
+    },
+    {
+      "id": "C2",
+      "pipeline": "blur_gaussian:3,compression_jpeg:5",
+      "support_psnr": {"pair0": 24.87},
+      "sim_signals_pair0": {"block_boundary": 3.3695, "variance_ratio": 0.8277, "unique_G": 255},
+      "note": "block_boundary 略超 target (3.370 vs 3.100)，但 PSNR 明显劣于 jpeg4"
+    },
+    {
+      "id": "C3",
+      "pipeline": "blur_gaussian:3,compression_jpeg:3",
+      "support_psnr": {"pair0": 26.21},
+      "note": "jpeg3 无 contrast 时仍略逊于 jpeg4"
+    },
+    {
+      "id": "C4",
+      "pipeline": "blur_lens:3,compression_jpeg:4",
+      "support_psnr": {"pair0": 24.76},
+      "note": "同尺度跨族 lens 明确落败，gaussian 族确认"
+    }
+  ],
+  "test_candidate_calls": 9,
+  "test_candidate_breakdown": {
+    "C0_signal_diagnostic_p0": 1,
+    "C1_pair0_to_pair4": 5,
+    "C2_pair0": 1,
+    "C3_pair0": 1,
+    "C4_pair0": 1
+  },
+  "best_validation": {
+    "candidate": "blur_gaussian:3,compression_jpeg:4",
+    "pair_psnr": {"pair0": 26.39, "pair1": 27.35, "pair2": 26.47, "pair3": 27.75, "pair4": 28.18},
+    "mean_psnr": 27.23,
+    "baseline_r0_pair_psnr": {"pair0": 25.06, "pair1": 26.07, "pair2": 25.46, "pair3": 25.95, "pair4": 28.06},
+    "baseline_r0_mean_psnr": 26.12,
+    "mean_gain_db": 1.11,
+    "max_pair_gain_db": 1.80,
+    "pairs_improved": "5/5",
+    "threshold": ">40 dB 或相对上一轮 +2 dB",
+    "threshold_met": false
+  },
+  "signal_sources": [
+    "block_boundary: target=3.1003 vs R0-sim=2.4163 (diff 22%); jpeg sev4 sim=2.538, sev5 sim=3.3695 → JPEG 存在于 sev4-5 区间，PSNR 选 sev4",
+    "variance_ratio: target=0.683 vs R0-sim=0.4755 (diff 65%, 过度) vs 无 contrast sim=0.8311 (偏高 47%) → R0 的 contrast_weaken_scale:1 (c=0.75) 过度；target 等效全局缩放 s≈0.91 不可由库内 global 表达",
+    "unique_G (compression/quantization 0%FP 信号): target=255, clean=256, R0-sim=221, 无 contrast sim=256 → R0 的 contrast 步骤是误加的最强反证",
+    "gm_ratio: target=0.2169 vs R0-sim=0.1649 vs 无 contrast sim=0.2194 → contrast 压低梯度；blur_gaussian:3 正确",
+    "spectral_slope_ratio: target=1.248 vs C1-sim=1.2569 (Δ=0.009) vs R0-sim=1.2576 → blur_gaussian:3 确认",
+    "noise: 无噪声仿真的 noise_prior_sigma 与 target 同为 1.73 → sigma 完全来自 blur/JPEG 结构残差，NO_NOISE (与 R0 一致)",
+    "blur subtype: residual_anisotropy=1.138 (<1.7, 排除 motion); glass_score=1.043 远超 glass 校准带 0.19-0.41 且无噪声仿真同样 0.88-1.26 → JPEG 块效应伪影；跨族 PSNR lens3 24.76 < gaussian3 26.39",
+    "mean_shift: target=-2.5, R0-sim=-2.5, 无 contrast sim=0.0 → target 的轻微均值偏移与 contrast 相关，但其幅度与 variance_ratio 矛盾，单一库内函数无法同时解释",
+    "saturation_chroma_ratio: target=0.9036 vs C1-sim=0.9809 → target 色度再低约 8%，库内 saturate_weaken 最小 sev1 (S×0.6-0.7) 过强，不可表达",
+    "clipped_fraction: target=0.0013 vs C1-sim=0.0416 → target 高光被压回，与 variance_ratio 同源，无温和高光压缩可用"
+  ],
+  "reason": "R0 的 contrast_weaken_scale:1 在信号上过度且不可表达 target 的轻度全局压缩 (unique_G 221 vs target 255; variance_ratio 0.475 vs target 0.683)。移除 contrast 后 blur_gaussian:3+compression_jpeg:4 在 5/5 对 support 上一致优于 R0，但平均仅 +1.11 dB (最大单对 +1.80 dB)，未达 +2 dB 门槛，也远未达 40 dB，按 R1 协议判 NO_CHANGE。残留 target 信号 (vr=0.683, mean=-2.5, chroma=0.904, 无 clip) 对应等效全局缩放 s≈0.91，x_distortion 库最温和的 contrast_weaken_scale:1 即为 c=0.75，无法复现，故可表达管线已接近上限。C1 记录为首选备选，供训练 PSNR 仲裁。"
+}

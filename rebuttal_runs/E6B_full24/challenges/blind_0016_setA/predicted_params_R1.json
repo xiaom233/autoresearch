@@ -1,0 +1,55 @@
+{
+  "challenge_id": "blind_0016_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_motion", 3], ["compression_jpeg", 2]],
+  "pipeline": [
+    {"function": "blur_motion", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_motion", "severity": 4}, {"function": "compression_jpeg", "severity": 2}],
+      "psnr_r1_pooled_mean_10": 25.97,
+      "psnr_baseline_pooled_mean_10": 25.21,
+      "delta_db": 0.76,
+      "ci_pass": "9.0/10",
+      "stats": {"gm_ratio_sim": 0.231, "gm_ratio_target": 0.2626, "spectral_slope_ratio_sim": 1.28, "spectral_slope_ratio_target": 1.195},
+      "function_family": "blur_motion",
+      "note": "R1 tested twice on 5 pairs; +0.76 dB < +2 dB gate, CI identical, signal calibration over-blurs -> rejected"
+    },
+    {
+      "pipeline": [{"function": "blur_motion", "severity": 5}, {"function": "compression_jpeg", "severity": 2}],
+      "psnr_rgb": 27.47,
+      "ci_pass": "7/10",
+      "function_family": "blur_motion",
+      "note": "R0 single-sample PSNR inflated by random motion-kernel direction; CI 7/10 worse; not re-tested in R1 (budget)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "mode": "PSNR",
+    "ci_pass_rate": "9-10/10 (R0 5/5 pairs); R1 baseline 7-10/10",
+    "r0_pipeline": "blur_motion:3,compression_jpeg:2",
+    "r1_decision": "keep pipeline unchanged",
+    "signal_sources": [
+      "block_boundary=2.1245 (0%FP) + dct_zero_ratio=0.851 -> JPEG severity 2 (5-pair bb error 0-5%)",
+      "PCA=3.582>2.5 (0%FP) + gm_ratio=0.2626 + spectral_slope_ratio=1.195 -> blur_motion",
+      "gm_ratio target 0.2626 between motion:3 sims 0.268/0.293 and motion:4 sim 0.231; slope_ratio target 1.195 vs motion:3 1.226/1.171 -> severity 3",
+      "variance_ratio=0.8182 reproduced by no-global sim 0.798 (2.4% gap, within 8% tol) + mean_shift -0.4 -> no global",
+      "noise_prior sigma=1.11 (<2) + noiseless sim reproduces residual_intensity_corr -0.435 vs -0.4405 -> no noise"
+    ],
+    "support_validation": {
+      "baseline_motion3_jpeg2_r1_5pairs": [28.11, 22.1, 22.07, 24.22, 24.13],
+      "motion4_jpeg2_rep1_5pairs": [24.88, 29.67, 29.6, 29.11, 23.57],
+      "motion4_jpeg2_rep2_5pairs": [21.15, 19.13, 21.92, 29.93, 30.72],
+      "baseline_pooled_mean_10": 25.21,
+      "motion4_pooled_mean_10": 25.97,
+      "delta_db": 0.76,
+      "change_gate_db": 2.0,
+      "note": "Motion kernel direction randomized per call; identical-pipeline repeats differ up to 2.8-4.7 dB. Pooled 10-sample comparison shows no reproducible severity-4 advantage."
+    },
+    "rationale": "R1 signal re-interpretation found no ignored/misread signal; FFT anisotropy=1.7012 is boundary but corroborated by PCA=3.582 and R0 CI (motion 10/10 vs alternatives 6-8/10). Severity 4 tested twice on all 5 support pairs: +0.76 dB < +2 dB gate with identical CI, while gm/slope calibration favors severity 3. Keep R0 pipeline."
+  }
+}

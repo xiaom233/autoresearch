@@ -1,0 +1,54 @@
+{
+  "challenge_id": "blind_0017_setB",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "compression_jpeg", "severity": 5}
+      ],
+      "psnr": 26.32,
+      "ci_pass": "5/10",
+      "stats": {"note": "pair0 verify_signals: spectral_slope + wiener_kernel 双 MATCH (<0.08 / >0.85); block_boundary 偏差 38%"},
+      "function_family": "glass+jpeg"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 26.82,
+      "ci_pass": "7/10",
+      "stats": {"note": "pair0 PSNR 最高的确定性跨族对照; dct_zero_ratio 0.9659 vs target 0.9629; 未达确定性 >30dB 预期"},
+      "function_family": "gaussian+jpeg"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "saturate_weaken_HSV", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 25.53,
+      "ci_pass": "7/10",
+      "stats": {"note": "全局指纹统计最匹配: impulse_pct_zero 偏差 1% (无去饱和时 403%), 但 PSNR -0.78dB; 供训练 PSNR 仲裁"},
+      "function_family": "glass+saturation+jpeg"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "6/10 (pair0); 7/10 (pairs 1-4)",
+    "mode": "PSNR (noise_prior sigma=0.62 < 2, NO_NOISE; Qwen 门控未触发, 无 API 调用)",
+    "rationale": "JPEG sev4 LIKELY: block_boundary=9.127 (0%FP 强信号) + dct_zero_ratio=0.9629; glass5+jpeg4 在 5 对上 block_boundary 偏差 6%/2%/0%/3%/4% 全部 <8% 阈值, 而 jpeg5 过冲 (+38%)。Blur glass sev5 UNCERTAIN: 5 对目标均见像素打乱式马赛克纹理, glass_score=1.62; 所有确定性模糊族 (gaussian3/5, lens4, motion4, quantization_median1 + jpeg) PSNR 均停滞在 25.2-26.8dB, 无一达到确定性退化应有 >30dB, 与随机 glass blur 的 PSNR 上限一致; glass4+jpeg5 信号层 slope+wiener 双 MATCH, 但 block_boundary 偏差 38% 且 gm_ratio 0.146 (target 0.182), 保留为 alternative。全局: 检测到一致全局指纹 (pair0/pair1 mean_shift +8.3/+6.8, variance_ratio 0.764/0.709, chroma 0.896/0.817, clipped≈0), 但 6 个候选 global 函数 (saturate_weaken_HSV:1, contrast_weaken_scale:1, contrast_weaken_stretch:1, brightness_brighten_gamma_RGB:1, brightness_brighten_shfit_HSV:1, quantization_median:1) 全部使 PSNR 下降 (0.8-10.6dB), 无匹配幅度 → 不进入主管线; saturate_weaken_HSV:1 作为 alternative。终止: 24/25 测试预算, 3 轮探索, PSNR 平台 + 信号冲突 → UNCERTAIN, 训练 PSNR 仲裁。",
+    "validation_pairs": [
+      {"pair": 0, "psnr_rgb": 26.31, "ci_pass": "6/10"},
+      {"pair": 1, "psnr_rgb": 24.51, "ci_pass": "7/10"},
+      {"pair": 2, "psnr_rgb": 25.34, "ci_pass": "7/10"},
+      {"pair": 3, "psnr_rgb": 24.80, "ci_pass": "7/10"},
+      {"pair": 4, "psnr_rgb": 24.59, "ci_pass": "7/10"}
+    ]
+  }
+}

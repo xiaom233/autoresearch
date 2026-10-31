@@ -1,0 +1,242 @@
+{
+  "challenge_id": "blind_0008_setA",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=0.999 (<1.05), unique_G_target=244 (ratio 1.03), dct_zero_ratio=0.1765 -> JPEG/quantization unlikely",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.099 (>1, gradients not reduced), spectral_slope_ratio=0.967 (<1.08), FFT anisotropy=0, pca=0.0 -> no strong blur signal",
+      "noise": "noise_prior sigma=0.0; step2 raw-residual verdict GAUSSIAN_YCrCb (cross_channel_corr=0.527) is suspect because raw residual is dominated by global tone change (spatial_corr=0.98). Peeled check required.",
+      "global": "BRIGHTNESS_brighten (mean_shift=17.1/255, variance_ratio=0.9736, spread_ratio=1.0073, clipped_fraction~0.0003); SATURATION_weaken raw (chroma_ratio=0.2042) but may be partially inflated by brightness"
+    },
+    "mode": "PSNR (sigma=0.0 < 2)",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "sigma<2 -> NO_NOISE branch per SKILL Step 0.5; API unavailable anyway"
+    },
+    "suspected": [
+      "brightness brighten (shift or gamma family)",
+      "saturation weaken"
+    ],
+    "ruled_out": [
+      "JPEG (block_boundary 0.999, unique_G 244)",
+      "strong blur (gm_ratio 1.099, spectral_slope_ratio 0.967)",
+      "contrast change (variance_ratio 0.974, spread_ratio 1.007)"
+    ]
+  },
+  "noise_6step_check": {
+    "note": "raw residual 被全局色调变化污染; 剥离 saturate_weaken_HSV:4 后 residual std=0.0, 逐像素为零, 属于精确复现, 非噪声",
+    "raw_residual_signals": {
+      "noise_prior_sigma": 0.0,
+      "impulse_zero_ratio": 0.3539,
+      "spatial_corr": 0.9807,
+      "cross_channel_corr": 0.5272,
+      "residual_intensity_corr": 0.0592
+    },
+    "peeled_pipeline": "saturate_weaken_HSV:4",
+    "peeled_residual_std": 0.0,
+    "peeled_6step": {
+      "extreme_pct": 100.0,
+      "vm_slope": 0.0,
+      "var_slope": 0.0,
+      "spatial_corr": null,
+      "rgb_ratio": 0.0,
+      "cross_ch_corr": null
+    },
+    "extreme_pct_artifact": "peeled residual 恒为 0, zero_ratio=1.0 → extreme_pct 的 0/0 伪影 (SKILL reflection_trigger: extreme_pct>50% + sigma<5 应忽略 IMPULSE)",
+    "diagnosis": "NO_NOISE: sigma=0.0 (<2), peeled residual std=0.0; IMPULSE 判定为伪迹"
+  },
+  "support_verification": {
+    "pair0": {"image_id": "0131", "psnr_rgb": "inf", "ci_pass": "10/10"},
+    "pair1": {"image_id": "0798", "psnr_rgb": "inf", "ci_pass": "10/10"},
+    "pair2": {"image_id": "0273", "psnr_rgb": "inf", "ci_pass": "10/10"},
+    "pair3": {"image_id": "0524", "psnr_rgb": "inf", "ci_pass": "10/10"},
+    "pair4": {"image_id": "0466", "psnr_rgb": "inf", "ci_pass": "10/10"},
+    "note": "5/5 对均逐像素精确匹配 saturate_weaken_HSV:4"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:1,saturate_weaken_HSV:5",
+        "thinking": "信号来源: mean_shift=17.1 + variance_ratio=0.974(不变) -> 加性亮度偏移假设; chroma_ratio=0.204 -> saturate_weaken 假设。HSV shift + HSV sat 均为全局确定性, sigma=0 -> PSNR 可用。测试 sev: brightness est=1, sat est=5"
+      },
+      "test_result": {
+        "psnr_rgb": 18.63,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:1,saturate_weaken_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:1",
+        "thinking": "对照测试: 去掉 saturate, 只保留 brightness shift HSV sev1。目的: 量化亮度项单独贡献, 判断 18.63dB 的误差主要来自 sat sev=5 过强还是 brightness 变体错误。信号: mean_shift=17.1, variance_ratio=0.974"
+      },
+      "test_result": {
+        "psnr_rgb": 20.33,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "对照测试: 只保留 saturate_weaken_HSV sev4。信号: saturation_chroma_ratio=0.2042 精确对应 HSV c=0.2 (sev4)。目的: 判断 desaturation 是否为被低估的主导退化, 并锁定饱和度函数族"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "支持集复核 pair1: 主分析 pair0 已 PSNR=inf 精确匹配 saturate_weaken_HSV:4; 验证同场景管线在 support pair1 上是否一致"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "支持集复核 pair2: 主分析 pair0 已 PSNR=inf 精确匹配 saturate_weaken_HSV:4; 验证同场景管线在 support pair2 上是否一致"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "支持集复核 pair3: 主分析 pair0 已 PSNR=inf 精确匹配 saturate_weaken_HSV:4; 验证同场景管线在 support pair3 上是否一致"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "支持集复核 pair4: 主分析 pair0 已 PSNR=inf 精确匹配 saturate_weaken_HSV:4; 验证同场景管线在 support pair4 上是否一致"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:1",
+      "psnr_rgb": 20.33,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:1,saturate_weaken_HSV:5",
+      "psnr_rgb": 18.63,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "saturate_weaken_HSV",
+        "severity": 4,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "rationale": "单步确定性全局退化。saturate_weaken_HSV:4 (c=0.2) 在 pair0 上 PSNR=inf (逐像素精确匹配, CI 10/10), 并在 support pair1-4 上全部 PSNR=inf。信号对应: saturation_chroma_ratio=0.2042 精确等于 c=0.2; mean_shift=17.1 是去饱和抬高 RGB 均值后的副产物而非 brightness (brightness 假设仅 20.33dB); variance_ratio=0.974 与 S 缩放一致; block_boundary=0.999、unique_G=244、sigma=0.0 排除 JPEG/量化/噪声; gm_ratio=1.099、slope_ratio=0.967 排除模糊。剥离后 residual std=0.0 进一步确认无噪声。",
+    "alternatives": [],
+    "alternatives_note": "PSNR=inf, gap=inf, 无跨族候选可接近; 按 SKILL 规则不保留低质量 alternatives"
+  }
+}

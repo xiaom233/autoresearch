@@ -1,0 +1,35 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": true,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "full_analysis_R2 step4: variance_ratio=0.1184 (≠1.0, Tier A), contrast_from_variance=true, contrast_detected_raw=true, contrast_spread_ratio=0.3757, mean_shift=0.0518, saturation_chroma_ratio=0.5281 → contrast 存在性由 Tier A 硬信号支撑 → 启用 ColorPre (§七: variance_ratio≠1.0 Tier A → ColorPre, 预期 +0.62~; exp38 contrast_scale +0.62, L2 contrast+noise +0.81; Step0 stretch 中难度可选 ColorPre)",
+    "R2 predicted_params_R2: verdict=LIKELY/Tier 1; 5 对 support 仿真 PSNR = 34.97/36.78/38.28/40.74/43.51 dB (mean 38.86, 较 R1 37.42 +1.44, 每对 +0.96~+1.53), CI 8/10-10/10, pair0 verify_signals MATCH 4/4 (blur:spectral_slope, blur:wiener_kernel, global:mean_shift, global:variance_ratio), R1 的唯一失配 (spectral_slope diff=0.126 WEAK) 已消除 → 识别置信度极高, 满足 ColorPre 使用前提",
+    "Blur 步骤: glass_score=0.2854>0.25 + mtf_roughness=2.6964 + blur_density=0.7455 → glass 族; severity 强制 ±1 扫描 (pair0): glass:2=31.89 / glass:3=35.24 (R1 control) / glass:4=36.78 (选定) / glass:5=35.67 → sev4 为单调峰, 且 signal 由 WEAK 转 MATCH 4/4",
+    "FiLM-GCM 不启用: STRATEGY_INSTRUCTIONS/§七 门控要求 contrast + 结构化局部 (motion/jpeg) 的 Tier A variance_ratio; 本管线 blur=blur_glass (wiener kernel 匹配 glass, motion corr=0.268 实测排除), block_boundary=0.9899<1.1 无 JPEG (unique_G=105 由 stretch:4 量化解释, 模拟与目标差 1-2) → 结构化门控不满足, use_gcm=false",
+    "OCAB 不启用: residual_anisotropy=1.7602>1.7 但 motion 已被 wiener corr=0.268 排除 (glass >0.85), anisotropy 来自 glass 残差非运动方向性; 且管线含 contrast, exp9 L2 Swin 28.70 vs OCAB 18.32; OCAB 另需 embed_dim=30 参数对齐 → attention_type=swin (dim=64, ws=8)",
+    "训练策略 Direct: 管线含 contrast_weaken_stretch → §六 Step1 含 contrast 保守选 Direct (stretch 的 RandomCurric 未测试; exp38 contrast 仅 -0.15, Direct 最安全); 无 motion sev≥3 的 Curric 前提",
+    "SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全 (L2 contrast+noise +0.78), 本管线 contrast+glass blur 不属 S5 三 motion 风险场景",
+    "噪声维持排除 (R2 peeled with glass:4+stretch:4): residual_std=3.7 (R1 4.4), spatial_corr=0.9883 结构化, extreme_pct=58.89% 属 sigma<5 已知假阳性, noise_prior sigma=4.45 为 blur 下界; R1 已证 noise_gaussian_RGB:1 sigma 偏差 124% → NO_NOISE, 无噪声步骤",
+    "lr=5e-4 (协议默认, 避免 GCM/发散风险), epoch_budget=2 与基线公平一致, batch_size=16"
+  ],
+  "rationale": "R2 盲识别为 LIKELY/Tier 1 (blur_glass:4 → contrast_weaken_stretch:4; 5 对 support 34.97-43.51 dB, mean 38.86 vs R1 37.42 +1.44 dB; CI 8-10/10; pair0 signal MATCH 4/4), 相对 R1 仅 severity 修正 (glass:3→4), 类型置信度极高。contrast 存在性由 Tier A 硬信号 variance_ratio=0.1184 + contrast_detected_raw=true + spread_ratio=0.3757 支撑, 且 stretch:4 经双端扫描确认为峰 (stretch:3=30.97 欠压缩, stretch:5=31.2 过压缩), 按 §七 门控启用 ColorPre (+0.8K, contrast/stretch 场景预期正收益; 无独立 saturation 步, 不触 ColorPre 禁用场景)。FiLM-GCM 因缺少结构化局部 (motion 被 wiener 0.268 排除, block_boundary=0.9899<1.1 无 JPEG) 不满足门控; OCAB 虽 anisotropy=1.76>1.7 但对应 motion 已被排除且 contrast 场景 OCAB 远劣于 Swin, 另需 dim=30 参数对齐 → 保持 Swin dim=64/ws=8。训练策略 Direct (含 contrast 保守), SimpleGate 常开, lr=5e-4, EPOCH_BUDGET=2, batch=16。架构与 R0/R1 完全相同 (Swin+SimpleGate+ColorPre+Direct), 使 R2-R1 的 PSNR 差异可归因于 severity 预测修正 (glass:3→4) 而非架构变化。"
+}

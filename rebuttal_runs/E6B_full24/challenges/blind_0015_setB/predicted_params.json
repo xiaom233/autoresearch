@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0015_setB",
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 2},
+    {"function": "brightness_darken_shfit_RGB", "severity": 3}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 2},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "psnr": 36.63,
+      "stats": {"ci_pass_rate": "9/10", "pair1_psnr": 20.03, "pair2_psnr": 30.1},
+      "function_family": "blur_lens (MTF-indistinguishable from gaussian; better CI, PSNR within 0.17 dB)"
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "psnr": 34.62,
+      "stats": {"ci_pass_rate": "8/10"},
+      "function_family": "brightness_only (no blur; worst-case fallback)"
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_darken_shfit_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 2}
+      ],
+      "psnr": 36.74,
+      "stats": {"ci_pass_rate": "8/10"},
+      "function_family": "order_swap (brightness before blur; 0.06 dB lower)"
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_darken_shfit_RGB", "severity": 2}
+      ],
+      "psnr": 27.68,
+      "stats": {"ci_pass_rate": "7/10"},
+      "function_family": "brightness_severity_lower"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "8/10",
+    "mode": "psnr",
+    "rationale": "pair0 signals: mean_shift=-36.3, variance_ratio=0.657, clipped_fraction=0.494, block_boundary=0.994, noise_prior_sigma=0.74. brightness_darken_shfit_RGB:3 reproduces target mean_shift (-36.0 vs -36.3; additive shift attenuated by 49% zero-clipping), variance_ratio (0.664 vs 0.657), zero-clipping (diff 0.15pp) and unique_RGB (diff 0) exactly; HSV variants (25.2/27.0dB), sev2 (27.68dB) and sev4 (26.23dB) rejected. Mild blur recovered from residual gm_ratio/spectral slope: gaussian:2 adds +2.18dB over brightness-only (34.62->36.80), peak vs sev1 36.50/sev3 36.18. Excluded: JPEG (block_boundary 0.994<1.05; adding JPEG drops to 34.2-35.5dB), noise (sigma 0.74; peeled extreme_pct=75.5% is the documented >50%+sigma<5 false positive), contrast (weaken sev1 -> 18.46dB on pair1), saturation (chroma_ratio=1.053). Pair0 final PSNR 36.80dB is deterministic but in the 30-40dB band -> UNCERTAIN per verdict rules. Cross-pair verification (same pipeline): pair0 36.80/8-10, pair1 19.96/5-10, pair2 30.07/9-10, pair3 28.34/8-10, pair4 25.65/8-10. All five pairs independently flag BRIGHTNESS_darken_sev3 and brightness tone fit generalizes; pair1 (dense line-art) is a content-sensitive outlier where lens:2 scores marginally better (20.03, CI 9/10). Blur kernel/severity remain ambiguous -> overall UNCERTAIN, training PSNR to arbitrate.",
+    "per_pair_psnr": {
+      "pair0": 36.8,
+      "pair1": 19.96,
+      "pair2": 30.07,
+      "pair3": 28.34,
+      "pair4": 25.65
+    },
+    "candidate_tests": 25,
+    "qwen_gate": "skipped (API unavailable; sigma<2 no gate)"
+  }
+}

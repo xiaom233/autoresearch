@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted pipeline: blur_gaussian:3 (UNCERTAIN), saturate_weaken_HSV:5 (LIKELY), compression_jpeg:3 (LIKELY); overall UNCERTAIN, CI 7/10, PSNR 30.34",
+    "full_analysis step3: residual_anisotropy=1.257 < 1.7 -> no motion blur, OCAB gate not met (finetune_strategy.md §七: anisotropy>1.7 才启用 OCAB)",
+    "full_analysis step4: variance_ratio=0.232 but reflection variance algebra (R4/R5) shows no contrast step fits (needs c>=0.94 while gm_ratio 0.193 requires blur); value is explained by saturate_weaken_HSV S=0 (saturation_chroma_ratio=0.000) + gaussian blur -> no contrast Tier A, so FiLM-GCM (contrast+structured) and ColorPre not triggered",
+    "finetune_strategy.md §七 ColorPre 禁用场景: saturation (有害 -0.34); pipeline's global step is saturation, not contrast",
+    "full_analysis step1: block_boundary=4.899 (Tier S, 0% FP) + dct_zero_ratio=0.876 confirms JPEG; per §七 Tier S JPEG has no dedicated component gate -> plain Swin",
+    "SimpleGate default-on per exp39 (-32K, 8/9 safe, L2 +0.78); contains no global contrast triple that resembles S5 mismatch",
+    "saturation global degradation best practice = Direct + pure Swin (§二 exp38); Direct safest for multi-step blend of global saturation + blur + jpeg (RandomCurric untested on saturation)"
+  ],
+  "rationale": "3-step mixed pipeline (gaussian blur UNCERTAIN + saturation S=0 LIKELY + JPEG LIKELY) with no contrast step and no motion (anisotropy 1.257<1.7). No Tier S/A component gate fires: OCAB needs motion, FiLM-GCM/ColorPre need contrast, ColorPre is harmful on saturation. Per finetune_strategy.md §七 default and §二 saturation best practice (Direct + pure Swin), train Direct from scratch with Swin ws=8 dim=64, SimpleGate on, lr=5e-4, 2 epochs."
+}

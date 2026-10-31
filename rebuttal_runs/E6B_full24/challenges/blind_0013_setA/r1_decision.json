@@ -1,0 +1,31 @@
+{
+  "challenge_id": "blind_0013_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_speckle", 3],
+    ["compression_jpeg", 2]
+  ],
+  "r1_pipeline": [
+    ["noise_speckle", 3],
+    ["compression_jpeg", 2]
+  ],
+  "support_psnr_r0": 27.78,
+  "candidates_tested": [
+    {"pipeline": "noise_speckle:3,compression_jpeg:2", "purpose": "R1 baseline re-test (pair0) + 5-pair validation", "result": "MATCH 3/3 on all 5 support pairs (rounds 17,19,20,21,22); pair0 full-profile 12/12 statistics match"},
+    {"pipeline": "noise_poisson:5,compression_jpeg:2", "purpose": "close R0's incomplete poisson severity scan (stopped at sev2 with ADJUST_SEVERITY)", "result": "PARTIAL (sigma diff 21%); full profile strictly worse than speckle:3 on dct_zero/ric/gm_ratio/sigma -> rejected"}
+  ],
+  "test_candidate_calls": 6,
+  "best_validation": "noise_speckle:3,compression_jpeg:2 — verify_signals MATCH (noise:sigma, noise:clean_residual, compression:block_boundary) on 5/5 support pairs; pair0 full profile: sigma 4.82/4.82, ric 0.3234/0.3211, mean_shift -4.1/-4.1, variance_ratio 0.8938/0.8936, dct_zero 0.4261/0.4272, block_boundary 1.2113/1.2081, chroma 0.9106/0.9117, clipped 0.0641/0.0631",
+  "signal_sources": [
+    "block_boundary=1.2081 (>1.1, 0%FP) -> compression_jpeg confirmed; sim bb=1.2113, dct_zero=0.4261 vs target 0.4272 -> jpeg:2",
+    "noise_prior sigma=4.82; noise_speckle:3 sim sigma=4.82; §B peeled vm_slope=2.6031 -> speckle",
+    "residual_intensity_corr=0.3211 (R1 rerun; R0 0.3267): speckle sim 0.3234 vs gaussian_RGB sim 0.0093 -> multiplicative speckle, not gamma/gaussian",
+    "peeled rgb_ratio=1.0274 <1.4 -> not YCrCb (step2 GAUSSIAN_YCrCb label is a ric>0.15 fallback artifact; the speckle sim itself is labeled the same)",
+    "brightness_detected_raw suppressed by JPEG cross-validation (block_uniformity=1.208>0.1); sim reproduces mean_shift=-4.1 without brightness -> no brightness step",
+    "clipped_fraction 0.0631 and saturation_chroma_ratio 0.9117 reproduced by sim (0.0641, 0.9106) -> no saturation/global step",
+    "spectral_slope_ratio=0.9843 vs sim 0.9864, gm_ratio 1.1243 vs 1.1242 -> no blur",
+    "poisson:5 (best-case extrapolation sigma~1/sqrt(c)): profile dct_zero 0.3686, ric 0.2644, gm 1.201, sigma 5.19 -> strictly worse than speckle:3"
+  ],
+  "reason": "No signal was found that contradicts R0. All borderline/ignored signals (brightness raw flag, heavy clipping, chroma ratio, gamma-suspect ric, YCrCb fallback label) are explained by the speckle:3+jpeg:2 simulation; R0's one protocol gap (poisson severity scan stopped at sev2) was closed in R1 and poisson:5 lost to speckle:3 on every profile statistic. Final candidate matches verify_signals on 5/5 support pairs and 12/12 pair0 profile statistics. Decision: NO_CHANGE."
+}

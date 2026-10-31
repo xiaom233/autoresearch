@@ -1,0 +1,58 @@
+{
+  "challenge_id": "blind_0021_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_lens", 4],
+    ["brightness_brighten_shfit_RGB", 1],
+    ["compression_jpeg", 4]
+  ],
+  "pipeline": [
+    {"function": "blur_lens", "severity": 4, "verdict": "LIKELY"},
+    {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr_pair0": 30.7,
+      "ci_pass_rate": "9/10",
+      "function_family": "blur_gaussian",
+      "note": "R0 cross-family blur backup; pair0 3.1 dB below lens under identical order, rejected again in R1"
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "blur_lens", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "support_psnr_r1": {"pair0": 33.97, "pair1": 37.64, "pair2": 42.99, "pair3": 42.88, "pair4": 36.66, "mean": 38.83},
+      "function_family": "order_variant_priority0",
+      "note": "R1 5-pair verification (pair0 from R0 round9, pairs1-4 from R1): 0.75 dB below R0 priority-2 order (mean 39.58); does not meet CHANGE bar"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr_pair0": 26.05,
+      "ci_pass_rate": "10/10",
+      "function_family": "blur_glass",
+      "note": "glass_score=1.023>0.25 DT signal; R1 reproducibility test gave 26.05/26.06 dB (stable), so PSNR rejection is valid; lens deterministically matches target at 43.8/43.2 dB, impossible for a stochastic glass realization"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "mode": "PSNR (noise_prior sigma=0.74/1.48 < 2, no noise step)",
+    "support_psnr_r0_trained": 27.32,
+    "r1_signal_rerun": "run_full_analysis.py re-run on pair0 -> full_analysis_R1.json identical to R0 except residual_intensity_corr -0.1908 -> -0.1902",
+    "r1_candidates_tested": 10,
+    "rationale": "R1 signal re-interpretation confirmed every R0 step: JPEG (block_boundary=3.2006, 0%FP; sev4 interior optimum 28.67/34.83/25.99 for 3/4/5 in final order), lens blur (lens:4 interior optimum 30.24/34.83/29.20; gaussian 30.70; motion boundary anisotropy=1.6547 -> 21.42; glass DT signal fails reproducibility + 43 dB deterministic match), brightness RGB shift sev1 (mean_shift=24.0 ~ +25.5, clipped_fraction=0.0188; HSV/gamma/sev2 worse by 7-9 dB), no noise (sigma<2; any noise sev1 would cap PSNR ~26 dB vs observed 43.8 dB). Untested orders were closed: post-JPEG brightness 34.10 dB (pair0, CI 7/10) and priority-0 brightness 5-pair mean 38.83 dB vs 39.58 dB for R0 order. No candidate reached >40 dB on 5 pairs or +2 dB over R0, so NO_CHANGE; overall verdict stays UNCERTAIN because pair0 reproduction is 34.83 dB < 40 dB."
+  }
+}

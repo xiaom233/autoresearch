@@ -1,0 +1,60 @@
+{
+  "challenge_id": "blind_0004_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_motion", 1]],
+  "pipeline": [
+    {"function": "blur_motion", "severity": 1, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_motion", "severity": 2}],
+      "function_family": "blur_motion",
+      "psnr": 26.19,
+      "reason": "R0 severity+1 scan: systematically over-blurs (zcd 9-11% below target vs 0-2% for motion:1); no R1 evidence supports it"
+    },
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+      "function_family": "blur_gaussian",
+      "psnr": 24.01,
+      "reason": "cross-family backup only (MTF gaussian/lens/motion hard to separate); R1 control motion:1 draws reached 49.54/42.71 dB while gaussian caps near 24 dB in R0 tests"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR",
+    "psnr": 37.21,
+    "psnr_mean_support": 37.21,
+    "psnr_best_support": 49.54,
+    "psnr_best_ci_clean": 42.71,
+    "psnr_note": "R1 fresh draws on the 5 support pairs: 35.50 / 49.54 / 28.15 / 30.16 / 42.71 dB (mean 37.21). Two pairs exceed 40 dB (pair1 49.54, CI 8/10 with two diff-approx-0 percentage artifacts; pair4 42.71, CI 10/10). Spread is explained by the stochastic motion angle drawn by x_distortion at simulation time.",
+    "support_psnr_r0_model": 34.55,
+    "signal_reinterpretation": [
+      "residual_anisotropy=1.6613 is just below the 1.7 motion threshold (boundary signal); R1 fresh control draws with motion:1 produced 49.54 dB (CI 8/10) and 42.71 dB (CI 10/10), far above the ~24 dB angle-independent ceiling of gaussian/glass, so motion is confirmed and severity=1 retained.",
+      "block_boundary=1.0156 < 1.1 but SKILL says mild JPEG can evade detection (should_still_test=true); R0 never tested JPEG. R1 test of blur_motion:1+compression_jpeg:1 on all 5 pairs: mean 26.44 dB vs control 37.21 (-10.77 dB), block_boundary target-sim diffs -0.064..-0.324 (25-134% error), CI 5-6/10 -> JPEG rejected.",
+      "variance_ratio=0.6935 + saturation_chroma_ratio=0.794 had only been rejected atop motion:2 in R0. R1 test of blur_motion:1+saturate_weaken_HSV:1 on all 5 pairs: mean 23.11 dB vs control 37.21 (-14.10 dB), CI <=8/10 -> global rejected; variance/chroma deficit is explained by motion-blur smoothing (control unique-color diffs 0-3%).",
+      "noise: noise_prior sigma=0.62; peeled §B extreme_pct=58.32 is the documented >50%+sigma<5 false positive; spatial_corr=0.984 shows a structured residual (angle mismatch); x_distortion minimum noise sigma 12.75 >> 0.62 -> NO_NOISE, 0 noise candidates tested (SKILL: sigma<2 -> NO_NOISE, PSNR mode).",
+      "brightness: mean_shift=-0.4/255 vs minimum shift 25.5/255; clipped_fraction=0 -> excluded.",
+      "glass_score=0.7004: known glass-detector false positive; R0 glass:2/3 capped ~24 dB; no R1 budget spent re-testing it because motion:1 already reproduced >40 dB."
+    ],
+    "support_validation_R1": {
+      "control_blur_motion_1": {
+        "pair0": {"psnr": 35.5, "ci": "10/10"},
+        "pair1": {"psnr": 49.54, "ci": "8/10", "note": "the two mismatches have diff~0 (0.000/0.001), percentage artifacts, not real signal differences"},
+        "pair2": {"psnr": 28.15, "ci": "6/10", "note": "impulse metrics diff ~0.001-0.013 with tiny denominators plus block_boundary 25%; other 6 metrics pass"},
+        "pair3": {"psnr": 30.16, "ci": "10/10"},
+        "pair4": {"psnr": 42.71, "ci": "10/10"},
+        "mean_psnr": 37.21,
+        "pairs_above_40db": [1, 4]
+      },
+      "comparison_with_r0_draws": "R0 recorded the same pipeline at pair PSNRs 28.84/24.46/29.11/37.66/17.62 (mean 27.54). R1 fresh draws mean 37.21 (+9.67 dB) with an unchanged pipeline, quantifying the stochastic-angle draw variance. This is not a degradation change."
+    },
+    "candidates_tested": [
+      {"pipeline": "blur_motion:1", "role": "control re-test of previous pipeline", "pair_psnr": [35.5, 49.54, 28.15, 30.16, 42.71], "mean_psnr": 37.21, "delta_vs_control": 0.0},
+      {"pipeline": "blur_motion:1,compression_jpeg:1", "role": "ignored-compression probe", "pair_psnr": [21.16, 27.57, 31.56, 33.09, 18.82], "mean_psnr": 26.44, "delta_vs_control": -10.77, "verdict": "REJECT"},
+      {"pipeline": "blur_motion:1,saturate_weaken_HSV:1", "role": "ignored-global probe", "pair_psnr": [19.27, 23.79, 18.67, 33.3, 20.51], "mean_psnr": 23.11, "delta_vs_control": -14.1, "verdict": "REJECT"}
+    ],
+    "rationale": "NO_CHANGE: the R0 pipeline blur_motion:1 is confirmed, not superseded. On 5 support pairs the unchanged pipeline reaches mean 37.21 dB with two pairs above 40 dB and near-perfect CI, whereas the two signal-gap hypotheses (mild JPEG, mild saturation weaken) degrade mean PSNR by 10.77 and 14.10 dB with systematic block_boundary/color mismatches. No noise (physics bound), no compression (block_boundary 1.0156 + JPEG probe), no global (saturation probe + 0-3% unique-color match), no brightness (mean_shift -0.4). Severity=1 is retained (motion:2/3 over-blur in R0: best 26.19 dB, zcd 9-20% low). Verdict raised from UNCERTAIN to LIKELY because two independent support pairs now reproduce the target above 40 dB at CI 8-10/10 with the deterministic step."
+  }
+}

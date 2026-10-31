@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "管线: blur_glass:5 (UNCERTAIN) + compression_jpeg:4 (LIKELY)，两步局部退化，无全局退化步",
+    "compression: block_boundary=6.8747 (Tier S, 0% FP) + unique_G=221 + dct_zero_ratio=0.92 → JPEG 确认，仅确定训练管线，不触发架构组件",
+    "blur: anisotropy_ratio=1.339 < 1.7 且无 motion 证据 → OCAB 不满足触发条件 (需 >1.7 + motion)",
+    "global: variance_ratio=0.7047，但 reflection 第 5/6 轮加入 contrast_weaken_scale:1 后 variance_ratio 失配达 65%，无 contrast Tier A 信号 → FiLM-GCM / ColorPre 均不启用；mean_shift=-2/255 排除 brightness",
+    "blur 子类型 UNCERTAIN: glass:5 为随机 pixel-shuffle 退化，spectral_slope 匹配 (<0.08) 但 gaussian diff=0.209、lens diff=0.125 均不匹配，PSNR 22.4-25.8 dB 受 realization 上限约束 → 按 §七 Tier C 保守处理，纯 Swin",
+    "noise: sigma=1.61 < 2 且 peeled extreme_pct=69.79% 为已知假阳性 (SKILL 规则) → 无 noise 步骤，不触发组件",
+    "SimpleGate: exp39 8/9 退化安全 (仅 S5 motion -0.86)，本挑战无 motion → 默认常开 (-32K 参数)"
+  ],
+  "rationale": "两步局部退化 (随机 glass blur + JPEG)，无 contrast Tier A variance_ratio、无 motion anisotropy 信号，按 finetune_strategy.md §七 全部门控规则不启用任何附加组件，采用默认纯 Swin + SimpleGate + Direct。虽为多步局部管线 (§六 可选 RandomCurric)，但 glass 为随机 realized 退化且步骤 verdict=UNCERTAIN，遵循指令默认 Direct 作为安全兜底。"
+}

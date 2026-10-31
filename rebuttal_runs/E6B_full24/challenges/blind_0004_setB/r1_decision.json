@@ -1,0 +1,62 @@
+{
+  "challenge_id": "blind_0004_setB",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_motion", 1]],
+  "r1_pipeline": [["blur_motion", 1]],
+  "support_psnr_r0": 34.55,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_motion:1",
+      "role": "control re-test of previous pipeline",
+      "mode": "psnr",
+      "pairs": 5,
+      "pair_psnr": [35.5, 49.54, 28.15, 30.16, 42.71],
+      "pair_ci": ["10/10", "8/10", "6/10", "10/10", "10/10"],
+      "mean_psnr": 37.21,
+      "pairs_above_40db": [1, 4],
+      "note": "R0 recorded mean for the same pipeline was 27.54 dB (draws 28.84/24.46/29.11/37.66/17.62); the +9.67 dB difference is stochastic motion-angle variance, not a degradation change"
+    },
+    {
+      "pipeline": "blur_motion:1,compression_jpeg:1",
+      "role": "ignored-compression probe (block_boundary=1.0156 but SKILL says mild JPEG can evade; R0 never tested JPEG)",
+      "mode": "psnr",
+      "pairs": 5,
+      "pair_psnr": [21.16, 27.57, 31.56, 33.09, 18.82],
+      "pair_ci": ["6/10", "5/10", "5/10", "5/10", "6/10"],
+      "mean_psnr": 26.44,
+      "delta_vs_control": -10.77,
+      "verdict": "REJECT",
+      "note": "block_boundary target-sim diff -0.064..-0.324 (25-134% error): JPEG blockiness is absent from the target"
+    },
+    {
+      "pipeline": "blur_motion:1,saturate_weaken_HSV:1",
+      "role": "ignored-global probe (variance_ratio=0.6935, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759; R0 only tested global atop motion:2)",
+      "mode": "psnr",
+      "pairs": 5,
+      "pair_psnr": [19.27, 23.79, 18.67, 33.3, 20.51],
+      "pair_ci": ["8/10", "8/10", "6/10", "8/10", "7/10"],
+      "mean_psnr": 23.11,
+      "delta_vs_control": -14.1,
+      "verdict": "REJECT"
+    }
+  ],
+  "test_candidate_calls": 15,
+  "best_validation": {
+    "pipeline": "blur_motion:1",
+    "mean_psnr": 37.21,
+    "best_pair_psnr": 49.54,
+    "best_pair_ci_clean_psnr": 42.71,
+    "pairs_above_40db": [1, 4],
+    "criteria": "no candidate reached >40 dB on the 5-pair mean nor +2 dB over the control; the two probes were 10.77 and 14.10 dB worse; unchanged pipeline is retained"
+  },
+  "signal_sources": [
+    "gm_ratio=0.6291 + spectral_slope_ratio=1.1011 -> blur exists (unchanged from pair0 re-analysis full_analysis_R1.json)",
+    "residual_anisotropy=1.6613 (below 1.7 motion threshold) + motion:1 support draws of 49.54 dB (CI 8/10, diff-0 artifacts) and 42.71 dB (CI 10/10) -> motion blur type confirmed, severity=1 retained",
+    "block_boundary=1.0156, unique_G_ratio=0.8908, dct_zero_ratio=0.4473 -> mild-JPEG probe tested and rejected (mean 26.44 dB, systematic block_boundary mismatch)",
+    "variance_ratio=0.6935, saturation_chroma_ratio=0.794, contrast_spread_ratio=0.759, mean_shift=-0.4/255, clipped_fraction=0 -> saturation probe tested and rejected (mean 23.11 dB); explained by motion-blur smoothing",
+    "noise_prior sigma=0.62; peeled §B extreme_pct=58.32 (documented >50%+sigma<5 false positive), spatial_corr=0.984, rgb_ratio=1.125; x_distortion minimum noise sigma 12.75 -> NO_NOISE",
+    "glass_score=0.7004 -> known glass-detector false positive; gaussian/glass PSNR ceiling ~24 dB vs motion:1 >40 dB"
+  ],
+  "reason": "Signal reinterpretation found two genuine R0 coverage gaps (mild JPEG and mild global were never tested atop the winning motion:1). Both were validated on all 5 support pairs and rejected by large margins (-10.77 dB and -14.10 dB vs control) with systematic CI mismatches. The unchanged blur_motion:1 pipeline reproduces the target at >40 dB on 2/5 fresh support draws (near-perfect texture statistics), confirming type and severity. No candidate improved by >=2 dB, so NO_CHANGE."
+}

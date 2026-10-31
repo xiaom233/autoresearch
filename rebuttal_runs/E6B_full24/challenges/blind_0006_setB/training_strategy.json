@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression: block_boundary=1.4499 (>1.1, Tier S, 0% FP) + dct_zero_ratio=0.7572 → JPEG 确认",
+    "PSNR 验证: compression_jpeg:1 在 Pair0 与 support pair 1-4 全部 PSNR=inf 像素级完全一致 (CI 10/10 each) → Tier 1 LIKELY, 无 alternative",
+    "剥离后 residual std=0.0, extreme_pct=100% 属全零残差伪信号 (SKILL 已知 FP: extreme_pct>50% 且 sigma<5 忽略 IMPULSE), 原 sigma=0.74 为 JPEG 伪影污染 (FP_YCrCb_BLUR_JPEG) → NO_NOISE",
+    "blur: gm_ratio=0.9472, spectral_slope_ratio=1.0006 (threshold 1.08) → BLUR_UNLIKELY, 无 motion/anisotropy>1.7 证据 → 不用 OCAB",
+    "global: variance_ratio=0.9923 ≈1.0 (无 contrast), mean_shift=0.1, saturation_chroma_ratio=0.9738, contrast_spread_ratio=1.0015, clipped_fraction=0.0178 → NO_GLOBAL, ColorPre/ColorMLP/ChannelCurve 门控均不触发",
+    "FiLM-GCM 需要 variance_ratio≠1.0 (Tier A) + 结构化局部; 本挑战 variance_ratio 实为 1.0, 不满足 → 不启用",
+    "JPEG severity=1 ≤2 → finetune_strategy.md §六 Step 0 低难度 → 纯 Swin + SimpleGate (默认常开, exp39 8/9 安全)"
+  ],
+  "rationale": "单步 JPEG sev=1，Tier 1 LIKELY 且 5 对 support 像素级精确复现 (PSNR=inf, CI 10/10)，盲识别置信度极高。§六 Step 1：单步纯局部退化无梯度干扰 → Direct 从零训练。§七：仅 block_boundary Tier S 触发（确认 JPEG），无 contrast variance_ratio 信号、无 motion anisotropy、无 brightness_HSV，因此除默认常开的 SimpleGate (-32K, exp39 8/9 安全) 外不启用任何组件；DualBranch/CSN/SCA/FPro 按规则不用。JPEG sev≤2 属低难度，纯 Swin + SimpleGate + Direct 即可，套用组件只会引入盲识别错配风险 (exp37 组件 0/24 胜)。"
+}

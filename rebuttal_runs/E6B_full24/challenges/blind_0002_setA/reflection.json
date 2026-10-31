@@ -1,0 +1,651 @@
+{
+  "challenge_id": "blind_0002_setA",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9992, unique_G=256/256, dct_zero_ratio=0.023)",
+      "blur": "BLUR_UNLIKELY (spectral_slope_ratio=0.9745 <1.08; FFT_anisotropy=0.00; gm_ratio=4.89 noise-destroyed)",
+      "noise": "GAUSSIAN_YCrCb low-confidence (noise_prior sigma=14.08; cross_channel_corr=0.169; residual_intensity_corr=0.20 gamma_suspect; impulse_zero_ratio=0.0466)",
+      "global": "NO_GLOBAL (contrast_noise_corrected=1.0146; mean_shift=3.0/255; variance_ratio=1.5828 explained by noise; clipped_fraction=0.1565 heavy clipping)"
+    },
+    "mode": "SIGNAL (sigma=14.1)",
+    "pair0_visual": "degraded looks like clean with additive grain; dark aerial forest scene, heavy shadow clipping at 0",
+    "suspected": [
+      "noise_gaussian_YCrCb sev1-2 (per-channel residual std R=29.7 G=22.4 B=35.8 matches YCrCb sev2 predicted ~(34.7,23.3,42.2) better than RGB noise)",
+      "noise_gaussian_RGB sev1 (sigma 12.75 ~= noise_prior 14.1, but equal channel sigma does not explain R/B > G asymmetry)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary 0.9992, unique_G 256, dct_zero_ratio 0.023)",
+      "blur (spectral_slope_ratio 0.9745; anisotropy 0.00)",
+      "brightness (mean_shift 3.0/255 << 25.5 of sev1 shift)",
+      "contrast (noise-corrected variance ratio 1.0146)"
+    ],
+    "note_sb6": "peeled_noise_check on empty pipeline: extreme_pct=51.29% is a signed-residual artifact (counts all negative residuals), zero_ratio=0.0162; vm_slope=-5.43 (negative, clipping-driven); var_slope=2.07; spatial_corr=0.37 (mean-channel, inflated by clipping); rgb_ratio=1.594; cross_ch_corr=0.294; ch_stds R=29.7 G=22.4 B=35.8. Run_full_analysis G-channel spatial_corr=0.0022 -> iid noise in G."
+  },
+  "noise_6step_check": {
+    "extreme_pct": 51.29,
+    "zero_ratio": 0.0162,
+    "vm_slope": -5.4323,
+    "var_slope": 2.0719,
+    "spatial_corr": 0.3728,
+    "rgb_ratio": 1.5941,
+    "cross_ch_corr": 0.2941,
+    "ch_stds": [
+      29.7,
+      22.4,
+      35.8
+    ],
+    "residual_std": 29.9,
+    "diagnosis": "extreme_pct artifact of signed residual; vm_slope negative -> not speckle; var_slope>1 driven by clipping; rgb_ratio=1.59 -> YCrCb candidate; cross_ch_corr=0.29 partly clipping-confounded. Primary: gaussian_YCrCb:2 (chroma sigma ~22 predicts observed R/B>G asymmetry); alternative gaussian_RGB:1."
+  },
+  "qwen_gate": {
+    "available": false,
+    "triggered": false,
+    "reason": "Step 0.5 gate not triggered: noise_prior sigma=14.08 > 10 -> definite-noise branch, no Qwen call needed"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1: run_full_analysis sigma=14.1 + ch_stds R/B>G 与 YCrCb sev2 (luma15.3/chroma22.2) 预测一致; rgb_ratio=1.59"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1",
+        "thinking": "R2 跨族替代: RGB 独立噪声 sev1 sigma=12.75 接近 noise_prior 14.1, 检验通道对称性判别 YCrCb vs RGB"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=55%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2",
+        "thinking": "R2 RGB 族 severity 扫描: RGB:1 WEAK(sigma diff 55%), 按协议升 sev 检验 RGB:2 sigma=25.5 是否更接近"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "support p1 复核: 主候选 noise_gaussian_YCrCb:2 在独立同图对上的信号验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "support p2 复核: 主候选 noise_gaussian_YCrCb:2 在独立同图对上的信号验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "support p3 复核: 主候选 noise_gaussian_YCrCb:2 在独立同图对上的信号验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "support p4 复核: 主候选 noise_gaussian_YCrCb:2 在独立同图对上的信号验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:1",
+        "thinking": "控制检验: 主候选叠加 blur_gaussian:1, 若 spectral_slope/Wiener 核偏离则确认目标无模糊 (slope_ratio=0.9745 已提示无 blur)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=93%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1基线复核 pair0: 信号重释确认 sigma=14.08, cross_channel_corr=0.169, variance_ratio=1.5828(noise-corrected 1.0146), mean_shift=3.0/255, clipped_fraction=0.1565 与 YCrCb sev2 仿真一致; 无 JPEG(block_boundary=0.9992)/无 blur(slope_ratio=0.9745,anisotropy=0)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1基线复核 pair1: 5对 support 上复核 R0 主候选, 信号来源 sigma/cross_channel_corr/variance_ratio 与 pair0 一致 (support_verification 已记录)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1基线复核 pair2: 5对 support 上复核 R0 主候选, 信号来源 sigma/cross_channel_corr/variance_ratio 与 pair0 一致 (support_verification 已记录)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1基线复核 pair3: 5对 support 上复核 R0 主候选, 信号来源 sigma/cross_channel_corr/variance_ratio 与 pair0 一致 (support_verification 已记录)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "thinking": "R1基线复核 pair4: 5对 support 上复核 R0 主候选, 信号来源 sigma/cross_channel_corr/variance_ratio 与 pair0 一致 (support_verification 已记录)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "thinking": "R1 候选2 (MISS_comp_BY_NOISE 检验) pair0: 目标 block_boundary=0.9992/unique_G=256/dct_zero_ratio=0.023 均不支持 JPEG; 若叠加 JPEG:1 使 block_boundary 明显偏离目标则排除存储压缩"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=92%)",
+          "compression:block_boundary (diff=63%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "thinking": "R1 候选2 (MISS_comp_BY_NOISE) pair1: 目标 block_boundary 0.992-1.002 与 unique_G=256; 叠加 JPEG:1 后比较 block_boundary 偏差与噪声信号"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=93%)",
+          "compression:block_boundary (diff=62%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "thinking": "R1 候选2 (MISS_comp_BY_NOISE) pair2: 目标 block_boundary 0.992-1.002 与 unique_G=256; 叠加 JPEG:1 后比较 block_boundary 偏差与噪声信号"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=88%)",
+          "compression:block_boundary (diff=32%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "thinking": "R1 候选2 (MISS_comp_BY_NOISE) pair3: 目标 block_boundary 0.992-1.002 与 unique_G=256; 叠加 JPEG:1 后比较 block_boundary 偏差与噪声信号"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=90%)",
+          "compression:block_boundary (diff=41%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "thinking": "R1 候选2 (MISS_comp_BY_NOISE) pair4: 目标 block_boundary 0.992-1.002 与 unique_G=256; 叠加 JPEG:1 后比较 block_boundary 偏差与噪声信号"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=91%)",
+          "compression:block_boundary (diff=29%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2",
+        "thinking": "R1 候选3 (跨族备选) pair0: 目标 cross_channel_corr=0.169 而 RGB:2 仿真仅 0.006 (通道结构不符); 观察 RGB:2 在 sigma 14.1-15.7 的 support 对上的 sigma 匹配是否劣于 YCrCb:2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2",
+        "thinking": "R1 候选3 (跨族备选) pair1: 目标 cross_channel_corr=0.169 而 RGB:2 仿真仅 0.006 (通道结构不符); 观察 RGB:2 在 sigma 14.1-15.7 的 support 对上的 sigma 匹配是否劣于 YCrCb:2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=20%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2",
+        "thinking": "R1 候选3 (跨族备选) pair2: 目标 cross_channel_corr=0.169 而 RGB:2 仿真仅 0.006 (通道结构不符); 观察 RGB:2 在 sigma 14.1-15.7 的 support 对上的 sigma 匹配是否劣于 YCrCb:2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2",
+        "thinking": "R1 候选3 (跨族备选) pair3: 目标 cross_channel_corr=0.169 而 RGB:2 仿真仅 0.006 (通道结构不符); 观察 RGB:2 在 sigma 14.1-15.7 的 support 对上的 sigma 匹配是否劣于 YCrCb:2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2",
+        "thinking": "R1 候选3 (跨族备选) pair4: 目标 cross_channel_corr=0.169 而 RGB:2 仿真仅 0.006 (通道结构不符); 观察 RGB:2 在 sigma 14.1-15.7 的 support 对上的 sigma 匹配是否劣于 YCrCb:2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=21%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [],
+  "candidate_signal_comparison": {
+    "pair0_target": {
+      "sigma": 14.08,
+      "cross_channel_corr": 0.169,
+      "residual_intensity_corr": 0.2,
+      "spatial_corr_G": 0.0022,
+      "block_boundary": 0.9992,
+      "spectral_slope": -0.8847,
+      "spectral_slope_ratio": 0.9745,
+      "variance_ratio": 1.5828,
+      "saturation_chroma_ratio": 1.998,
+      "clipped_fraction": 0.1565,
+      "mean_shift": 3.0
+    },
+    "sim_noise_gaussian_YCrCb_2": {
+      "sigma": 14.08,
+      "cross_channel_corr": 0.1691,
+      "residual_intensity_corr": 0.2015,
+      "spatial_corr_G": 0.0028,
+      "block_boundary": 1.0025,
+      "spectral_slope": -0.8853,
+      "spectral_slope_ratio": 0.9752,
+      "variance_ratio": 1.5823,
+      "saturation_chroma_ratio": 1.997,
+      "clipped_fraction": 0.1565,
+      "mean_shift": 3.0
+    },
+    "sim_noise_gaussian_RGB_1": {
+      "sigma": 6.05,
+      "cross_channel_corr": 0.0024,
+      "spatial_corr_G": -0.0006,
+      "block_boundary": 0.996,
+      "spectral_slope": -0.9034,
+      "variance_ratio": 1.0958,
+      "saturation_chroma_ratio": 1.2257,
+      "clipped_fraction": 0.0656
+    },
+    "sim_noise_gaussian_RGB_2": {
+      "sigma": 11.37,
+      "cross_channel_corr": 0.0063,
+      "spatial_corr_G": 0.003,
+      "block_boundary": 1.0004,
+      "spectral_slope": -0.8946,
+      "variance_ratio": 1.363,
+      "saturation_chroma_ratio": 1.6738,
+      "clipped_fraction": 0.1224
+    },
+    "conclusion": "noise_gaussian_YCrCb:2 reproduces every target statistic to ~0.1% (sigma 14.08 vs 14.08; cross_ch 0.1691 vs 0.169; variance_ratio 1.5823 vs 1.5828; saturation_chroma 1.997 vs 1.998; clipped 0.1565 vs 0.1565). RGB candidates fail channel structure (cross_ch 0.002-0.006 vs 0.169) and clipping/variance levels even when verify_signals sigma check passes (RGB:2)."
+  },
+  "blur_control_test": {
+    "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:1",
+    "verdict": "PARTIAL (3/4)",
+    "interpretation": "Adding blur collapses the wavelet sigma estimate of the simulated image -> noise:sigma mismatch 93%, physically inconsistent with target. Target sigma matches noise-only simulation exactly. blur:spectral_slope/wiener MATCH is below resolution for sev1 and is a known ~18% FP pathway (SKILL blur DT FP). Combined with slope_ratio 0.9745-0.9974 on all 5 pairs and exact clipped_fraction/variance_ratio match (blur would lower both), blur is ruled out."
+  },
+  "support_verification": {
+    "pair1": {
+      "block_boundary": 1.0016,
+      "sigma": 15.44,
+      "cross_channel_corr": 0.173,
+      "spatial_corr_G": 0.0061,
+      "spectral_slope_ratio": 0.9841,
+      "clipped_fraction": 0.0825,
+      "variance_ratio": 1.1505,
+      "verify_signals_YCrCb2": "MATCH"
+    },
+    "pair2": {
+      "block_boundary": 0.9921,
+      "sigma": 15.07,
+      "cross_channel_corr": 0.1737,
+      "spatial_corr_G": 0.004,
+      "spectral_slope_ratio": 0.9876,
+      "clipped_fraction": 0.1016,
+      "variance_ratio": 1.1022,
+      "verify_signals_YCrCb2": "MATCH"
+    },
+    "pair3": {
+      "block_boundary": 0.9988,
+      "sigma": 14.46,
+      "cross_channel_corr": 0.167,
+      "spatial_corr_G": 0.0013,
+      "spectral_slope_ratio": 0.9904,
+      "clipped_fraction": 0.1254,
+      "variance_ratio": 1.0443,
+      "verify_signals_YCrCb2": "MATCH"
+    },
+    "pair4": {
+      "block_boundary": 0.9978,
+      "sigma": 15.69,
+      "cross_channel_corr": 0.1757,
+      "spatial_corr_G": 0.0018,
+      "spectral_slope_ratio": 0.9974,
+      "clipped_fraction": 0.0656,
+      "variance_ratio": 1.2065,
+      "verify_signals_YCrCb2": "MATCH"
+    },
+    "summary": "5/5 pairs MATCH; sigma band 14.1-15.7, cross_channel_corr 0.167-0.176 (>0.12 YCrCb fingerprint), block_boundary 0.992-1.002 (no JPEG), slope_ratio 0.975-0.997 (no blur)."
+  },
+  "save_checklist": {
+    "quantization_rule": "N/A - no quantization predicted (unique_G=256, block_boundary~1.0)",
+    "noise_6step_recorded": true,
+    "blur_signals_recorded": "radial/anisotropy from run_full_analysis: FFT_anisotropy=0.00, glass_score n/a (sigma>3), spectral_slope_ratio=0.9745",
+    "deterministic_psnr": "N/A - SIGNAL mode (sigma>2); verify_signals used instead",
+    "verdict_rule": "noise step never LIKELY -> overall UNCERTAIN"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_YCrCb",
+        "severity": 2,
+        "verdict": "UNCERTAIN",
+        "evidence": "sigma 14.08==14.08, cross_ch 0.1691==0.169, variance_ratio 1.5823==1.5828, clipped 0.1565==0.1565; MATCH on all 5 support pairs"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Single-step additive noise in YCrCb space, severity 2 (luma sigma 15.3, chroma 22.2). All deterministic families ruled out: block_boundary=0.9992 (no JPEG), spectral_slope_ratio=0.9745-0.9974 (no blur), brightness mean_shift=3/255 << 25.5 (sev1), contrast noise-corrected=1.0146. YCrCb vs RGB decided by channel structure (cross_ch 0.169 vs 0.002-0.006) and per-channel std ordering R>B>G inconsistent with equal-sigma RGB noise. Noise step can never be LIKELY due to seed mismatch -> UNCERTAIN."
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 overall verdict=UNCERTAIN (support PSNR 30.19 dB); noise step never LIKELY by rule",
+    "signal_recheck": {
+      "method": "Re-ran run_full_analysis on pair0 (full_analysis_R1.json) and re-read all signals per reflection protocol; no residual-based diagnosis used",
+      "reproducibility": "R1 report identical to R0 on every signal value (block_boundary 0.9992, unique_G 256/256, dct_zero_ratio 0.023, gm_ratio 4.894, spectral_slope_ratio 0.9745, FFT_anisotropy 0.00, noise_prior sigma 14.08, spatial_corr_G 0.0022, cross_channel_corr 0.169, residual_intensity_corr 0.1959, variance_ratio 1.5828, contrast_noise_corrected 1.0146, mean_shift 3.0, clipped_fraction 0.1565, saturation_chroma_ratio 1.998)",
+      "signals": [
+        {"signal": "block_boundary=0.9992, unique_G=256/256, dct_zero_ratio=0.023", "reinterpretation": "无存储压缩。上一轮未实测 JPEG 组合 -> R1 补测 noise_YCrCb:2+JPEG:1: 5/5 对 block_boundary 偏差 29-63% 且噪声 sigma 崩塌 88-93%; MISS_comp_BY_NOISE 排除"},
+        {"signal": "spectral_slope_ratio=0.9745 (<1.08), FFT_anisotropy=0.00, gm_ratio=4.894(被噪声破坏)", "reinterpretation": "无 blur; R0 blur 控制 (叠加 blur_gaussian:1) sigma 崩塌 93% 佐证, 本轮不重复"},
+        {"signal": "noise_prior_sigma=14.08, spatial_corr_G=0.0022, cross_channel_corr=0.169", "reinterpretation": "G 通道 iid 噪声但存在通道间耦合 -> YCrCb 色度噪声指纹; cross_ch 0.169 与 YCrCb sev2 仿真 0.1691 一致, RGB 仿真仅 0.002-0.006"},
+        {"signal": "residual_intensity_corr=0.1959 (gamma_suspect=True)", "reinterpretation": "被忽略/误判项重释: YCrCb:2 仿真自身 ric=0.2015 (同值) -> 相关性来自 clipping (clipped_fraction=0.1565) 对噪声的亮度依赖截断, 非 gamma; 且 mean_shift=3.0/255、variance_ratio noise-corrected=1.0146 不支持任何全局变换"},
+        {"signal": "variance_ratio=1.5828, clipped_fraction=0.1565, saturation_chroma_ratio=1.998", "reinterpretation": "raw 方差/饱和膨胀全部由 YCrCb sev2 仿真精确重现 (1.5823/0.1565/1.997), 非 contrast/saturation 步骤"},
+        {"signal": "§B: extreme_pct=51.29 (signed residual artifact), vm_slope=-5.43, var_slope=2.07, rgb_ratio=1.594, cross_ch_corr=0.294", "reinterpretation": "vm_slope<0 排除 speckle; var_slope=2.07 由 clipping 驱动而非 poisson (poisson 各通道独立, 无法产生 cross_channel_corr=0.169); rgb_ratio>1.4 支持 YCrCb"},
+        {"signal": "noise severity: support sigma 14.08-15.69", "reinterpretation": "与 YCrCb sev2 (luma 15.3/chroma 22.2) 匹配; sev1/sev3 会偏离 sigma 带, 无需扫描 (R0 5/5 MATCH 已锚定)"}
+      ]
+    },
+    "candidate_ranking": [
+      {"rank": 1, "pipeline": "noise_gaussian_YCrCb:2", "support_verdict": "MATCH 5/5 (pairs 0-4)", "status": "retained"},
+      {"rank": 2, "pipeline": "noise_gaussian_RGB:2", "support_verdict": "MATCH 3/5 (pair1/pair4 WEAK, sigma diff 20-21%) + cross_channel_corr 0.006 vs target 0.169 通道结构不符", "status": "rejected (inferior to YCrCb)"},
+      {"rank": 3, "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1", "support_verdict": "WEAK 5/5 (block_boundary diff 29-63%, sigma diff 88-93%)", "status": "rejected"}
+    ],
+    "support_validation": {
+      "baseline_YCrCb_2": "MATCH 5/5 (R9-R13)",
+      "jpeg_composite": "WEAK 5/5 (R14-R18): block_boundary diff 63/62/32/41/29%, sigma diff 92/93/88/90/91%",
+      "rgb_2": "MATCH 3/5, WEAK 2/5 (R19-R23): pair1 sigma diff 20%, pair4 sigma diff 21%"
+    },
+    "budget": {"new_candidates": 3, "test_candidate_calls": 15, "signal_reinterpretation_rounds": 1},
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [{"function": "noise_gaussian_YCrCb", "severity": 2, "verdict": "UNCERTAIN"}],
+      "overall_verdict": "UNCERTAIN",
+      "rationale": "信号重释复现 R0 全部数值; 唯一未验证的 MISS_comp_BY_NOISE 经 5 对 support 实测被排除 (JPEG 组合 5/5 WEAK); 跨族 RGB:2 仅 3/5 MATCH 且通道结构不符; 无任何候选达到 CHANGE 门槛 (噪声步骤规则要求相对基线改善, 基线已是 5/5 MATCH). 维持 noise_gaussian_YCrCb:2."
+    }
+  }
+}

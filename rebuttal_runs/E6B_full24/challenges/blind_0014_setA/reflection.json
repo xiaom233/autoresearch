@@ -1,0 +1,524 @@
+{
+  "challenge_id": "blind_0014_setA",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED, block_boundary=1.7284 (0%FP signal), unique_G=248/256, dct_zero_ratio=0.8585 -> JPEG likely sev>=3",
+      "blur": "BLUR_UNLIKELY per spectral_slope_ratio=1.0026, BUT gm_ratio=0.7013 < 0.85 suggests gradient loss (could be JPEG/global coupling) -> must test blur candidates",
+      "noise": "noise_prior_sigma=0.37 < 2 -> NO_NOISE per Step 0 gate; high spatial_corr=0.807 and residual_intensity_corr=-0.51 likely JPEG/global residual structure, not noise",
+      "global": "mean_shift=60.5 (23.7%), clipped_fraction=0.1637 heavy clipping, variance_ratio=1.0611, contrast_spread_ratio=0.8004, saturation_chroma_ratio=1.425 -> strong global candidates: brightness (shift), saturation strengthen; contrast weaken possible (spread ratio<1)"
+    },
+    "mode": "PSNR (sigma=0.4 < 2 -> PSNR valid)",
+    "suspected": [
+      "compression_jpeg",
+      "global (brightness/saturation/contrast)"
+    ],
+    "ruled_out": [
+      "noise (sigma=0.37, below 2 gate)"
+    ],
+    "qwen_gate": "skipped - API unavailable (sigma<2 does not require gate anyway)"
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py after stripping brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+    "residual_std": 0.0,
+    "extreme_pct": 100.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": "nan (degenerate: zero residual)",
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": "nan (degenerate: zero residual)",
+    "noise_prior_sigma_peeled": 0.74,
+    "diagnosis": "NO_NOISE. Peeled residual std=0.0 -> simulation bit-exact with target, so no residual randomness of any kind. extreme_pct=100% is a degenerate artifact of zero-variance residual (all pixels equal), not impulse. noise_prior sigma 0.74 < 2 confirms no noise. Initial sigma=0.37 was below the Step-0 gate (2.0)."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:5",
+        "thinking": "mean_shift=+60.5 (23.7%), clipped_fraction=0.1637, variance_ratio=1.061, chroma_ratio=1.425. HSV V-shift is multiplicative in RGB -> brightens and scales chroma (explains both mean shift and chroma increase). Test sev5 as first global candidate."
+      },
+      "test_result": {
+        "psnr_rgb": 18.3,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:4",
+        "thinking": "sev5 over-brightened (255-clipping mismatch 211%). Scan severity down: sev4 (V+0.4). mean_shift target is +60.5, sev4 likely closer."
+      },
+      "test_result": {
+        "psnr_rgb": 22.79,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3",
+        "thinking": "PSNR improved 18.30->22.79 going sev5->sev4. Continue severity scan downward: sev3 (V+0.3)."
+      },
+      "test_result": {
+        "psnr_rgb": 30.32,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:2",
+        "thinking": "Monotonic PSNR gain 18.3->22.8->30.3 for sev5->4->3. Severity scan continues: sev2 (V+0.2). Note target mean_shift=+60.5 suggests sev>=3, but PSNR decides."
+      },
+      "test_result": {
+        "psnr_rgb": 21.43,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:3",
+        "thinking": "HSV shift sev3 best so far (30.32dB). Cross-family check: gamma RGB sev3 (gamma=0.6) also brightens multiplicatively and shifts chroma; residual_intensity_corr=-0.51 suggests intensity-dependent transform (gamma-like)."
+      },
+      "test_result": {
+        "psnr_rgb": 18.19,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:3",
+        "thinking": "Add JPEG on top of best global (HSV shift sev3, 30.32dB). block_boundary=1.728 strong -> JPEG exists; start sev3 (q=12). Physical order: brightness(priority0) before JPEG(last)."
+      },
+      "test_result": {
+        "psnr_rgb": 30.44,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:4",
+        "thinking": "JPEG:3 combined gives 30.44dB/8CI with block_boundary diff 7%. Severity scan: JPEG:4 (q=8) to test stronger compression."
+      },
+      "test_result": {
+        "psnr_rgb": 28.73,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "JPEG:4 worse (28.73). Scan other direction: JPEG:2 (q=18) with HSV shift sev3."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "Cross-pair verification: pair0 exact match (PSNR=inf). Apply same pipeline to pair1."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "Cross-pair verification: same pipeline on pair2 (pair0/1 exact match)."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "Cross-pair verification: same pipeline on pair3."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "Cross-pair verification: same pipeline on pair4."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 signal re-check pair0: mean_shift=+60.5/255 + clipped_fraction=0.1637 + chroma_ratio=1.425 => HSV V-shift (multiplicative RGB scale, clips highlights); block_boundary=1.7284 (0%FP) => JPEG; spectral_slope_ratio=1.0026 + sigma=0.37 => no blur/noise. Re-verify R0 pipeline on support pair0."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 cross-support verification pair1: same signal chain as pair0 (mean_shift/clip => HSV V-shift sev3; block_boundary => JPEG sev2; slope/sigma => no blur/noise). Test transferability of R0 pipeline."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 cross-support verification pair2: same signal chain as pair0 (mean_shift/clip => HSV V-shift sev3; block_boundary => JPEG sev2; slope/sigma => no blur/noise)."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 cross-support verification pair3: same signal chain as pair0 (mean_shift/clip => HSV V-shift sev3; block_boundary => JPEG sev2; slope/sigma => no blur/noise)."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "thinking": "R1 cross-support verification pair4: same signal chain as pair0 (mean_shift/clip => HSV V-shift sev3; block_boundary => JPEG sev2; slope/sigma => no blur/noise)."
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:5,compression_jpeg:2",
+        "thinking": "R1 re-audit of step4 raw verdict SATURATION_strengthen_sev5 (chroma_ratio=1.425) that was overridden in R0: test whether saturation family explains chroma gain with confirmed JPEG sev2 (block_boundary=1.7284). Competing interpretation of ignored signal."
+      },
+      "test_result": {
+        "psnr_rgb": 5.94,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:5,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:3",
+      "psnr_rgb": 30.44,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3",
+      "psnr_rgb": 30.32,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:4",
+      "psnr_rgb": 28.73,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:4",
+      "psnr_rgb": 22.79,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:2",
+      "psnr_rgb": 21.43,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_HSV:5",
+      "psnr_rgb": 18.3,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:3",
+      "psnr_rgb": 18.19,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:5,compression_jpeg:2",
+      "psnr_rgb": 5.94,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "brightness_brighten_shfit_HSV",
+        "severity": 3,
+        "verdict": "LIKELY",
+        "evidence": "PSNR=inf (exact), CI 10/10; mean_shift=+60.5 and chroma_ratio=1.425 explained by V-shift multiplicative scaling"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 2,
+        "verdict": "LIKELY",
+        "evidence": "block_boundary=1.7284 (0% FP); JPEG sev2 (q=18) exact match, sev3 30.44dB / sev4 28.73dB"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "cross_pair_verification": "All 5 pairs (pair0 main + pairs 1-4) reproduce target bit-exactly: PSNR=inf, CI=10/10 each",
+    "rationale": "Two-step deterministic pipeline. Global brightness HSV shift sev3 identified by severity scan (sev5/4/3/2 -> 18.3/22.8/30.3/21.4 dB; gamma_RGB alternative 18.2 dB rejected). JPEG block_boundary 1.728 confirmed compression; severity scan sev4/3/2 on top of global -> 28.73/30.44/inf dB. Exact reproduction (PSNR=inf, residual std=0.0 after peel) on pair0 and all 4 remaining pairs. Noise ruled out (sigma 0.37/0.74 < 2), blur ruled out (spectral_slope_ratio=1.003; gm_ratio drop explained by brightness+JPEG; no blur needed for exact match).",
+    "alternatives": []
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=LIKELY but support PSNR 27.03 dB < 35",
+    "signal_reinterpretation": [
+      "compression: block_boundary=1.7284 (0% FP) + dct_zero_ratio=0.8585 confirm JPEG; unique_G=248 (ratio 0.9688) is not <200 so the raw unique_G path does not fire, but block_boundary is decisive; R1 re-test at JPEG sev2 reproduces target bit-exactly.",
+      "global: mean_shift=+60.5/255 (23.7%) + clipped_fraction=0.1637 + saturation_chroma_ratio=1.425 + variance_ratio=1.0611 + contrast_spread_ratio=0.8004. HSV V-shift (sev3) is multiplicative in RGB per pixel => simultaneously explains chroma gain, mean shift and 16.4% highlight clipping. The step4 raw verdict SATURATION_strengthen_sev5 (the one signal that was ignored in R0) was re-tested on top of JPEG sev2: PSNR=5.94 dB, CI=6/10 => REJECT; saturation is a signal artifact of the brightness V-shift.",
+      "residual_intensity_corr=-0.5064 with gamma_suspect: intensity-dependent residual is consistent with the brightness V-shift; gamma_RGB:3 was already rejected in R0 (18.19 dB), no new gamma evidence.",
+      "blur: spectral_slope_ratio=1.0026 (threshold 1.08), FFT anisotropy=0.00, pca=0.0 => no blur. gm_ratio=0.7013 <0.85 is explained by 16.4% clipped highlights plus JPEG smoothing destroying gradients; any blur step would break the bit-exact match.",
+      "noise: noise_prior sigma=0.37 (pair0) and 0.74 (peeled residual) are both <2 gate. peeled_noise_check with the R0 pipeline gives residual std=0.0 (simulation bit-exact); its §B extreme_pct=100% IMPULSE output is the documented degenerate artifact of a zero-variance residual (zero_ratio=1.0, all channel stds=0.0, spatial_corr/cross_ch_corr=nan) => NO_NOISE."
+    ],
+    "candidates": [
+      {
+        "pipeline": "brightness_brighten_shfit_HSV:3,compression_jpeg:2",
+        "type": "re-verification of the R0 pipeline (no change)",
+        "support_validation": "PSNR=inf, CI=10/10 on all 5 support pairs (pair0..pair4), bit-exact",
+        "decision": "ACCEPT"
+      },
+      {
+        "pipeline": "saturate_strengthen_HSV:5,compression_jpeg:2",
+        "type": "new candidate from the previously ignored step4 raw verdict (chroma_ratio=1.425)",
+        "support_validation": "pair0 PSNR=5.94 dB, CI=6/10 (clipping mismatch 98%, zero-crossing 46%)",
+        "decision": "REJECT"
+      }
+    ],
+    "support_validation_summary": {
+      "pairs_tested": 5,
+      "bit_exact_pairs": 5,
+      "psnr": "inf",
+      "ci": "10/10"
+    },
+    "decision": "NO_CHANGE",
+    "rationale": "Fresh run_full_analysis reproduces the R0 signal picture exactly; the peeled residual is zero (simulation bit-exact); the R0 two-step pipeline re-verifies PSNR=inf with CI 10/10 on all 5 support pairs; the only previously ignored signal (step4 SATURATION_strengthen_sev5) was re-tested and rejected at 5.94 dB. No alternative can beat exact reproduction, so the blind-ID pipeline is unchanged. The low support PSNR (27.03 dB) is a restoration-difficulty/budget limit of the trained specialist under heavy clipping + JPEG, not a blind-ID error; there is no evidence-based blind-ID change available in R1.",
+    "candidate_tests_new": 1,
+    "test_candidate_calls": 6
+  }
+}

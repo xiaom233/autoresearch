@@ -1,0 +1,61 @@
+{
+  "challenge_id": "blind_0022_setA",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 3], ["compression_jpeg", 1]],
+  "r1_pipeline": [["blur_glass", 3], ["compression_jpeg", 1]],
+  "support_psnr_r0": 23.35,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:1",
+      "role": "baseline 复测 (R0 管线)",
+      "pairs": ["pair0", "p1", "p2", "p3", "p4"],
+      "psnr": {"pair0": 28.42, "p1": 31.25, "p2": 33.70, "p3": 26.37, "p4": 31.80},
+      "mean_5": 30.31,
+      "verdict": "KEEP"
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:1",
+      "role": "severity 边界假设 (gm_ratio=0.361 估 sev=4)",
+      "pairs": ["pair0", "p1", "p2", "p3", "p4"],
+      "psnr": {"pair0": 27.03, "p1": 30.56, "p2": 33.28, "p3": 24.94, "p4": 30.79},
+      "mean_5": 29.32,
+      "verdict": "REJECT",
+      "delta_vs_baseline": -0.99
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:1",
+      "role": "确定性跨族对照 (配对 R0 最优 jpeg:1)",
+      "pairs": ["pair0"],
+      "psnr": {"pair0": 24.68},
+      "verdict": "REJECT",
+      "delta_vs_baseline": -3.74
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:1",
+      "role": "确定性跨族对照 (配对 R0 最优 jpeg:1)",
+      "pairs": ["pair0"],
+      "psnr": {"pair0": 25.05},
+      "verdict": "REJECT",
+      "delta_vs_baseline": -3.37
+    }
+  ],
+  "test_candidate_calls": 11,
+  "best_validation": {
+    "pipeline": "blur_glass:3,compression_jpeg:1",
+    "mean_psnr_5_pairs": 30.31,
+    "per_pair": {"pair0": 28.42, "p1": 31.25, "p2": 33.70, "p3": 26.37, "p4": 31.80},
+    "reproducibility": "逐对与 R0 记录一致 (±0.02dB)"
+  },
+  "signal_sources": [
+    "variance_ratio=0.8127 + contrast_spread_ratio=0.9514 + mean_shift=-0.0 → blur 解释方差损失, 非 contrast/brightness/gamma",
+    "brightness_mean_shift=-0.0 精确为 0; gamma sev1 最小 0.8/1.4 必产生明显 mean_shift → gamma 假阳性 (residual_intensity_corr=-0.198 由 blur+JPEG 解释)",
+    "saturation_chroma_ratio=0.9057 ≈ JPEG 4:2:0 色度子采样量级, saturation_detected_raw=false",
+    "residual_anisotropy=2.035 < 4.0 (SKILL §C-2 motion 阈值), motion:4 实测 17.58dB → 非 motion",
+    "glass_score=0.459>0.25; glass:3 比全部确定性 blur 高 3.4-3.7dB → 非确定性 glass 确证",
+    "gm_ratio=0.361 估 sev=4, 但 glass:4 在 5 对 support 逐对劣于 sev3 (均值 29.32 vs 30.31) → sev=3",
+    "block_boundary=1.692 (0%FP) 确认 JPEG; 模拟 bb 误差 9%; unique_G=256 排除 quantization; sev1 的 PSNR/CI/bb 三指标一致最优",
+    "剥离后 noise_prior sigma=0.99<2; extreme_pct=58.1% 为已知假阳性; spatial_corr=0.963 为 glass 洗牌结构残差"
+  ],
+  "reason": "信号重释未改变任何一步的判断：global/brightness/gamma/saturation 全部被独立信号排除；noise 剥离后 sigma<2；blur 的 glass 子类型由 3.4-3.7dB 的跨族优势与随机洗牌纹理确证；唯一有理论依据的边界假设 glass:4 在 5 对 support 上逐对更低。无候选达到 >40dB 或 +2dB 门槛，故 NO_CHANGE。"
+}

@@ -1,0 +1,35 @@
+{
+  "challenge_id": "blind_0020_setA",
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "blur_gaussian", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "contrast_weaken_scale", "severity": 5, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_gaussian:2,contrast_weaken_scale:5",
+      "psnr": null,
+      "stats": "blur severity 下调备选: pair3 spectral_slope diff=0.130 提示该内容下模糊略偏强; sev2 保守备份",
+      "function_family": "gaussian blur / lower severity"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_glass:5,contrast_weaken_scale:5",
+      "psnr": null,
+      "stats": "run_full_analysis Step3 verdict=GLASS (glass_score=0.285>0.25); R4 中 glass:5 匹配 wiener_kernel, 但 spectral_slope diff=0.183",
+      "function_family": "glass blur (cross-family backup)"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_gaussian:3,contrast_weaken_scale:5,saturate_weaken_HSV:2",
+      "psnr": null,
+      "stats": "色彩备选: 加入轻度 saturation 使 mean_shift diff 0.0343→0.0201 (目标带 desat 观感), 但方差与灰度观感略差",
+      "function_family": "saturation weaken (color variant)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode, sigma=2.22; PSNR 对噪声无效)",
+    "mode": "SIGNAL",
+    "rationale": "sigma=2.22 (wavelet, flat slope) → 信号验证模式。Step3 blur DT: residual_anisotropy=1.76>1.7 → 先测 motion (wiener corr=0.268, 排除), glass:5 (wiener ✓ 但 slope diff=0.183 过强), gaussian 4/5 (slope 0.176/0.403 过强), gaussian:3 spectral_slope 匹配 (pair0/1/2/4), wiener corr 0.808-0.849 (阈值0.85 边界) → gaussian:3 为最佳模糊。Step4 global: variance_ratio=0.118, contrast sev1/5 方向校准证明 sev5 最强但 vr_sim≈0.20, 仍偏高 9-22% → contrast_weaken_scale:5 方向正确但幅度不足 (128 锚点差异/可能缺 brightness 步, 注册表中 brightness callable 名未解析出); mean_shift 目标 +0.052, 无 sat 时 sim +0.017 → 系统性偏暗. saturation sev5 目视近灰度 (目标仍彩色) → 排除强 desat, sat:2 改善均值但增加灰度与方差, 不采纳。Noise: peeled 残差结构主导 (spatial_corr=0.9993) §B 不可用; noise→blur 顺序下类型不可诊断 (SKILL 54.7%), 但 noise_prior sigma=2.22 (flat) 且 noise_gaussian_RGB:1 经 blur 后 sigma 在 5/5 对均匹配 (<20%) → 保留 gaussian_RGB:1 为 UNCERTAIN。5 对复核: spectral_slope 4/5 匹配, sigma 5/5 匹配, 其余信号系统性偏差 (mean/variance) 一致 → 确定性部分方向正确、幅度局部不符, 待训练 PSNR 仲裁。"
+  }
+}

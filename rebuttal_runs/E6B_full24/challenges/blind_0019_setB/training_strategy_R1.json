@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "R1 管线 blur_lens:4 -> compression_jpeg:4 -> saturate_weaken_HSV:5，三步均 LIKELY (Tier 1)；support pair0-pair3 像素级精确复现 (PSNR=inf, 全部 CI diff=0)，确定性退化最高级别确认（predicted_params_R1.json / reflection_R1.json）",
+    "blur: residual_anisotropy=1.3021 < 1.7 且子类型为 lens（非 motion）→ OCAB 不启用（anisotropy>1.7 + motion 才触发）；blur_lens:4 确定性核无随机成分，Swin 基线即可",
+    "compression: block_boundary=4.3884 (Tier S, 0% FP) + dct_zero_ratio=0.9021 → JPEG sev4 确认；JPEG 本身无专用组件映射，FiLM-GCM 还要求 contrast Tier A，本挑战不满足",
+    "global: verdict=SATURATION_weaken_sev5 (saturation_chroma_ratio=0.0, contrast_from_variance=false, contrast_detected_raw=false)；variance_ratio=0.814 源于完全灰度化而非 contrast → ColorPre (saturation 上 -0.34 有害) 与 FiLM-GCM (需 contrast + 结构化 Tier A variance_ratio) 均不启用",
+    "SimpleGate: exp39 -32K 参数，8/9 退化安全（S5 motion×3 -0.86 不适用本挑战）→ 默认常开",
+    "策略: 多步管线含全局 saturation，RandomCurric 在 saturation 上未验证（finetune_strategy.md §二 saturation 最佳实践为 Direct + 纯 Swin）；True Ft 在 1.5h/2-epoch 预算下 ≈ Direct (exp37/38) → Direct 最安全"
+  ],
+  "rationale": "R1 以像素级精确复现将 R0 的 blur_glass:4 修正为 blur_lens:4（lens:4 -> jpeg:4 -> sat:5 在 support pairs 0-3 上 PSNR=inf），退化已完全确定，但组件门控仍以原始信号为准：无 contrast Tier A（global 为 saturation，contrast_detected_raw=false）、无 motion（anisotropy 1.30<1.7，且 blur 子类型为 lens），故不启用 ColorPre/FiLM-GCM/OCAB；按 finetune_strategy.md §七 Tier B/C 兜底为纯 Swin + SimpleGate + Direct，lr=5e-4，2 epoch，batch 16。"
+}
