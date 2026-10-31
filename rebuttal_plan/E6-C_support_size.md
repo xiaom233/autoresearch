@@ -119,3 +119,21 @@ scripts/e6c_train_one.sh / e6c_train_reflect.sh / e6c_collect.py / e6c_select_ro
 - **限制**：嵌套设计条件于 E6-B setA；k=1 的 support PSNR 噪声大；每个 size 只跑 1 次，未做 run-to-run 重复；未做独立随机 1 张抽样（预注册的可选敏感性未执行）。
 
 产物：`rebuttal_runs/E6C_support_size/e6c_summary.json/.md`、`selection_final.jsonl`、`test_metrics_final_gpu*.jsonl`（16,800 行）；汇总脚本 `scripts/aggregate_e6c_support_size.py`。
+
+## 11. 审计与限制（2026-10-31）
+
+完整审计见 `rebuttal_runs/E6C_support_size/AUDIT.md`。通过项：48/48 R0（0 NaN；46 Swin+SG、2 OCAB）、5/5 R1、1 R2；选点 48/48 且 checkpoint 齐全；test 16,800 行无重复，`lq_sha256` 与 E6-B setA **16,800/16,800 完全一致**；宏平均可复算。
+
+**必须披露的两点**：
+
+1. **7 个私有 RNG 场景**（0003/0005/0017/0018/0020/0022/0023）的 support LQ 本身不可复现（同一图同种子两次生成不同），因此 size1 与 size3 共享图的 LQ 在这 7 个场景不一致；其余 17/24 场景逐字节一致。
+2. **size5 基线的 support LQ salt 不同**（E6-B `e6b-full-v1` vs E6-C `e6c-size-v1`）：clean image 相同、pipeline 相同，但随机退化 realization 不同。support 仅用于诊断与 checkpoint 选择，训练梯度来自合成数据，故影响限于选点/诊断。
+
+**17 个确定性场景敏感性**（排除 7 个私有 RNG 场景）：
+
+| 数据集 | size1 | size3 | size5 | size5−size1 | size5−size3 |
+|---|---:|---:|---:|---:|---:|
+| DIV2K | 27.925 | 27.863 | 28.455 | +0.530 [−0.140,+1.357]（8/17） | +0.592 [−0.241,+1.914]（9/17） |
+| LSDIR | 25.526 | 25.412 | 25.934 | +0.408 [−0.172,+1.082]（7/17） | +0.523 [−0.216,+1.694]（9/17） |
+
+与全 24 场景结论一致：1→3 ≈0，5 张相对 1 张仅 +0.4–0.5 dB，CI 跨 0。**结论不由 7 个 LQ 不可控场景驱动。**
