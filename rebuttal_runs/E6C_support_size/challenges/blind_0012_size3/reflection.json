@@ -1,0 +1,851 @@
+{
+  "challenge_id": "blind_0012_size3",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED high: block_boundary=2.7761 (>1.1, 0%FP), dct_zero_ratio=0.8877, unique_G=256 (no unique_G reduction)",
+      "blur": "strong blur: gm_ratio=0.4012, spectral_slope_ratio=1.3742; subtype conflict: residual_anisotropy=1.4348 (<1.7, DT would not say motion) but glass_score=1.2361 (>0.25, sigma<3 -> glass per DT); tool PCA=4.432 -> motion note (0%FP 41%recall). Plan to test motion/glass/gaussian.",
+      "noise": "noise_prior sigma=0.74 (<2 -> NO_NOISE per SKILL Step0.5); spatial_corr=0.8414 / cross_ch_corr=0.8721 likely JPEG/blur artifact; residual_intensity_corr=0.3988 flagged gamma-suspect, but step4 global none (mean_shift=-0.4/255, contrast_from_variance=false)",
+      "global": "NO_GLOBAL: mean_shift=-0.4 (negligible), variance_ratio=0.8691 consistent with blur, saturation_chroma_ratio=0.8906, clipped_fraction=0.0005"
+    },
+    "mode": "PSNR (sigma=0.74 < 2)",
+    "suspected": [
+      "compression_jpeg",
+      "blur (motion/glass/gaussian)"
+    ],
+    "ruled_out": [
+      "noise (sigma<2)",
+      "global contrast/brightness",
+      "quantization (unique_G=256)"
+    ],
+    "qwen_gate": {
+      "available": false,
+      "reason": "Qwen/API unavailable in this sub-agent environment; gate skipped, sigma=0.74<2 -> NO_NOISE by SKILL Step0.5"
+    }
+  },
+  "noise_6step_check": {
+    "note": "NO_NOISE challenge (sigma<2 on all 3 pairs). Values below are §B on peeled residual after stripping blur_motion:4,compression_jpeg:3 (peeled_noise_check.py); residual is structured due to irreducible random motion angle, not noise.",
+    "extreme_pct": 63.33,
+    "vm_slope": 0.8211,
+    "var_slope": -0.0825,
+    "spatial_corr": 0.9735,
+    "rgb_ratio": 1.0487,
+    "cross_ch_corr": 0.9238,
+    "residual_std": 17.3,
+    "noise_prior_sigma_on_peeled": 1.48,
+    "diagnosis": "IMPULSE label is a known false positive (extreme_pct>50% with noise_prior sigma<5, JPEG/blur artifacts); spatial_corr=0.97 structured residual = blur-angle mismatch. Final: NO_NOISE."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "thinking": "PCA blur_kernel pca_ratio=4.432>2.5 (motion note, 0%FP) + residual_anisotropy=1.4348; block_boundary=2.7761 (0%FP JPEG) + dct_zero_ratio=0.8877; order blur->jpeg per storage-last physics"
+      },
+      "test_result": {
+        "psnr_rgb": 26.98,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "thinking": "SKILL blur DT: anisotropy=1.4348<1.7 (not motion) AND glass_score=1.2361>0.25 with sigma=0.74<3 -> glass; block_boundary=2.7761 JPEG; blur->jpeg order"
+      },
+      "test_result": {
+        "psnr_rgb": 21.31,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Gaussian control baseline per SKILL DT ELSE branch (lens indistinguishable by MTF); same JPEG signal block_boundary=2.7761, dct_zero_ratio=0.8877"
+      },
+      "test_result": {
+        "psnr_rgb": 22.7,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "thinking": "Severity scan round2: motion won round1 (26.98dB vs glass 21.31/gauss 22.70, delta>4dB); scanning blur sev +/-1 and jpeg sev +/-1 around (motion:4, jpeg:4). Signal basis: gm_ratio=0.401 (strong blur), block_boundary=2.776 (strong JPEG)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.38,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:4",
+        "thinking": "Severity scan round2: motion won round1 (26.98dB vs glass 21.31/gauss 22.70, delta>4dB); scanning blur sev +/-1 and jpeg sev +/-1 around (motion:4, jpeg:4). Signal basis: gm_ratio=0.401 (strong blur), block_boundary=2.776 (strong JPEG)"
+      },
+      "test_result": {
+        "psnr_rgb": 26.12,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:5",
+        "thinking": "Severity scan round2: motion won round1 (26.98dB vs glass 21.31/gauss 22.70, delta>4dB); scanning blur sev +/-1 and jpeg sev +/-1 around (motion:4, jpeg:4). Signal basis: gm_ratio=0.401 (strong blur), block_boundary=2.776 (strong JPEG)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.47,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "Severity scan round2: motion won round1 (26.98dB vs glass 21.31/gauss 22.70, delta>4dB); scanning blur sev +/-1 and jpeg sev +/-1 around (motion:4, jpeg:4). Signal basis: gm_ratio=0.401 (strong blur), block_boundary=2.776 (strong JPEG)"
+      },
+      "test_result": {
+        "psnr_rgb": 29.44,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:2",
+        "thinking": "Round3 refinement: jpeg:3 beats jpeg:4 (29.44 vs 26.98) -> scan jpeg 2/1 and re-check motion severity at jpeg:3 (coupling); signals block_boundary=2.776, gm_ratio=0.401"
+      },
+      "test_result": {
+        "psnr_rgb": 23.43,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:1",
+        "thinking": "Round3 refinement: jpeg:3 beats jpeg:4 (29.44 vs 26.98) -> scan jpeg 2/1 and re-check motion severity at jpeg:3 (coupling); signals block_boundary=2.776, gm_ratio=0.401"
+      },
+      "test_result": {
+        "psnr_rgb": 29.08,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:3",
+        "thinking": "Round3 refinement: jpeg:3 beats jpeg:4 (29.44 vs 26.98) -> scan jpeg 2/1 and re-check motion severity at jpeg:3 (coupling); signals block_boundary=2.776, gm_ratio=0.401"
+      },
+      "test_result": {
+        "psnr_rgb": 25.16,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "Round3 refinement: jpeg:3 beats jpeg:4 (29.44 vs 26.98) -> scan jpeg 2/1 and re-check motion severity at jpeg:3 (coupling); signals block_boundary=2.776, gm_ratio=0.401"
+      },
+      "test_result": {
+        "psnr_rgb": 20.13,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "Round2 cross-family + repeat at jpeg:3: jpeg:3 best (29.44); motion angle is random per apply, so repeat motion draw for variance; test gaussian/glass/lens controls (MTF indistinguishable, PCA/blur_kernel pca=4.43 motion-specific 0%FP)"
+      },
+      "test_result": {
+        "psnr_rgb": 20.21,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "thinking": "Round2 cross-family + repeat at jpeg:3: jpeg:3 best (29.44); motion angle is random per apply, so repeat motion draw for variance; test gaussian/glass/lens controls (MTF indistinguishable, PCA/blur_kernel pca=4.43 motion-specific 0%FP)"
+      },
+      "test_result": {
+        "psnr_rgb": 23.25,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:3",
+        "thinking": "Round2 cross-family + repeat at jpeg:3: jpeg:3 best (29.44); motion angle is random per apply, so repeat motion draw for variance; test gaussian/glass/lens controls (MTF indistinguishable, PCA/blur_kernel pca=4.43 motion-specific 0%FP)"
+      },
+      "test_result": {
+        "psnr_rgb": 21.67,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:3",
+        "thinking": "Round2 cross-family + repeat at jpeg:3: jpeg:3 best (29.44); motion angle is random per apply, so repeat motion draw for variance; test gaussian/glass/lens controls (MTF indistinguishable, PCA/blur_kernel pca=4.43 motion-specific 0%FP)"
+      },
+      "test_result": {
+        "psnr_rgb": 22.76,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "Signal-mode check: PSNR noisy because blur_motion angle is random per apply (29.44 vs 20.21 same pipeline). Compare orientation-agnostic signals: spectral_slope target=-1.2723, block_boundary target=2.7761 (JPEG sev), dct_zero_ratio target=0.8877"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.083)",
+          "blur:wiener_kernel (corr=0.609)",
+          "compression:block_boundary (diff=9%)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "thinking": "Signal-mode cross-family: compare orientation-robust spectral_slope diff vs motion draw (0.083); target slope=-1.2723. If gaussian slope diff >> motion's, motion family confirmed; also compare wiener kernel corr (target kernel PCA=4.43 elongated)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.131)",
+          "blur:wiener_kernel (corr=0.480)",
+          "compression:block_boundary (diff=9%)"
+        ],
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:1",
+        "thinking": "JPEG severity calibration by block_boundary (target bb=2.7761, 0%FP): jpeg:3 gave 9% diff; scan jpeg 1/2/4 at fixed motion:4 in signal mode, smaller bb diff wins"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.333)",
+          "compression:block_boundary (diff=37%)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:2",
+        "thinking": "JPEG severity calibration by block_boundary (target bb=2.7761, 0%FP): jpeg:3 gave 9% diff; scan jpeg 1/2/4 at fixed motion:4 in signal mode, smaller bb diff wins"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.081)",
+          "blur:wiener_kernel (corr=0.465)",
+          "compression:block_boundary (diff=28%)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "thinking": "JPEG severity calibration by block_boundary (target bb=2.7761, 0%FP): jpeg:3 gave 9% diff; scan jpeg 1/2/4 at fixed motion:4 in signal mode, smaller bb diff wins"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.501)",
+          "compression:block_boundary (diff=23%)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:3",
+        "thinking": "Motion severity scan at calibrated jpeg:3 (block_boundary diff: jpeg3=9% best vs jpeg1=37%/jpeg2=28%/jpeg4=23%). Compare orientation-robust spectral_slope diff (target slope=-1.2723; motion:4 gave 0.081-0.083)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.129)",
+          "blur:wiener_kernel (corr=0.322)",
+          "compression:block_boundary (diff=11%)"
+        ],
+        "pipeline": "blur_motion:3,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "Motion severity scan at calibrated jpeg:3 (block_boundary diff: jpeg3=9% best vs jpeg1=37%/jpeg2=28%/jpeg4=23%). Compare orientation-robust spectral_slope diff (target slope=-1.2723; motion:4 gave 0.081-0.083)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "Repeat signal draw to gauge kernel-corr variance: blur_motion angle ~U(-90,90) random per apply; sev5 first draw gave MATCH (wiener>0.85) but PSNR draws were low; determine whether MATCH was angle luck and whether sev4/sev5 is the better severity"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.390)"
+        ],
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "Repeat signal draw to gauge kernel-corr variance: blur_motion angle ~U(-90,90) random per apply; sev5 first draw gave MATCH (wiener>0.85) but PSNR draws were low; determine whether MATCH was angle luck and whether sev4/sev5 is the better severity"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.299)"
+        ],
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "Final PSNR draw of main candidate: blur family confirmed by PCA=4.43 (0%FP) + slope-diff 0.083 vs gaussian 0.131; jpeg:3 calibrated by block_boundary diff 9%/8% vs jpeg1 37%, jpeg2 28%, jpeg4 23%; motion angle random per apply so PSNR expected in 20-30 range"
+      },
+      "test_result": {
+        "psnr_rgb": 20.22,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R1 validation baseline (all 3 pairs): R0 pipeline motion:4 + jpeg:3. Signal sources: gm_ratio 0.4012/0.4099/0.3619 -> sev4 (<0.50 mapping; pair2 0.012 from sev5 threshold), PCA kernel 4.43/4.33/4.32 motion (0%FP), block_boundary 2.78/3.37/4.10 JPEG (0%FP), dct_zero 0.89-0.95. Motion angle random U(-90,90) per apply -> PSNR stochastic."
+      },
+      "test_result": {
+        "psnr_rgb": 22.29,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R1 validation baseline pair1 (R0 tested pair0 only): motion:4 + jpeg:3. Pair1 signals: gm_ratio 0.4099 -> sev4, PCA 4.33 motion, anisotropy 1.7754 (>1.7 motion core), block_boundary 3.372 JPEG, dct_zero 0.936."
+      },
+      "test_result": {
+        "psnr_rgb": 32.3,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "R1 validation baseline pair2 (R0 tested pair0 only): motion:4 + jpeg:3. Pair2 signals: gm_ratio 0.3619 -> sev4 but 0.012 from sev5 threshold (<0.35), PCA 4.32 motion, block_boundary 4.099 JPEG (strongest), dct_zero 0.945, clipped_fraction 0.2034 heavy_clipping=true but mean_shift -0.7/255 and contrast_spread 0.983 -> content/sky clipping not global."
+      },
+      "test_result": {
+        "psnr_rgb": 23.56,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R1 candidate: motion sev5 + jpeg:3 (pair0). Reinterpreted signals: (1) gm_ratio is measured AFTER JPEG, and JPEG block artifacts add gradient energy -> gm_ratio biased UP -> severity estimate 4 is a lower bound; pair2 gm_ratio 0.3619 only 0.012 above sev5 cutoff (<0.35). (2) Angle-agnostic spectral_slope matched at motion:5 in 2/2 R0 signal draws, whereas motion:4 was borderline (diff 0.081-0.083 vs threshold 0.08) and sev3 was 0.129. (3) R0 PSNR draws are dominated by random angle U(-90,90), so cross-support PSNR only."
+      },
+      "test_result": {
+        "psnr_rgb": 30.97,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R1 candidate: motion sev5 + jpeg:3 (pair1). Same reinterpretation: gm_ratio biased upward by post-blur JPEG gradient energy -> sev4 estimate is lower bound; spectral_slope (angle-agnostic) matched sev5 2/2 signal draws in R0; pair1 gm_ratio 0.4099, anisotropy 1.7754 motion core."
+      },
+      "test_result": {
+        "psnr_rgb": 19.56,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "thinking": "R1 candidate completion: motion sev5 + jpeg:3 on support pair2 (all-k validation). Signal sources: (1) gm_ratio=0.3619 on pair2 is 0.012 above the sev5 cutoff 0.35, and gm_ratio is measured after JPEG whose block artifacts add gradient energy -> true blur severity is a lower bound; (2) angle-agnostic spectral_slope diff matched motion:5 in 2/2 R0 draws vs motion:4 borderline 0.081-0.083 (threshold 0.08); (3) blur family solid via PCA 4.43/4.34/4.32 across pairs (0%FP motion). PSNR is stochastic because x_distortion blur_motion draws angle ~U(-90,90) per apply."
+      },
+      "test_result": {
+        "psnr_rgb": 25.05,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 32.3,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 27
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 30.97,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 29
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 29.44,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:1",
+      "psnr_rgb": 29.08,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:4",
+      "psnr_rgb": 26.98,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:4",
+      "psnr_rgb": 26.12,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:3",
+      "psnr_rgb": 25.16,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 25.05,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 31
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 23.56,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 28
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:2",
+      "psnr_rgb": 23.43,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:3",
+      "psnr_rgb": 23.25,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:3",
+      "psnr_rgb": 22.76,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 22.7,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 22.29,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 26
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:3",
+      "psnr_rgb": 21.67,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:5",
+      "psnr_rgb": 21.47,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:4",
+      "psnr_rgb": 21.38,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:4",
+      "psnr_rgb": 21.31,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 20.22,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 20.21,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 20.13,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "psnr_rgb": 19.56,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 30
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_motion",
+        "severity": 4,
+        "verdict": "UNCERTAIN",
+        "signal_basis": "motion PCA ratio 4.43/4.33/4.32 across 3 pairs (>2.5, 0%FP motion); spectral_slope_ratio 1.37; gm_ratio 0.40; slope-diff at sev4 0.081-0.083 vs gaussian 0.131 and motion-sev3 0.129; x_distortion blur_motion uses random angle U(-90,90) per apply -> PSNR of the correct pipeline spans 20.2-29.4 dB; sev4 vs sev5 not separable (one sev5 draw MATCH, repeat PARTIAL wiener=0.299)"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 3,
+        "verdict": "LIKELY",
+        "signal_basis": "block_boundary 2.78/3.37/4.10 all pairs (>1.1, 0%FP), dct_zero_ratio 0.89-0.95; severity calibration by block_boundary diff at fixed motion:4: sev1=37%, sev2=28%, sev3=9% (8% PARTIAL draws), sev4=23% -> sev3 best"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Two deterministic steps in physical order (blur -> storage JPEG), no noise (sigma 0.74/0.74/0.37; peeled sigma 1.48<2) and no global degradation (mean_shift<1/255, variance_ratio 0.87-0.98 explained by blur). Blur family motion is high confidence (oracle PCA 0%FP, slope-diff beats gaussian/glass/lens). Overall UNCERTAIN instead of LIKELY because blur_motion's random angle cannot be reproduced, so PSNR stays below 30 (best 29.44 dB, CI 7/10) and severity 4 vs 5 remains ambiguous; JPEG=3 is LIKELY.",
+    "alternatives": [
+      {
+        "pipeline": "blur_motion:5,compression_jpeg:3",
+        "psnr": 20.13,
+        "reason": "same-family severity alternative; one signal draw MATCH (slope+wiener>0.85+bb<8%), repeat PARTIAL (wiener=0.299)"
+      },
+      {
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "psnr": 23.25,
+        "reason": "cross-family backup; worse signals (slope diff 0.131, wiener 0.480)"
+      }
+    ]
+  },
+  "cross_support_verification": {
+    "method": "run_full_analysis.py on pair1/pair2 (test_candidate budget 25/25 exhausted; no extra candidate tests)",
+    "pair0": {
+      "block_boundary": 2.7761,
+      "dct_zero_ratio": 0.8877,
+      "gm_ratio": 0.4012,
+      "anisotropy": 1.4348,
+      "pca_ratio": 4.432,
+      "sigma": 0.74,
+      "verdict": "MOTION_BLUR + COMPRESSION_DETECTED, no global"
+    },
+    "pair1": {
+      "block_boundary": 3.372,
+      "dct_zero_ratio": 0.936,
+      "gm_ratio": 0.41,
+      "anisotropy": 1.78,
+      "pca_ratio": 4.33,
+      "sigma": 0.74,
+      "verdict": "MOTION_BLUR + COMPRESSION_DETECTED, no global"
+    },
+    "pair2": {
+      "block_boundary": 4.099,
+      "dct_zero_ratio": 0.945,
+      "gm_ratio": 0.362,
+      "anisotropy": 1.62,
+      "pca_ratio": 4.32,
+      "sigma": 0.37,
+      "verdict": "MOTION_BLUR + COMPRESSION_DETECTED, no global"
+    },
+    "result": "CONSISTENT across all 3 support pairs"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict UNCERTAIN; support_psnr 24.82",
+    "k_pairs": 3,
+    "pairs_used": ["0299 (pair0)", "0517 (pair1)", "0275 (pair2)"],
+    "full_analysis_rerun_pair0": {
+      "file": "full_analysis_R1.json",
+      "step1_compression": {"block_boundary": 2.7761, "dct_zero_ratio": 0.8877, "unique_G_target": 256, "unique_G_ratio": 1.0159, "verdict": "COMPRESSION_DETECTED"},
+      "step2_noise": {"noise_prior_sigma": 0.74, "spatial_corr": 0.8414, "cross_channel_corr": 0.8721, "residual_intensity_corr": 0.3902, "verdict": "GAUSSIAN_YCrCb low-confidence (false positive)"},
+      "step3_blur": {"gm_ratio": 0.4012, "spectral_slope_target": -1.2723, "spectral_slope_clean": -0.9258, "spectral_slope_ratio": 1.3742, "residual_anisotropy": 1.4348, "glass_score": 1.2361, "pca_ratio": 4.432, "verdict": "MOTION_BLUR est severity 4"},
+      "step4_global": {"mean_shift": -0.4, "variance_ratio": 0.8691, "contrast_spread_ratio": 0.9272, "clipped_fraction": 0.0005, "verdict": "NO_GLOBAL"},
+      "reproduction": "all pair0 values identical to R0 full_analysis.json"
+    },
+    "signal_reinterpretation": [
+      {"signal": "gm_ratio", "values": "0.4012/0.4099/0.3619 across pairs", "reinterpretation": "gm_ratio is measured on the final JPEG image; block artifacts add gradient energy -> severity estimate is a lower bound. Pair2 0.3619 is only 0.012 above the sev5 cutoff 0.35.", "supports": "motion:5 hypothesis"},
+      {"signal": "spectral_slope (angle-agnostic)", "values": "target -1.2723 (pair0); motion:5 diff matched 2/2 R0 signal draws; motion:4 diff 0.081-0.083 (threshold 0.08, MISMATCH); motion:3 0.129", "reinterpretation": "R0 kept sev4 although only sev5 matched the noise/angle-robust slope signal in both draws.", "supports": "motion:5 hypothesis"},
+      {"signal": "wiener kernel corr", "values": "motion:5 draws MATCH (>0.85) then PARTIAL (0.299); motion:4 best 0.609", "reinterpretation": "split across draws; blur_motion angle U(-90,90) per apply makes kernel corr draw-dependent", "supports": "inconclusive"},
+      {"signal": "PCA blur kernel ratio", "values": "4.432/4.335/4.323 (>2.5, motion 0%FP)", "reinterpretation": "confirms motion family on all 3 pairs; insensitive to severity", "supports": "motion family"},
+      {"signal": "anisotropy", "values": "1.4348/1.7754/1.6206", "reinterpretation": "pair1 >1.7 motion core; pair0 1.43 below DT threshold but PCA overrides (0%FP). DT conflict documented, family unchanged.", "supports": "motion family"},
+      {"signal": "glass_score", "values": "1.2361/0.9776/1.1324 (>0.25)", "reinterpretation": "glass DT trigger, but glass PSNR 21.31/21.67 << motion best 29.44 and PCA says motion -> score inflated by JPEG/blur artifacts", "supports": "reject glass"},
+      {"signal": "variance_ratio / contrast_spread_ratio", "values": "0.8691-0.9775 / 0.9272-0.9832", "reinterpretation": "variance loss explained by blur; contrast_detected_raw false -> no global step", "supports": "NO_GLOBAL"},
+      {"signal": "mean_shift", "values": "-0.4/-0.6/-0.7 of 255", "reinterpretation": "negligible -> no brightness", "supports": "NO_GLOBAL"},
+      {"signal": "clipped_fraction", "values": "0.0005/0.0042/0.2034", "reinterpretation": "pair2 heavy clipping is content/sky clipping: mean_shift and contrast_spread unchanged -> not a global edit", "supports": "NO_GLOBAL"},
+      {"signal": "noise sigma + peeled 6-step", "values": "sigma 0.74/0.74/0.37; peeled after motion:4+jpeg:3: sigma 1.48, extreme_pct 63.33, var_slope -0.0825, vm_slope 0.8211, spatial_corr 0.9735, rgb_ratio 1.0487, cross_ch_corr 0.9238", "reinterpretation": "extreme_pct>50% with sigma<5 is the documented JPEG/blur false positive; structured residual (spatial_corr 0.97) = motion-angle mismatch -> NO_NOISE", "supports": "NO_NOISE"},
+      {"signal": "residual_intensity_corr", "values": "0.3902/-0.0469/-0.2625", "reinterpretation": "sign inconsistent across pairs -> gamma_suspect is a blur+JPEG false positive; no gamma step", "supports": "no gamma"},
+      {"signal": "block_boundary / dct_zero_ratio", "values": "2.7761/3.3721/4.0992 (>1.1, 0%FP); dctz 0.8877/0.9356/0.9450", "reinterpretation": "JPEG presence signal solid; severity calibrated in R0 by bb diff (sev3 8-9% vs sev1 37%, sev2 28%, sev4 23%) -> jpeg:3 LIKELY", "supports": "jpeg:3"}
+    ],
+    "candidates_tested": [
+      {"pipeline": "blur_motion:4,compression_jpeg:3", "role": "R0 control revalidation", "rounds": [26, 27, 28], "psnr_per_pair": [22.29, 32.3, 23.56], "mean_psnr": 26.05, "ci_per_pair": ["7/10", "9/10", "10/10"]},
+      {"pipeline": "blur_motion:5,compression_jpeg:3", "role": "new candidate", "rounds": [29, 30, 31], "psnr_per_pair": [30.97, 19.56, 25.05], "mean_psnr": 25.19, "ci_per_pair": ["10/10", "9/10", "10/10"], "per_pair_delta_vs_control": [8.68, -12.74, 1.49], "mean_delta": -0.86}
+    ],
+    "decision_rule": "pure deterministic candidate (sigma<2): PSNR on all k pairs; CHANGE only if >40 dB or +2 dB vs previous round",
+    "decision": "NO_CHANGE",
+    "rationale": "The sev4->5 hypothesis is well motivated by signal reinterpretation, but the mandated cross-support PSNR validation rejects it: candidate mean 25.19 dB vs control 26.05 dB (delta -0.86 dB < +2 dB), no draw >40 dB, and per-pair deltas change sign (+8.68/-12.74/+1.49). x_distortion blur_motion draws angle U(-90,90) per apply, giving a 20.2-32.3 dB spread for the same pipeline - larger than the sev4/sev5 effect - so single-draw PSNR cannot arbitrate severity. Evidence insufficient -> keep R0 pipeline item-for-item.",
+    "limitations": "k=3 pairs only (all available). Severity 4 vs 5 remains unresolved and is carried forward for training-time arbitration. A >40 dB aligned-angle draw was not pursued (lottery, not signal-driven).",
+    "budget": {"new_candidates": 1, "test_candidate_calls_R1": 6, "test_candidate_budget": 15, "signal_reinterpretation_rounds": 1}
+  }
+}

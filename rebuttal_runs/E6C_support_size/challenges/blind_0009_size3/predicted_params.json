@@ -1,0 +1,30 @@
+{
+  "challenge_id": "blind_0009_size3",
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 2, "verdict": "UNCERTAIN"},
+    {"function": "saturate_strengthen_YCrCb", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 2},
+        {"function": "saturate_strengthen_YCrCb", "severity": 4}
+      ],
+      "psnr": null,
+      "function_family": "poisson noise + YCrCb saturation (severity backup)",
+      "stats": {"pair0_verify": "MATCH 4/4", "pair1_variance_diff_pct": 25, "pair2_variance_diff_pct": 25},
+      "note": "仅 pair0 匹配, 跨对不一致; 保留为饱和度严重度后备档"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode; verify_signals 4/4 signals on all 3 supports)",
+    "mode": "SIGNAL (sigma_prior 5.56/23.6/25.57 per support; PSNR unusable)",
+    "rationale": "两退化步骤: noise_poisson:2 -> saturate_strengthen_YCrCb:3 (物理顺序 noise->ISP)。证据: (1) 压缩被排除 (block_boundary≈1.0, unique_G=256, dct_zero_ratio=0.05); (2) 模糊被排除 (spectral_slope_ratio≈1.0 both pairs); (3) 全局 YCrCb 饱和度: 三对 target 的 chroma_ratio 2.16/4.21/6.00 与 variance_ratio 2.03/3.30/2.50 + 大量裁剪 + 均值偏移 (-9.5~+16.1) 只能由 chroma 放大裁剪重建解释, 且最终模拟在 3 对上的 mean/var/chroma/clip/spread/σ 与 target 逐位吻合; (4) 噪声: 剥离纯 sat 后 sigma_prior 仅 0.86/1.61/0.49, 而 target 为 5.56/23.6/25.57, 证明噪声存在; 5 类噪声 (gaussian_RGB/gaussian_YCrCb/impulse/speckle/poisson) 中仅 poisson:2 在 3 对 support 同时匹配 sigma 与残差结构 (spatial_corr<0.15, extreme<5%, FWHM<4)。verdict 规则: 噪声步骤永不 LIKELY -> 整体 UNCERTAIN。",
+    "per_step": {
+      "noise_poisson": {"severity": 2, "verdict": "UNCERTAIN", "evidence": "verify_signals noise:sigma MATCH on all 3 supports (σ 5.56/23.6/25.57 与模拟 5.56/23.6/25.57 吻合); residual autocorr/spatial structure MATCH"},
+      "saturate_strengthen_YCrCb": {"severity": 3, "verdict": "LIKELY", "evidence": "global:mean_shift + global:variance_ratio MATCH on all 3 supports; 6 项全局统计 (含 chroma/clip/spread) 逐位一致"}
+    }
+  }
+}

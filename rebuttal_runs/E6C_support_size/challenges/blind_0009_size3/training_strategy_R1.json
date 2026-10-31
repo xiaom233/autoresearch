@@ -1,0 +1,36 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "step noise_poisson:2 verdict=UNCERTAIN (3 对 support sigma 5.56/23.6/25.57 与模拟逐位吻合, 但含噪声步骤永不 LIKELY) -> 该步骤不加任何组件 (finetune_strategy.md §七: UNCERTAIN 步骤不加组件)",
+    "step saturate_strengthen_YCrCb:3 verdict=LIKELY (pair0/1/2 的 mean_shift +16.1/-8.1/-9.5, variance_ratio 2.028/3.304/2.503, chroma_ratio 2.16/4.21/6.00, clipped 0.526/0.369/0.364 全 MATCH)",
+    "variance_ratio≠1.0 归因于 saturation 而非 contrast: full_analysis contrast_from_saturation=true, contrast_saturation_corrected=true; reflection R1 contrast_strengthen_scale:4 verify_signals=MISMATCH (variance diff 27%) 被 REJECT",
+    "ColorPre 门控不满足: 信号源为 saturation/YCrCb, finetune_strategy.md §七 明确 saturation 禁用 ColorPre (有害 -0.34)",
+    "FiLM-GCM 门控不满足: 需 contrast + 结构化局部 (motion/jpeg) 的 Tier A variance_ratio; 本挑战 compression 被 block_boundary 0.9998/1.0005/1.0015 + unique_G=256 排除 (NO_COMPRESSION, Tier S), blur 被 spectral_slope_ratio 0.998/0.957/0.983 排除 (BLUR_UNLIKELY) -> 无 motion/jpeg 结构化局部",
+    "OCAB 门控不满足: anisotropy_ratio>1.7 + motion 条件无 motion 支撑 (spectral_slope_ratio≈1.0 三对一致), 不启用",
+    "SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全 (L2 +0.78); 本挑战 noise+saturation 非 S5(motion×3) 风险场景",
+    "策略 Direct: 含全局 saturation 变换, finetune_strategy.md §六 Step1 全局退化推荐 Direct (保守); 2 步噪声步骤 UNCERTAIN 不支持 RandomCurric 的收益前提",
+    "DualBranch 不启用: full_analysis 的推荐标志不作为依据, finetune_strategy.md §七 exp37 盲识别场景 DualBranch 0/24 胜; STRATEGY_INSTRUCTIONS 禁用 DualBranch",
+    "k=3 support 不改变架构门控: 跨 support 仅增强信号一致性 (3/3 MATCH), 门控阈值与 k=1 相同"
+  ],
+  "rationale": "本挑战为 noise_poisson:2(UNCERTAIN) + saturate_strengthen_YCrCb:3(LIKELY) 两步退化。三对 support 复核确认噪声 sigma 与全局统计逐位吻合, 但噪声步骤按协议永不 LIKELY; 全局步骤的 variance_ratio/chroma_ratio/裁剪/均值偏移均可由 YCrCb 饱和度放大+裁剪重建解释, contrast_scale 实测 MISMATCH。关键门控: 无 motion/jpeg 结构化局部 (compression/blur 均被 0%FP/光谱信号排除), 且 ColorPre 在 saturation 上明确有害, 故不启用 FiLM-GCM/ColorPre/OCAB/CSN/DualBranch。按 STRATEGY_INSTRUCTIONS 默认纯 Swin + SimpleGate + Direct, lr=5e-4, EPOCH=2, batch=16, embed_dim=64。"
+}

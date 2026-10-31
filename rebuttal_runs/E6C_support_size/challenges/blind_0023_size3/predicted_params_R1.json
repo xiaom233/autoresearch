@@ -1,0 +1,65 @@
+{
+  "challenge_id": "blind_0023_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_glass", 5],
+    ["compression_jpeg", 4],
+    ["contrast_weaken_scale", 1]
+  ],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"},
+    {"function": "contrast_weaken_scale", "severity": 1, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "contrast_weaken_scale", "severity": 1}
+      ],
+      "function_family": "blur:gaussian (deterministic)",
+      "psnr": {"pair0": 24.86, "pair1": 24.84, "pair2": 25.60, "mean": 25.10},
+      "reason": "bb-favoured blur family (target 4.054/4.862 vs gauss5+jpeg4 4.135/4.819, ~2% err); fully deterministic chain. 0.45 dB BELOW R0 glass chain on k=3 PSNR -> not enough for CHANGE (+2 dB rule)."
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "function_family": "2-step (no global)",
+      "psnr": {"pair0": 23.35, "pair1": null, "pair2": null, "mean": null},
+      "reason": "Tests whether the global step is a false positive. 1.51 dB below the same blur with contrast1 (pair0) -> global step is justified."
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_brighten_gamma_RGB", "severity": 1},
+        {"function": "blur_gaussian", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "function_family": "global:gamma-brighten (ignored-signal hypothesis)",
+      "psnr": {"pair0": 22.66, "pair1": null, "pair2": null, "mean": null},
+      "reason": "residual_intensity_corr=0.459 + gamma_suspect=True suggested a tone-curve (gamma) step; unique_G became 249 vs target 246 (1%.) but mean brightening overshoots (PSNR 22.66, lowest) -> rejected."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR for deterministic re-simulations (no noise step in candidate), SIGNAL history retained; raw sigma 3.95 (pair0) is JPEG-artifact inflated, cross-pair sigma 1.1/0.4 and peeled residual (spatial_corr=0.977, var_slope=-0.074) -> NO_NOISE",
+    "support_psnr_r0": 20.15,
+    "psnr_validation_k3": {
+      "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1 (R0)": [25.44, 25.36, 25.86],
+      "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1": [24.86, 24.84, 25.60]
+    },
+    "decision_rule": "Deterministic candidates need PSNR > 40 dB or +2 dB vs previous round. Best new candidate (gaussian chain) is -0.45 dB vs R0 on all 3 pairs; R0 chain itself 25.55 dB mean -> NO_CHANGE.",
+    "signal_reinterpretation": [
+      "blur_glass is stochastic: x_distortion/blur.py calls shuffle_pixels_njit with np.random.randint per pixel. Therefore (a) PSNR/self-simulation of any glass pipeline saturates ~25 dB, (b) the 11-21% block_boundary deficit of glass5+jpeg4 vs target is partly irreducible shuffle-realisation variance, and (c) the 3/3-pair raw spectral_slope match of glass (-1.417/-1.60/-1.70 vs target -1.379/-1.594/-1.678, diff 0.03-0.06) remains the strongest subtype evidence. PSNR ordering glass > gaussian on 3/3 pairs (+0.58/+0.52/+0.26 dB) confirms the R0 choice.",
+      "Global step: variance_ratio=0.456 / spread 0.6385 / chroma 0.7855 / mean_shift=+5.4. Relative to blur+JPEG baseline the missing tone step is var x0.72-0.75, i.e. c~0.85, milder than the mildest library contrast (sev1 c=0.75). No library function matches exactly: contrast1 after JPEG gives var 0.358 (closest variance; PSNR +1.51 dB over no-global), gamma sev1 matches unique_G (249 vs 246) but overshoots mean and costs 2.2 dB, saturate_weaken_HSV/D sev1 over-desaturate (chroma 0.605 vs 0.786), quantization_hist/median would collapse unique_G to <=24 (target 246) -> ruled out. Keep contrast_weaken_scale:1.",
+      "Order: contrast AFTER JPEG confirmed again - before JPEG raised bb +40% in R0 T9; after JPEG leaves bb unchanged and gives the best PSNR on all tested chains.",
+      "Noise re-check (R1 full_analysis reproduced: sigma 3.95, ric 0.4586, gamma_suspect=True): the intensity-correlated residual is explained by the tone step (gamma_suspect is a by-product), not by noise; cross-pair sigma 1.1/0.4 makes a sensor-noise step impossible."
+    ],
+    "severity_scan": "blur: gaussian5, glass5, lens5 (R0), glass5 PSNR-checked on k=3; jpeg 4 (5 overshoots bb +58%); global: contrast1 (closest), gamma1, sat HSV1/3 (R0), no-global",
+    "residual_uncertainty": "Library gap: GT global step (effective c~0.85, mean +5.4) cannot be represented exactly; contrast sev1 overshoots variance/unique_G while mean stays +2.0 vs +5.4. Glass-vs-gaussian remains a cross-signal conflict (slope/gm/gm-glass_score -> glass; bb magnitude -> gaussian), arbitrated by k=3 PSNR in favour of glass by only 0.45 dB. Training PSNR (R0=20.15) likely reflects this representability gap rather than a wrong degradation family."
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "challenge_id": "blind_0024_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "noise_gaussian_RGB",
+      3
+    ],
+    [
+      "blur_gaussian",
+      3
+    ],
+    [
+      "saturate_strengthen_HSV",
+      5
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_gaussian_RGB",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "saturate_strengthen_HSV",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        [
+          "noise_gaussian_YCrCb",
+          3
+        ],
+        [
+          "blur_gaussian",
+          3
+        ],
+        [
+          "saturate_strengthen_HSV",
+          5
+        ]
+      ],
+      "function_family": "noise_gaussian_YCrCb",
+      "reason": "R0 保留备选；R1 未重测，R0 指纹对比(bench 3/5 弱于 RGB)未改变结论。"
+    },
+    {
+      "pipeline": [
+        [
+          "noise_gaussian_RGB",
+          3
+        ],
+        [
+          "blur_gaussian",
+          3
+        ],
+        [
+          "saturate_strengthen_HSV",
+          3
+        ]
+      ],
+      "function_family": "saturate_strengthen_HSV(sev3)",
+      "reason": "饱和 sev3/4/5 信号不可区分（R0 R3/R9 已验证），保留 severity 备选。"
+    },
+    {
+      "pipeline": [
+        [
+          "noise_speckle",
+          2
+        ],
+        [
+          "blur_gaussian",
+          3
+        ],
+        [
+          "saturate_strengthen_HSV",
+          5
+        ]
+      ],
+      "function_family": "noise_speckle",
+      "reason": "R1-C3：verify_signals 5✓/1✗（variance_ratio 由 10% 失配变为匹配），但 §B 指纹变差（cross_ch 0.777 vs target 0.754，ric 0.8700 vs 0.8627，chroma 1.656→1.561，gm 0.150→0.132）。单对 k=1 证据不足未采纳，保留供训练后 PSNR 仲裁。"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL",
+    "noise_prior_sigma": 3.83,
+    "support_pairs": 1,
+    "test_candidate_calls": 8,
+    "new_candidate_families": [
+      "noise_speckle",
+      "noise_poisson",
+      "blur_lens",
+      "blur_gaussian:2"
+    ],
+    "k1_limitation": "仅 pair0（k=1），无法跨对验证；单对噪声 seed 与内容依赖波动不可分离，阈值未放宽，证据不足判 NO_CHANGE。",
+    "rationale": "R1 重跑 run_full_analysis 与 R0 信号一致（sigma=3.83、mean_shift=-42.9、gm_ratio=0.1503、spectral_slope_ratio=1.2618、block_boundary=0.9996、unique_G=233；仅 residual_intensity_corr 0.8617→0.8627）。压缩排除；blur_gaussian:3 保持最佳（spectral_slope diff=0.0305<0.08、wiener 匹配；lens:3/2 与 glass:4、gaussian:2/4 均 WEAK→排除）；全局 saturate_strengthen_HSV:5（mean 精确复现 -42.9、chroma 1.623 vs 1.655、clip 0.334 vs 0.323；sat-only 模拟图被 run_full_analysis 同样判为 BRIGHTNESS_darken_sev3+SATURATION，确证 brightness 为裁剪假阳性）；噪声 gaussian_RGB:3（sigma 精确一致；cross_ch 0.750 vs 0.754、ric 0.8625 vs 0.8627，优于 speckle 的 0.777/0.873）。唯一改善 verify 的 speckle:2/3（5✓/1✗）仅靠 variance_ratio（全局信号）阈值补偿，同时 chroma/gm/cross_ch/ric 偏离增大，非支配性改善且 pair 仍为 PARTIAL（未发生 WEAK→PARTIAL/MATCH）；poisson/lens/blur2 均 WEAK；无候选达到 MATCH。故 R1 管线与 R0 逐项相同。"
+  }
+}

@@ -1,0 +1,767 @@
+{
+  "challenge_id": "blind_0017_size1",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=8.393 (>1.05, 0%FP) → JPEG; dct_zero_ratio=0.957; unique_G 226/249 (ratio 0.91)",
+      "blur": "gm_ratio=0.199 (strong), glass_score=1.62>0.25, FFT anisotropy=1.39<1.7 (not motion), spectral_slope_ratio=1.132 → glass blur, medium confidence",
+      "noise": "noise_prior sigma=0.74 < 2 → NO_NOISE; gamma_suspect=true (residual_intensity_corr=-0.206) kept as global alternative",
+      "global": "variance_ratio=0.732, saturation_chroma_ratio=0.848, mean_shift=-0.2/255 → saturate_weaken_HSV:2 (low confidence); contrast_weaken / gamma as alternatives"
+    },
+    "mode": "PSNR (sigma=0.74)",
+    "suspected": [
+      "compression_jpeg",
+      "blur_glass",
+      "saturate_weaken_HSV"
+    ],
+    "ruled_out": [
+      "noise (sigma<2)",
+      "motion blur (anisotropy 1.39<1.7)",
+      "brightness (mean_shift≈-0.2/255)",
+      "impulse (extreme signal absent)"
+    ],
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "sigma=0.74<2 → NO_NOISE, Step 0.5 not triggered"
+    }
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py on residual after stripping blur_gaussian:5,compression_jpeg:4 (glass:5,jpeg:4 peel identical structure: std 10.9, spatial_corr 0.9679, extreme_pct 75.60, vm_slope 0.2495, var_slope -0.4392, rgb_ratio 1.4017, cross_ch_corr 0.6814)",
+    "extreme_pct": 77.32,
+    "vm_slope": 0.2195,
+    "var_slope": 0.263,
+    "spatial_corr": 0.9666,
+    "rgb_ratio": 1.4852,
+    "cross_ch_corr": 0.6272,
+    "ch_stds": {
+      "R": 8.7,
+      "G": 8.2,
+      "B": 12.2
+    },
+    "residual_std": 10.2,
+    "noise_prior_sigma": 1.48,
+    "noise_prior_note": "wavelet sigma is a lower bound (blur attenuates high-freq noise); raw target sigma_prior=0.74",
+    "diagnosis": "NO_NOISE. sigma=1.48<2 per SKILL threshold. extreme_pct=77.32% IMPULSE is the documented false positive (extreme_pct>50% AND sigma<5 → JPEG/blur artifact); residual spatial_corr=0.9666 is structured (not random noise); impulse:1 control candidate produced no PSNR gain (27.69 vs 27.38/27.41 baseline, within glass seed noise). rgb_ratio=1.49 mild YCrCb hint is also structural (ch_stds dominated by B-channel blur/JPEG mismatch), not noise."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "Step1 compression: block_boundary=8.393 (0%FP JPEG), dct_zero_ratio=0.957, unique_G ratio 0.91. Test JPEG sev4 anchor before deciding scan direction."
+      },
+      "test_result": {
+        "psnr_rgb": 24.19,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "Compression severity scan: jpeg:4 PSNR=24.19. block_boundary extremely high (8.39) suggests strong JPEG; test sev5."
+      },
+      "test_result": {
+        "psnr_rgb": 23.66,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "Compression severity scan: sev4=24.19 > sev5=23.66 → try lower sev3."
+      },
+      "test_result": {
+        "psnr_rgb": 24.14,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "thinking": "Step2 blur: gm_ratio=0.199 (very strong), glass_score=1.62>0.25 with sigma<3 → glass per SKILL DT. Physical order blur→JPEG. JPEG sev4 fixed."
+      },
+      "test_result": {
+        "psnr_rgb": 27.38,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "thinking": "Cross-family blur control: glass_score signal could be FP; test gaussian sev5 (SKILL failure mode: if gaussian PSNR ≥5dB higher, DT is wrong)."
+      },
+      "test_result": {
+        "psnr_rgb": 28.0,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,saturate_weaken_HSV:2,compression_jpeg:4",
+        "thinking": "Step4 global: variance_ratio=0.732 + saturation_chroma_ratio=0.848 + mean_shift≈0 → saturation weaken sev2 (ISP before JPEG). Add to best blur+jpeg pipeline to test contribution."
+      },
+      "test_result": {
+        "psnr_rgb": 23.71,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,saturate_weaken_HSV:2,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:2,compression_jpeg:4",
+        "thinking": "Global cross-family: saturation weaken dropped PSNR 4.3dB → reject. variance_ratio=0.732 is luma variance → contrast_weaken more plausible than saturation (saturation keeps luma variance). Test contrast_weaken_scale:2."
+      },
+      "test_result": {
+        "psnr_rgb": 23.18,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:2,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "thinking": "Glass severity scan: DT → glass. Peeled residual spatial_corr=0.967 under gaussian peel (structured) supports glass-type (shuffle) mismatch. Test glass sev4 (±1 vs sev5)."
+      },
+      "test_result": {
+        "psnr_rgb": 27.41,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "thinking": "JPEG severity scan in final glass context: standalone jpeg3≈jpeg4 (24.14 vs 24.19). Blur before JPEG smooths blocks, so actual JPEG may be stronger; re-test sev3 vs sev4 with glass:5 fixed."
+      },
+      "test_result": {
+        "psnr_rgb": 27.68,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,blur_glass:5,compression_jpeg:4",
+        "thinking": "Step3 noise control: noise_prior sigma=1.48<2 and peeled spatial_corr=0.968 (structured) → §B IMPULSE is JPEG/blur FP. Physical order noise→blur→JPEG. Add impulse:1 to test if noise contributes at all (expect PSNR drop)."
+      },
+      "test_result": {
+        "psnr_rgb": 27.69,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:1,blur_glass:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "thinking": "Signal-mode verification (robust to glass shuffl seed): check spectral_slope diff and Wiener kernel self-consistency for gaussian blur severity 5."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.310)",
+          "compression:block_boundary (diff=39%)"
+        ],
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:5",
+        "thinking": "Signal-mode: jpeg4 gave block_boundary diff 39% (sim weaker than target). Test jpeg5 to see if raw blockiness converges (target block_boundary=8.39 very high)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.169)",
+          "compression:block_boundary (diff=162%)"
+        ],
+        "pipeline": "blur_gaussian:5,compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "thinking": "Blur type arbitration: glass_score=1.62 DT branch. Signal mode checks wiener kernel + spectral_slope vs gaussian candidate (wiener MATCHED for gaussian)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.190)",
+          "blur:wiener_kernel (corr=0.831)",
+          "compression:block_boundary (diff=12%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:5,compression_jpeg:4",
+        "thinking": "Cross-family blur control (bandwidth doubt): gaussian slope diff 0.310 and glass 0.190 suggest stronger HF attenuation; lens sev5 radius=8 is the remaining family (radial_ratio not flagged as reliable). Deterministic → PSNR comparable."
+      },
+      "test_result": {
+        "psnr_rgb": 28.03,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:5,compression_jpeg:4",
+        "thinking": "Signal-mode for lens: compare wiener kernel corr (gaussian MATCHED >0.85, glass 0.831) and spectral_slope diff (gaussian 0.310, glass 0.190)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.228)",
+          "compression:block_boundary (diff=19%)"
+        ],
+        "pipeline": "blur_lens:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Blur severity scan (deterministic): gaussian5+jpeg4=28.0 too low for exact deterministic match; test gaussian sev4 (±1) before abandoning deterministic family."
+      },
+      "test_result": {
+        "psnr_rgb": 28.21,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "thinking": "Exact-combo search: deterministic gaussian4/5+jpeg4 plateau ~28 suggests JPEG severity mismatch. Test gaussian:4 + JPEG:3 (deterministic exact match would jump >35dB)."
+      },
+      "test_result": {
+        "psnr_rgb": 28.48,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "thinking": "Final candidate verification (k=1 single support pair): repeat primary glass5+jpeg4 to estimate glass shuffle seed variance vs deterministic plateau 28.0-28.5."
+      },
+      "test_result": {
+        "psnr_rgb": 27.41,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:2,compression_jpeg:4",
+        "thinking": "Sim-calibration: gaussian5+jpeg4 gave gm_ratio 0.138/slope1.389 (over-blurred vs target 0.199/1.132) and var_ratio 0.887 (target 0.732). Use gaussian4 + mild contrast_weaken_stretch sev2 (scale 0.9 → var×0.81 → 0.72) + jpeg4."
+      },
+      "test_result": {
+        "psnr_rgb": 21.1,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:2,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Final arbitration: gaussian4+jpeg4 has best CI block ratio (1%) and PSNR 28.21. Signal mode compares raw block_boundary (target 8.39; gaussian5+jpeg4 sim measured 11.64=+39%) to decide blur/JPEG severity."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.188)",
+          "compression:block_boundary (diff=13%)"
+        ],
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:4",
+        "thinking": "Blur severity boundary: gaussian5→4 improved PSNR/CI/slope/block monotonically; test gaussian3 to find the minimum (target gm_ratio 0.199 vs gaussian5 sim 0.138 → weaker blur expected)."
+      },
+      "test_result": {
+        "psnr_rgb": 28.22,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "thinking": "R1 family-coverage check: SKILL requires gaussian+lens+motion coverage; R0 tested gaussian/glass/lens but not motion. Signal: residual_anisotropy=1.3947 (<1.7 motion threshold of 94% recall) and gm_ratio=0.199 → gaussian expected; test motion as the last untested blur family before NO_CHANGE."
+      },
+      "test_result": {
+        "psnr_rgb": 25.67,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:3",
+        "thinking": "R1 joint-boundary test: signals show current sims overshoot on both steps — gaussian5+jpeg4 sim gm_ratio=0.138 vs target 0.199 (over-blurred) and sim block_boundary +13% vs target 8.393 (over-blocky). R0 tested gaussian3+jpeg4 (28.22) and gaussian4+jpeg3 (28.48) separately but never the joint lowering gaussian3+jpeg3; if the plateau is a symmetric severity overestimate this combination should converge."
+      },
+      "test_result": {
+        "psnr_rgb": 28.31,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:1,compression_jpeg:4",
+        "thinking": "R1 unexplained-signal boundary test: target variance_ratio=0.732 vs gaussian5+jpeg4 sim 0.887 (−0.155 shortfall) is the only signal not explained by blur+JPEG; R0 tested contrast_weaken_stretch:2 and contrast_weaken_scale:2 (both −4.8 to −7.1 dB) but never the mild sev1 boundary. If a weak contrast step is real, sev1 is the only unexplored point; if PSNR/CI still degrade, global is definitively a blur+JPEG byproduct."
+      },
+      "test_result": {
+        "psnr_rgb": 21.72,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:3",
+        "thinking": "R1 grid completion (k=1 pair0): signals indicate target blur between gaussian3 and gaussian4 (target gm_ratio 0.199 vs gaussian5 sim 0.138 over-blurred), and JPEG sev4 preferred by 0%FP block_boundary (raw target 8.393). The only untested corner of the plausible gaussian3-5 x jpeg3-4 grid is gaussian5+jpeg3; test it to confirm the ~28dB deterministic plateau and rule out a >2dB CHANGE (threshold >30.21dB)."
+      },
+      "test_result": {
+        "psnr_rgb": 28.34,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:3",
+      "psnr_rgb": 28.48,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:3",
+      "psnr_rgb": 28.34,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:3",
+      "psnr_rgb": 28.31,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:4",
+      "psnr_rgb": 28.22,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 28.21,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_lens:5,compression_jpeg:4",
+      "psnr_rgb": 28.03,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": 28.0,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "noise_impulse:1,blur_glass:5,compression_jpeg:4",
+      "psnr_rgb": 27.69,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:3",
+      "psnr_rgb": 27.68,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:4",
+      "psnr_rgb": 27.41,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4",
+      "psnr_rgb": 27.41,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4",
+      "psnr_rgb": 27.38,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:4",
+      "psnr_rgb": 25.67,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 24.19,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 24.14,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:5,saturate_weaken_HSV:2,compression_jpeg:4",
+      "psnr_rgb": 23.71,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 23.66,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:2,compression_jpeg:4",
+      "psnr_rgb": 23.18,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_stretch:1,compression_jpeg:4",
+      "psnr_rgb": 21.72,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_stretch:2,compression_jpeg:4",
+      "psnr_rgb": 21.1,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_gaussian",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "alternatives": [
+      "blur_glass:5,compression_jpeg:4 (PSNR 27.41, CI 8/10; glass DT branch still possible, glass_score shown to be JPEG-inflated)",
+      "blur_gaussian:4,compression_jpeg:3 (PSNR 28.48, CI 8/10, but block_boundary CI 16%)",
+      "blur_gaussian:3,compression_jpeg:4 (PSNR 28.22, CI 8/10)",
+      "blur_lens:5,compression_jpeg:4 (PSNR 28.03, CI 7/10, wiener MATCH)"
+    ],
+    "rationale": "JPEG presence is certain (block_boundary=8.393, 0%FP; dct_zero_ratio=0.957). Strong blur certain (gm_ratio=0.199). Noise and global ruled out by peeled §B (sigma<2, structured residual) and by three global tests that each cost 4-7dB / CI collapse. Blur subtype: glass DT signal (glass_score=1.62) is contradicted by a control — pure gaussian:5+jpeg:4 simulation scores glass_score=1.69, proving JPEG inflates glass_score; gaussian family wins on wiener kernel self-consistency (MATCH vs glass 0.831) and PSNR (28.2 vs 27.4). Severity: sim analysis of gaussian5+jpeg4 (gm_ratio 0.138, spectral slope ratio 1.389) vs target (0.199, 1.132) shows gaussian5 is over-blurred → sev4 (sev3 ties at PSNR but is the boundary of the scan). JPEG sev4 preferred over 3 on the 0%FP block signal (CI 1% vs 16%) despite sev3 PSNR +0.27dB. No candidate exceeds 30dB — a plateau consistent with an unresolved stochastic component (glass shuffle cannot be excluded) or off-grid severity; verdict stays UNCERTAIN, training PSNR must arbitrate. Single support (k=1, pair0 only): final candidates were verified on the only support pair; cross-pair validation impossible.",
+    "support_size_note": "k=1：仅 pair0 (image 0383) 可用，无法做跨对验证；所有结论基于单对 support。",
+    "budget": {
+      "test_candidate_calls": 21,
+      "budget_limit": 25,
+      "peeled_noise_check": 2,
+      "run_full_analysis": 2
+    },
+    "qwen_gate": {
+      "available": false,
+      "triggered": false
+    }
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN, support_psnr_r0=24.66 (<35)",
+    "support_size": {
+      "k": 1,
+      "pairs_used": [
+        "pair0: degraded.png / clean.png"
+      ],
+      "limitation": "单对 support：无跨对验证，单对 PSNR 噪声大；CHANGE 阈值不放宽（>40dB 或相对上一轮 +2dB，即 >30.21dB），证据不足即 NO_CHANGE"
+    },
+    "signal_reanalysis": {
+      "full_analysis_R1": "重跑结果与 R0 逐项一致：block_boundary=8.393 (0%FP JPEG), unique_G 226/249=0.9076, dct_zero_ratio=0.9571, gm_ratio=0.1989, spectral_slope_ratio=1.1319, residual_anisotropy=1.3947, glass_score=1.6207, blur_pca_ratio=1.159, noise_prior sigma=0.74, variance_ratio=0.7324, contrast_spread_ratio=0.8665, saturation_chroma_ratio=0.8476, mean_shift=-0.2/255, clipped_fraction=0.0001, residual_intensity_corr=-0.1891（R0 为 -0.2063，仅该低权重残差-强度相关有微量运行波动）",
+      "checked_signals": [
+        {
+          "signal": "motion blur family (被忽略的模糊族)",
+          "value": "residual_anisotropy=1.3947 < 1.7（94% recall 阈值）；R0 只测 gaussian/glass/lens，未覆盖 motion（SKILL 要求 gaussian+lens+motion 覆盖）",
+          "action": "test_candidate blur_motion:4,compression_jpeg:4 (PSNR 模式)",
+          "outcome": "25.67 dB, CI 7/10 → 明显低于 R0 的 28.21 dB，motion 排除（block_boundary diff 3% 为所有候选最佳，仅作记录）"
+        },
+        {
+          "signal": "联合 severity 边界 (被忽略的组合)",
+          "value": "gaussian5+jpeg4 模拟 gm_ratio=0.138 vs 目标 0.199（过模糊）；jpeg4 模拟 block_boundary 比目标高 13%（过块）；R0 分别测过 gauss3+jpeg4 与 gauss4+jpeg3，联合 gauss3+jpeg3 未测",
+          "action": "test_candidate blur_gaussian:3,compression_jpeg:3 (PSNR 模式)",
+          "outcome": "28.31 dB 但 CI 5/10（block 20%、overshoot 23%、zero_crossing 32% 失配）→ 拒绝；PSNR 增益 +0.10dB 远低于 +2dB 门槛"
+        },
+        {
+          "signal": "gaussian×JPEG severity 网格未测角 (完成性检查)",
+          "value": "目标 gm_ratio=0.199 介于 gaussian3/4 区间（gaussian5 模拟 0.138 为过模糊）；block_boundary=8.393 (0%FP) 指向 JPEG；gaussian3-5 × jpeg3-4 网格仅剩 gaussian5+jpeg3 未测",
+          "action": "test_candidate blur_gaussian:5,compression_jpeg:3 (PSNR 模式)",
+          "outcome": "28.34 dB, CI 8/10 (block 11%) → 低于 CHANGE 门槛 30.21dB；确定性网格闭合（gauss3-5×jpeg3-4 全部 28.00-28.48dB），~28dB 平台确认"
+        },
+        {
+          "signal": "variance_ratio 缺口（唯一未解释信号）",
+          "value": "目标 variance_ratio=0.7324 vs gaussian5+jpeg4 模拟 0.887（缺口 −0.155）；R0 只测过 contrast sev2（−4.8/−7.1dB），轻度 sev1 未测",
+          "action": "test_candidate blur_gaussian:4,contrast_weaken_stretch:1,compression_jpeg:4 (PSNR 模式)",
+          "outcome": "21.72 dB, CI 3/10 → 即使 sev1 全局退化也崩溃 6.5dB；variance_ratio=0.732 确系 blur+JPEG 空间非均匀副产物，global 彻底排除"
+        },
+        {
+          "signal": "噪声 §B（在 R0 最终管线上重剥离）",
+          "value": "peel blur_gaussian:4+compression_jpeg:4: extreme_pct=78.51%, vm_slope=0.2122, var_slope=0.058, spatial_corr=0.9664, rgb_ratio=1.5141, cross_ch_corr=0.5975, residual_std=9.9, noise_prior sigma=1.48",
+          "r0_status": "R0 peel 用的是 gaussian5+jpeg4（数值 77.32/0.2195/0.263/0.9666/1.4852/0.6272），R1 用最终管线复核",
+          "outcome": "残差高度结构化（spatial_corr=0.966），sigma=1.48<2 → NO_NOISE 维持；extreme_pct IMPULSE 为文档化假阳性（>50% 且 sigma<5）"
+        }
+      ]
+    },
+    "hypotheses_and_validation": [
+      {
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "mode": "PSNR",
+        "psnr": 25.67,
+        "ci": "7/10",
+        "decision": "REJECT"
+      },
+      {
+        "pipeline": "blur_gaussian:3,compression_jpeg:3",
+        "mode": "PSNR",
+        "psnr": 28.31,
+        "ci": "5/10",
+        "decision": "REJECT"
+      },
+      {
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:1,compression_jpeg:4",
+        "mode": "PSNR",
+        "psnr": 21.72,
+        "ci": "3/10",
+        "decision": "REJECT"
+      },
+      {
+        "pipeline": "blur_gaussian:5,compression_jpeg:3",
+        "mode": "PSNR",
+        "psnr": 28.34,
+        "ci": "8/10",
+        "decision": "REJECT"
+      }
+    ],
+    "final_decision_R1": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        [
+          "blur_gaussian",
+          4
+        ],
+        [
+          "compression_jpeg",
+          4
+        ]
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "rationale": "R1 完成 4 个新候选（motion 族覆盖、联合 severity 边界、global sev1 边界、gaussian×JPEG 网格补角），全部未达 +2dB CHANGE 门槛（>30.21dB）：gauss3+jpeg3 28.31 但 CI 5/10；gauss5+jpeg3 28.34/CI 8/10；motion 25.67；加 global 21.72。确定性网格 gauss3-5×jpeg3-4 全部落在 28.00-28.48dB，~28dB 平台闭合，R0 的 gaussian4+jpeg4（28.21dB, CI 8/10）维持。残留随机分量（glass 洗牌无法排除）或 off-grid severity 只能由训练 PSNR 仲裁。k=1 单对限制：无跨对验证，证据不足→NO_CHANGE，保持 R0 管线不变。",
+      "budget": {
+        "run_full_analysis": 2,
+        "peeled_noise_check": 2,
+        "test_candidate_calls": 4,
+        "new_candidates": 4,
+        "budget_limit": 15
+      },
+      "completion_note": "R1 记录由两次调用完成：先前调用产生前 3 个候选（iterations round 9-11）与 reflection_R1 草稿；本次调用重跑 run_full_analysis（逐项一致）、按最终管线重剥离 §B（数值与草稿一致：extreme_pct=78.51, vm_slope=0.2122, var_slope=0.058, spatial_corr=0.9664, sigma=1.48）、补测第 4 个候选（round 12, gauss5+jpeg3=28.34dB），并补齐 predicted_params_R1.json / r1_decision.json / agent_timing_R1.json。",
+      "support_size_note": "k=1：仅 pair0 可用；所有 R1 结论基于单对，未放宽阈值。"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "OCAB 不触发: full_analysis_R1 step3 residual_anisotropy=1.1478 (<1.7), blur_pca_ratio=1.154, spectral_slope_ratio=1.2618; R1 采用 blur_gaussian:3 (LIKELY, 3 对 PSNR 峰值), 各向同性 gaussian, motion 已排除",
+    "FiLM-GCM 不触发: variance_ratio=1.3713 但 full_analysis_R1 step4 contrast_from_variance=false, brightness_clip_explains_variance=true, false_positive_checks.contrast_from_saturation=true; 管线无 contrast 步骤, 也无结构化 motion/jpeg (block_boundary=0.9996, unique_G=233 → NO_COMPRESSION)",
+    "ColorPre 不触发: 唯一全局步骤为 saturate_strengthen_HSV:3 (UNCERTAIN, chroma_ratio=1.6553), 属 Tier C saturation 信号; finetune_strategy.md §七 saturation 不加 ColorPre (有害 -0.34)",
+    "SimpleGate 默认常开: -32K 参数, exp39 8/9 退化安全; 本挑战 2 步管线不含 S5 三退化场景",
+    "策略 Direct: R1 管线 blur_gaussian:3 + saturate_strengthen_HSV:3 含全局 saturation, 整体 verdict=UNCERTAIN, 按 finetune_strategy.md Step1 含全局退化/UNCERTAIN → Direct 保守; 无曲线/ckpt 迁移收益 (True Ft ≈ Direct, exp37)",
+    "R1 删除噪声步: peeled residual spatial_corr=0.9869 (sat4 peel)/0.9864 (sat3 peel), residual_intensity_corr=0.8636 → clip 伪影而非噪声, 故无噪声专用处理; BLUR 子类型为 gaussian (Tier B), 不启用组件",
+    "k=3 support 不改变门控: 未因 support 少而放宽 anisotropy>1.7 / variance_ratio+结构化 等阈值"
+  ],
+  "rationale": "纯 Swin + SimpleGate + Direct。R1 管线为确定性两步 (blur_gaussian:3 + saturate_strengthen_HSV:3), 信号层面: anisotropy 1.1478<1.7 排除 OCAB; variance_ratio 异常被 clipping/saturation 解释且无 contrast/结构化局部, FiLM-GCM 不成立; saturation 属 Tier C 不加 ColorPre; 仅 SimpleGate 默认常开。UNCERTAIN + 全局 saturation → Direct, lr=5e-4, EPOCH=2 与基线一致。"
+}

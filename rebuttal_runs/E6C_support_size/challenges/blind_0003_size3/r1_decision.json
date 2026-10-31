@@ -1,0 +1,41 @@
+{
+  "challenge_id": "blind_0003_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 2]],
+  "r1_pipeline": [["blur_glass", 2]],
+  "support_psnr_r0": 26.79,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_glass:2",
+      "role": "anchor re-validation on all k=3 pairs",
+      "psnr_per_pair": {"pair0": 34.67, "pair1": 28.47, "pair2": 38.87},
+      "ci": "10/10 on all 3 pairs",
+      "verdict": "retained; |delta| <= 0.04 dB vs R0 (34.66/28.44/38.91)"
+    },
+    {
+      "pipeline": "blur_glass:2,compression_jpeg:1",
+      "role": "H1 missed mild compression (the only R0 signal flagged should_still_test but never probed)",
+      "psnr_per_pair": {"pair0": 32.08},
+      "ci": "6/10 on pair0",
+      "verdict": "rejected: -2.59 dB vs anchor; CI block_boundary diff 101% (simulated blockiness about 2x target); pair0 carries the strongest compression signal among the 3 pairs (unique_G_ratio 0.834, dct_zero_ratio 0.5074), so failure there closes the hypothesis without needing pairs 1/2"
+    }
+  ],
+  "test_candidate_calls": 4,
+  "best_validation": {
+    "pipeline": "blur_glass:2",
+    "psnr_by_pair": {"pair0": 34.67, "pair1": 28.47, "pair2": 38.87},
+    "ci_pass": "10/10 on all 3 support pairs (max |diff| <= 0.002)",
+    "reproducibility_vs_R0": "|delta| <= 0.04 dB per pair"
+  },
+  "signal_sources": [
+    "pair0 full_analysis_R1 rerun: block_boundary 1.0019 (<1.05, no JPEG), unique_G 211/253 (ratio 0.834), dct_zero_ratio 0.5074, gm_ratio 0.2989, spectral_slope_ratio 1.0927, residual_anisotropy 1.244 (<1.7, not motion), glass_score 0.5049 (>0.25), noise_prior_sigma 1.48, spatial_corr 0.4762, cross_ch_corr 0.9327, residual_intensity_corr -0.0124, variance_ratio 0.8686, contrast_spread_ratio 0.9197, mean_shift -0.5, clipped_fraction 0.0",
+    "pair1 full_analysis_p1: gm_ratio 0.2603, glass_score 0.4663, residual_anisotropy 1.4424, noise_prior_sigma 4.08 (content-dependent), residual_intensity_corr 0.4333 (gamma_suspect, pair-specific), variance_ratio 0.760, unique_G_ratio 0.9766 (NO_COMPRESSION), dct_zero_ratio 0.3975",
+    "pair2 full_analysis_p2: gm_ratio 0.5644, spectral_slope_ratio 1.0646 (BLUR_UNLIKELY borderline), noise_prior_sigma 0.37 (content-dependent, 11x spread vs pair1), block_boundary 0.9979, variance_ratio 0.9875, contrast_spread_ratio 0.9948, saturation_chroma_ratio 0.9817",
+    "R0 sim_glass2 pair0 fingerprint: unique_G 212 vs target 211, dct_zero_ratio 0.5068 vs 0.5074, gm_ratio 0.2985 vs 0.2989, glass_score 0.5048 vs 0.5049, noise_prior_sigma 1.48 vs 1.48, variance_ratio 0.8682 vs 0.8686, contrast_spread_ratio 0.9197 vs 0.9197, mean_shift -0.5 vs -0.5, block_boundary 1.0008 vs 1.0019, blur_pca_ratio 1.118 vs 1.124, blur_density 0.8437 vs 0.8437; only mtf_roughness differs (0.999 vs 0.8767)",
+    "peeled_noise_R1 on blur_glass:2 residual (pair0): residual_std 4.7, extreme_pct 58.45%, vm_slope 4.968, var_slope 0.0577, spatial_corr 0.9511, rgb_ratio 1.0635, cross_ch_corr 0.9080, ch_stds 4.6/4.7/4.9, noise_prior sigma 2.97 (<5); matches SKILL documented extreme_pct>50% + sigma<5 false-positive mode for glass shuffle residuals -> no noise step",
+    "R1 JPEG probe (pair0): blur_glass:2,compression_jpeg:1 -> 32.08 dB, CI 6/10, block_boundary diff 101%, unique_G diff -12 (5%), overshoot_ratio diff 37% -> mild JPEG overshoots target blockiness; target has no JPEG",
+    "R0 severity scan on pair0: glass5 28.42, glass3 32.20, glass1 32.86, glass2 34.67 (R1); target gm_ratio 0.2989 equals the glass:2 simulation 0.2985, so the run_full_analysis severity estimate 5 (derived from gm_ratio alone) is a DT artifact and severity 2 is correct"
+  ],
+  "reason": "R1 signal reanalysis reproduced the R0 glass:2 identification on every signal and on all 3 support pairs: anchor PSNR 34.67/28.47/38.87 dB with CI 10/10 and |delta| <= 0.04 dB vs R0, and the only untested R0 signal (mild compression) was probed at the minimum JPEG severity after blur and rejected (-2.59 dB on pair0, block_boundary overshoot 101%). Noise, global and gamma reinterpretations were rejected by cross-pair signal variation and the peeled-residual false-positive mode. No candidate reached >40 dB or +2 dB versus the previous round on all 3 pairs, so the protocol requires NO_CHANGE. Support PSNR 26.79 < 35 is attributable to the non-invertible random pixel shuffle of blur_glass (SKILL C4): simulation PSNR is capped at 34.67/28.47/38.87 dB per pair, with pair1 alone capping near 28 dB, so the trigger reflects a stochastic-blur evaluation limit rather than an identification error."
+}

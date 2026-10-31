@@ -1,0 +1,33 @@
+{
+  "challenge_id": "blind_0004_size3",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "pipeline = [blur_gaussian:2], per-step verdict UNCERTAIN (predicted_params.json): Wiener kernel corr=0.718<0.9, best PSNR 25.7/29.0/32.6 dB across k=3 support pairs -> Tier B blur, no component",
+    "OCAB gate NOT met: FFT anisotropy=0.00, pca=0.0 (isotropic blur; motion is ruled out also by blur_motion:1/2 PSNR 21.27/24.59 < gaussian), anisotropy threshold is >1.7",
+    "FiLM-GCM / ColorPre gates NOT met: full_analysis step4 NO_GLOBAL, variance_ratio=0.945 (contrast_from_variance=false), mean_shift=-0.5, saturation_chroma_ratio=0.972 -> no contrast Tier A variance_ratio signal, and no structured local step (variance_ratio+structured requirement unmet)",
+    "No JPEG structure: block_boundary=1.0118 (<1.1 Tier S rule), unique_G 250/256, jpeg:1/2/4 PSNR 23.29/23.16/22.48 all below blur candidate",
+    "No noise step: noise_prior sigma=0.74/1.11/0.74 (<2, NO_NOISE); GAUSSIAN_YCrCb hint documented blur-induced FP, peeled residual spatial_corr=0.98 std=13.2 -> deterministic structure",
+    "support k=3 does not alter gating; SimpleGate kept on by default (exp39: -32K params, 8/9 degradations safe, L2 +0.78)"
+  ],
+  "rationale": "Single UNCERTAIN isotropic gaussian blur step with no Tier S/A gate satisfied: no anisotropy>1.7 (OCAB off), no contrast Tier A variance_ratio (FiLM-GCM/ColorPre off), no JPEG, no noise. finetune_strategy.md §七 decision rule for Tier B / UNCERTAIN -> pure Swin baseline; exp37 shows components on uncertain/incorrect predicted degradations lose (0/24) and pure Swin + Direct is the safe fallback. full_analysis's auto-recommended DualBranch is overridden: DualBranch is disallowed per E6-C instructions and exp37 blind scenario 0/24 wins. Direct from scratch (True Ft ~= Direct at 1.5h, exp37/38), lr=5e-4, 2 epochs, batch 16, SimpleGate on (-32K, safe default; only S5 triple-motion shows -0.86, not applicable here)."
+}

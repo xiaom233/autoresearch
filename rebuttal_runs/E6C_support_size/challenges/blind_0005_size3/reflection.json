@@ -1,0 +1,388 @@
+{
+  "challenge_id": "blind_0005_size3",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.994/1.006, unique_G=256/256, dct_zero_ratio=0.016)",
+      "blur": "BLUR_UNLIKELY (gm_ratio=5.334/3.404 target gradient >> clean; spectral_slope_ratio=0.901/0.970)",
+      "noise": "IMPULSE (impulse_zero_ratio=0.900/0.900; noise_prior_sigma=0.0 because MAD on sparse residual)",
+      "global": "pair0: CONTRAST_strengthen_sev5+SATURATION_strengthen_sev5 (variance_ratio=2.185, chroma_ratio=3.253); pair2: BRIGHTNESS_darken+SATURATION (variance_ratio=1.239, chroma_ratio=13.831); clipping ~10%"
+    },
+    "mode": "PSNR (sigma=0.0; impulse seed mismatch makes PSNR unusable, CI content-independent impulse metrics primary)",
+    "suspected": [
+      "noise_impulse severity 5 (amount=0.10): 90% pixels bit-identical to clean, ~10% clipped to 0/255"
+    ],
+    "ruled_out": [
+      "compression (block_boundary ~1.0, unique_G=256)",
+      "blur (gradient magnitude far above clean, no spectral flattening)",
+      "contrast/saturation as independent steps (variance/chroma inflation explained by sparse 0/255 impulse; any real LUT step would change >90% pixels, contradicting zero_ratio=0.90)",
+      "gaussian/speckle/poisson (would alter essentially every pixel, not leave 90% bit-identical)"
+    ],
+    "global_fp_reasoning": "run_full_analysis cannot correct impulse-driven variance/chroma inflation (its noise correction reads _for_step4.sigma=0.0 for IMPULSE). pair2 chroma_ratio=13.8 arises because clean bridge image has near-zero chroma; adding 10% neutral extreme pixels hugely inflates chroma std."
+  },
+  "noise_6step_check": {
+    "extreme_pct": 95.0,
+    "vm_slope": 9.8804,
+    "var_slope": 0.1529,
+    "spatial_corr": 0.3457,
+    "rgb_ratio": 1.0367,
+    "cross_ch_corr": 0.0046,
+    "zero_ratio": 0.8999,
+    "diagnosis": "zero_ratio=0.8999 (90% pixels bit-identical) is the impulse sparsity fingerprint → noise_impulse amount≈0.10 → severity 5. extreme_pct=95% and vm_slope=9.88 are artifacts of counting |residual| extremes / sparse spikes (peeled residual = target-clean, no deterministic step to strip). spatial_corr≈0.35 matches spatially independent sparse spikes (theoretical ≈0.33 for 10% independent impulses under 3x3 blur). rgb_ratio=1.04 and cross_ch_corr≈0.005 → per-channel independent corruption (RGB s&p)."
+  },
+  "qwen_gate": {
+    "available": false
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1: 残差 90.0% 像素 bit-exact 相等 + clipped_fraction 0.1007 = salt&pepper 稀疏指纹。x_distortion noise_impulse sev5 amount=0.10 对应 zero_ratio≈0.90。无压缩(bb=0.994)、无模糊(gm=5.33)。PSNR 因噪声 seed 失配不可用，看 CI impulse_total_pct/pct_zero/pct_255 是否匹配。"
+      },
+      "test_result": {
+        "psnr_rgb": 12.68,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_impulse:4",
+        "thinking": "R2 severity 扫描 (强制, est=5±1): sev4 amount=0.07 预期 impulse_total_pct 比 target 低约 3 个百分点。用于确认 sev5 而非 sev4。"
+      },
+      "test_result": {
+        "psnr_rgb": 13.37,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R3 跨 pair 复核 (pair1, beetle 暗调): 用 pair0 胜者 noise_impulse:5 在 support 第 2 对验证。预测 zero_ratio=0.90 指纹一致，CI impulse 指标匹配。PSNR 噪声 seed 失配不可用。"
+      },
+      "test_result": {
+        "psnr_rgb": 11.16,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R4 跨 pair 复核 (pair2, bridge 亮调低色度): 用 pair0 胜者 noise_impulse:5 在 support 第 3 对验证。pair2 分析给出 chroma_ratio=13.8/variance_ratio=1.24，预期由 10% 0/255 稀疏极值解释，CI 指标匹配。"
+      },
+      "test_result": {
+        "psnr_rgb": 11.67,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1 基线复核 (pair0): §B zero_ratio=0.8999 ≈ 1-0.10 精确对应 noise_impulse sev5 amount=0.10；extreme_pct=95 因零残差被计入 <=0；rgb_ratio=1.04/cross_ch=0.005 → 每通道独立 s&p。含噪候选按协议用 signal 模式复核。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1 基线复核 (pair1): zero_ratio 指纹与逐通道独立 s&p 应在其余 support 对上复现；signal 模式比较 sigma/残差自相关/极端值。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1 基线复核 (pair2): pair2 的 chroma_ratio=13.8 系 clean 近零色度 + 10% 中性极值假阳性；零残差指纹与 sev5 amount=0.10 对应，用 signal 模式在第三对上复核。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5,contrast_strengthen_scale:5",
+        "thinking": "R1 假设 G (pair0): 重新审视 full_analysis 的 CONTRAST_strengthen_sev5 (variance_ratio=2.185)；若存在真实 contrast 步，其 scale=4.0 会使 variance_ratio 远高于 target，signal 模式 global:variance_ratio 应 mismatch。用于证伪'漏检全局步'假设。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=60%)",
+          "global:mean_shift (diff=0.0302)",
+          "global:variance_ratio (diff=534%)"
+        ],
+        "pipeline": "noise_impulse:5,contrast_strengthen_scale:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5,contrast_strengthen_scale:5",
+        "thinking": "R1 假设 G (pair1): 跨 pair 复核'漏检 contrast 步'假设；若真实存在 scale=4.0 contrast，global variance_ratio 会大幅偏离 target。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=33%)",
+          "global:mean_shift (diff=0.0497)",
+          "global:variance_ratio (diff=219%)"
+        ],
+        "pipeline": "noise_impulse:5,contrast_strengthen_scale:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5,contrast_strengthen_scale:5",
+        "thinking": "R1 假设 G (pair2): 第三对复核'漏检 contrast 步'假设；pair2 的 global 判读为 BRIGHTNESS+SATURATION 而非 CONTRAST，跨 pair 不一致本身提示为脉冲极值假阳性。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "global:mean_shift (diff=0.0549)",
+          "global:variance_ratio (diff=701%)"
+        ],
+        "pipeline": "noise_impulse:5,contrast_strengthen_scale:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_impulse:4",
+        "thinking": "R1 severity 边界复核 (pair0): 阈值边界重检——zero_ratio=0.8999 对应 amount=0.10 而非 sev4 的 0.07 (预期 zero_ratio≈0.93)；signal 模式复核 sev4 是否同样通过，以评估其 severity 分辨力。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2",
+        "thinking": "R1 假设 N (pair0): peeled_noise_check 内部的 noise_prior 在 residual+128 上误报 sigma≈23.2 / gaussian_RGB；按该误报强度 (sigma≈25.5, sev2) 测试稠密噪声替代族。若零残差指纹 (zero_ratio=0.8999) 成立，稠密噪声必然 sigma mismatch。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=950%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "noise_impulse:4",
+      "psnr_rgb": 13.37,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "noise_impulse:5",
+      "psnr_rgb": 12.68,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "noise_impulse:5",
+      "psnr_rgb": 11.67,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "noise_impulse:5",
+      "psnr_rgb": 11.16,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_impulse",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "单步 salt&pepper 噪声。决策依据为 seed 无关的确定性统计而非 PSNR：(1) pair0/pair2 残差 zero_ratio=0.8999/0.9001（90% 像素 bit-exact），只有稀疏脉冲噪声能产生此指纹，任何全局 LUT（contrast/saturation/gamma）都会改动几乎所有像素；(2) x_distortion noise_impulse sev5 amount=0.10 精确对应 zero_ratio≈0.90 + clipped_fraction≈0.10；(3) CI 内容无关指标在全部 3 对 support 上 10/10 通过，impulse_total_pct 误差 ≤0.022%（sev4 对照组误差 30%，被排除）；(4) run_full_analysis 的 CONTRAST/SATURATION/BRIGHTNESS 判读为 FP：variance_ratio/chroma_ratio 膨胀由 10% 0/255 极值造成（pair2 chroma_ratio=13.8 因 clean 近乎无彩色），且 full_analysis 对 IMPULSE 的 _for_step4.sigma 恒为 0.0，无法做噪声修正。PSNR 约 11-13 dB 是脉冲 seed 失配的必然结果，按 SKILL 噪声规则不作判据。噪声步骤永不标 LIKELY（exp34），故为 UNCERTAIN。",
+    "test_candidate_count": 4,
+    "cross_pair_validation": {
+      "pair0": "CI 10/10, impulse_total_pct diff=-0.004%",
+      "pair1": "CI 10/10, impulse_total_pct diff=-0.002%",
+      "pair2": "CI 10/10, impulse_total_pct diff=+0.015%"
+    },
+    "alternatives": [],
+    "notes": "test_candidate.py 的 PSNR 判决字段（REJECT）是机械规则产物：对含噪声挑战 PSNR 因 seed 失配不可用，改用 CI/统计判据。severity 5 已通过强制 ±1 扫描（sev4）确认。"
+  },
+  "reflection_R1": {
+    "decision": "NO_CHANGE",
+    "trigger": "verdict=UNCERTAIN（噪声步骤按 exp34 规则永不 LIKELY）；R0 support PSNR=44.53 dB",
+    "iterations_in_this_round": "iterations[] 中 round 5-12 为 R1（round 1-4 为 R0）",
+    "reread_reproducibility": "run_full_analysis(pair0) → full_analysis_R1.json 与 R0 full_analysis.json 逐字节一致；peeled_noise_check(pair0, 空 pipeline) → peeled_sb6_p0_R1.json 与 R0 peeled_sb6_p0.json 逐字节一致。",
+    "signal_reinterpretation": {
+      "kept_consistent": [
+        "zero_ratio=0.8999 = 1-0.1001（逐通道元素级 bit-exact）→ 稀疏逐元素脉冲指纹；任何全局 LUT/卷积/JPEG 后处理都会改动几乎所有像素，无法产生 90% bit-exact",
+        "amount≈0.1001 ≈ x_distortion noise_impulse sev5=0.10（sev4=0.07 → 预期 zero_ratio≈0.93）",
+        "clipped_fraction=0.1007(pair0)/0.100(pair2) 与 amount 跨对一致",
+        "rgb_ratio=1.0367<1.4 + cross_channel_corr=0.0046 → 每通道独立 s&p（非 YCrCb 噪声）",
+        "spatial_corr=0.3457 ≈ 1/3：独立稀疏脉冲经 3x3 邻域均值的理论相关",
+        "var_slope=0.1529<1.0 → 非 poisson；R0 CI impulse_total_pct 10/10、误差≤0.022%（sev4 7/10、30% 误差）",
+        "block_boundary=0.994/1.006、unique_G=256(=clean)/214(clean=213)、dct_zero≈0.015 → 无压缩",
+        "gm_ratio=5.334/3.404、spectral_slope_ratio=0.901/0.970、anisotropy=0.00 → 无模糊"
+      ],
+      "misjudged_signals": [
+        "extreme_pct=95.0%（peeled §B）：把零残差同时计入 res<=0 的假阳性，非脉冲强度证据",
+        "vm_slope=9.8804：90% 全零 16x16 patch（var=0, mean²=0）+ 稀疏尖峰造成的协方差伪影，不能据此判 speckle",
+        "peeled_noise_check 内部 noise_prior 报 sigma≈23.2 / gaussian_RGB：输入为 (residual+128, clean) 错配配对，不是 target 噪声估计；full_analysis 的同图 noise_prior sigma=0.0 有效",
+        "global verdict（pair0: CONTRAST_strengthen_sev5+SATURATION；pair2: BRIGHTNESS_darken+SATURATION；variance_ratio=2.185/1.239、chroma_ratio=3.253/13.831）：10% 0/255 极值抬高方差、pair2 clean 近零色度放大 chroma_ratio；两对判读互不一致亦为 FP 证据"
+      ],
+      "boundary_checks": "所有关键阈值均有大裕量：block_boundary 0.994/1.006 vs 1.1；unique_G 256/214 vs 200；gm_ratio 5.33/3.40 vs <0.85；spectral_slope_ratio 0.901/0.970 vs >1.08；rgb_ratio 1.037 vs 1.4。唯一落在阈值边界的是 amount：0.1001 vs sev5=0.10（偏差 0.1%），sev4=0.07 被排除。"
+    },
+    "candidates": [
+      {
+        "pipeline": "noise_impulse:5",
+        "role": "baseline_revalidation",
+        "mode": "signal",
+        "support_pairs": {"pair0": "MATCH 2✓/0✗", "pair1": "MATCH 2✓/0✗", "pair2": "MATCH 2✓/0✗"},
+        "calls": 3,
+        "conclusion": "R0 管线在 3/3 对信号通过，构成 R1 判定上限"
+      },
+      {
+        "pipeline": "noise_impulse:4",
+        "role": "severity_boundary",
+        "mode": "signal",
+        "support_pairs": {"pair0": "MATCH 2✓/0✗"},
+        "calls": 1,
+        "conclusion": "signal 模式对 impulse severity 不敏感（sev4 亦 MATCH）；sev4 由 zero_ratio 指纹与 R0 CI 排除"
+      },
+      {
+        "pipeline": "noise_impulse:5,contrast_strengthen_scale:5",
+        "role": "missed_global_hypothesis",
+        "mode": "signal",
+        "support_pairs": {
+          "pair0": "WEAK 1✓/3✗ (variance_ratio diff=534%, mean_shift diff=0.0302, sigma diff=60%)",
+          "pair1": "WEAK 1✓/3✗ (variance_ratio diff=219%, mean_shift diff=0.0497, sigma diff=33%)",
+          "pair2": "WEAK 1✓/3✗ (variance_ratio diff=701%, mean_shift diff=0.0549, sigma diff=100%)"
+        },
+        "calls": 3,
+        "conclusion": "拒绝：加入 contrast sev5 使信号在 3/3 对恶化，证实 full_analysis 的 global 判读为脉冲 FP"
+      },
+      {
+        "pipeline": "noise_gaussian_RGB:2",
+        "role": "dense_noise_alternative",
+        "mode": "signal",
+        "support_pairs": {"pair0": "WEAK 1✓/1✗ (noise:sigma diff=950%)"},
+        "calls": 1,
+        "conclusion": "拒绝：按 peeled noise_prior 误报强度测试稠密噪声族，与 90% bit-exact 指纹互斥"
+      }
+    ],
+    "change_criterion_check": "含噪候选规则要求多数 support 对由 WEAK→PARTIAL/MATCH 才可 CHANGE。基线 noise_impulse:5 已 3/3 MATCH（signal 判定上限），其余候选在多数/全部对为 WEAK，无严格更优者 → NO_CHANGE。",
+    "final_pipeline": [["noise_impulse", 5]],
+    "verdict": "UNCERTAIN（噪声步骤规则不变；R1 不改变严重度与类型）",
+    "limitations": [
+      "仅用本目录 k=3 对 support；未使用其他 size/挑战/E6B/E6A/E6_LLM/E6 数据补足",
+      "signal 模式对 impulse severity 不敏感（sev4 也 MATCH）；severity 由确定性 bit-exact/截断统计与 R0 跨对 CI 决定",
+      "impulse seed 失配使 PSNR（R0 的 11-13 dB）不可作为判据",
+      "test_candidate 机械 PSNR 判决（R0 的 REJECT/ACCEPT）不适用于本含噪挑战"
+    ]
+  }
+}

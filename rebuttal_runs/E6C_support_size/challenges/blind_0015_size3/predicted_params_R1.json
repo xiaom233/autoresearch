@@ -1,0 +1,64 @@
+{
+  "challenge_id": "blind_0015_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["brightness_darken_shfit_RGB", 3],
+    ["blur_lens", 2]
+  ],
+  "pipeline": [
+    {"function": "brightness_darken_shfit_RGB", "severity": 3, "verdict": "LIKELY"},
+    {"function": "blur_lens", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "brightness_darken_shfit_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 2}
+      ],
+      "psnr_by_pair": {"pair0": 29.35, "pair1": 29.24, "pair2": 27.55},
+      "psnr_mean": 28.71,
+      "ci_by_pair": {"pair0": "8/10", "pair1": "6/10", "pair2": "4/10"},
+      "function_family": "blur_gaussian",
+      "note": "沿用 R0 alternatives; 平均 PSNR 略高但跨对 CI 不稳, 未达 +2dB CHANGE 阈值"
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_darken_shfit_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 1}
+      ],
+      "psnr_by_pair": {"pair0": 28.79, "pair1": 29.5, "pair2": 27.29},
+      "psnr_mean": 28.53,
+      "ci_by_pair": {"pair0": "8/10", "pair1": "8/10", "pair2": "7/10"},
+      "function_family": "blur_gaussian",
+      "note": "沿用 R0 alternatives; 跨对平均低于 lens2, 未达 CHANGE 阈值"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (k=3; 噪声候选 verify_signals, 确定性候选 PSNR)",
+    "support_psnr_r0": 18.16,
+    "signal_reinterpretation_summary": {
+      "rerun_pair0": "full_analysis_R1.json 与 R0 一致: block_boundary=1.0038, gm_ratio=0.4782, spectral_slope_ratio=0.9996, noise_prior sigma=0.74, mean_shift=-42.9, variance_ratio=0.7181, clipped_fraction=0.3199",
+      "cross_pair_global": "pair1 variance_ratio=0.815 / mean_shift=-48.6; pair2 variance_ratio=0.638 / mean_shift=-43.9; 三对 compression=NO_COMPRESSION (bb<1.05), noise_prior sigma=0.74/1.4/1.5 (<2)",
+      "ignored_variance_ratio_gap": "verify_signals 控制组 variance_ratio 差 pair1=14%, pair2=10% (pair0 R0 记录 3%); 加入 gaussian_RGB 后扩大为 33%/23% -> target 方差系统性低于 亮度3+lens2 仿真, 提示残余对比度压缩或模糊核差异; 但确定性族/severity/顺序已在 R0 全覆盖且无候选达到 +2dB",
+      "vm_slope_con_found": "peeled residual vm_slope=0.9203, ivc=0.9869 表面像 speckle; 但 peeled zero_ratio=0.3225 (32.25% 像素残差恰为0, 即 clipping 区) + spatial_corr=0.9724 -> 方差-均值相关主要来自 clipping, 不能作为乘性噪声证据",
+      "extreme_pct_false_positive": "peeled §B extreme_pct=70.53% 触发 IMPULSE(confidence=high), 但 SKILL 已知 FP 规则 (extreme_pct>50% 且 noise_prior sigma<5) 适用; peeled noise_prior sigma=1.73 < 2 -> 忽略 IMPULSE",
+      "wiener_kernel": "wiener corr 三对 0.729/0.675 (控制组) 与 0.61-0.75 (全部候选) 均 <0.85 -> 核不可辨识 (SKILL: gaussian<->lens MTF 不可区分), 不用于判别",
+      "order": "brightness->blur 优于 blur->brightness: pair0 PSNR 29.17 vs 28.89 (lens2), peeled zero_ratio 0.3225 vs 0.3475 (target 0.3199)"
+    },
+    "candidates_verified": {
+      "control_r0": {"pair0": "PARTIAL 3✓/1✗ (round27)", "pair1": "WEAK 2✓/2✗ (round31)", "pair2": "WEAK 2✓/2✗ (round32)"},
+      "A_speckle1": {"pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2", "pair0": "PARTIAL 4✓/2✗ (round26)", "pair1": "WEAK 3✓/3✗ (round33)", "pair2": "WEAK 3✓/3✗ (round36)"},
+      "B_gaussian_RGB1": {"pipeline": "brightness_darken_shfit_RGB:3,noise_gaussian_RGB:1,blur_lens:2", "pair0": "WEAK 2✓/4✗ (round35)", "pair1": "WEAK 3✓/3✗ (round34)", "pair2": "WEAK 2✓/4✗ (round37)"}
+    },
+    "change_criteria_check": {
+      "deterministic": "无候选 PSNR >40dB 或相对 R0 lens2 +2dB (确定性天花板 25.9-29.5dB, 最优 gaussian2 mean 28.71 vs R0 28.65)",
+      "noise": "无多数对由 WEAK 提升到 PARTIAL/MATCH: speckle pair1/pair2 仍 WEAK; gaussian_RGB 三对 WEAK 且全局信号 (mean_shift/variance_ratio) 恶化",
+      "noise_identifiability": "SKILL: noise->blur 顺序下 §B 54.7%≈随机; 且 verify_signals 的 structured_residual/FWHM 检查假设噪声在确定性退化之后, 与生成器 noise(priority0)->blur(priority1) 相悖, 噪声候选系统性无法达到 MATCH"
+    },
+    "support_psnr_interpretation": "R0 support PSNR 18.16 低于确定性仿真保真度 29.35dB, 提示存在未建模成分, 但 k=3 的可用信号无法定证其类型; 按判据保留原管线, 留待 R1 训练 PSNR 仲裁",
+    "rationale": "R1 信号重释确认全局暗化 brightness_darken_shfit_RGB:3 证据最强 (mean_shift 三对匹配, unique_G=203 与 shift-only 仿真精确相等, clipped_fraction 0.3199 vs 0.3228), 模糊族确定性扫描维持 29dB 平台且无候选满足 CHANGE 阈值; 两种噪声候选在 k=3 上均未达到多数对 WEAK->PARTIAL/MATCH, 且 gaussian_RGB 使全局信号变差; 按 REFLECT_INSTRUCTIONS 判据 decision=NO_CHANGE, pipeline 与 R0 逐项相同"
+  }
+}

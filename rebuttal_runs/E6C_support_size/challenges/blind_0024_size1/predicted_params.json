@@ -1,0 +1,60 @@
+{
+  "challenge_id": "blind_0024_size1",
+  "pipeline": [
+    {
+      "function": "noise_gaussian_RGB",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "LIKELY"
+    },
+    {
+      "function": "saturate_strengthen_HSV",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 5}
+      ],
+      "function_family": "noise_gaussian_YCrCb",
+      "signal_evidence": {
+        "variance_ratio_diff_pct": 14,
+        "cross_channel_corr_sim_vs_target": [0.7355, 0.7542],
+        "residual_intensity_corr_sim_vs_target": [0.8418, 0.8617]
+      },
+      "reason": "run_full_analysis 原始噪声类型调用（低置信）。但饱和裁剪使分类器同样将 RGB 噪声模拟图判为 YCrCb（已实测 sim6 同样输出 GAUSSIAN_YCrCb），故以 6 项指纹匹配为准：RGB 在 3/4 项更接近 target。保留 YCrCb 作为训练后 PSNR 仲裁备选。"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 3}
+      ],
+      "function_family": "saturate_strengthen_HSV(sev3)",
+      "signal_evidence": {
+        "variance_ratio_diff_pct": 10,
+        "mean_shift_sim_vs_target": [-42.7, -42.9],
+        "chroma_ratio_sim_vs_target": [1.6131, 1.6553],
+        "clipped_fraction_sim_vs_target": [0.3315, 0.3228]
+      },
+      "reason": "sev3/4/5 在当前信号下不可区分（S×12/20/64 对多数像素均裁剪）；sev5 均值吻合更精确(-42.9 完全相同)且 chroma 更近，故主选 5，保留 3 为 severity 备选。"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode, sigma=3.83, PSNR 不可靠)",
+    "mode": "SIGNAL",
+    "steps_estimated": 3,
+    "support_pairs": 1,
+    "rationale": "压缩排除（block_boundary=0.9996, unique_G_ratio=0.910）。模糊：residual_anisotropy=1.148<1.7 排除 motion；gaussian:3 同时匹配 spectral_slope(diff≈0.03<0.08) 与 Wiener 核相关(>0.85)，blur4 斜率过陡(ratio 1.496 vs 1.262)、glass:4 核相关失配(0.839)，lens 因 MTF 不可区分仅作潜在备选。全局：saturate_strengthen 由 mean_shift(-42.9 精确复现)、chroma_ratio(1.626 vs 1.655)、clip 32%、variance_ratio 方向共同确证；YCrCb 饱和变体被强排除(mean 差 0.122、variance 差 442%)；brightness 是饱和裁剪导致的假阳性（生成器每类别仅一步，且 sat 单独即精确复现均值）。噪声：sigma=3.83，RGB:3+blur:3 复现 sigma 3.83 精确一致，4 项指纹 3 项更近；噪声 seed 失配 → 永不 LIKELY。顺序 noise→blur→saturate 经交换实验确认（sat→blur 方差差 109%）。残余偏差：variance_ratio 1.410 vs 1.371（+10%，阈值 8%）与残差 FWHM=8-10px，源于饱和度强非线性裁剪边界对噪声 seed 的放大，参数空间内 sat3/4/5 与 lens/glass 均无法收敛。"
+  }
+}

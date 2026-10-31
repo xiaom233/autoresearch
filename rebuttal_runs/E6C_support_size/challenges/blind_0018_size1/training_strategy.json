@@ -1,0 +1,36 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": true,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "block_boundary=3.1893 (Tier S, 0% FP) + dct_zero_ratio=0.928 → compression_jpeg:5 确认（full_analysis step1）",
+    "variance_ratio=2.5179 (Tier A, ≠1.0) + contrast_detected_raw=true + mean_shift=-29.0 + contrast_spread_ratio=1.2946 + clipped_fraction=0.0211 → contrast_strengthen_stretch:4（full_analysis step4）",
+    "PSNR=31.19 dB / CI=10/10 on support (k=1)，verdict=UNCERTAIN；finetune_strategy.md §七：Tier S/A 信号明确时可覆盖 UNCERTAIN verdict 启用组件",
+    "FiLM-GCM 门控满足：contrast (variance_ratio=2.518, Tier A) + 结构化 jpeg (block_boundary=3.189, Tier S)；对应 exp10 L5 +3.52、exp38 stretch +0.35，lr=5e-4 无 NaN",
+    "FFT_anisotropy=0.00 + blur UNLIKELY (gm_ratio=1.332, spectral_slope_ratio=0.928) → 无 motion / anisotropy<1.7 → 不启 OCAB",
+    "noise_prior sigma=0.37 (<2)，6步检查 residual spatial_corr=0.90 为确定性结构残差 → 无噪声步骤，不启噪声相关组件",
+    "不含 saturation / HSV-brightness → 不启 ColorMLP；结构化 jpeg 在场时按 §七流程优先 FiLM-GCM 而非 ColorPre",
+    "SimpleGate 默认常开（exp39 -32K, 8/9 退化安全，L2 +0.78）",
+    "管线含 contrast_strengthen → Direct（RandomCurric 在 contrast 更保守）；True Ft ≈ Direct（exp37/38），不采用",
+    "k=1 support 不改变门控：未放宽阈值，亦未因支持集小而收紧"
+  ],
+  "rationale": "预测管线 contrast_strengthen_stretch:4 → compression_jpeg:5，两者信号几乎全匹配（bb 3.149/3.189, mean -29.3/-29.0, var 2.548/2.518）。按 finetune_strategy.md §七信号门控：variance_ratio=2.518 (Tier A) 与 block_boundary=3.189 (Tier S, 0%FP) 同时成立，属 contrast+结构化 jpeg 的 FiLM-GCM 触发条件，故启用 FiLM-GCM（+26K，lr=5e-4 规避 NaN）；无 motion/anisotropy（FFT=0.00）不启 OCAB；无 saturation/HSV 不启 ColorMLP/ColorPre；DualBranch/CSN/SCA/FPro 按指令禁用。含 contrast 步骤采用 Direct 从零训练（True Ft 与 Direct 持平，RandomCurric 在 contrast 上无优势）。SimpleGate 默认常开。k=1 未放宽门控。"
+}

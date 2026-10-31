@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0009_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    {"function": "noise_poisson", "severity": 2},
+    {"function": "saturate_strengthen_YCrCb", "severity": 3}
+  ],
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 2, "verdict": "UNCERTAIN"},
+    {"function": "saturate_strengthen_YCrCb", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 2},
+        {"function": "saturate_strengthen_YCrCb", "severity": 4}
+      ],
+      "function_family": "poisson noise + YCrCb saturation (severity backup)",
+      "evidence": "pair0 MATCH 4/4; pair1/pair2 variance_ratio diff 25% (R0 rounds 13/16)",
+      "note": "仅作 sat severity 后备; R1 anchor 三对 MATCH 4/4 支持 sat:3, sat:4 明显劣于主预测"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma_prior ~5.56/23.6/25.57 per support; PSNR unusable)",
+    "support_size": 3,
+    "r1_trigger": "R0 verdict=UNCERTAIN (noise 步骤永不 LIKELY); R0 support PSNR 31.80 dB",
+    "per_step": {
+      "noise_poisson": {
+        "severity": 2,
+        "verdict": "UNCERTAIN",
+        "evidence": "R1 anchor (rounds 27-29) 三对 verify_signals 均 MATCH 4/4 (noise:sigma, noise:clean_residual, global:mean_shift, global:variance_ratio); R1-C1 上界检验: poisson:3 在 pair0 sigma diff 57% (PARTIAL), 在 pair2 仍 MATCH (亮内容 c=60/40 简并); sev1 在 R0 为 sigma diff 27% → sev2 为三对中最优"
+      },
+      "saturate_strengthen_YCrCb": {
+        "severity": 3,
+        "verdict": "LIKELY",
+        "evidence": "R1 anchor 三对 global:mean_shift + global:variance_ratio MATCH; R1-C4 等增益 HSV:2 → WEAK (mean diff 0.1637, var 81%, sigma 133%) 排除 HSV 子类型; contrast_strengthen_scale:4 在 R0 已被否决"
+      }
+    },
+    "r1_candidates_tested": [
+      {"id": "C1", "pipeline": "noise_poisson:3,saturate_strengthen_YCrCb:3", "result": "pair0 PARTIAL (sigma diff 57%); pair2 MATCH 4/4", "action": "REJECT"},
+      {"id": "C2", "pipeline": "saturate_strengthen_YCrCb:3,noise_poisson:2", "result": "pair0 WEAK (sigma 67%, mean 0.0096, var 14%)", "action": "REJECT"},
+      {"id": "C3", "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_YCrCb:3", "result": "pair1 WEAK (sigma 55%, mean 0.0321, var 17%)", "action": "REJECT"},
+      {"id": "C4", "pipeline": "noise_poisson:2,saturate_strengthen_HSV:2", "result": "pair0 WEAK (mean 0.1637, var 81%, sigma 133%)", "action": "REJECT"},
+      {"id": "C5", "pipeline": "blur_gaussian:1,noise_poisson:2,saturate_strengthen_YCrCb:3", "result": "pair0 MATCH 6/6 (verify_signals 对 mild blur 在该噪声/饱和区不敏感)", "action": "NO_ADOPT"}
+    ],
+    "rationale": "R1 信号重释未发现可改进之处。(1) 噪声: target-清晰 spectral/gm 受饱和裁剪污染, gm_ratio=7.259 不可用作模糊判据; residual_intensity_corr≈0.47 与 var_slope=11.26 指向强度相关 Poisson, 而非 gamma/YCrCb 高斯 (C3 WEAK); (2) 噪声必须先于饱和 (C2 交换顺序 WEAK), 与生成器 priority 一致; (3) 全局: full_analysis 启发式建议 HSV 子类型被 C4 否决, YCrCb:3 (c=5) 在三对复现 mean_shift/variance_ratio; (4) 噪声严重度: pair0 判别 sev2 (sev3 +57%), 亮内容对简并; (5) 压缩被 0%FP 信号排除 (block_boundary=0.9998, unique_G=256=clean, dct_zero=0.0499); (6) R0 管线在 R1 三对独立复跑均 MATCH 4/4, 无候选取得更优信号匹配, 故 NO_CHANGE。",
+    "limitations": [
+      "poisson sev2/sev3 在亮内容 (pair1/pair2) 上简并, 严重度判别主要依赖 pair0 (dark, sigma=5.56)",
+      "verify_signals 的 blur 检查 (spectral_slope<0.08, wiener>0.85) 在强饱和+噪声区对 blur_gaussian:1 不敏感; 无模糊结论依据目标-清晰 slope ratio 0.9979 (方向与模糊相反) + 2 步模型 6 项全局统计精确复现, 而非 C5",
+      "噪声候选验证受噪声 seed 失配影响, sigma 匹配为统计量匹配, 非像素级"
+    ],
+    "test_candidate_calls": 9,
+    "anchor_rounds": [27, 28, 29],
+    "support_pairs": ["degraded.png/clean.png", "degraded_1.png/clean_1.png", "degraded_2.png/clean_2.png"]
+  }
+}

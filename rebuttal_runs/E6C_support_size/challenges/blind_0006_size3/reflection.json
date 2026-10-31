@@ -1,0 +1,342 @@
+{
+  "challenge_id": "blind_0006_size3",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED, block_boundary=1.989 (0% FP), dct_zero_ratio=0.862, unique_G=256 (saturated levels)",
+      "blur": "BLUR_UNLIKELY, gm_ratio=0.734 (<0.85 提示可能存在), spectral_slope_target=-1.2905 vs clean=-1.2919 (ratio=0.999), FFT_anisotropy=0.00, pca=0.0",
+      "noise": "noise_prior sigma=0.74 < 2 -> NO_NOISE (Step 0.5 gate: sigma<2 跳过 Step3); type 提示 GAUSSIAN_YCrCb 但 confidence=low",
+      "global": "NO_GLOBAL, variance_ratio=0.9924, mean_shift=0.1, saturation_chroma_ratio=0.973, clipped_fraction=0.107"
+    },
+    "mode": "PSNR (sigma=0.74 < 2)",
+    "suspected": [
+      "compression_jpeg"
+    ],
+    "ruled_out": [],
+    "pending": [
+      "blur severity/存在性 (gm_ratio=0.734 与 spectral_slope_ratio=0.999 矛盾)",
+      "global 步骤 (variance_ratio≈1 但 clipped_fraction=0.107 偏高)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false,
+    "triggered": false,
+    "reason": "Step 0.5 门控未触发: noise_prior sigma=0.74 < 2 → NO_NOISE, 无 API 调用"
+  },
+  "noise_6step_check": {
+    "residual_source": "peeled residual after stripping compression_jpeg:1 (pair0)",
+    "residual_std": 0.0,
+    "extreme_pct": 100.0,
+    "extreme_pct_note": "退化后残差恒为 0 (zero_ratio=1.0), extreme_pct=100% 为除零退化值, 属 SKILL 已知假阳性 (extreme_pct>50% + sigma<5 → 忽略 IMPULSE)",
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "channel_stds": {
+      "R": 0.0,
+      "G": 0.0,
+      "B": 0.0
+    },
+    "diagnosis": "NO_NOISE: 剥离 compression_jpeg:1 后残差像素级恒 0, 无任何噪声结构; peeled 输出的 IMPULSE 为全零残差导致的退化假阳性, 不予采纳"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "信号来源: block_boundary=1.989 (>1.1, 0%FP) 且 dct_zero_ratio=0.862 → JPEG 确认; 以 sev=3 起始估计"
+      },
+      "test_result": {
+        "psnr_rgb": 31.26,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "block_boundary=1.989 强 JPEG; sev3 仅 31.26dB, 块边界差异 -29% 提示模拟块边界弱于目标 → 提高 JPEG severity 到 4"
+      },
+      "test_result": {
+        "psnr_rgb": 30.01,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "预算内 severity 括号: sev3=31.26 优于 sev4=30.01; 测 sev2 确认峰值位置"
+      },
+      "test_result": {
+        "psnr_rgb": 34.13,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "PSNR 随 severity 降低持续上升 (sev4=30.01, sev3=31.26, sev2=34.13) → 测 sev1 确定最优点; impulse_pct_zero 持续 8.4pp 失配提示可能另有步骤"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 重验 pair0: block_boundary=1.989 (0%FP) + dct_zero_ratio=0.862 指向 JPEG; R0 在该对已达像素级一致 (PSNR=inf)。重跑确认 support 一致性, 检查是否仍有被忽略的步骤"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 跨对验证 pair1: 沿用 pair0 信号 (block_boundary=1.989, dct_zero_ratio=0.862) 与 R0 pair1 结果; 检查 jpeg:1 是否在该对同样像素级一致"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "R1 跨对验证 pair2: 信号同 pair0; 检查 jpeg:1 是否在第三对 support 上同样像素级一致"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "R1 severity 边界复核: block_boundary=1.989 与 dct_zero_ratio=0.862 只给出 JPEG 类型; 检验 sev2 能否替代 sev1 (若 sev2 也达 inf, 说明 sev1 不唯一; 实际 R0 sev2=34.13dB 已提示不可替代)"
+      },
+      "test_result": {
+        "psnr_rgb": 34.13,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,compression_jpeg:1",
+        "thinking": "R1 假设检验(被忽略的 blur): gm_ratio=0.7336 (<0.85 提示 blur), 但 spectral_slope_ratio=0.999、FFT_anisotropy=0.00、pca_ratio=0.0 指向无 blur; 检验附加 blur 是否使像素级一致消失 (FP_blur_risk)"
+      },
+      "test_result": {
+        "psnr_rgb": 37.36,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:1,compression_jpeg:1",
+      "psnr_rgb": 37.36,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 34.13,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 34.13,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 31.26,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 30.01,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    }
+  ],
+  "cross_pair_verification": {
+    "k": 3,
+    "results": [
+      {
+        "pair": 0,
+        "target": "degraded.png",
+        "pipeline": "compression_jpeg:1",
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10",
+        "note": "模拟图与目标像素级完全一致"
+      },
+      {
+        "pair": 1,
+        "target": "degraded_1.png",
+        "pipeline": "compression_jpeg:1",
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10",
+        "note": "模拟图与目标像素级完全一致 (reflection_p1.json)"
+      },
+      {
+        "pair": 2,
+        "target": "degraded_2.png",
+        "pipeline": "compression_jpeg:1",
+        "psnr_rgb": "inf",
+        "ci_pass": "10/10",
+        "note": "模拟图与目标像素级完全一致 (reflection_p2.json)"
+      }
+    ],
+    "conclusion": "3/3 support 对全部 PSNR=inf, 管线一致"
+  },
+  "blur_gm_ratio_note": {
+    "observation": "gm_ratio=0.734 (<0.85) 曾提示 blur 可能, spectral_slope_ratio=0.999 与 FFT_anisotropy=0.00 指向无 blur",
+    "resolution": "compression_jpeg:1 在 3 对上均达像素级完全一致 (PSNR=inf), 证明 gm_ratio 下降完全由 JPEG 高频损失引起, 不存在 blur 步骤; 无需追加 blur 候选测试"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "compression_jpeg",
+        "severity": 1,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "rationale": "block_boundary=1.989 (0%FP) + dct_zero_ratio=0.862 先验指向 JPEG; severity 扫描 sev4=30.01 < sev3=31.26 < sev2=34.13 < sev1=inf, sev1 在全部 3 对 support 上模拟图与目标像素级完全一致 (PSNR=inf, CI=10/10), 单步退化可确认。剥离 JPEG:1 后残差恒 0 → 无 blur、无 noise (sigma=0.74<2 门控 + peeled 残差 std=0)、无 global (variance_ratio=0.9924, mean_shift=0.1)。severity 单调性说明 target 为 x_distortion 的 compression_jpeg sev1 输出。",
+    "alternatives": []
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=LIKELY, support_psnr=31.54 < 35",
+    "signal_reevaluation": {
+      "method": "重跑 run_full_analysis.py pair0 -> full_analysis_R1.json; 与 R0 full_analysis.json 相比仅 residual_intensity_corr 由 0.3541 变为 0.3529 (0.0012 波动, 不跨任何阈值), 其余信号逐项一致",
+      "compression": "block_boundary=1.989 (>1.05, 0%FP), dct_zero_ratio=0.8619, unique_G_target=clean=256 (ratio=1.0) -> JPEG 确认, 排除 quantization",
+      "blur": "唯一指向 blur 的信号 gm_ratio=0.7336 (<0.85) 被 spectral_slope_target=-1.2905 vs clean=-1.2919 (ratio=0.999 < 1.08)、FFT_anisotropy=0.00、pca=0.0 否定; gm_ratio 下降由 JPEG 高频损失解释。实证: blur_gaussian:1+compression_jpeg:1 pair0=37.36dB (CI 9/10), 显著劣于 jpeg:1 的 inf",
+      "noise": "noise_prior sigma=0.74<2 -> NO_NOISE 门控; peeled_noise_check(pipeline=compression_jpeg:1) residual_std=0.0, ch_stds R=G=B=0.0 -> 残差恒零; §B extreme_pct=100% IMPULSE 为全零残差除零假阳性 (SKILL 已知 FP, sigma<5 忽略); residual_intensity_corr=0.3529/gamma_suspect 无残差支撑, 不成立",
+      "global": "variance_ratio=0.9924, contrast_spread_ratio=1.0041, mean_shift=0.1, saturation_chroma_ratio=0.9731 -> NO_GLOBAL; clipped_fraction=0.1069 继承自 clean (jpeg:1(clean) 与 target 的 impulse_pct_zero 差=0.000 且像素级一致)"
+    },
+    "threshold_boundary_checks": [
+      "gm_ratio=0.7336 的 blur 灰区: 被 spectral_slope_ratio=0.999 与 blur 实证否定",
+      "clipped_fraction=0.1069 heavy_clipping: 由 3 对像素级一致证明来自 clean, 非 global 步骤",
+      "severity 边界: jpeg:2=34.13dB 无法替代 jpeg:1"
+    ],
+    "candidates_tested": [
+      {"pipeline": "compression_jpeg:1", "scope": "pair0/pair1/pair2", "result": "PSNR=inf x3, CI=10/10 x3 -> 保持"},
+      {"pipeline": "compression_jpeg:2", "scope": "pair0", "result": "34.13dB, CI 7/10 -> 拒绝"},
+      {"pipeline": "blur_gaussian:1,compression_jpeg:1", "scope": "pair0", "result": "37.36dB, CI 9/10 -> 拒绝"},
+      {"pipeline": "brightness 假设", "scope": "none", "result": "未实例化 (x_distortion 无可调用 brightness/brightness_shift, 2 次调用中止, 无验证输出); global 缺失已由 3 对像素级一致 + CI 零差证明"}
+    ],
+    "support_verification": {
+      "k": 3,
+      "results": [
+        {"pair": 0, "pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci_pass": "10/10"},
+        {"pair": 1, "pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci_pass": "10/10"},
+        {"pair": 2, "pipeline": "compression_jpeg:1", "psnr_rgb": "inf", "ci_pass": "10/10"}
+      ],
+      "conclusion": "3/3 support 对像素级完全一致, 管线已达 PSNR 上界 (inf), 不存在可 +2dB 或 >40dB 的改进候选"
+    },
+    "training_implication": "R0 管线精确复现全部 support 目标; support_psnr=31.54<35 不能归因于盲识别错误, 更可能源于训练预算/3 对数据量或 JPEG sev1 信息损失上限; 修正管线无信号依据",
+    "decision": "NO_CHANGE",
+    "reason": "CHANGE 门槛无法满足: 保持的管线在 3/3 对复验为 inf; sev2 与附加 blur 均显著劣化。信号重释未发现被忽略的有效步骤 (blur/global/noise 假设均被否定)"
+  }
+}

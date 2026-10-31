@@ -1,0 +1,792 @@
+{
+  "challenge_id": "blind_0023_size3",
+  "qwen_gate": {
+    "available": false,
+    "note": "Qwen/API unavailable; sigma=4.0 boundary gate skipped per instructions"
+  },
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=4.0538, dct_zero_ratio=0.8885, unique_G_ratio=0.96",
+      "blur": "GLASS/GAUSSIAN: gm_ratio=0.1233, spectral_slope_ratio=1.498, FFT_anisotropy=1.29 (<1.7 not motion), glass_score=1.3725, pca=1.043",
+      "noise": "GAUSSIAN_YCrCb sigma=3.95 (low confidence); spatial_corr=0.6428, cross_channel_corr=0.8627, residual_intensity_corr=0.4639, gamma_suspect=True",
+      "global": "CONTRAST_weaken_sev5 + SATURATION_weaken_sev3 (low conf): variance_ratio=0.456, mean_shift=5.4/255, saturation_chroma_ratio=0.7855"
+    },
+    "mode": "SIGNAL (sigma=4.0)",
+    "suspected": [
+      "compression_jpeg",
+      "blur_gaussian (lens alt)",
+      "noise (type uncertain)",
+      "contrast/saturation possible FP from blur"
+    ],
+    "ruled_out": [
+      "motion blur (anisotropy=1.29 < 1.7)"
+    ],
+    "sigma_note": "noise_prior sigma=3.95 on raw target-clean residual; may be inflated by JPEG block artifacts and/or deflated by heavy blur. Must re-check on peeled residual."
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py on pair0 residual after blur_gaussian:5,compression_jpeg:4 (structure-contaminated; type not trustworthy)",
+    "extreme_pct": 44.54,
+    "vm_slope": 0.0917,
+    "var_slope": -0.0739,
+    "spatial_corr": 0.9768,
+    "rgb_ratio": 1.4407,
+    "cross_ch_corr": 0.6786,
+    "residual_std": 16.5,
+    "diagnosis": "NO_NOISE. Peeled residual is dominated by smooth structured content (spatial_corr=0.977, std=16.5 ~ the missing contrast-step variance gap), not random noise; extreme_pct=44.5% matches the known JPEG/blur artifact FP. Cross-pair: pair1/pair2 noise_prior sigma=1.1/0.4 while pair0=3.95; blur+JPEG-only simulations reproduce sigma~3.95 on pair0, so JPEG block artifacts fully explain the raw sigma. var_slope=-0.074<1.0 also rules out Poisson/quantization."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "thinking": "T1: block_boundary=4.054 (0%FP) confirms JPEG; gm_ratio=0.123+slope=1.498 confirms strong blur; anisotropy=1.29<1.7 rules out motion; glass_score=1.37 but sigma=4.0>=3 so DT falls to gaussian (lens alt). Test gaussian sev5 + jpeg sev4 together (blur before JPEG per physical order)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.260)"
+        ],
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "thinking": "T2: T1 PARTIAL(wiener ok, slope diff 0.260) -> mandatory severity sweep, gaussian sev-1. Target slope=-1.379; if sev5 over-smooths, sev4 should reduce slope gap. Keep jpeg:4 (bb matched <8%)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=13%)"
+        ],
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:5",
+        "thinking": "T3: target bb=4.054 sits between T2(gauss4+jpeg4,bb=3.513) and T1(gauss5+jpeg4,bb=4.135); target raw_slope=-1.379 matches gauss4(-1.424) not gauss5(-1.639). Hypothesis: blur=4 (slope match) and JPEG=5 (stronger blockiness raises bb to ~4.05)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=37%)"
+        ],
+        "pipeline": "blur_gaussian:4,compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,saturate_weaken_HSV:3,compression_jpeg:4",
+        "thinking": "T4: peeled residual after blur5+jpeg4 has spatial_corr=0.977 (structured) + target mean_shift=+5.4 unexplained (sim 0.1) + var_ratio target 0.456 < sim 0.611 + chroma_ratio 0.786. Desaturation raises RGB mean toward V and lowers chroma/variance -> add saturate_weaken_HSV:3 (report suggested sev3). Order: blur(priority1) then sat/jpeg(priority2)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.247)",
+          "global:mean_shift (diff=0.0246)",
+          "global:variance_ratio (diff=24%)"
+        ],
+        "pipeline": "blur_gaussian:5,saturate_weaken_HSV:3,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "thinking": "T5: DT reported GLASS_BLUR (glass_score=1.373>>0.25); pixel-shuffle blocks could explain high bb and structured residual. Cross-family test vs gaussian:5. gaussian sev5 fit bb but not slope; gaussian4 fit slope but not bb."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=11%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,compression_jpeg:4",
+        "thinking": "T6: variance gap target 0.456 vs gauss5+jpeg4 0.611 (peeled residual std=16.5 ~ variance gap), chroma 0.786 vs 0.863, spread 0.639 vs 0.750. contrast_weaken_scale sev1 would give 0.344 (too low); needed factor ~0.86. contrast_weaken_stretch c=1.0 is the mildest nonlinear weaken. Blur=5 kept (bb); jpeg=4 kept."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.197)",
+          "compression:block_boundary (diff=76%)",
+          "global:mean_shift (diff=0.0857)",
+          "global:variance_ratio (diff=32%)"
+        ],
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_lens:5,compression_jpeg:4",
+        "thinking": "T7: target raw_slope=-1.379 is flatter than all gaussian/glass sims (-1.417..-1.639) and var_ratio=0.456 is 25% below gauss5+jpeg4 (0.611). Disk lens MTF (radius 8) has ringy OTF -> flatter spectrum + stronger smoothing. DT alternative lens:5, same gaussian/glass/jpeg severity budget."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.134)",
+          "compression:block_boundary (diff=10%)"
+        ],
+        "pipeline": "blur_lens:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "thinking": "T8: cross-pair baseline check. Pairs 1/2 sigma=1.1/0.4 -> no noise. Same pipeline assumed for all pairs; pair0 bb/slope suggested gauss5+jpeg4 but pair0 mean/var/chroma unexplained. Test whether blur5+jpeg4 also matches pair1 (mean_shift 5.8, var 0.590, chroma 0.865, slope -1.594)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.228)"
+        ],
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "T9: across pairs, missing effects are consistent (var x0.75, chroma x0.90, mean +5.4/+5.8, slope flatter 0.23). contrast_weaken_scale uses PIL L-channel mean as pivot -> unlike theory, RGB mean can shift toward Lmean (candidate cause of +mean). Measure real var/mean/chroma of blur5+contrast1+jpeg4."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.222)",
+          "compression:block_boundary (diff=40%)",
+          "global:mean_shift (diff=0.0126)",
+          "global:variance_ratio (diff=21%)"
+        ],
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "thinking": "T10: pair0 gauss5+jpeg4 slope off +0.26, pair1 off +0.228 (consistent). Glass5 adds pixel-shuffle HF: on pair0 it gave slope -1.417 (target -1.379). Predict pair1 glass5 slope ~-1.60 (target -1.594). Cross-pair test of glass subtype."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=12%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,saturate_weaken_HSV:1,compression_jpeg:4",
+        "thinking": "T11: visual look is washed-out (haze, lifted blacks) - saturation candidate. Mean shift +5.4/+5.8/+2.0 across pairs is best explained by saturate_weaken_HSV (desaturation moves RGB toward V=max, raising mean). Test sev1 with glass5 (slope-matched blur) + jpeg4. Measure exact mean/chroma/var."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=13%)",
+          "global:variance_ratio (diff=29%)"
+        ],
+        "pipeline": "blur_glass:5,saturate_weaken_HSV:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,brightness_brighten_shfit_HSV:1,compression_jpeg:4",
+        "thinking": "T12: unexplained global signature: mean +5.4 (all 3 pairs positive), var x0.75, chroma x0.90, spread x0.85. Contrast1 overshoots var (0.34 vs 0.456) and mean too low (+2.2). Brighten-shift-HSV lifts dark regions (dark backlit forest) and clips bright sky: could raise mean mildly and reduce variance. Test sev1."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=10%)",
+          "global:mean_shift (diff=0.0562)",
+          "global:variance_ratio (diff=41%)"
+        ],
+        "pipeline": "blur_glass:5,brightness_brighten_shfit_HSV:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "thinking": "T13: third-pair baseline. Pair2 target var=0.698 mean=+2.0 chroma=0.867 bb=7.034 slope=-1.678. Same pipeline hypothesis; get exact sim values to compute consistent target/baseline ratios across all 3 pairs."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=21%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "T14 FINAL-candidate pair0: cross-pair ratios (P0/P1/P2) target/baseline = var 0.72/0.75/0.74, chroma 0.90/0.89/0.85, spread 0.84/--/0.83, mean +5.4/+6.1/+2.4 -> linear contrast weaken c~0.85. Target unique_G 218-246 < JPEG-only sims 255-256 -> contrast applied AFTER JPEG (integer rounding merges levels). blur=glass:5 (slope matches 3/3 pairs), jpeg=4 (best bb)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=11%)",
+          "global:mean_shift (diff=0.0133)",
+          "global:variance_ratio (diff=18%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "T15 FINAL-candidate pair1 verification: same pipeline as T14. Cross-pair invariance of the contrast-like ratios underlies the global hypothesis; check slope/bb/global signals on second support."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=13%)",
+          "global:mean_shift (diff=0.0251)",
+          "global:variance_ratio (diff=36%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "T16 FINAL-candidate pair2 verification: same pipeline as T14/T15. Pair2 was the least degraded in signals (var 0.698, mean +2.0, sigma 0.37) - check whether contrast1 overshoot persists and whether slope/bb remain consistent."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=19%)",
+          "global:mean_shift (diff=0.0143)",
+          "global:variance_ratio (diff=56%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "R1-C1: block_boundary=4.054 (0%FP JPEG) + gaussian5+jpeg4 bb=4.135 (2% err) vs glass5+jpeg4 bb=3.618 (11% err); glass is stochastic (shuffle_pixels random) so its slope match may be shuffle-HF; global from variance_ratio=0.456/spread=0.6385/unique_G=246 vs JPEG-only 255. PSNR arbitration on fully deterministic chain."
+      },
+      "test_result": {
+        "psnr_rgb": 24.86,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "R1-C2 (R0 baseline PSNR reference): R0 final pipeline glass5+jpeg4+contrast1. glass_score=1.373 + slope -1.417 vs target -1.379 favored glass in R0, but blur_glass uses random shuffle_pixels (stochastic); measure PSNR to compare with deterministic gaussian chain (C1=24.86 dB, pair0)."
+      },
+      "test_result": {
+        "psnr_rgb": 25.44,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "thinking": "R1-C3: ignored signal re-read - step2 residual_intensity_corr=0.459 + gamma_suspect=True (full_analysis_R1), step4 mean_shift=+5.4 & variance_ratio=0.456 & chroma=0.786 all co-move with a gamma tone curve; R0 only tested linear shift (mean +19.7 overshoot), never gamma. gamma 0.8 (sev1) lifts midtones, compresses highlights (var down), mild chroma compression; brightness priority=0 -> before blur."
+      },
+      "test_result": {
+        "psnr_rgb": 22.66,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:1,blur_gaussian:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "thinking": "R1-C4: FP check on the global step - R0 added contrast1 because target variance_ratio=0.456 < blur+jpeg baseline 0.611, but library sev1 (c=0.75) overshoots (0.358) and lowers unique_G/chroma too far; test whether the 2-step chain is closer (global = false positive from blur subtype / JPEG coupling)."
+      },
+      "test_result": {
+        "psnr_rgb": 23.35,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "R1-C1 pair1: k=3 cross-pair validation of the deterministic candidate that matched bb (target 4.862 vs gauss5+jpeg4 4.819) and tests whether glass slope match was shuffle-HF coincidence; pair0 PSNR 24.86 vs R0-glass 25.44."
+      },
+      "test_result": {
+        "psnr_rgb": 24.84,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "R1-C1 pair2: third support pair for the deterministic candidate; pair0/pair1 PSNR 24.86/24.84. Completes the k=3 validation required before any CHANGE."
+      },
+      "test_result": {
+        "psnr_rgb": 25.6,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "R1-C2 pair1 (R0 baseline k-pair reference): R0 final glass5+jpeg4+contrast1; pair0 PSNR 25.44 vs gaussian 24.86. Need pairs1/2 to decide CHANGE/NO_CHANGE under the +2 dB rule (blur_glass is stochastic -> PSNR is a distribution, quote as approximate)."
+      },
+      "test_result": {
+        "psnr_rgb": 25.36,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "R1-C2 pair2 (R0 baseline k-pair reference): completes 3-pair PSNR comparison glass vs gaussian. Pair0/1: glass 25.44/25.36 vs gaussian 24.86/24.84 (glass +0.5 dB, < +2 dB CHANGE threshold)."
+      },
+      "test_result": {
+        "psnr_rgb": 25.86,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+      "psnr_rgb": 25.86,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1",
+      "psnr_rgb": 25.6,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+      "psnr_rgb": 25.44,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+      "psnr_rgb": 25.36,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1",
+      "psnr_rgb": 24.86,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1",
+      "psnr_rgb": 24.84,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": 23.35,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:1,blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": 22.66,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "WEAK",
+      "mode": "signal",
+      "round": "14-16",
+      "note": "FINAL candidate; 2/5 checks matched on 3/3 pairs (spectral_slope+wiener); bb -11/-13/-19%, var 0.358 vs 0.456"
+    },
+    {
+      "pipeline": "blur_glass:5,saturate_weaken_HSV:1,compression_jpeg:4",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "WEAK",
+      "mode": "signal",
+      "round": 11,
+      "note": "3/5 matched incl. mean_shift 6.00 vs 5.40; chroma 0.605 vs 0.786 over-desaturated"
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "PARTIAL",
+      "mode": "signal",
+      "round": "1,8",
+      "note": "bb+wiener match; slope off 0.260/0.228"
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:4",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "PARTIAL",
+      "mode": "signal",
+      "round": "5,10,13",
+      "note": "slope+wiener match on 3/3 pairs; var +34..44% high, mean -5.4..-6.1 low"
+    },
+    {
+      "pipeline": "blur_glass:5,brightness_brighten_shfit_HSV:1,compression_jpeg:4",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "WEAK",
+      "mode": "signal",
+      "round": 12,
+      "note": "mean +19.7, var diff 41% - ruled out"
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:1,compression_jpeg:4",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "WEAK",
+      "mode": "signal",
+      "round": 9,
+      "note": "contrast before JPEG raises bb +40%; var 0.343"
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,compression_jpeg:4",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "WEAK",
+      "mode": "signal",
+      "round": 6,
+      "note": "stretch pivots mean to 0.5 (mean diff 0.0857) - ruled out"
+    },
+    {
+      "pipeline": "blur_lens:5,compression_jpeg:4",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "WEAK",
+      "mode": "signal",
+      "round": 7,
+      "note": "slope diff 0.134, bb -10%"
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "PARTIAL",
+      "mode": "signal",
+      "round": 2,
+      "note": "slope pass, bb -13%"
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:5",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "PARTIAL",
+      "mode": "signal",
+      "round": 3,
+      "note": "bb +37% overshoot"
+    },
+    {
+      "pipeline": "blur_gaussian:5,saturate_weaken_HSV:3,compression_jpeg:4",
+      "psnr_rgb": -1.0,
+      "ci_pass": "N/A",
+      "verdict": "WEAK",
+      "mode": "signal",
+      "round": 4,
+      "note": "sat3 too strong (chroma 0.301, mean +11.7)"
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_glass",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "contrast_weaken_scale",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Step-level evidence: (1) compression_jpeg: block_boundary 4.05/4.86/7.03 (0%FP), dct_zero 0.889/0.908/0.924; jpeg4 best (jpeg5 +58% bb). (2) blur_glass:5: raw spectral_slope of glass5+jpeg4 matches target within 0.03-0.06 on all 3 pairs while gaussian5 misses by 0.22-0.26; anisotropy 1.24-1.31 rules out motion; wiener corr matches 3/3; gm matches pairs1/2. (3) contrast_weaken_scale:1 (after JPEG): cross-pair target/baseline ratios are consistent (var 0.718/0.745/0.743, chroma 0.901/0.885/0.853, spread 0.838/na/0.829) = linear contrast scale ~0.85; target unique_G 246/218/236 < JPEG-only 255-256 supports a post-JPEG tonal step. No noise: pair1/2 sigma 1.1/0.4, peeled residual structure-dominated, blur+JPEG sims reproduce pair0 sigma 3.95.",
+    "support_verification": {
+      "pairs_verified": 3,
+      "final_candidate_results": [
+        {
+          "pair": 0,
+          "verdict": "WEAK",
+          "matched": [
+            "blur:spectral_slope",
+            "blur:wiener_kernel"
+          ],
+          "bb": [
+            3.618,
+            4.054
+          ],
+          "var_ratio": [
+            0.358,
+            0.456
+          ],
+          "mean_shift": [
+            2.0,
+            5.4
+          ],
+          "chroma": [
+            0.654,
+            0.786
+          ],
+          "unique_G": [
+            192,
+            246
+          ]
+        },
+        {
+          "pair": 1,
+          "verdict": "WEAK",
+          "matched": [
+            "blur:spectral_slope",
+            "blur:wiener_kernel"
+          ],
+          "bb_diff_pct": 13,
+          "var_ratio": [
+            null,
+            0.59
+          ],
+          "mean_shift_diff": 0.0251
+        },
+        {
+          "pair": 2,
+          "verdict": "WEAK",
+          "matched": [
+            "blur:spectral_slope",
+            "blur:wiener_kernel"
+          ],
+          "bb_diff_pct": 19,
+          "var_ratio": [
+            null,
+            0.698
+          ],
+          "mean_shift_diff": 0.0143
+        }
+      ],
+      "consistency": "slope+wiener matched on 3/3 pairs; global signals all point the same direction on 3/3 pairs"
+    },
+    "residual_uncertainty": "GT contrast effect (effective c~0.85) is milder than any current severity (sev1=0.75); mean shift (+5.4/+5.8/+2.0) exceeds the PIL L-pivot prediction (+2.2). Glass-vs-gaussian conflict: slope/gm favor glass, bb magnitude favors gaussian. Training PSNR must arbitrate."
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "decision": "NO_CHANGE",
+    "trigger": "R0 support PSNR 20.15 dB + verdict UNCERTAIN",
+    "r1_full_analysis": "full_analysis_R1.json 重跑 pair0, 信号与 R0 完全一致: block_boundary=4.0538, dct_zero=0.8885, sigma=3.95, gm_ratio=0.1233, spectral_slope_target=-1.3793, glass_score=1.3725, variance_ratio=0.456, mean_shift=5.4 (residual_intensity_corr 0.4639->0.4586, gamma_suspect=True).",
+    "signal_reinterpretation": [
+      "被忽略的机制信号: blur_glass 内部调用 shuffle_pixels_njit (np.random.randint 逐像素随机置换), 是随机退化. 推论: (a) glass 链的 PSNR 自仿真上限约 25 dB, 不能因 bb 偏低 11-21% 否定 glass; (b) 3/3 对 raw spectral_slope 匹配 (glass5+jpeg4 -1.417/-1.60/-1.70 vs target -1.379/-1.594/-1.678, 差 0.03-0.06) 仍是 subtype 的最强证据.",
+      "gamma 假设 (被 R0 忽略): residual_intensity_corr=0.459 + gamma_suspect=True + mean_shift=+5.4/var=0.456/chroma=0.786 共同指向色调曲线. 实测 brightness_brighten_gamma_RGB:1+blur_gaussian:5+jpeg4: unique_G 249 vs target 246 (1%), 但 mean 抬升过强, PSNR=22.66 dB (比 contrast 链低 2.20 dB) -> 驳回.",
+      "无全局步 FP 检查: blur_gaussian:5+jpeg4 PSNR=23.35 dB (pair0), 比加 contrast1 低 1.51 dB -> 全局步保留.",
+      "量化类全局步排除: quantization_hist/median 会把 unique_G 压到 <=24 (target 246); saturate_weaken_HSV/YCrCb sev1 chroma 0.605 vs target 0.786 过强.",
+      "噪声复查: raw sigma pair0=3.95 但 pair1/2=1.1/0.4; peeled residual spatial_corr=0.977/std=16.5/var_slope=-0.074 结构主导 -> NO_NOISE 维持; gamma_suspect 由色调步解释."
+    ],
+    "candidates": [
+      {"pipeline": "blur_gaussian:5,compression_jpeg:4,contrast_weaken_scale:1", "family": "blur:gaussian 确定性链", "psnr": {"p0": 24.86, "p1": 24.84, "p2": 25.60, "mean": 25.10}},
+      {"pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1", "family": "R0 链 (PSNR 参考复测, 随机 glass)", "psnr": {"p0": 25.44, "p1": 25.36, "p2": 25.86, "mean": 25.55}},
+      {"pipeline": "blur_gaussian:5,compression_jpeg:4", "family": "2-step 无全局 FP 检查", "psnr": {"p0": 23.35}},
+      {"pipeline": "brightness_brighten_gamma_RGB:1,blur_gaussian:5,compression_jpeg:4", "family": "global:gamma 假设", "psnr": {"p0": 22.66}}
+    ],
+    "validation_rule": "确定性候选需 >40 dB 或在 k 对上比上一轮 +2 dB. 最佳新候选 (gaussian 链) 在 3/3 对均低于 R0 链 0.26-0.58 dB, 未达阈值 -> NO_CHANGE. R0 链为随机 glass, 3 对均值 25.55 dB; R0 训练 support PSNR 20.15 dB 主要反映温和对比度不可表达 (c~0.85 vs sev1=0.75) 与 blur 随机性, 而非退化族错误.",
+    "test_candidate_calls": 8,
+    "rounds_used": "17-24 (auto-appended by test_candidate.py)",
+    "data_normalization": "R0 psnr_ranking 的 signal-mode 条目 psnr_rgb 原为 null; 归一化为 -1.0 以便 test_candidate.py 的数值排序混合运行; R0 从未产生 PSNR 数值, 语义不变.",
+    "residual_uncertainty": "库函数无法精确表示 GT 全局步 (有效 c~0.85, mean +5.4); contrast sev1 方差/unique_G 过冲而均值欠 (+2.0 vs +5.4). glass vs gaussian 冲突由 k=3 PSNR 仲裁 (glass 仅领先 0.45 dB). 若后续训练 PSNR 仍低, 优先怀疑全局步可表达性与 glass 随机性, 而非换族."
+  }
+}

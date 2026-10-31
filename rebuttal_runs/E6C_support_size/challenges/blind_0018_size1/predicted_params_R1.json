@@ -1,0 +1,55 @@
+{
+  "challenge_id": "blind_0018_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["contrast_strengthen_stretch", 4],
+    ["compression_jpeg", 5]
+  ],
+  "pipeline": [
+    {
+      "function": "contrast_strengthen_stretch",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "mode": "PSNR (noise_prior sigma=0.37 < 2, 无噪声)",
+    "change_rule": "确定性候选需 >40dB 或相对 R0 +2dB (即 >33.19dB) 才可 CHANGE；k=1 不放宽阈值",
+    "best_validation": {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 31.19,
+      "ci": "10/10",
+      "pairs": ["pair0"]
+    },
+    "candidates_tested_R1": [
+      {"pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5", "psnr_rgb": 31.19, "ci": "10/10", "decision": "KEEP_BASELINE"},
+      {"pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_stretch:3,compression_jpeg:5", "psnr_rgb": 26.2, "ci": "10/10", "decision": "REJECT"},
+      {"pipeline": "contrast_strengthen_stretch:2,contrast_strengthen_stretch:2,compression_jpeg:5", "psnr_rgb": 25.64, "ci": "8/10", "decision": "REJECT"}
+    ],
+    "signal_sources": [
+      "block_boundary=3.1893 + dct_zero_ratio=0.928 -> JPEG 确认 (jpeg:5)",
+      "variance_ratio=2.5179 + mean_shift=-29.0 + spread_ratio=1.2946 + clipped=0.0211 + chroma=1.1134 -> contrast_strengthen_stretch:4",
+      "unique_G=256 -> 排除 quantization",
+      "noise_prior_sigma=0.37 (noise sev1 sigma>=12.75) -> NO_NOISE",
+      "gm_ratio=1.3322 + spectral_slope_ratio=0.928 + FFT_anisotropy=0 -> BLUR_UNLIKELY",
+      "residual_intensity_corr=-0.6826 + gamma_suspect 边界 -> 测 gamma+stretch 组合, 更差"
+    ],
+    "support": {
+      "k": 1,
+      "pairs": ["pair0: clean_0.png / degraded_0.png (clean.png/degraded.png 为同 sha256 别名)"],
+      "single_pair_limitation": "k=1 无法跨对验证, 单对 PSNR 噪声大; 阈值不变, 证据不足即 NO_CHANGE",
+      "cross_pair_validation": "not possible"
+    },
+    "rationale": "R1 重跑 full_analysis 与 R0 完全一致；两个新假设 (gamma+stretch 26.20dB, 双段 stretch 25.64dB) 均低于 31.19dB 基线且远未达 +2dB 阈值；控制实验精确复现 31.19dB/CI 10/10，仿真图与目标视觉几乎一致 (水面中性区紫/绿翻转由逐通道 sigmoid 复现, gamma 不可复现)。无噪声/模糊/量化边界信号支持新增步骤。剩余结构化残差 (std≈7.0) 最可能来自库/编码器实现差异, 超出 x_distortion 可用函数组合的表达空间。R0 训练 NaN 非管线错配的信号级证据, R0 重训已另行排队。",
+    "r0_support_psnr": 20.23,
+    "nan_note": "触发条件为 R0 训练 NaN; R1 决策仅基于信号与 support 仿真验证, 不改 R0。"
+  }
+}

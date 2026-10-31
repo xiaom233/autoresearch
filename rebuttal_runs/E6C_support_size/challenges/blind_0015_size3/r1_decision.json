@@ -1,0 +1,73 @@
+{
+  "challenge_id": "blind_0015_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["brightness_darken_shfit_RGB", 3],
+    ["blur_lens", 2]
+  ],
+  "r1_pipeline": [
+    ["brightness_darken_shfit_RGB", 3],
+    ["blur_lens", 2]
+  ],
+  "support_psnr_r0": 18.16,
+  "candidates_tested": [
+    {
+      "id": "control_r0",
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+      "mode": "signal",
+      "verdicts": {
+        "pair0": "PARTIAL (3✓/1✗, round27)",
+        "pair1": "WEAK (2✓/2✗, round31)",
+        "pair2": "WEAK (2✓/2✗, round32)"
+      }
+    },
+    {
+      "id": "A_speckle1",
+      "pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2",
+      "mode": "signal",
+      "verdicts": {
+        "pair0": "PARTIAL (4✓/2✗, round26)",
+        "pair1": "WEAK (3✓/3✗, round33)",
+        "pair2": "WEAK (3✓/3✗, round36)"
+      }
+    },
+    {
+      "id": "B_gaussian_RGB1",
+      "pipeline": "brightness_darken_shfit_RGB:3,noise_gaussian_RGB:1,blur_lens:2",
+      "mode": "signal",
+      "verdicts": {
+        "pair0": "WEAK (2✓/4✗, round35)",
+        "pair1": "WEAK (3✓/3✗, round34)",
+        "pair2": "WEAK (2✓/4✗, round37)"
+      }
+    }
+  ],
+  "test_candidate_calls": 7,
+  "best_validation": {
+    "deterministic_best_psnr": {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+      "pair0": 29.17,
+      "pair1": 29.31,
+      "pair2": 27.47,
+      "mean": 28.65,
+      "note": "R0 主预测; 确定性家族 (gaussian1-3/lens1-4/glass1-2/motion1) 三对区间 25.9-29.5dB, 无一满足 >40dB 或 +2dB"
+    },
+    "noise_best_signal": {
+      "pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2",
+      "pair0": "PARTIAL (4✓/2✗)",
+      "pair1": "WEAK (3✓/3✗)",
+      "pair2": "WEAK (3✓/3✗)",
+      "note": "noise:sigma 仅 pair0/pair1 匹配 (pair2 diff=50%); structured_residual FWHM=4.0px 恒不匹配; 无多数对 WEAK->PARTIAL/MATCH"
+    }
+  },
+  "signal_sources": [
+    "full_analysis_R1.json (pair0): block_boundary=1.0038, gm_ratio=0.4782, spectral_slope_ratio=0.9996, noise_prior sigma=0.74, mean_shift=-42.9, variance_ratio=0.7181, clipped_fraction=0.3199",
+    "full_analysis_R1_p1.json / _p2.json: pair1 var=0.815/ms=-48.6, pair2 var=0.638/ms=-43.9; 两对均 NO_COMPRESSION (bb<1.05), noise_prior sigma=1.4/1.5",
+    "peeled_noise_check (brightness3,lens2): residual_std=8.9, extreme_pct=70.53 (SKILL 已知 FP), vm_slope=0.9203, var_slope=0.0103, spatial_corr=0.9724, rgb_ratio=1.0561, cross_ch_corr=0.9788, zero_ratio=0.3225, noise_prior sigma=1.73 (<2)",
+    "peeled_noise_check (lens2,brightness3): residual_std=9.2, zero_ratio=0.3475 (target clipped=0.3199) -> brightness 先于 blur",
+    "verify_signals control k=3: variance_ratio 差 pair1=14%/pair2=10%, wiener corr 0.675-0.729, mean_shift/spectral_slope 匹配",
+    "verify_signals 噪声候选 k=3: speckle1 WEAK(pair1/2), gaussian_RGB1 WEAK(全部3对, variance_ratio 差 17-33%, mean_shift 0.0059-0.0075 越界)"
+  ],
+  "reason": "R1 信号重释未发现可验证的漏检退化: 全局暗化 brightness_darken_shfit_RGB:3 在 k=3 上 mean_shift 全匹配且 unique_G=203 与 shift-only 仿真精确相等; 残余 variance_ratio 差 (10-14%) 与结构化残差 (spatial_corr=0.97) 提示存在未建模成分, 但确定性候选无 >40dB/+2dB 改善, 含噪候选无多数对 WEAK->PARTIAL/MATCH (speckle pair1/pair2 仍 WEAK; gaussian_RGB 三对 WEAK 且全局信号恶化), 按 REFLECT_INSTRUCTIONS 判据不可 CHANGE -> 保持 R0 pipeline 逐项相同, UNCERTAIN 留待训练 PSNR 仲裁."
+}

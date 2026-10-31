@@ -1,0 +1,34 @@
+{
+  "challenge_id": "blind_0001_size3",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [["noise_poisson", 5], ["quantization_median", 2]],
+  "r1_pipeline": [["noise_poisson", 5], ["quantization_median", 1]],
+  "support_psnr_r0": 29.99,
+  "candidates_tested": 4,
+  "test_candidate_calls": 9,
+  "candidates_tested_detail": [
+    {"family": "impulse revisit", "pipelines": ["noise_impulse:3,quantization_median:2", "noise_impulse:5,quantization_median:2"], "result": "WEAK/WEAK (sigma -88%/-76%) → 排除; 证实 peeled extreme_pct=55% 为量化带+噪声seed失配假阳性"},
+    {"family": "speckle cross-family", "pipelines": ["noise_speckle:5,quantization_median:2", "noise_speckle:4,quantization_median:2", "noise_speckle:3,quantization_median:2"], "result": "WEAK/PARTIAL(VR 10%)/WEAK → 排除 (基线 poisson VR 误差 0.1%)"},
+    {"family": "poisson severity boundary", "pipelines": ["noise_poisson:4,quantization_median:2"], "result": "WEAK (sigma -21%, VR -45%) → 确认 sev5"},
+    {"family": "quantization severity correction", "pipelines": ["noise_poisson:5,quantization_median:1"], "result": "pair0/1/2 全部 MATCH (4/4), unique_per_channel 精确 [16,16,16] → ACCEPT"}
+  ],
+  "best_validation": {
+    "pair0": {"target_unique": [16, 16, 16], "sim_unique": [16, 16, 16], "sigma": [16.68, 16.68], "variance_ratio": [1.3173, 1.3180], "mean_shift": [-1.2, -1.2], "clipped_fraction": [0.1635, 0.1638], "spectral_slope": [-1.2491, -1.2491], "chroma_ratio": [2.6552, 2.6572], "ivc": [0.7718, 0.7693]},
+    "pair1": {"target_unique": [16, 16, 16], "sim_unique": [16, 16, 16], "sigma": [17.17, 17.17], "variance_ratio": [1.1433, 1.1429], "mean_shift": [-2.9, -2.9], "clipped_fraction": [0.1472, 0.1472], "spectral_slope": [-1.1459, -1.1456], "chroma_ratio": [1.7518, 1.7518], "ivc": [0.8294, 0.8349]},
+    "pair2": {"target_unique": [16, 16, 16], "sim_unique": [16, 16, 16], "sigma": [10.38, 10.50], "variance_ratio": [1.0812, 1.0815], "mean_shift": [-1.7, -1.7], "clipped_fraction": [0.332, 0.332], "spectral_slope": [-1.3343, -1.3353], "chroma_ratio": [1.4853, 1.4856], "ivc": [0.9079, 0.9121]},
+    "verify_signals": "3/3 pairs MATCH (4/4 signals each)",
+    "r0_comparison": "median:2 的 unique=15 (vs 16), pair0 clip=0.150 (vs 0.1635), pair1 sigma=16.93 (vs 17.17), pair0 slope=-1.2519 (vs -1.2491); median:1 在以上指标均精确命中"
+  },
+  "signal_sources": [
+    "unique_per_channel=[16,16,16] (target 三对恒定; clean=256) → 确定性量化签名, 直接区分 quantization_median sev1 (16 色) 与 sev2 (15 色)",
+    "block_boundary 0.9935/0.9991/1.0000 (sim) vs 1.0007/0.9995/1.0011 (target) → 排除 JPEG",
+    "noise_prior sigma 16.68/17.17/10.38 (target) vs 16.68/17.17/10.50 (sim) → poisson:5",
+    "intensity_var_corr 0.772/0.829/0.908 (target) vs 0.769/0.835/0.912 (sim) → 强度相关噪声 (poisson)",
+    "variance_ratio 1.3173/1.1433/1.0812 (target) vs 1.3180/1.1429/1.0815 (sim); mean_shift -1.2/-2.9/-1.7 vs 同值",
+    "clipped_fraction 0.1635/0.1472/0.332 (target) vs 0.1638/0.1472/0.332 (sim)",
+    "spectral_slope -1.2491/-1.1459/-1.3343 (target) vs -1.2491/-1.1456/-1.3353 (sim) → 无 blur (slope_ratio 0.993/0.982/0.994)",
+    "peeled §B extreme_pct 55.13% (median2) / 55.47% (median1) → 假阳性: impulse:3/5 实测 WEAK (sigma -88%/-76%)"
+  ],
+  "reason": "R0 将 target 恒定的 unique_per_channel=16 与本仓库 median:2 的 15 色偏差解释为版本差异; R1 信号重释表明这是 severity 误判: 同仓库 quantization_median:1 即可精确产生 16 色。修正后在全部 k=3 对 support 上 verify_signals 均 MATCH (4/4), 且 unique_G 精确一致, pair0 clip 0.1638 vs 0.1635 (R0 0.150), pair1 sigma 17.17 vs 17.17 (R0 16.93), pair0 spectral_slope 精确一致 (R0 -1.2519 vs -1.2491)。噪声步 poisson:5 经 pois:4 边界测试确认; impulse/speckle 族实测 WEAK/PARTIAL 均劣于 poisson。变更满足 'k 对多数 PARTIAL/MATCH' 门槛 (3/3 MATCH) 且修正了唯一确定性签名不一致, 故 CHANGE。"
+}

@@ -1,0 +1,74 @@
+{
+  "challenge_id": "blind_0004_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_gaussian", 2]],
+  "r1_pipeline": [["blur_gaussian", 2]],
+  "support_psnr_r0": 24.95,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_glass:1",
+      "function_family": "blur_glass",
+      "mode": "psnr",
+      "k": 3,
+      "results": {"pair0": 24.29, "pair1": 26.69, "pair2": 30.45},
+      "ci": {"pair0": "7/10", "pair1": "8/10", "pair2": "10/10"},
+      "delta_vs_r0_pipeline": {"pair0": -1.42, "pair1": -2.30, "pair2": -2.15},
+      "verdict": "REJECT"
+    },
+    {
+      "pipeline": "blur_lens:1",
+      "function_family": "blur_disk",
+      "mode": "psnr",
+      "k": 3,
+      "results": {"pair0": 25.15, "pair1": 28.61, "pair2": 32.32},
+      "ci": {"pair0": "9/10", "pair1": "9/10", "pair2": "9/10"},
+      "delta_vs_r0_pipeline": {"pair0": -0.56, "pair1": -0.38, "pair2": -0.28},
+      "verdict": "REJECT (PSNR below R0; best CI, retained as evidence for lens family)"
+    },
+    {
+      "pipeline": "blur_lens:2",
+      "function_family": "blur_disk",
+      "mode": "psnr",
+      "k": 3,
+      "results": {"pair0": 25.61, "pair1": 29.0, "pair2": 32.55},
+      "ci": {"pair0": "7/10 (R0)", "pair1": "8/10", "pair2": "9/10"},
+      "delta_vs_r0_pipeline": {"pair0": -0.10, "pair1": 0.01, "pair2": -0.05},
+      "verdict": "REJECT as CHANGE (tied, max +0.01 dB < +2 dB); kept as best cross-family alternative"
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "function_family": "blur_gaussian",
+      "mode": "psnr",
+      "k": 3,
+      "results": {"pair0": 25.10, "pair1": 28.68, "pair2": 32.27},
+      "ci": {"pair0": "7/10", "pair1": "8/10", "pair2": "8/10"},
+      "delta_vs_r0_pipeline": {"pair0": -0.61, "pair1": -0.31, "pair2": -0.33},
+      "verdict": "REJECT as CHANGE (below R0 on all pairs); kept as milder-severity backup"
+    },
+    {
+      "pipeline": "blur_gaussian:2,noise_gaussian_RGB:1",
+      "function_family": "blur+noise",
+      "mode": "signal",
+      "k": 1,
+      "results": {"pair0": {"verdict": "WEAK", "matched": ["blur:spectral_slope"], "mismatched": ["blur:wiener_kernel (corr=0.721)", "noise:sigma (diff=1467%)", "noise:structured_residual (FWHM=4.0px)"]}},
+      "verdict": "REJECT (noise sigma mismatch 1467%, structure FWHM 4.0px; no improvement over R0 blur-only WEAK)"
+    }
+  ],
+  "test_candidate_calls": 11,
+  "best_validation": {
+    "pipeline": "blur_gaussian:2",
+    "k": 3,
+    "psnr_rgb": {"pair0": 25.71, "pair1": 28.99, "pair2": 32.6},
+    "ci": {"pair0": "6/10", "pair1": "4/10", "pair2": "8/10"},
+    "best_challenger": {"pipeline": "blur_lens:2", "psnr_rgb": {"pair0": 25.61, "pair1": 29.0, "pair2": 32.55}, "ci": {"pair0": "7/10", "pair1": "8/10", "pair2": "9/10"}, "max_gain_db": 0.01},
+    "note": "No candidate reaches 40 dB or +2 dB over the R0 pipeline on any support pair."
+  },
+  "signal_sources": [
+    "Simulation inversion (pair0): run_full_analysis on simulate(clean, blur_gaussian:2) vs clean gives gm_ratio=0.4418, spectral_slope_ratio=1.1324, variance_ratio=0.9052, contrast_spread_ratio=0.9341, saturation_chroma_ratio=0.9511, dct_zero_ratio=0.7519, unique_G=249, clipped_fraction=0.051, mean_shift=-0.5; target gives gm_ratio=0.6485, spectral_slope_ratio=1.0569, variance_ratio=0.945, contrast_spread_ratio=0.9628, saturation_chroma_ratio=0.972, dct_zero_ratio=0.4457, unique_G=250, clipped_fraction=0.0603, mean_shift=-0.5. gaussian:2 over-blurs; target is bracketed by legal sev1/sev2; unique_G/chroma/clipping/mean explained by blur+content -> global and quantization steps excluded; any global scaling that would restore gm=0.649 would overshoot variance_ratio far beyond 0.945.",
+    "Noise recheck: raw wavelet sigma 0.74/1.11/0.74 (<2); after peeling blur_gaussian:2 on pair0 peeled sigma=1.48, spatial_corr=0.98, var_slope=0.737, extreme_pct=58.8% (documented structured-residual artifact); signal-mode candidate blur_gaussian:2+noise_gaussian_RGB:1 -> WEAK, noise:sigma diff=1467%, structured_residual FWHM=4.0px -> NO_NOISE.",
+    "Cross-family/severity k=3 validation: glass:1 (24.29/26.69/30.45), lens:1 (25.15/28.61/32.32), lens:2 (25.61/29.00/32.55), gaussian:1 (25.10/28.68/32.27) vs R0 gaussian:2 (25.71/28.99/32.60); no +2 dB gain, lens:2 statistically tied with better CI.",
+    "R0 full-analysis signals re-confirmed unchanged in R1 re-run: block_boundary=1.0118 (no JPEG, 0% FP), gm_ratio=0.6485, spectral_slope_ratio=1.0569, sigma=0.74, variance_ratio=0.945, mean_shift=-0.5, clipped_fraction=0.0603, residual_intensity_corr=0.3721."
+  ],
+  "reason": "R1 signal reanalysis (simulation inversion + noise signal screen + k=3 cross-family/severity validation) shows the target is a single mild isotropic blur whose effective PSF lies between legal integer severities; R0's blur_gaussian:2 slightly over-blurs but remains the best PSNR candidate on all three support pairs. No new candidate reaches the CHANGE threshold (>40 dB or +2 dB over the previous round) and global/quantization/noise steps are quantitatively excluded. Decision NO_CHANGE, pipeline kept item-by-item identical to R0."
+}

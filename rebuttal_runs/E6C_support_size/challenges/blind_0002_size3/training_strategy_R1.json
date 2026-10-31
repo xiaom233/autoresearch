@@ -1,0 +1,32 @@
+{
+  "challenge_id": "blind_0002_size3",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "压缩: block_boundary=0.9992 (<1.1, Tier S, 0% FP) + unique_G=256/256 → NO_COMPRESSION, 无 JPEG 专项",
+    "模糊: spectral_slope_ratio=0.9937 (<1.08, 噪声下可靠) + gm_ratio=3.6555 被噪声破坏 → BLUR_UNLIKELY; 无 motion 证据, anisotropy 未报 >1.7 → 不触发 OCAB",
+    "噪声: sigma_prior=14.46, §B rgb_ratio=1.6253 + cross_ch_corr=0.2926 (YCrCb 理论 0.283), 每通道残差 std (30.9,22.9,37.3) 与 YCrCb sev2 模拟逐项一致 (std 31.1=31.1); 3/3 support verify_signals MATCH → noise_gaussian_YCrCb:2, verdict=UNCERTAIN (SKILL 噪声规则)",
+    "全局: variance_ratio=1.0448 / chroma_ratio=1.2044 / clipped_fraction=0.1255 由纯 YCrCb 噪声模拟逐项复现 (1.0446/1.2044/0.1255), 且模拟图重跑 run_full_analysis 同样输出 SATURATION_sev3 → 噪声假阳性, 无真实 contrast/global 步 → Tier A variance_ratio 不可用",
+    "SimpleGate 默认常开: exp39 -32K, 8/9 退化安全 (本挑战无 S5 三退化场景)"
+  ],
+  "rationale": "单步随机噪声 (noise_gaussian_YCrCb sev2) 是唯一有统计指纹支持的退化; 压缩/模糊信号明确阴性, global 信号已被纯噪声模拟证伪, 因此不存在 contrast+结构化组合, FiLM-GCM/ColorPre/OCAB 的 Tier S/A 触发条件均不满足, 按 finetune_strategy.md §七 走纯 Swin + SimpleGate 兜底。单步管线无梯度干扰, Direct 优于 RandomCurric; True Ft (AR_LOAD_CKPT) 在 2-epoch 预算下与 Direct 持平 (exp37/38), 不采用。full_analysis.json 的 DualBranch 建议按指令与 exp37 (盲识别 0/24 胜) 拒绝。support k=3 仅增强噪声指纹一致性 (3/3 MATCH), 不改变任何架构门控阈值。lr=5e-4, EPOCH=2, batch=16 与基线公平一致; VAL PARAMS 指向预测管线 noise_gaussian_YCrCb:2 (非 GT)。"
+}

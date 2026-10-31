@@ -1,0 +1,99 @@
+{
+  "challenge_id": "blind_0004_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 1]
+  ],
+  "r1_pipeline": [
+    ["blur_motion", 1]
+  ],
+  "support_psnr_r0": 33.11,
+  "candidates_tested": [
+    {
+      "pipeline": "contrast_weaken_stretch:1",
+      "mode": "psnr",
+      "psnr_rgb": 14.44,
+      "ci_pass": "2/10",
+      "hypothesis": "阈值边界全局信号 variance_ratio=0.945 / contrast_spread_ratio=0.9628 可能对应轻微 contrast step",
+      "conclusion": "证伪：库内最小 contrast 档也远强于观测（unique_G -42%，PSNR 14.44dB）；观测 5.5% 方差下降由 blur 低通解释，无需 global 步"
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "mode": "psnr",
+      "psnr_rgb": 23.74,
+      "ci_pass": "5/10",
+      "hypothesis": "补全 R0 未覆盖的高严重度确定性 blur（gaussian sev4），排除漏检的强高斯",
+      "conclusion": "排除：确定性真值应 PSNR=inf，实测 23.74dB；gaussian sev1-4 全不匹配"
+    }
+  ],
+  "test_candidate_calls": 2,
+  "best_validation": {
+    "r1_best_psnr_candidate": {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 23.74,
+      "ci_pass": "5/10",
+      "meets_change_gate": false,
+      "gate": ">40dB 或相对上一轮 +2dB（R0 上一轮 motion:1 最佳采样 24.53dB → 门槛 26.53dB）"
+    },
+    "r1_best_ci_candidate": {
+      "pipeline": "contrast_weaken_stretch:1",
+      "psnr_rgb": 14.44,
+      "ci_pass": "2/10",
+      "meets_change_gate": false
+    },
+    "retained_r0_evidence": {
+      "pipeline": "blur_motion:1",
+      "ci_pass": "10/10（三次独立角度采样：21.34/24.53/22.91 dB）",
+      "note": "motion 角度随机 → PSNR 为角度彩票，不以单次高值触发 CHANGE"
+    }
+  },
+  "signal_sources": [
+    {
+      "signal": "spectral_slope_ratio",
+      "value": 1.0569,
+      "note": "target slope -1.018 vs clean -0.9632；低于 1.08 阈值 2.1%，属阈值边界 → blur 存在（BLUR_UNLIKELY 假阴性），配合 gm_ratio=0.6485"
+    },
+    {
+      "signal": "gm_ratio",
+      "value": 0.6485,
+      "note": "梯度幅度下降 35%，blur 确定存在，与 R0 一致"
+    },
+    {
+      "signal": "variance_ratio / contrast_spread_ratio",
+      "value": "0.945 / 0.9628",
+      "note": "被忽略的边界全局信号；库内最小 contrast 档（scale 0.75 ≈ 44% 方差降；stretch:1 实测 unique_G -42%）远强于观测 5.5% → 由 blur 解释，无 contrast/gamma 步"
+    },
+    {
+      "signal": "mean_shift",
+      "value": -0.5,
+      "note": "库内 brightness 最小档 shift=0.1（≈+25/255）或 gamma 0.8/1.4，均远超 -0.5 → brightness/gamma 排除；residual_intensity_corr=0.3759 属 SKILL 已知 blur FP（残差随纹理强度变化）"
+    },
+    {
+      "signal": "saturation_chroma_ratio",
+      "value": 0.972,
+      "note": "库内 saturate_weaken 最小档 HSV 0.7 / YCrCb 0.6（30-40% 降），远超 2.8% → saturation 排除"
+    },
+    {
+      "signal": "clipped_fraction",
+      "value": 0.0603,
+      "note": "heavy_clipping 但 R0 motion:1 CI 10/10 涵盖 impulse_pct_zero/255 指标 → clipping 由原图内容+blur 解释，无需 brightness 步"
+    },
+    {
+      "signal": "noise_prior_sigma / peeled §B",
+      "value": "0.74 / extreme_pct=72.68% (blur_motion:1 剥离)",
+      "note": "σ<2 → NO_NOISE；extreme_pct>50% 且 σ<5 属 SKILL 已知 FP；per-channel std 2.7/2.8/2.6（rgb_ratio=1.085）→ 无噪声/YCrCb"
+    },
+    {
+      "signal": "block_boundary / unique_G_ratio",
+      "value": "1.0118 / 0.9766",
+      "note": "0% FP 压缩信号未触发，R0 jpeg:1 23.29dB/CI 4/10 → 无 JPEG/quantization"
+    },
+    {
+      "signal": "确定性 blur 全族 PSNR",
+      "value": "gaussian sev1-4 = 25.10/25.71/24.86/23.74 dB；lens:2=25.61；glass:2=24.38",
+      "note": "确定性真值应 PSNR=inf → 确定性族排除；CI 判别 motion:1 10/10 ×3 > motion:2/3 9/10（系统 impulse_pct_255 失配 38-59%）> glass:2 7/10"
+    }
+  ],
+  "reason": "R1 信号重释未发现任何可通过验证门槛的修正方向。阈值边界的 variance_ratio=0.945/contrast_spread_ratio=0.9628 经测试证明超出库内最小 contrast 档强度（contrast_weaken_stretch:1 PSNR=14.44dB、unique_G -42%），且该 5.5% 方差下降可由 blur 低通解释；brightness/gamma 被 mean_shift=-0.5 排除；saturation 被 2.8% 幅度排除；噪声被 σ=0.74 与 peeled §B 已知 FP 排除；压缩被 0% FP 信号与 jpeg:1 测试排除；确定性 blur 排除补全至 gaussian sev4。保留 R0 的 blur_motion:1（CI 10/10 ×3，motion:2/3 系统性 impulse_pct_255 失配）。因 k=1 单对且 motion 角度随机，仿真 PSNR 为角度彩票，无法获得 >40dB 或相对上一轮 +2dB 的可复现证据，故 NO_CHANGE。"
+}

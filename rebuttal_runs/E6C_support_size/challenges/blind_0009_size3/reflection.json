@@ -1,0 +1,903 @@
+{
+  "challenge_id": "blind_0009_size3",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9998, unique_G=256, dct_zero_ratio=0.0499)",
+      "blur": "BLUR_UNLIKELY (spectral_slope_ratio=0.9979, gm_ratio=7.259 noise-destroyed)",
+      "noise": "GAUSSIAN_YCrCb candidate sigma=5.56 (low confidence; residual_intensity_corr=0.478, gamma_suspect=true, spatial_corr=0.2443)",
+      "global": "SATURATION_strengthen_sev5 heuristic (chroma_ratio=2.1606, variance_ratio=2.028, mean_shift=16.1/255, clipped_fraction=0.5263, brightness_detected_raw=false)"
+    },
+    "mode": "SIGNAL (sigma=5.6)",
+    "suspected": [
+      "global: 对比度/饱和度/亮度类强变换（variance_ratio=2.03 + 52.6% 像素裁剪 + chroma_ratio=2.16）",
+      "noise: 可见颗粒，sigma~5.6，类型待剥离后 §B 判定"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary=1.0, unique_G=256, dct_zero_ratio=0.05)",
+      "blur (spectral_slope_ratio=1.0)"
+    ],
+    "qwen_gate": {
+      "available": false,
+      "note": "Qwen/API 不可用，跳过 Step 0.5 门控"
+    }
+  },
+  "noise_6step_check": {
+    "method": "peeled_noise_check.py on residual = target - saturate_strengthen_YCrCb:3(clean); 该残差被 chroma×5 放大与裁剪翻转污染 (residual_std=41.2, 真实噪声 sigma~5.6)",
+    "extreme_pct": 73.69,
+    "zero_ratio": 0.4431,
+    "vm_slope": 15.6024,
+    "var_slope": 11.2591,
+    "intensity_var_corr": 0.3202,
+    "spatial_corr": 0.5131,
+    "rgb_ratio": 1.3278,
+    "cross_channel_corr": 0.6392,
+    "ch_stds": [
+      43.3,
+      34.1,
+      45.2
+    ],
+    "residual_std": 41.2,
+    "diagnosis": "extreme_pct=73.7%>50% 且残差有结构(spatial_corr=0.51) -> §B 数值被饱和度放大/裁剪翻转污染，不可直接用于类型判定 (SKILL 失败模式: extreme_pct>50% 时 IMPULSE 为假阳性)。最终噪声类型由跨 support 联合信号验证确定: poisson:2 的 sigma 估计在三对 target 上逐位吻合 (5.56/23.6/25.57)，联合残差 spatial_corr<0.15, extreme<5%, FWHM<4 全部通过；RGB/YCrCb/impulse/speckle 均无法同时匹配 sigma。var_slope=11.26 (>1.0) 与 POISSON 方向一致，佐证类型判断。"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:4",
+        "thinking": "R1: variance_ratio=2.028+mean_shift=16.1+clipped=52.6%+chroma=2.16, brightness_raw=false -> 对比度强化(scale)可在R/G下降B上升时产生正均值偏移并大量裁剪; 测 sev4"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0268)",
+          "global:variance_ratio (diff=27%)"
+        ],
+        "pipeline": "contrast_strengthen_scale:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:5",
+        "thinking": "R1: 天空深蓝->亮青(B=255,G~100,R=0)符合YCrCb chroma放大裁剪重建; chroma_ratio=2.16+clipped=52.6%; 测 sev5(c=16)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=14%)"
+        ],
+        "pipeline": "saturate_strengthen_YCrCb:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:4",
+        "thinking": "R2 severity扫描: YCrCb:5 已匹配mean_shift, variance_ratio差14%; 降一档 sev4(c=8) 检查方差比"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,saturate_strengthen_YCrCb:4",
+        "thinking": "R2联合: 物理顺序noise->saturation; sigma=5.56(最小档gaussian_RGB:1=12.75/255被饱和裁剪掩盖); 验证sigma+残差§B结构(spatial_corr/extreme/fwhm)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=40%)",
+          "global:mean_shift (diff=0.0081)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,saturate_strengthen_YCrCb:4",
+        "thinking": "R2 noise severity扫描: RGB:1时sigma差40%, 升一档RGB:2判断方向(若diff增大则sev1更接近)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=33%)",
+          "global:mean_shift (diff=0.0105)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,saturate_strengthen_YCrCb:4",
+        "thinking": "R2 noise severity扫描: sigma diff sev1=40%, sev2=33% 单调下降, 测sev3确认方向"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=230%)",
+          "global:mean_shift (diff=0.0078)",
+          "global:variance_ratio (diff=12%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_YCrCb:4",
+        "thinking": "R3跨类型: noise_prior在target上报channel sigma ratio=4.8->YCrCb; 测YCrCb:2(sigma_l=15.3,chroma=22.2)对照RGB"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=120%)",
+          "global:mean_shift (diff=0.0091)",
+          "global:variance_ratio (diff=8%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,saturate_strengthen_YCrCb:4",
+        "thinking": "R3噪声全覆盖: 稀疏斑点+sigma_prior仅5.56但低于最小gaussian档(12.75)->impulse(1%)离群稀疏, wavelet MAD对其不敏感; 测impulse:1"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=87%)"
+        ],
+        "pipeline": "noise_impulse:1,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_impulse:2,saturate_strengthen_YCrCb:4",
+        "thinking": "R3 severity扫描: impulse:1 PARTIAL(sigma差87%), 升一档impulse:2(3%)看sigma与全局是否保持"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=80%)"
+        ],
+        "pipeline": "noise_impulse:2,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,saturate_strengthen_YCrCb:4",
+        "thinking": "R3跨类型: speckle乘性噪声(0.14*I)暗区扰动小, 可保持mean_shift; 测speckle:1"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=47%)",
+          "global:variance_ratio (diff=9%)"
+        ],
+        "pipeline": "noise_speckle:1,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_poisson:1,saturate_strengthen_YCrCb:4",
+        "thinking": "R3跨类型: poisson(c=80)强度相关噪声, 暗区sigma小; 测poisson:1"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=27%)"
+        ],
+        "pipeline": "noise_poisson:1,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:4",
+        "thinking": "R3 severity扫描: poisson:1 PARTIAL(sigma差27%最佳), 升一档poisson:2(c=60)看sigma是否收敛"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:4",
+        "thinking": "跨support复核 pair1: 最终候选噪声seed跨对验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0058)",
+          "global:variance_ratio (diff=25%)"
+        ],
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:4",
+        "thinking": "pair1控制测试: 无噪声sat:4, 隔离噪声对方差比的扰动; 判断全局severity是否仍合适"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0131)",
+          "global:variance_ratio (diff=21%)"
+        ],
+        "pipeline": "saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:4",
+        "thinking": "pair2控制: 无噪声sat:4, 获取全局信号对照target(-9.5,2.503,chroma6.00,clip0.364)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0238)",
+          "global:variance_ratio (diff=22%)"
+        ],
+        "pipeline": "saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:4",
+        "thinking": "跨support复核 pair2: 最终候选 poisson:2+satYCrCb:4"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=25%)"
+        ],
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "thinking": "pair2全局severity扫描: sat4方差高25%, 降一档sat3(c=5)看variance/chroma/clip及sigma影响"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "thinking": "跨support复核 pair0: sat3全局severity扫描后候选, 检验是否保持pair0的MATCH"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "thinking": "跨support复核 pair1: sat3候选最后复验"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,saturate_strengthen_YCrCb:3",
+        "thinking": "跨类型控制: poisson已被3对MATCH; 检验gaussian_RGB:2+sat3是否也可行(若不可, 则noise类型判为poisson更可靠)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=67%)",
+          "global:mean_shift (diff=0.0068)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,saturate_strengthen_YCrCb:3",
+        "thinking": "R1-C1 噪声严重度上界: R0 poisson:2 三对 sigma MATCH, poisson:1 sigma diff 27%; poisson c=[80,60,40], sev3(c=40) sigma 应高 22%. 检验 pair0(dark, target sigma=5.56) 是否仍匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=57%)"
+        ],
+        "pipeline": "noise_poisson:3,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,saturate_strengthen_YCrCb:3",
+        "thinking": "R1-C1 噪声严重度上界跨内容复核: pair2(bright, target sigma=25.57) 用 poisson:3(c=40) 检验是否越过上界"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:3,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_YCrCb:3,noise_poisson:2",
+        "thinking": "R1-C2 顺序检验: 若噪声先于饱和, 噪声在 chroma 放大(×5)与裁剪前注入; 改为 sat->poisson 后 sigma/全局统计应偏离 target(pair0: sigma=5.56, ms=16.1, vr=2.028)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=67%)",
+          "global:mean_shift (diff=0.0096)",
+          "global:variance_ratio (diff=14%)"
+        ],
+        "pipeline": "saturate_strengthen_YCrCb:3,noise_poisson:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_YCrCb:3",
+        "thinking": "R1-C3 初判噪声族复核: full_analysis step2 判 GAUSSIAN_YCrCb(low conf, sigma=5.56); R0 仅在 pair0+sat:4 测过. 用 sat:3 在 pair1(target sigma=23.6) 检验 YCrCb 高斯族是否可替代 poisson"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=55%)",
+          "global:mean_shift (diff=0.0321)",
+          "global:variance_ratio (diff=17%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_HSV:2",
+        "thinking": "R1-C4 全局子类型交叉检验: full_analysis 全局启发式建议 saturate_strengthen_HSV(sev5); R0 只测 YCrCb. 取等增益 HSV:2(c=6, 接近 YCrCb:3 的 c=5) + poisson:2, 检验 HSV 子类型能否复现 pair0 的 mean_shift=16.1/variance_ratio=2.028"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=133%)",
+          "global:mean_shift (diff=0.1637)",
+          "global:variance_ratio (diff=81%)"
+        ],
+        "pipeline": "noise_poisson:2,saturate_strengthen_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "thinking": "R1-C5 模糊漏检检验: gm_ratio=7.259 被噪声破坏不可用, spectral_slope_ratio=0.998 提示无模糊; 噪声下的 Wiener 核自洽(>0.85)与 spectral_slope 差(<0.08)可判模糊. 加入 blur_gaussian:1 检验 spectral_slope/wiener 是否失配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_gaussian:1,noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "thinking": "R1-anchor 最终候选复验 pair0: R0 已在此对 MATCH 4/4; R1 独立复跑确认可重复性(噪声 seed 不同), 不构成新候选"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "thinking": "R1-anchor 最终候选复验 pair1: R0 已在此对 MATCH 4/4; R1 独立复跑确认可重复性(噪声 seed 不同), 不构成新候选"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "thinking": "R1-anchor 最终候选复验 pair2: R0 已在此对 MATCH 4/4; R1 独立复跑确认可重复性(噪声 seed 不同), 不构成新候选"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [],
+  "signal_ranking": [
+    {
+      "rank": 1,
+      "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+      "verdict": "MATCH 4/4",
+      "supports": "pair0/pair1/pair2 全部 MATCH (sigma, clean_residual, mean_shift, variance_ratio)",
+      "note": "三对 6 项全局统计逐位吻合 (见 cross_support_validation)"
+    },
+    {
+      "rank": 2,
+      "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:4",
+      "verdict": "MATCH(pair0) / PARTIAL(pair2) / WEAK(pair1)",
+      "supports": "pair0 4/4; pair1 variance差25%; pair2 variance差25%",
+      "note": "仅 pair0 巧合匹配; 跨对不一致"
+    },
+    {
+      "rank": 3,
+      "pipeline": "noise_impulse:2,saturate_strengthen_YCrCb:4",
+      "verdict": "PARTIAL 3/4",
+      "supports": "pair0; sigma差80%"
+    },
+    {
+      "rank": 4,
+      "pipeline": "noise_speckle:1,saturate_strengthen_YCrCb:4",
+      "verdict": "WEAK 2/4",
+      "supports": "pair0; sigma差47%, variance差9%"
+    },
+    {
+      "rank": 5,
+      "pipeline": "noise_gaussian_RGB:2,saturate_strengthen_YCrCb:4",
+      "verdict": "WEAK 2/4",
+      "supports": "pair0; sigma差33%, mean差0.0105"
+    },
+    {
+      "rank": 6,
+      "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_YCrCb:4",
+      "verdict": "WEAK 1/4",
+      "supports": "pair0; sigma差120%"
+    },
+    {
+      "rank": 7,
+      "pipeline": "saturate_strengthen_YCrCb:4 (无噪声)",
+      "verdict": "MATCH(pair0) 但 pairs1/2 MISMATCH",
+      "supports": "pair0 均值/方差巧合; 无噪声模型 -> 跨对不一致"
+    },
+    {
+      "rank": 8,
+      "pipeline": "contrast_strengthen_scale:4",
+      "verdict": "MISMATCH 0/2",
+      "supports": "pair0; mean差0.0268, variance差27%"
+    }
+  ],
+  "cross_support_validation": {
+    "final_pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+    "pair0": {
+      "verify_signals": "MATCH 4/4",
+      "target": {
+        "sigma": 5.56,
+        "mean_shift": 16.1,
+        "variance_ratio": 2.028,
+        "chroma_ratio": 2.1606,
+        "clipped_fraction": 0.5263,
+        "spread_ratio": 1.2643
+      },
+      "sim": {
+        "sigma": 5.56,
+        "mean_shift": 16.1,
+        "variance_ratio": 2.028,
+        "chroma_ratio": 2.1605,
+        "clipped_fraction": 0.5264,
+        "spread_ratio": 1.2643
+      }
+    },
+    "pair1": {
+      "verify_signals": "MATCH 4/4",
+      "target": {
+        "sigma": 23.6,
+        "mean_shift": -8.1,
+        "variance_ratio": 3.304,
+        "chroma_ratio": 4.2135,
+        "clipped_fraction": 0.3694,
+        "spread_ratio": 1.549
+      },
+      "sim": {
+        "sigma": 23.6,
+        "mean_shift": -8.2,
+        "variance_ratio": 3.3025,
+        "chroma_ratio": 4.2127,
+        "clipped_fraction": 0.369,
+        "spread_ratio": 1.549
+      }
+    },
+    "pair2": {
+      "verify_signals": "MATCH 4/4",
+      "target": {
+        "sigma": 25.57,
+        "mean_shift": -9.5,
+        "variance_ratio": 2.5031,
+        "chroma_ratio": 6.0016,
+        "clipped_fraction": 0.3635,
+        "spread_ratio": 1.3375
+      },
+      "sim": {
+        "sigma": 25.57,
+        "mean_shift": -9.5,
+        "variance_ratio": 2.5031,
+        "chroma_ratio": 5.9993,
+        "clipped_fraction": 0.3634,
+        "spread_ratio": 1.3375
+      }
+    },
+    "note": "k=3 support 全部复核; 6 项全局统计均逐位吻合 (noise 统计大数收敛, seed 失配不影响)"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_poisson",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "saturate_strengthen_YCrCb",
+        "severity": 3,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "noise_poisson",
+            "severity": 2
+          },
+          {
+            "function": "saturate_strengthen_YCrCb",
+            "severity": 4
+          }
+        ],
+        "evidence": "pair0 verify MATCH 4/4; pair1/pair2 variance_ratio 差 25%",
+        "reason": "饱和度 severity 的后备档; 跨对不一致, 明显劣于 sev3"
+      }
+    ],
+    "rationale": "压缩/模糊被 0%FP 信号排除 (block_boundary≈1.0, unique_G=256, spectral_slope_ratio≈1.0)。全局: 三对 target 的高 chroma_ratio(2.16/4.21/6.00)+大 variance_ratio+大量裁剪+负/正均值偏移, 与 saturate_strengthen_YCrCb 的 chroma 放大裁剪重建一致 (天空深蓝->亮青, 虎纹彩色斑点); contrast scale 被排除 (mean/variance 失配)。噪声: sigma_prior(5.56/23.6/25.57) 远高于纯 sat 模拟的水平(0.86/1.61/0.49) -> 存在噪声; 5 种噪声类型逐一比对, 仅 poisson:2 能在三对 support 同时匹配 sigma 与残差结构。pipeline 顺序 noise->saturation 符合物理约束, 且联合模拟的 6 项全局统计与 target 逐位吻合。",
+    "noise_verdict_note": "SKILL 规则: 含噪声步骤 seed 失配 -> 永不 LIKELY, 故 noise_poisson:2 标 UNCERTAIN; 但三对 sigma/残差匹配为强证据。",
+    "test_candidate_calls": 20,
+    "qwen_gate": {
+      "available": false
+    }
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": {
+      "verdict_r0": "UNCERTAIN",
+      "support_psnr_r0": 31.8,
+      "support_size": 3,
+      "reason": "R0 整体 verdict=UNCERTAIN (噪声步骤永不 LIKELY), 触发信号重释"
+    },
+    "signal_reexamination": {
+      "pair0_rerun": {
+        "output": "full_analysis_R1.json",
+        "stability": "与 R0 full_analysis.json 逐项比对 157 项中仅 residual_intensity_corr 不同 (0.478 -> 0.4707), 其余信号一致",
+        "mode": "SIGNAL (sigma_prior 5.56)"
+      },
+      "items": [
+        {
+          "signal": "step2_noise.verdict=GAUSSIAN_YCrCb (low confidence, sigma=5.56, rgb_ratio=1.3278, cross_channel_corr=0.2669)",
+          "r0_interpretation": "初判 YCrCb 高斯, 后被 R0 跨对测试否决",
+          "r1_reinterpretation": "pair0 单对低 sigma + 强饱和裁剪下的假象; C3 在 pair1 用 sat:3 复核 noise_gaussian_YCrCb:2 -> WEAK (sigma diff 55%, mean 0.0321, var 17%), YCrCb 高斯族不成立",
+          "signal_source": "full_analysis_R1 step2 + R1-C3 verify_signals"
+        },
+        {
+          "signal": "residual_intensity_corr=0.478 (R1 复跑 0.4707), gamma_suspect_from_noise=true",
+          "r0_interpretation": "被列为 gamma 可疑项, 未单独解释",
+          "r1_reinterpretation": "强度相关残差是 Poisson (var ∝ I) 的指纹, 非 gamma: gamma 不产生 x5 chroma 增益且不能解释 chroma_ratio 2.16/4.21/6.00 与三对 sigma 5.56/23.6/25.57 随内容亮度变化 (sqrt(I/c), c=60); R0 peeled §B var_slope=11.26 (>1) 同向佐证",
+          "signal_source": "full_analysis_R1 step2/step4 + R0 peeled §B 记录"
+        },
+        {
+          "signal": "step4_global.verdict=SATURATION_strengthen_sev5 (heuristic, chroma_ratio=2.1606)",
+          "r0_interpretation": "采用 saturate_strengthen_YCrCb (未测 HSV)",
+          "r1_reinterpretation": "子类型应为 YCrCb 而非 HSV; C4 用等增益 HSV:2(c=6)+poisson:2 -> WEAK (mean diff 0.1637, var 81%, sigma 133%); YCrCb:3(c=5) 三对 MATCH。heuristic 的 'sev5' 与实际函数 severity 标度不同, 不可直接映射",
+          "signal_source": "full_analysis_R1 step4 + R1-C4 verify_signals"
+        },
+        {
+          "signal": "step3_blur.gm_ratio=7.259 / spectral_slope_ratio=0.9979",
+          "r0_interpretation": "gm_ratio 受噪声破坏, 以 slope ratio≈1 排除模糊",
+          "r1_reinterpretation": "gm_ratio 被饱和裁剪+噪声破坏, 不可用; 目标-清晰 spectral_slope = -1.1988 vs -1.2014 (方向与模糊相反); C5 显示加入 blur_gaussian:1 后 verify_signals 6/6 仍 MATCH, 说明该工具在强噪声/饱和区对 mild blur 不敏感 (工具分辨率限制); 无模糊结论依赖 slope 方向 + 2 步模型 6 项全局统计精确复现, 不依赖 C5",
+          "signal_source": "full_analysis_R1 step3 + R1-C5 verify_signals"
+        },
+        {
+          "signal": "step1_compression: block_boundary=0.9998, unique_G=256(==clean), dct_zero_ratio=0.0499",
+          "r0_interpretation": "0%FP 信号排除压缩/量化",
+          "r1_reinterpretation": "维持排除; R1 未消耗 test_candidate 于 compression (0%FP 信号充分, 预算优先噪声/全局边界)",
+          "signal_source": "full_analysis_R1 step1"
+        },
+        {
+          "signal": "噪声严重度边界 (poisson c=[80,60,40,25,15])",
+          "r0_interpretation": "sev2 在 3 对 MATCH, sev1 sigma 差 27%",
+          "r1_reinterpretation": "上界检验 C1: pair0 (dark, sigma=5.56) sev3 sigma +57% -> PARTIAL; pair2 (bright) sev3 仍 MATCH -> 亮内容 c=60/40 简并; 判别依赖 pair0, sev2 为三对最优",
+          "signal_source": "R1-C1 verify_signals + R0 rounds 11/12"
+        },
+        {
+          "signal": "pipeline 顺序 (noise priority=0 < sat priority=2)",
+          "r0_interpretation": "noise -> sat (物理顺序)",
+          "r1_reinterpretation": "C2 交换为 sat:3 -> poisson:2 -> WEAK (sigma 67%, mean 0.0096, var 14%); 噪声必须在饱和前注入才能被 chroma x5 放大到 target sigma, 顺序确认",
+          "signal_source": "R1-C2 verify_signals"
+        }
+      ]
+    },
+    "candidates_R1": [
+      {"id": "C1", "pipeline": "noise_poisson:3,saturate_strengthen_YCrCb:3", "pairs": {"pair0": "PARTIAL (sigma diff 57%)", "pair2": "MATCH 4/4"}, "decision": "REJECT", "note": "上界; 相对 R0 无改进"},
+      {"id": "C2", "pipeline": "saturate_strengthen_YCrCb:3,noise_poisson:2", "pairs": {"pair0": "WEAK (sigma 67%, mean 0.0096, var 14%)"}, "decision": "REJECT", "note": "顺序错误"},
+      {"id": "C3", "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_YCrCb:3", "pairs": {"pair1": "WEAK (sigma 55%, mean 0.0321, var 17%)"}, "decision": "REJECT", "note": "初判噪声族被否决"},
+      {"id": "C4", "pipeline": "noise_poisson:2,saturate_strengthen_HSV:2", "pairs": {"pair0": "WEAK (mean 0.1637, var 81%, sigma 133%)"}, "decision": "REJECT", "note": "全局子类型 HSV 被否决"},
+      {"id": "C5", "pipeline": "blur_gaussian:1,noise_poisson:2,saturate_strengthen_YCrCb:3", "pairs": {"pair0": "MATCH 6/6"}, "decision": "NO_ADOPT", "note": "与 R0 同分, 不增加证据; 工具对 mild blur 不敏感"}
+    ],
+    "anchor_validation_R1": {
+      "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+      "rounds": [27, 28, 29],
+      "pair0": "MATCH 4/4",
+      "pair1": "MATCH 4/4",
+      "pair2": "MATCH 4/4",
+      "note": "R1 独立复跑 (噪声 seed 不同) 复现 R0 rounds 17-19 的三对 MATCH"
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 2, "verdict": "UNCERTAIN"},
+        {"function": "saturate_strengthen_YCrCb", "severity": 3, "verdict": "LIKELY"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "reason": "无候选在 k=3 pairs 上取得优于 R0 的信号匹配; R0 管线三对 MATCH 4/4 被 R1 独立复现; 所有被忽略/误判/边界信号重释后均支持 R0 (Poisson 非 gamma/YCrCb, YCrCb 非 HSV, noise 先于 sat, sev2 优于 sev1/sev3, 无压缩/模糊)",
+      "limitations": [
+        "poisson sev2/sev3 在亮内容 (pair1/pair2) 简并, 严重度判别主要依赖 pair0 (dark, sigma=5.56)",
+        "verify_signals 的 blur 检查对 blur_gaussian:1 在该噪声/饱和区不敏感 (C5 MATCH 6/6), 无模糊结论由目标-清晰 slope 方向与 2 步模型统计复现支撑",
+        "噪声候选验证为 seed 失配下的统计匹配, 非像素级"
+      ]
+    },
+    "test_candidate_calls": 9
+  }
+}

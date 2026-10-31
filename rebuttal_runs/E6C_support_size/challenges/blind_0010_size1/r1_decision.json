@@ -1,0 +1,49 @@
+{
+  "challenge_id": "blind_0010_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_gaussian", 1], ["brightness_darken_gamma_HSV", 5]],
+  "r1_pipeline": [["blur_gaussian", 1], ["brightness_darken_gamma_HSV", 5]],
+  "support_psnr_r0": 30.26,
+  "candidates_tested": [
+    {
+      "label": "control_R0_reverification",
+      "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+      "psnr_rgb": "inf",
+      "ci_pass": "10/10",
+      "outcome": "REPRODUCED_EXACT (残差恒 0, 10 项 CI diff 全 0)"
+    },
+    {
+      "label": "compression_boundary",
+      "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5,compression_jpeg:1",
+      "psnr_rgb": 43.03,
+      "ci_pass": "6/10",
+      "outcome": "REJECTED (追加 JPEG 改变像素: block_boundary diff +106%, 与 inf 精确复现互斥 → 无压缩步骤)"
+    },
+    {
+      "label": "saturation_boundary",
+      "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5,saturate_weaken_HSV:1",
+      "psnr_rgb": 45.73,
+      "ci_pass": "10/10",
+      "outcome": "REJECTED (最轻 saturate:1 仍改变像素, 45.73<inf; chroma 损失由 gamma V 缩放+截断解释, 无独立 saturation 步骤)"
+    }
+  ],
+  "test_candidate_calls": 3,
+  "best_validation": {
+    "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+    "psnr_rgb": "inf",
+    "ci_pass": "10/10",
+    "peeled_residual_std": 0.0,
+    "peeled_residual_zero_ratio": 1.0,
+    "support_pairs": "k=1 (pair0 only)"
+  },
+  "signal_sources": [
+    "full_analysis_R1.json 与 R0 full_analysis.json 完全一致 (仅 residual_intensity_corr 0.9362→0.9366)",
+    "block_boundary=0.9992 (<1.05/1.1) + dct_zero_ratio=0.8886 + unique_G 241/254=0.9488 → 边界压缩信号; 由 jpeg:1 追加测试 (43.03 dB, block_boundary +106%) 判定为 66.9% 黑区+gamma 平滑所致伪信号",
+    "saturation_chroma_ratio=0.2891 → 边界 saturation 信号; 由 saturate_weaken_HSV:1 追加测试 (45.73 dB<inf) 判定为 gamma V 缩放+截断的后果",
+    "peeled_noise_check (主管线): residual std=0.0, zero_ratio=1.0; §B extreme_pct=100% IMPULSE 为零残差伪影 (SKILL 已知 FP: extreme_pct>50% + sigma<5)",
+    "noise_prior_sigma=0.62<2 → NO_NOISE; residual_intensity_corr≈0.936 为结构化 gamma 残差, 非噪声",
+    "gm_ratio=0.251 / spectral_slope_ratio=0.928 / FFT anisotropy=0.00 / PCA=0.0 → 各向同性 gaussian; 精确复现钉死 sev=1 且在 gamma 之前 (逆序 52.10 dB, R0)"
+  ],
+  "reason": "R0 主管线在唯一 support 对上像素级精确 (PSNR=inf, CI 10/10, 剥离残差 std=0.0), R1 重跑信号一致且控制复现 inf。R1 新测的 2 个边界候选 (jpeg:1 43.03 dB; saturate:1 45.73 dB) 均改变像素、严格劣于 inf, 证明 block_boundary/dct/unique_G 与 chroma_ratio 两处边界信号不是独立退化步骤。任何 CHANGE 都无法满足 >40 dB 或 +2 dB 的改进判据 (inf 为上限), 故 NO_CHANGE。support PSNR 30.26<35 源于 66.9% 像素截断为纯黑的不可逆信息损失与 2-epoch/0.46M 训练容量, 非参数误差。"
+}

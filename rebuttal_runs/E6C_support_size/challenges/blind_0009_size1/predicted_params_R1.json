@@ -1,0 +1,58 @@
+{
+  "challenge_id": "blind_0009_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_poisson", 1],
+    ["saturate_strengthen_YCrCb", 3]
+  ],
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "saturate_strengthen_YCrCb", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 1},
+        {"function": "saturate_strengthen_YCrCb", "severity": 3}
+      ],
+      "verdict": "PARTIAL 3/4",
+      "stats": "sigma OK, clean_residual OK, variance_ratio OK; mean_shift diff=0.0080 (R0 R7); sev2 overshoots sigma by 283% (R1 R12), so sev1 is this family's best bracket",
+      "function_family": "gaussian_chroma_noise+global"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 2},
+        {"function": "saturate_strengthen_YCrCb", "severity": 3}
+      ],
+      "verdict": "PARTIAL 3/4",
+      "stats": "sigma OK, clean_residual OK, variance_ratio OK; mean_shift diff=0.0081 (R1 R16); sev1 fails sigma by 40% (R1 R11) - multiplicative noise cannot close the positive mean shift",
+      "function_family": "speckle_noise+global"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 2},
+        {"function": "saturate_strengthen_YCrCb", "severity": 3}
+      ],
+      "verdict": "MATCH 4/4 (severity ambiguity)",
+      "stats": "4/4 MATCH (R1 R15), indistinguishable from R0 pipeline on a single pair; kept as fallback if training PSNR favors stronger noise",
+      "function_family": "poisson_noise+global"
+    },
+    {
+      "pipeline": [
+        {"function": "saturate_strengthen_YCrCb", "severity": 3}
+      ],
+      "verdict": "WEAK (deterministic fallback)",
+      "stats": "variance_ratio matched, mean_shift diff=0.0051 just over threshold; noise presence (sigma=5.56, PNG +30%) favors keeping a noise step",
+      "function_family": "global_only"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=5.56)",
+    "support_pairs": "k=1 (pair0 only); no cross-pair validation possible",
+    "test_candidate_calls_R1": 6,
+    "rationale": "R1 signal rerun reproduced R0 signals exactly (no JPEG: block_boundary=0.9998, unique_G=256; no blur: spectral_slope_ratio=0.9979, anisotropy=0; global saturation: variance_ratio=2.028, mean_shift=0.0631, chroma_ratio=2.16, clipped 52.6%). Re-interpretation found the peeled §B IMPULSE verdict is a signed-residual counting artifact (residual std 41.2 vs wavelet sigma 8.4, spatial_corr=0.513, cross_ch=0.639) and did not re-test impulse; speckle (vm_slope=15.60) and the noise_prior-predicted gaussian_YCrCb were tested at their best severities and remain PARTIAL (0.0080/0.0081 mean_shift shortfalls). Poisson is the only family reproducing the residual positive mean shift (intensity-dependent bias) while holding sigma/clean-residual/variance_ratio; poisson:1 and poisson:2 both reach 4/4 on the single pair, so noise severity is unidentifiable. Global sev3 is bracketed (sat2 WEAK, sat4 PARTIAL). No alternative exceeds R0's 4/4 MATCH and no evidence justifies changing noise type/severity -> NO_CHANGE. k=1 limitation: all checks single-sample, noise sigma check fluctuates across seeds; residual_intensity_corr=0.4686/gamma_suspect remains an untested ambiguity (equally explained by chroma saturation + clipping + Poisson variance)."
+  }
+}

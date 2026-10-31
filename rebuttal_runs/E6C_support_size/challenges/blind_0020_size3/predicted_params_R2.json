@@ -1,0 +1,78 @@
+{
+  "challenge_id": "blind_0020_size3",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 5],
+    ["contrast_weaken_stretch", 4],
+    ["saturate_weaken_HSV", 3]
+  ],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 4, "verdict": "LIKELY"},
+    {"function": "contrast_weaken_stretch", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "contrast_weaken_stretch", "severity": 4}
+      ],
+      "psnr_pair0": 39.68,
+      "psnr_pair1": 37.15,
+      "function_family": "blur_glass severity neighbor (sev5: sigma1.6, shift4, iter2)",
+      "reason": "Closest R2 alternative: -1.00 dB on pair0 and -1.12 dB on pair1 vs the unchanged winner; glass severity axis nearly flat but sev4 remains the peak"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "contrast_weaken_stretch", "severity": 4}
+      ],
+      "psnr_pair0": 39.24,
+      "function_family": "blur_gaussian sev4 cross-subtype control",
+      "reason": "Without the glass shuffle: -1.44 dB on pair0 -> glass advantage survives removal of the saturation step (not a sat3 artifact), though glass_score=0.3044 margin is modest"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "contrast_weaken_stretch", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 1}
+      ],
+      "psnr_pair0": 38.76,
+      "function_family": "saturate_weaken_HSV sev1 (s=0.7) — 3-step fallback inherited from R1",
+      "reason": "Weakest usable saturation step remains -1.92 dB below the 2-step winner; saturation is a signal false positive (contrast_from_saturation=true)"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (noise_prior sigma=0.37 < 2)",
+    "support_psnr_by_pair": {
+      "pair0_0227": 40.68,
+      "pair1_0459": 38.27,
+      "pair2_0032": 43.57
+    },
+    "support_psnr_note": "pair0 re-measured in R2 at 40.68 dB (R1: 40.69/40.67); pair1/pair2 carried from R1 k-pair validation (pipeline unchanged; deterministic re-runs stable within 0.02 dB)",
+    "support_psnr_mean": 40.84,
+    "r0_support_psnr_by_pair": {
+      "pair0_0227": 34.29,
+      "pair1_0459": 28.14,
+      "pair2_0032": 36.14
+    },
+    "r0_support_psnr_mean": 32.86,
+    "delta_mean_db": 7.98,
+    "ci_pass": {
+      "pair0_0227": "9/10",
+      "pair1_0459": "10/10",
+      "pair2_0032": "9/10"
+    },
+    "r2_candidate_scan_pair0": {
+      "blur_glass:4,contrast_weaken_stretch:3": 31.26,
+      "blur_glass:4,contrast_weaken_stretch:4 (anchor)": 40.68,
+      "blur_glass:4,contrast_weaken_stretch:5": 29.82,
+      "blur_glass:3,contrast_weaken_stretch:4": 39.35,
+      "blur_glass:5,contrast_weaken_stretch:4": 39.68,
+      "blur_gaussian:4,contrast_weaken_stretch:4": 39.24
+    },
+    "rationale": "R2 re-ran run_full_analysis on pair0: signal report identical to R1 except residual_intensity_corr 0.5787->0.5739 (numerical noise), so the R1 interpretation stands (glass blur; stretch global; no third step). The only un-revisited axis was severity: R0/R1 bracketed both severities only with saturate_weaken_HSV:3 present. Under the corrected 2-step pipeline the contrast axis is a sharp peak at the discrete stretch sev4 (c=0.6): sev3 31.26, sev4 40.68, sev5 29.82 (x_distortion contrast_weaken_stretch has no intermediate c value). The glass axis is nearly flat: sev3 39.35, sev4 40.68, sev5 39.68 -> gm_ratio=0.1377 overstates blur severity because it embeds the stretch c=0.6 gradient contraction (~0.3 factor). Subtype control: gaussian4 39.24 on pair0 (-1.44 dB vs glass4) confirms the glass advantage is not a saturation artifact, but glass_score=0.3044 stays marginal. All 5 R2 candidates scored below the unchanged winner on pair0; the closest alternative (glass5) also lost on the weakest pair1 (37.15 vs 38.27). Residual zero_crossing_density (target ZC above every simulation by 41-51% relative while all other CI metrics pass) is consistent with blur_glass's unseeded np.random.randint shuffle: the GT shuffle realization is unrecoverable, which explains the content-dependent 38.27-43.57 dB spread and caps simulation PSNR. No candidate met the >40 dB or +2 dB CHANGE rule on any support pair -> NO_CHANGE."
+  }
+}

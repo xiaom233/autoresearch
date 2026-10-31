@@ -1,0 +1,45 @@
+{
+  "challenge_id": "blind_0013_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_gaussian_RGB", 3], ["compression_jpeg", 2]],
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_impulse", "severity": 2},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "verdict": "PARTIAL",
+      "matched_signals": ["compression:block_boundary", "noise:clean_residual"],
+      "mismatched_signals": ["noise:sigma (diff=37%)"],
+      "notes": "跨族对照: clipped_fraction 0.0636 与目标精确吻合, 但 gm_ratio/残差std/spatial_corr/cross_channel_corr 均劣于 gaussian 方案",
+      "function_family": "noise_impulse"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3}
+      ],
+      "verdict": "参考",
+      "notes": "若训练/评估显示 jpeg 步不必要可回退单步；block_boundary=1.2085 支持保留 jpeg",
+      "function_family": "noise_gaussian_RGB"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (signal mode, no CI)",
+    "mode": "SIGNAL (sigma=4.82 > 2, PSNR 不可用)",
+    "rationale": "R1 无候选优于 R0 管线，decision=NO_CHANGE。(1) 重跑 full_analysis 与 peeled_noise_check 与 R0 逐项一致: block_boundary=1.2085 (0%FP), unique_G=256 (无 quantization), dct_zero_ratio=0.4274, noise_prior sigma=4.82, peeled ch_stds=23.5/23.1/22.9 (rgb_ratio=1.026, RGB 族), variance_ratio=0.8934/mean_shift=-4.1, gm_ratio=1.1238/spectral_slope_ratio=0.9844/anisotropy=0 (无 blur)。(2) R1 新增 4 个候选信号验证: R0 管线 (gaussian_RGB:3+jpeg:2) 跨 seed 复核仍 MATCH (3/3); full_analysis 首选 YCrCb:3 实测 PARTIAL (noise:sigma diff=50%); jpeg:3 实测 WEAK (block_boundary diff=14%, sigma diff=50%); R0 未测的 gamma 曲线型 brightness_darken_gamma_RGB:1 实测 WEAK (global:mean_shift diff=0.0549, variance_ratio diff=23%)。三者均劣于 R0 管线。(3) 遗留 mean_shift=-4.1/255、clipped_fraction 0.0636 vs 0.0444、chroma 0.911 vs 0.937 幅度低于库内任何 sev1 global (shift 型 brightness=-25.5, gamma 型实测 0.055, saturate weaken 0.7)，判定为 JPEG 编码器/裁剪偏差，不构成独立退化步。噪声 seed 失配 → 噪声步骤永不 LIKELY → 整体 UNCERTAIN。",
+    "r1_checks": {
+      "full_analysis_rerun": "full_analysis_R1.json 与 R0 完全一致",
+      "peeled_noise_rerun": "§B 值与 R0 一致; IMPULSE/SPECKLE 标签为 JPEG 残留已知假阳性, noise_prior 自身判 gaussian_RGB",
+      "candidates_tested": 4,
+      "test_candidate_calls": 4
+    },
+    "single_support_note": "k=1：仅 pair0 可验证，单对噪声大；阈值未放宽（PSNR +2dB / 噪声 WEAK→PARTIAL），证据不足以 CHANGE，无法做跨对验证。"
+  }
+}

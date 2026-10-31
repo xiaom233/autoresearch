@@ -1,0 +1,45 @@
+{
+  "challenge_id": "blind_0010_size3",
+  "round": "R2",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["brightness_darken_shfit_HSV", 4]
+  ],
+  "r1_pipeline": [
+    ["brightness_darken_gamma_HSV", 5]
+  ],
+  "pipeline": [
+    ["blur_gaussian", 1],
+    ["brightness_darken_gamma_HSV", 5]
+  ],
+  "support_psnr_r0": 20.62,
+  "support_psnr_r1": 28.59,
+  "candidates_tested": [
+    "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+    "brightness_darken_gamma_HSV:5,blur_gaussian:1"
+  ],
+  "test_candidate_calls": 4,
+  "best_validation": {
+    "pipeline": "blur_gaussian:1,brightness_darken_gamma_HSV:5",
+    "pair0_psnr": "inf (exact)",
+    "pair1_psnr": "inf (exact)",
+    "pair2_psnr": "inf (exact)",
+    "ci": "10/10 on all 3 pairs, every CI metric diff 0.000",
+    "control_reversed_order": {
+      "pipeline": "brightness_darken_gamma_HSV:5,blur_gaussian:1",
+      "pair0_psnr": 52.10,
+      "pair0_ci": "9/10",
+      "note": "finite PSNR and CI unique diffs -7/-3/-3 -> ordering is real; also proves the exact match is not a copy artifact"
+    },
+    "criteria": "PSNR > 40 dB on all k=3 pairs (pixel-exact) satisfies the deterministic CHANGE gate; R1 k=3 mean was 33.20 dB (pair0 43.97 / pair1 24.45 / pair2 31.17)"
+  },
+  "signal_sources": [
+    "pair2 blur signals: gm_ratio 0.6627 < 0.85, spectral_slope_ratio 1.0914 > 1.08, residual_anisotropy 1.375 < 1.7 (not motion), glass_score 0.2998 -> blur exists; exact match shows subtype is gaussian sev1 (glass_score was FP)",
+    "pair0/pair1 blur masked by clipping: gm_ratio 0.2506/0.3453 with slope ratios 0.928/1.010; clipped_fraction 0.6692/0.2638 vs pair2 0.1373",
+    "R1 peel residual after gamma-only (pair1) was structured and target smoother than sim (residual_std 14.9, hf_lf diff 25%, zero_crossing 39%, spatial_corr 0.651) -> missing optical blur, not noise/severity error",
+    "order from control test: blur->gamma inf dB (3/3 exact) vs gamma->blur 52.10 dB (pair0, CI 9/10, unique diffs -7/-3/-3); non-commuting operators",
+    "sampler physics: blur priority 1, brightness priority 0 or 2; exact match fixes brightness at priority 2 (after blur)"
+  ],
+  "reason": "R1 support PSNR 28.59 dB (+7.97 dB over R0 20.62) triggered R2. Signal reinterpretation identified the missing optical blur: pair2 independently flags blur, while pair0/pair1 mask it through 66.9%/26.4% black clipping, and the R1 gamma-only residual was structured rather than noise. Adding blur_gaussian:1 before brightness_darken_gamma_HSV:5 reproduces all three k=3 support pairs pixel-exactly (PSNR inf, CI 10/10, all metric diffs 0), which is deterministic confirmation (>40 dB on every pair). The reversed order control (52.10 dB, CI 9/10) establishes the blur->gamma ordering and rules out a comparison artifact. Budget: 4/15 test_candidate calls, 2 pipelines, rounds 10-11; no external data.",
+  "key_lesson": "Pair0's gamma-only 43.97 dB was an over-confident LIKELY for an incomplete pipeline because heavy clipping masks mild blur; exact k=3 support matching exposes the missing step."
+}

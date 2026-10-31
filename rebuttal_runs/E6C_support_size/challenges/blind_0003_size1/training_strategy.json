@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "full_analysis step3_blur: glass_score=0.5031 > 0.25, gm_ratio=0.2984, spectral_slope_ratio=1.0952, mtf_roughness=0.9967 -> blur_glass 子类型 (medium confidence)",
+    "full_analysis step3_blur: residual_anisotropy=1.203 < 1.7 -> motion 排除, 不满足 OCAB Tier A 门控 (finetune_strategy.md §七: anisotropy>1.7 才启用 OCAB)",
+    "full_analysis step4_global: NO_GLOBAL, variance_ratio=0.8684 但 contrast_from_variance=false / contrast_detected_raw=false, mean_shift=-0.5, clipped_fraction=0.0 -> 无 contrast Tier A 信号, 不启用 ColorPre/FiLM-GCM",
+    "full_analysis step1_compression: block_boundary=1.0052 < 1.1 (Tier S 未触发), unique_G=214 >= 200 -> 无 JPEG 结构化局部退化, FiLM-GCM 的结构化前提不成立",
+    "full_analysis step2_noise: noise_prior_sigma=1.48 < 2 -> NO_NOISE (reflection noise_6step_check: x_distortion 最小噪声 sev1 sigma≈12.75, 残差 sigma 2-3 不可能含噪声步)",
+    "predicted_params: 单步 blur_glass sev2, verdict UNCERTAIN (Tier 1, PSNR 34.67 dB 落在 30-40 band, stochastic pixel-shuffle 上限 ~35 dB); 无 contrast 全局退化, Direct 最安全",
+    "support k=1 不改变架构门控 (E6C 指令); pair0 repeat 稳定性 0.03 dB, 供训练后验证参考"
+  ],
+  "rationale": "单步纯模糊 (blur_glass sev2, UNCERTAIN): 所有组件门控均未满足——anisotropy=1.203<1.7 排除 OCAB, NO_GLOBAL/contrast_from_variance=false 且 block_boundary=1.005<1.1 排除 FiLM-GCM 与 ColorPre, 无噪声。按 finetune_strategy.md §六/§七默认路径: 纯 Swin + SimpleGate (默认常开, exp39 8/9 退化安全) + Direct, lr=5e-4, EPOCH=2, batch=16。单退化步骤无梯度干扰问题, 不需 RandomCurric; True Ft 在 2-epoch 预算下≈Direct (exp37/38), 不采用。DualBranch/CSN/SCA/FPro 按 E6C 指令不使用。"
+}

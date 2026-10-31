@@ -1,0 +1,35 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted_params.json: pipeline = noise_impulse:5 only, verdict UNCERTAIN (Tier 2), ci_pass_rate 10/10",
+    "reflection.json noise_6step_check: zero_ratio=0.9000, residual_std=42.1, ch_stds=[43.0,41.4,41.6], rgb_ratio=1.04, cross_ch_corr=0.0043 -> salt&pepper amount=0.10, sev5 (sev4 impulse_total_pct off by 30%)",
+    "reflection.json initial_analysis.reinterpretation: 90% residual pixels exactly zero -> all non-impulse pixels byte-identical to clean; excludes blur/JPEG/contrast/brightness (dense transforms modify nearly all pixels)",
+    "full_analysis step4: variance_ratio=2.1845 / chroma_ratio=3.252 / gm_ratio=5.3326 are outlier-inflation false positives from sparse 0/255 impulse pixels (FP_global_risk, FP_blur_risk); not genuine contrast Tier A -> FiLM-GCM/ColorPre NOT triggered",
+    "full_analysis step1: block_boundary=0.9989, unique_G=256/256 -> NO_COMPRESSION (no JPEG component)",
+    "full_analysis step3: BLUR_UNLIKELY (spectral_slope_ratio=0.903, gm_ratio noise-destroyed), no motion signal -> anisotropy-based OCAB NOT triggered",
+    "No noise-specific architecture component; single-step pure local degradation -> Direct; True Ft ~= Direct (exp37/38, ~0 dB at 2-epoch budget)",
+    "SimpleGate default always-on (exp39: -32K, 8/9 degradations neutral-or-positive; C/N/B safe)",
+    "k=1 support size does not alter gating thresholds (STRATEGY_INSTRUCTIONS rule 3)"
+  ],
+  "rationale": "Single support pair (k=1). Analysis establishes a single sparse impulse-noise step (noise_impulse sev5, verdict capped at UNCERTAIN by noise rules; CI fingerprint 10/10 across two seeds). The contrast/saturation variance-ratio and chroma signals are false-positive artifacts of the 0/255 outliers, not a real global transform, so no FiLM-GCM/ColorPre. No compression (block_boundary=0.9989), no blur/motion (spectral_slope_ratio=0.903), so no OCAB. With a one-step pure-local pipeline the strategy is pure Swin + SimpleGate + Direct at lr=5e-4, epoch_budget=2, batch=16 (finetune_strategy.md §六 Step 1, §七 default path)."
+}

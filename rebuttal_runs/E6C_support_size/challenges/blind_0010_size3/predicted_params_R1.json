@@ -1,0 +1,119 @@
+{
+  "challenge_id": "blind_0010_size3",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    [
+      "brightness_darken_shfit_HSV",
+      4
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "brightness_darken_gamma_HSV",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        [
+          "brightness_darken_gamma_RGB",
+          5
+        ]
+      ],
+      "psnr": {
+        "pair0": 34.73,
+        "pair1": 21.54,
+        "pair2": 27.8,
+        "mean": 28.02
+      },
+      "stats": {
+        "pair0_ci": "3/10",
+        "pair1_ci": "2/10",
+        "pair2_ci": "3/10"
+      },
+      "function_family": "global_brightness_darken_gamma_per_channel",
+      "note": "same level-preserving family, per-channel variant; k=3 validated. Lower than gamma_HSV:5 because V-gamma matches saturated sky (pair1) and dark colourful spiders (pair2) better."
+    },
+    {
+      "pipeline": [
+        [
+          "brightness_darken_shfit_HSV",
+          4
+        ]
+      ],
+      "psnr": {
+        "pair0": 34.58,
+        "pair1": 22.32,
+        "pair2": 20.48,
+        "mean": 25.79
+      },
+      "stats": {
+        "pair0_ci": "5/10",
+        "pair1_ci": "2/10",
+        "pair2_ci": "3/10"
+      },
+      "function_family": "global_brightness_darken_V_shift",
+      "note": "R0 pipeline, cross-family shift fallback only; unique-level evidence (target ~241-252 vs shift sim ~155-166) argues against shift families."
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "mode": "PSNR (noise_prior sigma 0.62/1.48/0.74 << noise_gaussian sev1 = 12.75 grey levels -> no random noise)",
+    "per_step_verdict": [
+      {
+        "function": "brightness_darken_gamma_HSV",
+        "severity": 5,
+        "verdict": "LIKELY on pair0 (43.97 dB), UNCERTAIN on pair1/pair2"
+      }
+    ],
+    "k_pair_psnr": {
+      "pair0": 43.97,
+      "pair1": 24.45,
+      "pair2": 31.17,
+      "mean": 33.2
+    },
+    "r0_k_pair_psnr": {
+      "pair0": 34.58,
+      "pair1": 22.32,
+      "pair2": 20.48,
+      "mean": 25.79
+    },
+    "delta_mean_vs_r0": 7.41,
+    "support_psnr_r0": 20.62,
+    "rationale": "R1 changes the global darkening from the V-shift family to brightness_darken_gamma_HSV:5 (V^3.5), the only family consistent with all signals: (1) target unique_R/G/B levels (248/252/241, 252/251/252, 252/251/250) are preserved, whereas every additive-shift simulation collapses them to ~155-166 (CI unique diff target-sim +82..+100); (2) target zero-clip fractions 0.669/0.264/0.137 match gamma sev5 near-zero thresholds (V<=49 for g=3.5, x<=45 for g=3.2) with residual clip diffs 0.2%/4%/8%, while RGB:5 over-clips pair1 by 16 pp; (3) a single V-gamma simultaneously explains mean_shift -45.3/-66.7/-74.4, variance_ratio 0.193/0.709/0.830 and chroma_ratio 0.289/0.620/0.393 without a second global step (sampler allows only one function per category); (4) pair0 reaches 43.97 dB (>40 dB = deterministic confirmation) with exact unique/clipping match, while R0's 34.58 dB for the shift family was inflated by 67% black clipping. Pair1 (24.45 dB) and pair2 (31.17 dB) remain below the deterministic ceiling; peeled residual after gamma_HSV:5 on pair1 is structured, not noise (residual_std 14.9, spatial_corr 0.651, cross_ch_corr 0.9959, ivc 0.9974, noise_prior sigma 4.94 << sev1; extreme_pct 75.5% meets the known >50% + sigma<5 FP rule). Target is slightly smoother than sim (hf_lf diff 25%, zero_crossing 39%), so an unmodelled mild blur is the leading residual explanation; blur+gamma combos could not be validated on k=3 within the call budget and are left for R2, not adopted here.",
+    "signal_sources": [
+      {
+        "signal": "unique_R/G/B (level preservation)",
+        "values": "target 241-252 vs shift sim 155-166",
+        "source": "test_candidate CI unique_* (difference = target - simulated)"
+      },
+      {
+        "signal": "clipped_fraction / impulse_pct_zero",
+        "values": "0.6692 / 0.2638 / 0.1373; gamma_HSV:5 residual diffs 0.2% / 4% / 8%",
+        "source": "run_full_analysis step4 + test_candidate CI"
+      },
+      {
+        "signal": "mean_shift / variance_ratio / saturation_chroma_ratio",
+        "values": "-45.3/0.193/0.289; -66.7/0.709/0.620; -74.4/0.830/0.393",
+        "source": "run_full_analysis step4 (all k pairs)"
+      },
+      {
+        "signal": "peeled residual structure (pair1)",
+        "values": "std 14.9, spatial_corr 0.651, cross_ch_corr 0.9959, ivc 0.9974, sigma_prior 4.94",
+        "source": "peeled_noise_check.py on gamma_HSV:5 residual"
+      }
+    ],
+    "coupling_notes": "The sampler (blind_challenge.py) allows at most one function per category, so brightness+saturation / brightness+contrast pipelines are impossible; the observed chroma loss must come from the single global function itself, which is exactly what V-gamma produces (chroma scales with V^(g-1)). The remaining pair1/pair2 residual is content-dependent (fine-detail scenes lose more) and points to a possible mild blur step (pair2 full_analysis flags glass: glass_score 0.2998, spectral_slope_ratio 1.0914, mtf_roughness 1.3616; pair0/pair1 do not reach blur thresholds).",
+    "k_limitation": "k=3 support pairs only; no external data added. Pair0 is the primary alias (degraded.png).",
+    "budget": {
+      "test_candidate_calls": 14,
+      "cap": 15,
+      "pipelines_tested": 8,
+      "rounds": 6
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0022_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 3], ["compression_jpeg", 2]],
+  "r1_pipeline": [["blur_glass", 3], ["compression_jpeg", 2]],
+  "support_psnr_r0": 25.4,
+  "candidates_tested": [
+    {
+      "round": 25,
+      "pipeline": "blur_glass:3,compression_jpeg:2",
+      "pair": "pair0",
+      "psnr_rgb": 27.93,
+      "ci": "6/10",
+      "note": "R0 最终管线复现 (与 R0 R11/R24 的 27.93/27.96 一致), 同时 --output-sim 导出模拟图用于结构信号仲裁"
+    },
+    {
+      "round": 26,
+      "pipeline": "blur_gaussian:3,compression_jpeg:2",
+      "pair": "pair0",
+      "psnr_rgb": 24.99,
+      "ci": "8/10",
+      "note": "确定性对照; 若真为 gaussian 家族应 >40 dB, 实测远低于 R0 管线 (-2.94 dB)"
+    },
+    {
+      "round": 27,
+      "pipeline": "blur_lens:3,compression_jpeg:2",
+      "pair": "pair0",
+      "psnr_rgb": 24.34,
+      "ci": "6/10",
+      "note": "确定性跨族对照 (R0 仅测过 lens:4); 排除 lens"
+    },
+    {
+      "round": 28,
+      "pipeline": "blur_motion:2,compression_jpeg:2",
+      "pair": "pair0",
+      "psnr_rgb": 20.75,
+      "ci": "4/10",
+      "note": "anisotropy=2.018 残留假设; 用 jpeg:2 + 低 severity motion 排除方向性模糊 (R0 的 motion:4 测试被 jpeg:4 混淆)"
+    }
+  ],
+  "test_candidate_calls": 4,
+  "best_validation": {
+    "pipeline": "blur_glass:3,compression_jpeg:2",
+    "psnr": {"pair0": 27.93, "pair1": 31.25, "pair2": 32.70},
+    "note": "pair0 为 R1 复现 (R25); pair1/pair2 取自 R0 跨对验证 (R17/R18, 同管线同 support); k=3 全对可用"
+  },
+  "signal_sources": [
+    "block_boundary: target 1.6844 vs glass:3+jpeg:2 模拟 1.7067 (+1.3%, 0%FP 信号) → JPEG 存在, jpeg:2 强度匹配; dct_zero_ratio 0.8232 vs 0.8519 (+3.5%)",
+    "gm_ratio: 0.3606 vs 模拟 0.3499 (-3.0%); spectral_slope_ratio 1.1621 vs 1.1671 (+0.4%); residual_anisotropy 2.02 vs 2.09 → blur 强度匹配 glass sev3",
+    "variance_ratio: 0.8135 vs 0.8676; contrast_spread_ratio 0.9514 vs 0.9833; saturation_chroma_ratio 0.9042 vs 0.9351 → 目标低 3-5% (隐含全局 scale≈0.967), 但 x_distortion 最弱全局档: contrast_weaken_scale sev1=0.75 (方差×0.56) / contrast_weaken_stretch sev1=img/(img+mean) / saturate_weaken_HSV sev1=0.7 / brightness shift 最小 25.5 级 / gamma 最小 0.8,1.4 → 无任何全局函数能实现 3% 减弱, 排除漏检 global; 归因于 glass shuffle realization + JPEG 量化",
+    "noise: 三对 noise_prior sigma=0.62/0.74/0.37; peeled(glass:3+jpeg:2) sigma_post=0.99, residual_std=10.3, extreme_pct=55.1% (SKILL 已知 FP: extreme_pct>50% & sigma<5), var_slope=-0.013, vm_slope=1.007, rgb_ratio=1.138<1.4, cross_ch=0.763; 加性噪声最低档 sigma=12.75 (gaussian RGB/YCrCb 0.05*255), speckle 最低 0.14, impulse 最低 1% 但 pair1 clipped_fraction=0.0 → NO_NOISE",
+    "quantization: unique_G=256/224/246 (均未 <200), 三对 dct_zero_ratio 0.82-0.90 由 JPEG 解释 → 排除",
+    "brightness/oversharpen: mean_shift=-0.10/0.20/0.00, overshoot 误差 11% → 排除",
+    "motion: residual_anisotropy 跨对不一致 (pair0 2.018 vs pair1 1.555), motion:2+jpeg:2=20.75 dB → 排除",
+    "global: contrast_spread_ratio 0.936-0.963 均 >0.9 阈值, contrast_detected_raw=false; 见上条全局函数粒度论证"
+  ],
+  "reason": "R1 用 4 次 test_candidate (3 个新候选 + R0 管线复现) 完成信号重释: 确定性 gaussian:3 / lens:3 / motion:2 与 jpeg:2 组合均仅 20.75-24.99 dB (若为真实确定性管线应 >40 dB), 远低于 CHANGE 门槛 (pair0 需 >=29.93 且三对均 +2 dB); 最佳候选仍是 R0 管线本身 (27.93/31.25/32.70). 目标与 glass:3+jpeg:2 模拟的结构信号高度一致 (bb 1.3%, slope 0.4%, gm 3.0%), 目标低 3-5% 的 variance/spread/chroma 无法由任何 x_distortion 全局函数表示 (最弱档 0.75/0.7/25.5 级别, 远强于隐含 0.967), 噪声/量化/亮度/过锐/方向模糊均被排除. glass 为随机 pixel shuffle, PSNR 上限 ~28-33 dB, 不支持 >40 dB 判据; 无候选满足 CHANGE 条件 → 维持 R0 管线不变."
+}

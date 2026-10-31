@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression: block_boundary=1.2085/1.514/1.784 (3 对, Tier S 0%FP) 确认 JPEG sev2, 同内容 jpeg:2 bb 3/3 匹配 — 但 Tier S JPEG 信号无对应可启用组件, 仅确认管线",
+    "noise: full_analysis 三对 GAUSSIAN_YCrCb (sigma 4.82/2.2/1.4), 低置信度; verify_signals 跨对 YCrCb:4 pair1/pair2 MATCH, pair0 PARTIAL(sigma 37%) — 该步骤 verdict UNCERTAIN (sigma>2, Tier C 级), 不加任何组件",
+    "blur: BLUR_UNLIKELY — spectral_slope_ratio=0.9844 (<1.08), gm_ratio=1.1238 被噪声抬高, anisotropy=0.00, pca=0.0; 加 blur_gaussian:1 对照 WEAK → 无 blur, 故 OCAB 的 anisotropy>1.7 + motion 条件不满足",
+    "global: NO_GLOBAL — variance_ratio=0.8934, contrast_spread_ratio=0.9891, contrast_detected_raw=false, mean_shift=-4.1 (未达亮度阈值), clipped_fraction=0.0636 归因于噪声边缘饱和; 无 Tier A variance_ratio≠1.0 → 不触发 ColorPre 或 FiLM-GCM",
+    "顺序: noise→jpeg 确认 (反转顺序 WEAK: sigma diff=1004%, bb 17%); 整体 verdict=UNCERTAIN (Tier 3), 无任何 Tier S/A 组件触发条件",
+    "k=3 support 不改变架构门控 (STRATEGY_INSTRUCTIONS 规则)"
+  ],
+  "rationale": "两步均为 UNCERTAIN 的噪声+JPEG 混合管线: JPEG 虽有 Tier S block_boundary 阳性但无对应组件 (JPEG 专项不在组件表), 无 motion (anisotropy=0), 无 contrast (variance_ratio=0.8934 未达 Tier A) → OCAB/FiLM-GCM/ColorPre 的启用条件全部不满足。按 finetune_strategy.md §七 信号门控: 无 Tier S/A 组件触发 → 纯 Swin + SimpleGate + Direct。SimpleGate 为 exp39 默认常开 (-32K, 8/9 退化安全, 仅 S5 三退化 -0.86)。不使用 DualBranch (exp37 盲识别 0/24 胜, 且指令禁用)。Direct 而非 RandomCurric: 单噪声+JPEG 混合且sigma>2 下 PSNR 不可用、步骤 UNCERTAIN, 保守 Direct 最安全 (True Ft ≈ Direct, exp37/38 确认)。lr=5e-4, EPOCH=2, batch=16 与基线一致。"
+}

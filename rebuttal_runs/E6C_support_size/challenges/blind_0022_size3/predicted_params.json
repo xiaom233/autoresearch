@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0022_size3",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": {"pair0": 26.68, "pair1": 30.39, "pair2": 32.37},
+      "stats": {"ci": ["8/10", "9/10", "5/10"], "note": "severity+1 兄弟候选；结构信号略逊 (sim gm_ratio=0.299 vs target 0.361; slope 1.292 vs 1.162; bb 1.767 vs 1.684)，但离群像素统计更接近"},
+      "function_family": "glass blur + jpeg"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 3},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": {"pair0": 27.36},
+      "stats": {"ci": "5/10", "note": "JPEG severity+1 变体；CI 与 PSNR 均低于 jpeg:2"},
+      "function_family": "glass blur + jpeg"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": {"pair0": 24.50},
+      "stats": {"ci": "8/10", "note": "跨族备份 (gaussian 为确定性基线); PSNR 明显低于 glass 系, 仅作函数族备份"},
+      "function_family": "gaussian blur + jpeg"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "6/10 (pair0) / 7/10 (pair1) / 6/10 (pair2)",
+    "mode": "PSNR (sigma=0.62<2, 无噪声)",
+    "order": "blur_glass -> compression_jpeg (物理/generator 约束; 反序对照 CI bb 误差 48% vs 正序 2-9%)",
+    "rationale": "compression: block_boundary=1.684/2.099/2.647 (三对均>1.05, 0%FP), unique_G≈256 排除 quantization; 模拟图结构复现 bb=1.699 vs 目标 1.684 (0.9%) → jpeg:2 (sev 扫描 jpeg1/3/4/5 均更差: 离群失配或 CI/PSNR 降)。blur: gm_ratio=0.361/0.378/0.453 + glass_score=0.4575/0.74 触发 glass DT; motion (17.99dB@jpeg4), gaussian (23.63-24.50), lens (24.83) 均被 PSNR 排除; severity 结构仲裁 (同图模拟: gm_ratio 0.350 vs 目标 0.361; slope_ratio 1.168 vs 1.162; bb 1.699 vs 1.684; glass4 对应值 0.299/1.292/1.767 均更差) + PSNR 峰值扫描 (sev2 25.61 < sev3 27.93 > sev4 26.68 > sev5 24.93) → sev3; glass 为非确定性像素 shuffle, 按 SKILL 永不 LIKELY。无噪声: 剥离后 noise_prior sigma=0.99<2, extreme_pct=55% 属 JPEG/glass 伪影已知 FP; 且 x_distortion 各加性噪声最低 sigma≈12.75 远高于观测。无全局: mean_shift≤0.2, contrast_spread_ratio=0.95, saturation_ratio=0.90-0.96。三对 support 全部复核: PSNR 27.93/31.25/32.70 dB。"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "challenge_id": "blind_0020_size3",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 5],
+    ["contrast_weaken_stretch", 4],
+    ["saturate_weaken_HSV", 3]
+  ],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 4, "verdict": "LIKELY"},
+    {"function": "contrast_weaken_stretch", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "contrast_weaken_stretch", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 1}
+      ],
+      "psnr_pair0": 38.76,
+      "function_family": "saturate_weaken_HSV sev1 (s=0.7) — 3-step fallback if a saturation step truly exists with near-identity strength",
+      "reason": "Only 1.93 dB below the 2-step winner on pair0; keeps a saturation component at the weakest usable strength"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "contrast_weaken_stretch", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 3}
+      ],
+      "psnr_pair0": 34.78,
+      "function_family": "blur_gaussian sev4 — cross-family blur fallback",
+      "reason": "Same severity gaussian control (34.78 dB) is 5.91 dB below the glass winner under identical globals -> glass subtype is supported"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (noise_prior sigma=0.37 < 2)",
+    "support_psnr_by_pair": {
+      "pair0_0227": 40.69,
+      "pair1_0459": 38.27,
+      "pair2_0032": 43.57
+    },
+    "support_psnr_mean": 40.84,
+    "r0_support_psnr_by_pair": {
+      "pair0_0227": 34.29,
+      "pair1_0459": 28.14,
+      "pair2_0032": 36.14
+    },
+    "r0_support_psnr_mean": 32.86,
+    "delta_mean_db": 7.98,
+    "ci_pass": {
+      "pair0_0227": "9/10",
+      "pair1_0459": "10/10",
+      "pair2_0032": "9/10"
+    },
+    "rationale": "R1 signal reinterpretation: (1) blur_subtype: run_full_analysis_R1 step3_blur verdict=GLASS_BLUR (glass_score=0.3044>0.25, sigma=0.37<3) and anisotropy=1.4991<1.7 excludes motion -> SKILL blur decision tree routes to glass; R0 defaulted to gaussian without PSNR-testing glass. (2) blur severity: gm_ratio=0.1377 includes the contrast contraction c=0.6, so severity 4 fits better than 5 (pair0: glass4 35.36 vs glass5 34.82 under identical globals). (3) step count / saturation: R0 added saturate_weaken_HSV:3 from chroma_ratio=0.5045, but CI showed unique_G sim-target diff -30 (28%) over-contraction; under stretch4 the sat axis is monotone (sat3 35.36 -> sat1 38.76 -> no sat 40.69), i.e. saturation was a false-positive step (full_analysis false_positive_checks.contrast_from_saturation=true) and chroma_ratio is explained by per-channel contrast_weaken_stretch c=0.6 alone. Removing it also fixed unique_G (diff -1, 1% on pair0; 0% on pair1/pair2), resolving the unique_G<200 compression/quantization rule without any JPEG or quantization step. (4) no JPEG: block_boundary=1.0024 (0% FP); no noise: sigma=0.37<2. k=3 validation of blur_glass:4 + contrast_weaken_stretch:4: 40.69 / 38.27 / 43.57 dB (mean 40.84, +7.98 dB vs R0 mean 32.86; +6.40 / +10.13 / +7.43 per pair), CI 9/10, 10/10, 9/10. CHANGE threshold met (>40 dB on pair0/pair2 and +2 dB on every pair)."
+  }
+}

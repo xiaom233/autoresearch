@@ -1,0 +1,684 @@
+{
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_motion:5",
+        "thinking": "信号来源: gm_ratio=0.097(强模糊), residual_anisotropy=3.17>1.7(SKILL Step2 motion 判定), glass_score=0.075<0.25(lens/glass 排除). 主假设 motion blur sev5"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.123)",
+          "blur:wiener_kernel (corr=0.481)"
+        ],
+        "pipeline": "blur_motion:5",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_motion:4",
+        "thinking": "motion:5 MISMATCH(spectral_slope diff=0.123, wiener corr=0.481) → 按 SKILL 强制 severity 扫描先于换类型, 测 motion sev4"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.393)",
+          "blur:wiener_kernel (corr=0.532)"
+        ],
+        "pipeline": "blur_motion:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_motion:3",
+        "thinking": "motion sev 扫描(强制): sev5 diff=0.123 优于 sev4 diff=0.393, 按协议补测 sev3 确认最优点, 若仍 MISMATCH 则换子类型"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.308)",
+          "blur:wiener_kernel (corr=0.503)"
+        ],
+        "pipeline": "blur_motion:3",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "motion 全 severity 扫描 MISMATCH(best sev5 diff=0.123) → 按 SKILL 换子类型: gaussian(MTF 默认对照, anisotropy 3.17 处 fallback 区且 PCA 失败). 测 gaussian sev5"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.263)"
+        ],
+        "pipeline": "blur_gaussian:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "gaussian:5 WEAK(wiener matched, slope diff=0.263 疑由噪声抹平高频导致) → 强制 severity 扫描补测 gaussian sev4"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,saturate_weaken_HSV:2",
+        "thinking": "全局候选验证: full_analysis 报 variance_ratio=0.574, chroma_ratio=0.796(analyzer 建议 saturate sev3). 先测 saturate_weaken_HSV:2 复查 global 信号(方差比/色度比), 同时复查 blur:4 是否仍匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0756)",
+          "global:variance_ratio (diff=19%)"
+        ],
+        "pipeline": "blur_gaussian:4,saturate_weaken_HSV:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "复核 blur:4 并导出模拟图以分离其自身全局统计(variance/chroma/mean_shift), 判断 global 退化是否真实存在(避免 sat:2 叠加后误判)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "thinking": "global 信号由 blur:4 自身解释(var_ratio 0.605 vs target 0.574, chroma 0.794 vs 0.796)→无独立 global. 剥离后残差 std=2.9 为真实噪声; x_distortion gaussian_RGB sev3=38.25, 经 sigma4 模糊衰减 ~1/14 → ~2.7, 与残差吻合 → 测 noise_gaussian_RGB:3 (噪声先于模糊, 物理顺序)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=82.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:4",
+        "thinking": "gaussRGB:3+blur:4 PARTIAL(sigma 匹配, structured_residual FWHM=82px). PARTIAL→强制 severity 扫描. 残差方差比 target 0.574 低于 sim 0.605, 更强噪声的 uint8 裁剪效应可能压低方差 → 试 sev4"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=138.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "thinking": "gaussRGB sev4 FWHM 138 更差, sev3(82)最佳 → 补测 sev2 完成强制 ±1 扫描"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=22.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "thinking": "sev2 FWHM=22 优于 sev3(82)/sev4(138), 继续向下扫描 sev1 确认 FWHM 趋势与实际噪声强度"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=22.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2,blur_gaussian:4",
+        "thinking": "§B peeled 残差 vm_slope=0.287(似 speckle), 噪声必须先于 blur(否则残差远大于 2.9). 测 speckle:2 复查 FWHM/sigma"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=14.0px)"
+        ],
+        "pipeline": "noise_speckle:2,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:4",
+        "thinking": "§B peeled rgb_ratio=1.79(ch_stds R3.3/G2.6/B1.8)提示 YCrCb; speckle:2 FWHM=14 优于 RGB gaussian(22). 测 YCrCb:2 对比 FWHM 与 sigma, 决定噪声子类型"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=46.0px)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,blur_gaussian:4",
+        "thinking": "speckle:2 FWHM=14 当前最佳 → 强制 severity 扫描 sev3(est+1), 比较 FWHM 与 sigma"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=28.0px)"
+        ],
+        "pipeline": "noise_speckle:3,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:4",
+        "thinking": "speckle sev3 FWHM=28 劣于 sev2(14) → 补测 sev1 完成 speckle ±1 扫描"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=12.0px)"
+        ],
+        "pipeline": "noise_speckle:1,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_lens:5",
+        "thinking": "gaussian:4 虽 MATCH 但残差含平滑结构(std2.9, spatial_corr0.99)且方差低5% → 检验 lens:5(disk r=8, 核方差与 sigma4 相同, MTF 形状不同, SKILL 称 gaussian↔lens 难分). 用 blur 信号+结构判定"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.139)",
+          "noise:sigma (diff=371%)",
+          "noise:structured_residual (FWHM=6.0px)"
+        ],
+        "pipeline": "noise_speckle:1,blur_lens:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "thinking": "跨对验证 pair1: 最终候选 noise_gaussian_RGB:2+blur_gaussian:4 (pair0 上 blur 双信号 MATCH, 残差仅余平滑结构). 检验 blur 信号在 support pair1 是否同样匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=100.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "thinking": "跨对验证 pair2: 同一最终候选 noise_gaussian_RGB:2+blur_gaussian:4, 检验 blur 双信号与 sigma 在 support pair2 是否匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=14.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "thinking": "pair1 FWHM=100(sev2) 偏大 → 在 pair1 上降一档 sev1 检验噪声强度是否被高估"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=72.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "R1-1: 确定性 PSNR 扫描 pair0。信号来源: R0 测得 gaussian:4 双信号 MATCH 但从未做 PSNR/severity=3 对照; 目标 variance_ratio=0.574 高于 sev4 模拟 0.605, 需检查 sev3/4/5 的真实 MSE 排序"
+      },
+      "test_result": {
+        "psnr_rgb": 30.83,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "R1-2: 确定性 PSNR 扫描 pair0。信号来源: R0 gaussian:4 spectral_slope+wiener MATCH; 本测给出 pair0 的 MSE 基准 (纯确定性)，用于判断 >40dB 或相对 R0 残差基准(20log10(255/2.9)=38.9dB) 是否 +2dB"
+      },
+      "test_result": {
+        "psnr_rgb": 37.09,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "R1-3: 确定性 PSNR 扫描 pair0。信号来源: R0 gaussian:5 为 WEAK(slope diff=0.263) 但目标方差比 0.574 低于 sev4 模拟 0.605, 更强模糊可能解释方差差; 用 PSNR 排除 sev5"
+      },
+      "test_result": {
+        "psnr_rgb": 33.36,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "R1-4: 3对support验证 pair1。信号来源: pair0 PSNR 扫描确认 gaussian:4 最优(37.09, +3.7dB vs sev5); 在 pair1 上做纯确定性 PSNR 验证 (>40dB 或 +2dB 才可 CHANGE)"
+      },
+      "test_result": {
+        "psnr_rgb": 39.45,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "R1-5: 3对support验证 pair2。信号来源: 同上, pair0 已确认 gaussian:4; 检验 pair2 的纯确定性 PSNR 与 CI"
+      },
+      "test_result": {
+        "psnr_rgb": 41.59,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "blur_lens:4",
+        "thinking": "R1-6: 跨族排除 lens。信号来源: SKILL §C 称 gaussian↔lens MTF 难分, R0 仅测过 lens:5(WEAK, slope diff=0.139); 用 pair0 PSNR 检验 lens:4 是否可能优于 gaussian:4(37.09)"
+      },
+      "test_result": {
+        "psnr_rgb": 31.66,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 41.59,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 39.45,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 37.09,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 33.36,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_lens:4",
+      "psnr_rgb": 31.66,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 30.83,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    }
+  ],
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=1.000（三对 0.992/1.000/1.001）+ dct_zero=0.823 + unique_G=198；但纯 blur_gaussian:4 模拟完全复现（bb=1.0007, dct=0.826, unique_G=192）→ 无 JPEG/quantization",
+      "blur": "gm_ratio=0.097, spectral_slope_ratio=1.644, residual_anisotropy=3.17（FFT 报 motion 但仅 5% recall 的 fallback 分支）。实测 motion 全 severity MISMATCH、lens:5 MISMATCH、gaussian:5 WEAK、gaussian:4 双信号 MATCH（三对 support 均 MATCH）",
+      "noise": "noise_prior sigma=3.09，但无噪声的 blur:4 模拟同样给出 3.09 / cross_ch 0.95 / spatial_corr 0.58 → noise_prior 被模糊污染，不可用于分型。剥离 blur:4 后残差 std=2.9",
+      "global": "variance_ratio=0.574, chroma_ratio=0.796；blur:4 模拟自身已达 vr=0.605 / chroma=0.794 → 无独立 global。残余 ~5% 方差差与 -2.5 均值移无法用任何 x_distortion 全局函数（最弱 contrast_weaken_sev1=0.75）在正确幅度复现，判为生成伪影/未建模微小增益；saturate_weaken_HSV:2 实测 global 信号 MISMATCH（mean_shift 差 0.0756, variance 差 19%）"
+    },
+    "mode": "SIGNAL（sigma>2, PSNR 不可用；全部用 verify_signals 信号验证）"
+  },
+  "qwen_gate": {
+    "available": false,
+    "note": "SKILL Step0.5 门控条件触发（2<sigma=3.1<10 边界），但 Qwen/API 不可用，按信号分析继续"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 83.82,
+    "vm_slope": 0.2867,
+    "var_slope": 0.222,
+    "spatial_corr": 0.9926,
+    "rgb_ratio": 1.7922,
+    "cross_ch_corr": 0.3349,
+    "ch_stds": [
+      3.3,
+      2.6,
+      1.8
+    ],
+    "diagnosis": "剥离 blur_gaussian:4 后残差仍以平滑结构为主（spatial_corr=0.9926, extreme_pct=83.8% 为差分图极端值假阳性），§B 分型被污染不可靠：vm_slope 偏 speckle、rgb_ratio 偏 YCrCb 均可由内容结构解释（无噪声模拟复现 cross_ch=0.95）。var_slope=0.22<<1.0 排除 poisson；impulse 无独立证据。噪声本身很弱（模糊后幅度约 1-2，须先于模糊否则量级不符），按 SKILL 默认取 gaussian_RGB，子类型标 UNCERTAIN；speckle(1/2)/YCrCb(2) 已作为对照实测（pair0 FWHM 12-14 / 46）"
+  },
+  "support_validation": {
+    "pair0": {
+      "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+      "blur_spectral_slope": "MATCH",
+      "blur_wiener_kernel": "MATCH",
+      "noise_sigma": "MATCH",
+      "residual_FWHM_px": 22.0
+    },
+    "pair1": {
+      "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+      "blur_spectral_slope": "MATCH",
+      "blur_wiener_kernel": "MATCH",
+      "noise_sigma": "MATCH",
+      "residual_FWHM_px": 100.0,
+      "sev1_FWHM_px": 72.0
+    },
+    "pair2": {
+      "pipeline": "noise_gaussian_RGB:2,blur_gaussian:4",
+      "blur_spectral_slope": "MATCH",
+      "blur_wiener_kernel": "MATCH",
+      "noise_sigma": "MATCH",
+      "residual_FWHM_px": 14.0
+    },
+    "conclusion": "blur 两信号在全部 3 对 support 均 MATCH，跨对一致；noise sigma 3/3 MATCH；残余结构 FWHM 随内容在 14-100px 变化，主要来自未建模的平滑确定性成分（非噪声类型差异）"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_RGB",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "blur_gaussian",
+        "severity": 4,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "rationale": "blur_gaussian:4 在三对 support 上 spectral_slope 差<0.08 且 Wiener 核 corr>0.85 全部 MATCH，纯模糊模拟还复现了全部 compression/global 表层信号 → 高置信。噪声必须先于模糊（后置任何 x_distortion 噪声 sev1 幅度≥12.75，与剥离残差 std=2.9 不符），强度弱（模糊后≈1-2）；类型信号被平滑残差结构污染，按 SKILL 默认取 gaussian_RGB，severity 取 1-3 的中间值 2（±1 容差）。无 JPEG/quantization/global 步骤。三对支持验证结论一致。",
+    "alternatives": [
+      {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:4",
+        "function_family": "gaussian_RGB 更弱噪声",
+        "evidence": "pair0 FWHM=22 与 sev2 并列；pair1 sev1 FWHM=72<sev2 100；若 GT 噪声为 sev1 更贴近"
+      },
+      {
+        "pipeline": "noise_speckle:2,blur_gaussian:4",
+        "function_family": "speckle 噪声",
+        "evidence": "pair0 FWHM=14 最优且 §B vm_slope=0.287；但 FWHM 受结构混淆、lens:5 反例(FWHM=6 仍错误)表明该指标区分力有限"
+      }
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 overall_verdict=UNCERTAIN (噪声子类型不可诊断, noise→blur 顺序 §B 54.7%≈随机); support PSNR R0=23.85; k=3 对 support (pair0/1/2)",
+    "actions": [
+      "run_full_analysis.py pair0 → full_analysis_R1.json: 信号与 R0 一致 (仅 residual_intensity_corr 0.0285→0.0206)",
+      "peeled_noise_check.py --pipeline blur_gaussian:4 → 三对剥离残差 (std 2.9/2.6/2.0; wavelet σ 6.18/1.48/1.24; spatial_corr 0.98-0.99 仍含平滑结构)",
+      "test_candidate.py PSNR: 纯确定性候选 gaussian:3/4/5 + lens:4 (pair0), gaussian:4 (pair1/2), 共 6 次 (rounds 20-25; 见 iterations)",
+      "x_distortion 源码核对 severity 映射: noise_gaussian_RGB σ=0.05-0.25×255; blur_gaussian σ=sev; 高斯核白噪声衰减 1/(2√π·4)=1/14.2"
+    ],
+    "signal_reinterpretation": [
+      {
+        "signal": "step3_blur estimated_severity=5 (gm_ratio=0.0973)",
+        "issue": "gm_ratio 严重度为内容依赖误判",
+        "evidence": "pair0 纯确定性 PSNR: gaussian:4=37.09 > gaussian:5=33.36 (+3.7dB) > gaussian:3=30.83 (+6.3dB); 三对 gaussian:4 CI=10/10,9/10,7/10 → sev4 确认, 不用 gm_ratio 的 sev5"
+      },
+      {
+        "signal": "SKILL 称 gaussian↔lens MTF 不可区分 (R0 仅测 lens:5)",
+        "issue": "缺 lens 跨族 PSNR 裁决",
+        "evidence": "pair0 blur_lens:4=31.66, 比 gaussian:4 低 5.4dB → lens 排除"
+      },
+      {
+        "signal": "剥离残差 std (R0 仅 pair0=2.9), 噪声严重度按 1-3 中间值取 2",
+        "issue": "R0 的 sev2 缺跨对幅度约束; R1 首次用 blur 后噪声 floor 定量核对",
+        "evidence": "三对残差 2.9/2.6/2.0; blur:4 后 noise_RGB floor: sev1≈0.90, sev2≈1.80, sev3≈2.69; 最小残差对 pair2 (2.0-2.1) 更贴近 sev2; 取 sev3 需系统性相消 → 维持 sev2 (获得定量支持)"
+      },
+      {
+        "signal": "§B rgb_ratio=1.792 (YCrCb) 与 vm_slope=0.287 (speckle)",
+        "issue": "子类型信号为内容依赖污染",
+        "evidence": "跨对 rgb_ratio=1.79/1.15/1.05 (YCrCb 仅 pair0); vm_slope=0.287/0.073/0.274 各对均高而 spatial_corr 恒 0.98-0.99 → 残差以平滑确定性结构为主, §B 分型不成立, 维持 gaussian_RGB 默认与 UNCERTAIN"
+      },
+      {
+        "signal": "variance_ratio=0.5736 vs blur:4 模拟 0.605, mean_shift=-2.5",
+        "issue": "复核是否漏 global 步骤",
+        "evidence": "x_distortion 最弱 contrast_weaken sev1 方差乘子≈0.56 远超所需 5% 差; brightness sev1 幅度远超 2.5/255; 且噪声只抬高方差 → 无法用合法 global 函数在正确幅度复现, 维持无 global/JPEG 步骤"
+      }
+    ],
+    "deterministic_candidate_check": {
+      "threshold": "纯确定性候选 CHANGE 需 >40dB 或相对上一轮 +2dB (k 对全部验证)",
+      "results": {
+        "pair0": {"blur_gaussian:3": 30.83, "blur_gaussian:4": 37.09, "blur_gaussian:5": 33.36, "blur_lens:4": 31.66},
+        "pair1": {"blur_gaussian:4": 39.45},
+        "pair2": {"blur_gaussian:4": 41.59}
+      },
+      "outcome": "blur_gaussian:4 三对均值 39.38dB (<40), 仅 pair2 41.59>40 → 未达 CHANGE 门槛; R0 为 SIGNAL 模式无可比 PSNR 基线, 且禁止用 PSNR 对含噪管线做比较 (噪声 seed 失配)"
+    },
+    "noise_candidate_check": "未新增噪声候选: R0 已在 3 对验证 noise_gaussian_RGB:2+blur_gaussian:4 均 PARTIAL (blur 双信号+noise sigma MATCH, structured_residual FWHM 22/100/14); 现状已 PARTIAL, 变更需多数对达 MATCH; R0 已测 RGB:1/3、speckle:1/2/3、YCrCb:2 均 PARTIAL 且 FWHM 未优于 sev2 → 无可支持变更",
+    "decision": "NO_CHANGE",
+    "final_pipeline": [["noise_gaussian_RGB", 2], ["blur_gaussian", 4]],
+    "rationale": "blur_gaussian:4 由信号 (3/3 对 spectral_slope+wiener MATCH) 与纯确定性 PSNR (三对最优, 且优于 sev3/sev5/lens:4) 双重确认; 纯确定性候选均值 39.38dB<40 不满足确定性 CHANGE 门槛; 噪声严重度 sev2 首次获得跨对残留幅度下界支持 (最小残差对 pair2≈2.0-2.1 vs blur 后 sev2 floor≈1.80、sev3 floor≈2.69); 噪声子类型仍不可诊断 (54.7%≈随机), 维持 gaussian_RGB+UNCERTAIN。未发现可支持 CHANGE 的新证据 → NO_CHANGE。",
+    "budget": {"test_candidate_limit": 15, "test_candidate_used": 6, "new_candidates_limit": 5, "new_candidates_used": 4, "reflect_rounds_used": 1},
+    "r1_test_iteration_rounds": [20, 21, 22, 23, 24, 25]
+  }
+}

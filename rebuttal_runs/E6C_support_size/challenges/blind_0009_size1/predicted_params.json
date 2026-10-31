@@ -1,0 +1,50 @@
+{
+  "challenge_id": "blind_0009_size1",
+  "pipeline": [
+    {
+      "function": "noise_poisson",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "saturate_strengthen_YCrCb",
+      "severity": 3,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 1},
+        {"function": "saturate_strengthen_YCrCb", "severity": 3}
+      ],
+      "psnr": null,
+      "stats": "verify_signals PARTIAL 3/4: noise:sigma ✓, noise:clean_residual ✓, global:variance_ratio ✓; global:mean_shift ✗ (diff=0.0080, target 0.0631)",
+      "function_family": "gaussian_chroma_noise+global"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 1},
+        {"function": "saturate_strengthen_YCrCb", "severity": 4}
+      ],
+      "psnr": null,
+      "stats": "verify_signals PARTIAL 3/4: sigma ✓, clean_residual ✓, variance_ratio ✓; mean_shift ✗ (diff=0.0109)",
+      "function_family": "gaussian_chroma_noise+global"
+    },
+    {
+      "pipeline": [
+        {"function": "saturate_strengthen_YCrCb", "severity": 3}
+      ],
+      "psnr": null,
+      "stats": "deterministic-only fallback: variance_ratio ✓, mean_shift ✗ (diff=0.0051); use if noise step deemed spurious",
+      "function_family": "global_only"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (signal mode, sigma=5.56; verify_signals 4/4 checks MATCH)",
+    "mode": "SIGNAL (sigma=5.56)",
+    "rationale": "Full analysis: no JPEG (block_boundary=0.9998, unique_G=256/256), no blur (spectral_slope_ratio=0.998, anisotropy=0). Strong global (variance_ratio=2.028, mean_shift=+16.1/255 with channel-divergent means, chroma_ratio=2.16, clipped 52.6%) -> saturate_strengthen_YCrCb; HSV variant rejected (mean_shift -0.106), contrast stretch rejected (residual std 101 vs 41 at pixel level). Severity scan alone: sev2 matched mean_shift, sev3 matched variance_ratio; with noise, sev3 clearly best. Noise: sigma=5.56 (>2) but noise_prior/§B contaminated by clipping; poisson sigma is intensity-dependent (weak in dark night sky) and is the only tested noise that simultaneously matched sigma + clean residual + mean_shift + variance_ratio (4/4 MATCH, R10). Gaussian YCrCb/RGB alternatives were PARTIAL/WEAK (mean_shift and/or sigma mismatched). k=1: single support pair, no cross-pair verification possible."
+  }
+}

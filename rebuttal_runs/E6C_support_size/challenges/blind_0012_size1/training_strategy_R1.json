@@ -1,0 +1,32 @@
+{
+  "challenge_id": "blind_0012_size1",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "Step1 compression: block_boundary=2.7761 (>1.1, Tier S, 0% FP) + dct_zero_ratio=0.8877 -> compression_jpeg LIKELY; JPEG 无对应架构开关（无 jpeg 专项 flag），保持 Swin",
+    "Step3 blur: blur_pca_ratio=4.432 (0% FP) + gm_ratio=0.4012 支持 motion，但 residual_anisotropy=1.4348 < 1.7 (OCAB 触发阈值) 且该步 verdict=UNCERTAIN -> 不启用 OCAB，保持 Swin",
+    "Step4 global: NO_GLOBAL; variance_ratio=0.8691 (非 1.0) 但 contrast_from_variance=false, mean_shift=-0.4/255, contrast_spread_ratio=0.9272 -> 非 Tier A contrast 信号，方差降低可由 blur+JPEG 解释 -> 不启用 FiLM-GCM/ColorPre",
+    "Step2 noise: NO_NOISE; noise_prior_sigma=0.74 (peeled 1.48) < 2，residual_intensity_corr=0.3913 的 gamma 嫌疑被 JPEG/blur 结构化残差污染 (spatial_corr=0.9701) -> 无噪声步骤，不加组件",
+    "support k=1 (仅 pair0) 不改变架构门控；无 Tier S/A 组件信号明确满足 -> 纯 Swin + SimpleGate + Direct（exp37/exp39 安全默认）"
+  ],
+  "rationale": "本挑战为 motion blur(UNCERTAIN) + JPEG(LIKELY) 两确定性步，无 contrast/brightness/saturation 全局退化，无噪声。JPEG 由 Tier S block_boundary=2.7761 确认但无架构组件映射；motion 的 anisotropy=1.4348 未达 OCAB 门控 1.7，且 blur 严重度 sev3/sev4 尚未仲裁（多角度 PSNR 20-27dB 波动）；variance_ratio=0.8691 属 NO_GLOBAL 下 blur+JPEG 可解释的方差下降，不构成 Tier A contrast。按 finetune_strategy.md §七：Tier B/UNCERTAIN 步骤用 Swin 基线，SimpleGate 常开安全 (-32K, 8/9 无害)，Direct 从零训练。k=1 不改变门控。"
+}

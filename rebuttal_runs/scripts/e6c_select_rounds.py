@@ -66,7 +66,7 @@ def main():
         best = max(cands, key=lambda x: (x["support_psnr"], -ROUNDS.index(x["round"])))
         sid = name.rsplit("_", 1)[0]
         setk = name.rsplit("_", 1)[1]
-        rows.append({"run_id": f"E6B_{name}", "scenario_id": sid, "support_set": setk,
+        rows.append({"run_id": f"E6C_{name}", "scenario_id": sid, "support_set": setk,
                      "name": name, "selected_round": best["round"],
                      "checkpoint": best["checkpoint"], "checkpoint_sha256": best["checkpoint_sha256"],
                      "checkpoint_step": best["checkpoint_step"], "support_psnr": best["support_psnr"],

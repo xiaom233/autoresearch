@@ -1,0 +1,22 @@
+{
+  "challenge_id": "blind_0001_size3",
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "quantization_median", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "9/10",
+    "mode": "SIGNAL (sigma=16.7, noise 耦合 → 不用 PSNR 判型)",
+    "psnr_rgb_reference": 13.15,
+    "rationale": "noise→quantization 顺序由色阶数强制: 三对 target 每通道唯一色阶=16, 噪声若在量化后会产生大量色阶。确定性步 quantization_median:2 在全部 3 对 support 上精确复现 VR/ms/chroma/clip/slope/gm (verify_signals MATCH, CI 9/10); 唯一差异 unique_G 15 vs 16 源于本仓库 median sev2=15 色而挑战端为 16 色 (实现版本差异)。噪声步 poisson:5 统计匹配 (sigma 16.68/17.17/10.38 三对均 <20% 误差; intensity_var_corr 完全一致), 但 seed 失配, 按协议标 UNCERTAIN。备选 (gaussian_RGB:2、saturate_strengthen、contrast_strengthen、brightness_darken、quantization_hist 变体) 均实测 WEAK 不合格, 故 alternatives 为空。",
+    "per_step_signal_sources": {
+      "noise_poisson:5": "quantization_median:2 剥离后无法独立判型 (§B 被量化主导); 判型依据 = 全管线统计匹配: poisson:5+median2 三对 sigma 16.68/16.93/10.50 vs target 16.68/17.17/10.38, intensity_var_corr 0.774/0.838/0.908 vs 0.772/0.829/0.908; gaussian_RGB:2 对照 ivc 0.102 明显不符",
+      "quantization_median:2": "unique_per_channel=[16,16,16] 三对恒定 (clean 256); block_boundary=1.0007 排除 JPEG; median2 逐通道量化复现 VR/ms/chroma/clip"
+    },
+    "support_used": ["clean_0/degraded_0", "clean_1/degraded_1", "clean_2/degraded_2"],
+    "cross_pair_match": "3/3 对 verify_signals MATCH"
+  }
+}

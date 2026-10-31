@@ -1,0 +1,129 @@
+{
+  "challenge_id": "blind_0015_size1",
+  "round": 1,
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_glass",
+      1
+    ],
+    [
+      "brightness_darken_shfit_RGB",
+      3
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_glass",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "brightness_darken_shfit_RGB",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        [
+          "brightness_darken_shfit_RGB",
+          3
+        ],
+        [
+          "blur_lens",
+          1
+        ]
+      ],
+      "psnr": 28.84,
+      "ci_pass": "9/10",
+      "source": "R0",
+      "function_family": "blur_lens",
+      "note": "确定性各向同性替代; PSNR 高于 incumbent 但在 R0 已测得 CI 9/10 (overshoot 超 32%), 过平滑目标保留的高频"
+    },
+    {
+      "pipeline": [
+        [
+          "blur_gaussian",
+          2
+        ],
+        [
+          "brightness_darken_shfit_RGB",
+          3
+        ]
+      ],
+      "psnr": 29.04,
+      "ci_pass": "8/10",
+      "source": "R1",
+      "function_family": "blur_gaussian",
+      "note": "R1 新增判别候选: 确定性, PSNR +2.53dB vs incumbent(26.51), 但 overshoot diff +0.148(61%) / hf_lf +0.107(16%) 表明 σ2 过度平滑 target 保留的高频, CI 8/10"
+    },
+    {
+      "pipeline": [
+        [
+          "blur_motion",
+          1
+        ],
+        [
+          "brightness_darken_shfit_RGB",
+          3
+        ]
+      ],
+      "psnr_range": [
+        27.62,
+        31.66
+      ],
+      "psnr_mean": 29.52,
+      "samples": 5,
+      "ci_pass": "8/10 x4, 10/10 x1",
+      "source": "R1",
+      "function_family": "blur_motion",
+      "note": "角度 np.random.uniform(-90,90) 无种子, 5 次采样 27.62/28.41/29.84/30.09/31.66 (mean 29.52, 极差 4.04dB); 信号级核对 gm_ratio=0.5318 vs target 0.4782 (+11.2%), 劣于 glass sim 的 -4.1%; k=1 无法平均随机角度"
+    },
+    {
+      "pipeline": [
+        [
+          "brightness_darken_shfit_RGB",
+          3
+        ],
+        [
+          "blur_glass",
+          1
+        ]
+      ],
+      "psnr": 26.69,
+      "ci_pass": "10/10",
+      "source": "R0",
+      "function_family": "order_swap",
+      "note": "顺序替代: CI 同为 10/10, 但 zero%/unique/hf_lf 略差于 blur->brightness"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "step_verdicts": [
+      {
+        "function": "blur_glass",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "brightness_darken_shfit_RGB",
+        "severity": 3,
+        "verdict": "LIKELY"
+      }
+    ],
+    "k": 1,
+    "support_psnr_r0": 23.27,
+    "mode": "PSNR (sigma=0.74<2, NO_NOISE); glass 为无种子随机置换, PSNR 上限 ~26.5dB, 以 CI + 聚合信号匹配为主判据 (SKILL §C.4: 非确定性 blur 不追 PSNR)",
+    "signal_sources": [
+      "brightness_darken_shfit_RGB:3 锁定: mean_shift -42.9 / variance_ratio 0.7181 / clipped_fraction 0.3199 / unique_G 203 / contrast_spread_ratio 0.7844 与 R0 sim (-42.8/0.7223/0.3216/203/0.7891) 五项一致; gamma_RGB 在任何 severity 都不会产生 32% 零裁剪(sev3 gamma=2.1 仅 clean<~11 归零), 排除 gamma 假阳性",
+      "blur 存在性: 纯 shift_RGB:3 PSNR 26.72 -> gaussian:1 28.60 -> gaussian:2 29.04, 单调改善说明 target 确实比 clean->brightness 更平滑; spectral_slope_ratio=0.9996 不排除弱/方向性模糊",
+      "工具局限重释: run_full_analysis step2 低置信 GAUSSIAN_YCrCb 使 has_noise=True, step3 走 spectral_slope 早退分支, 未计算 residual_anisotropy / blur_pca_ratio / glass_score (打印的 FFT_anisotropy=0.00, pca=0.0 为缺失默认值, 非实测) -> 不能据其排除 motion/glass",
+      "HF 夹逼: jitter:1(纯置换无平滑) overshoot diff -0.521(216%) / hf_lf -0.143(22%) target 高频显著低于纯置换; gaussian:2 overshoot diff +0.148(61%) / hf_lf +0.107(16%) target 高频显著高于 σ2; glass(σ0.7x2 平滑 + ±1px 置换) 位于两者之间, CI 10/10, R0 15 项聚合信号 max 偏差 4.1%",
+      "R1 复现 incumbent: blur_glass:1->shift_RGB:3 = 26.51dB, CI 10/10 (与 R0 两次 26.51 一致)"
+    ],
+    "single_pair_limitation": "k=1 仅 pair0, 无跨对验证; 随机置换(glass)/随机角度(motion) 候选的 PSNR 方差无法用多对平均消除; 阈值未因 k=1 放宽",
+    "rationale": "R1 重跑信号与 R0 完全一致, 未发现新的一阶信号改变诊断。新增证据是高频夹逼 (jitter 过高 / gaussian:2 过低, glass 位于中间) 与 motion 随机角度采样: 确定性 gaussian:2/lens 虽满足 +2dB PSNR 门槛, 但 CI 8-9/10 且 overshoot/HF 系统性偏离; motion 5 次采样 mean 29.52 但极差 4.04dB 且模拟图 gm_ratio 偏离 target +11.2% (glass 仅 -4.1%); incumbent 的 PSNR 低是随机置换 seed 上限所致而非模型错误。k=1 单对证据不足以用 PSNR 推翻 CI 10/10 + 全信号匹配的 incumbent, 故 NO_CHANGE。"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "challenge_id": "blind_0015_size1",
+  "round": 1,
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_glass", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "r1_pipeline": [
+    ["blur_glass", 1],
+    ["brightness_darken_shfit_RGB", 3]
+  ],
+  "support_psnr_r0": 23.27,
+  "candidates_tested": [
+    {"pipeline": [["blur_glass", 1], ["brightness_darken_shfit_RGB", 3]], "role": "incumbent 复现", "psnr": 26.51, "ci_pass": "10/10", "mode": "psnr"},
+    {"pipeline": [["blur_jitter", 1], ["brightness_darken_shfit_RGB", 3]], "role": "纯置换无平滑对照(诊断, 非最终候选)", "psnr": 24.71, "ci_pass": "6/10", "mode": "psnr"},
+    {"pipeline": [["blur_motion", 1], ["brightness_darken_shfit_RGB", 3]], "role": "新增子类型(随机角度 5 次)", "psnr_samples": [27.62, 28.41, 29.84, 30.09, 31.66], "psnr_mean": 29.52, "ci_pass": "8/10 x4, 10/10 x1", "mode": "psnr"},
+    {"pipeline": [["blur_gaussian", 2], ["brightness_darken_shfit_RGB", 3]], "role": "各向同性强度判别", "psnr": 29.04, "ci_pass": "8/10", "mode": "psnr"}
+  ],
+  "test_candidate_calls": 8,
+  "best_validation": {
+    "incumbent": {"pipeline": [["blur_glass", 1], ["brightness_darken_shfit_RGB", 3]], "psnr": 26.51, "ci_pass": "10/10", "signal_match": "R0 对模拟图重跑 run_full_analysis: 15 项聚合信号与 target 一致, 最大偏差 gm_ratio 4.1%, 其余 <4%"},
+    "best_psnr_deterministic": {"pipeline": [["blur_gaussian", 2], ["brightness_darken_shfit_RGB", 3]], "psnr": 29.04, "ci_pass": "8/10", "rejection": "overshoot diff +0.148(61%), hf_lf +0.107(16%): σ2 过度平滑 target 保留的高频"},
+    "best_stochastic": {"pipeline": [["blur_motion", 1], ["brightness_darken_shfit_RGB", 3]], "psnr_mean": 29.52, "psnr_spread": 4.04, "rejection": "随机角度极差 4.04dB; 模拟图 gm_ratio=0.5318 vs target 0.4782 (+11.2%), 信号失配大于 glass(-4.1%); CI 8/10 x4"}
+  },
+  "signal_sources": [
+    "R1 重跑 run_full_analysis: block_boundary 1.0038 / unique_G 203 / sigma 0.74 / gm_ratio 0.4782 / spectral_slope_ratio 0.9996 / mean_shift -42.9 / variance_ratio 0.7181 / clipped 0.3199 与 R0 逐位一致",
+    "brightness_darken_shfit_RGB:3 由 mean_shift -42.9 + clipped_fraction 0.3199 + variance_ratio 0.7181 + unique_G 203 四项指纹锁定; gamma 被 32% 零裁剪排除 (gamma_suspect 为裁剪诱发的已知假阳性, residual_intensity_corr 0.6731 可由 residual=-min(clean,51) 机制解释)",
+    "run_full_analysis step2 返回低置信 GAUSSIAN_YCrCb -> has_noise=True -> step3 仅用 spectral_slope 早退 BLUR_UNLIKELY; residual_anisotropy/blur_pca_ratio/glass_score 从未计算(控制台 0.00/0.0 为缺失默认), 模糊子类型未被信号排除",
+    "高频夹逼: jitter:1 overshoot diff -0.521(216%)/hf_lf -0.143(22%) (纯置换 HF 过高); gaussian:2 overshoot diff +0.148(61%)/hf_lf +0.107(16%) (σ2 HF 过低); glass 位于两者之间且 CI 10/10",
+    "motion:1 模拟图聚合信号: gm_ratio 0.5318 vs target 0.4782 (+11.2%); glass sim 0.4584 (-4.1%)"
+  ],
+  "reason": "1) R1 全信号重跑与 R0 一致, 无新一阶信号; 2) 新发现的工具局限(blur 子类型信号因 has_noise 早退未计算)不等于存在新证据支持更换子类型; 3) 确定性 gaussian:2/lens 虽满足 +2dB PSNR 门槛, 但 overshoot/HF 系统性偏离 (CI 8-9/10), incumbent 的低 PSNR 是 glass 随机置换的 seed 上限(SKILL §C.4)而非参数错误; 4) motion 5 次采样 mean 29.52 但极差 4.04dB 且模拟图 gm_ratio 偏离 +11.2%, 单对 k=1 无法平均角度随机性; 5) incumbent 的 CI 10/10 + 15 项信号匹配未被任何候选同时超越, 证据不足, 按协议 NO_CHANGE."
+}

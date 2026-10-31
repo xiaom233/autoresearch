@@ -1,0 +1,44 @@
+{
+  "challenge_id": "blind_0010_size3",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["brightness_darken_shfit_HSV", 4]
+  ],
+  "r1_pipeline": [
+    ["brightness_darken_gamma_HSV", 5]
+  ],
+  "support_psnr_r0": 20.62,
+  "candidates_tested": [
+    "brightness_darken_shfit_RGB:5,saturate_weaken_HSV:2",
+    "brightness_darken_gamma_RGB:5",
+    "blur_gaussian:2,brightness_darken_gamma_RGB:5",
+    "brightness_darken_gamma_RGB:5,blur_gaussian:2",
+    "brightness_darken_shfit_RGB:5",
+    "brightness_darken_shfit_RGB:5,blur_gaussian:2",
+    "brightness_darken_gamma_HSV:5",
+    "brightness_darken_gamma_HSV:4"
+  ],
+  "test_candidate_calls": 14,
+  "best_validation": {
+    "pipeline": "brightness_darken_gamma_HSV:5",
+    "pair0_psnr": 43.97,
+    "pair1_psnr": 24.45,
+    "pair2_psnr": 31.17,
+    "mean_psnr": 33.20,
+    "r0_mean_psnr": 25.79,
+    "delta_vs_r0_mean": 7.41,
+    "pair0_ci": "6/10",
+    "pair1_ci": "5/10",
+    "pair2_ci": "6/10",
+    "criteria": "pair0 43.97 dB > 40 dB (deterministic confirmation) AND mean +7.41 dB > +2 dB over R0 on the same k=3 pairs"
+  },
+  "signal_sources": [
+    "unique_R/G/B level preservation: target 241-252 vs additive-shift sims 155-166 (CI diff target-sim +82..+100) -> gamma, not shift",
+    "clipped_fraction 0.6692/0.2638/0.1373 matches gamma sev5 near-zero thresholds (V<=49 for gamma_HSV g=3.5; x<=45 for gamma_RGB g=3.2); gamma_HSV:5 residual clip diffs 0.2%/4%/8%",
+    "mean_shift -45.3/-66.7/-74.4 + variance_ratio 0.193/0.709/0.830 + saturation_chroma_ratio 0.289/0.620/0.393 all explained by one V-gamma (chroma scales with V^(g-1)); sampler allows one function per category so no brightness+saturation pipeline is possible",
+    "R0's 34.58 dB for shift HSV:4 on pair0 is inflated by 66.9% black clipping (uninformative pixels); pair0 only discriminates when level counts and clipping are also matched",
+    "peeled residual after gamma_HSV:5 (pair1): structured, not noise (std 14.9, spatial_corr 0.651, cross_ch_corr 0.9959, ivc 0.9974, sigma_prior 4.94 << sev1); extreme_pct 75.51% is the known >50% + sigma<5 FP"
+  ],
+  "reason": "UNCERTAIN trigger: R0 support PSNR 20.62 dB; R0 pipeline fits only pair0 (34.58) and fails on pair1/pair2 (22.32/20.48). Signal re-interpretation shows the additive V-shift family is incompatible with the preserved unique-level counts and with the joint mean_shift/variance/chroma constraints, while brightness_darken_gamma_HSV:5 is consistent on all three pairs and reaches 43.97 dB on pair0 (>40 dB deterministic confirmation; exact unique and clipping match). k=3 mean improves from 25.79 to 33.20 dB (+7.41 dB). Pair1/pair2 residuals are structured (not noise) and are slightly smoother in the target than in the simulation; a mild unmodelled blur is the leading R2 hypothesis but was not validated on k=3 within the call budget, so it is not adopted in R1. Budget: 14/15 test_candidate calls, 8 pipelines (6 signal-driven probes/severity scans)."
+}

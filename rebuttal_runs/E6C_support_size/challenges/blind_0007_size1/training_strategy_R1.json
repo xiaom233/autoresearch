@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "step2_noise: SPECKLE, sigma=4.32, vm_slope=16.24, intensity_var_corr=0.9274, intensity_scaled_var_corr=0.4292, zero_ratio=0.2467 → 单步乘性噪声; 全指纹与 noise_speckle:1 模拟逐项吻合 (reflection fingerprint_comparison); verdict=UNCERTAIN (Tier 2, 噪声步骤协议永不 LIKELY) → 不触发任何组件",
+    "step1_compression: NO_COMPRESSION — block_boundary=0.9971 < 1.1, unique_G=256 封顶, dct_zero_ratio=0.1058 → 无 JPEG (Tier S 阴性), 无结构化局部",
+    "step3_blur: BLUR_UNLIKELY — spectral_slope_ratio=0.9984 < 1.08, spatial_corr=0.0015 (白噪声理论≈1/3自相关), noise+blur 对照 gm_ratio=1.161 vs 目标 5.711 → 无 blur/motion; 无 anisotropy 记录且反射确认无 blur → 不启用 OCAB",
+    "step4_global: NO_GLOBAL — variance_ratio=1.0302 与 speckle:1 模拟 1.0305 一致 (乘性噪声自身造成), contrast_from_variance=false, mean_shift=-0.8/255, cross_channel_corr=0.0026 → 非 contrast/stretch Tier A (variance_ratio 偏离已由噪声完全解释) → 不启用 ColorPre/FiLM-GCM",
+    "pipeline 单步纯局部噪声 (无 contrast, 无结构化局部) → finetune_strategy §六 Step1: Direct; 无梯度干扰需 Curric; True Ft 不推荐 (exp37/38 ≈ Direct)",
+    "SimpleGate: 默认常开 (exp39 -32K 参数, 8/9 退化安全, 唯一负例 S5 三退化 motion -0.86 不适用本挑战); k=1 support 不改变门控"
+  ],
+  "rationale": "单步 noise_speckle:1 (sev1) 信号指纹高度吻合但噪声协议限定 UNCERTAIN/Tier 2; 其余步骤 (compression/blur/global) 均阴性。无任何 Tier S/A 组件触发条件: block_boundary 与 unique_G 仅为 JPEG 阴性证据, variance_ratio=1.0302 已被 speckle 模拟复现 (非 contrast 信号), spectral_slope_ratio≈1 且无各向异性/结构化局部。因此采用默认部署: 纯 Swin (dim=64, ws=8) + SimpleGate 常开 + Direct 从头训练, lr=5e-4, epoch=2, batch=16。DualBranch/CSN/SCA/FPro 不使用; full_analysis.json 的 recommended_architecture(DualBranch) 为脚本通用建议, 按 finetune_strategy §七 exp37 结论 (盲识别 UNCERTAIN 时纯 Swin 最安全) 予以否决。k=1 (单 support) 不放宽任何架构门控。"
+}

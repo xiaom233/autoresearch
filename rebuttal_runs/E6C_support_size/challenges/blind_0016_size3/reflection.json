@@ -1,0 +1,703 @@
+{
+  "challenge_id": "blind_0016_size3",
+  "support_pairs": [
+    "clean_0/degraded_0",
+    "clean_1/degraded_1",
+    "clean_2/degraded_2"
+  ],
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=2.0134 (0%FP), dct_zero_ratio=0.857, unique_G=256",
+      "blur": "MOTION_BLUR: residual_anisotropy=1.8846>1.7 (94% recall), PCA=3.342>2.5 (0%FP), gm_ratio=0.2755, glass_score=1.359",
+      "noise": "noise_prior_sigma=1.11 < 2 -> NO_NOISE (GAUSSIAN_YCrCb verdict 置信度 low, gamma_suspect 由残差-强度相关引起, 见下)",
+      "global": "NO_GLOBAL: mean_shift=-0.4/255, variance_ratio=0.8196 (可由 blur 解释), saturation_chroma_ratio=0.9402"
+    },
+    "cross_pair_signals": {
+      "pair0": {
+        "block_boundary": 2.013,
+        "dct_zero": 0.857,
+        "sigma": 1.11,
+        "gm_ratio": 0.276,
+        "anisotropy": 1.885,
+        "pca": 3.342,
+        "variance_ratio": 0.82,
+        "chroma": 0.94
+      },
+      "pair1": {
+        "block_boundary": 2.726,
+        "dct_zero": 0.906,
+        "sigma": 0.74,
+        "gm_ratio": 0.347,
+        "anisotropy": 1.326,
+        "pca": 2.788,
+        "variance_ratio": 0.943,
+        "chroma": 0.965
+      },
+      "pair2": {
+        "block_boundary": 2.616,
+        "dct_zero": 0.916,
+        "sigma": 0.37,
+        "gm_ratio": 0.327,
+        "anisotropy": 2.886,
+        "pca": 2.652,
+        "variance_ratio": 0.937,
+        "chroma": 0.992
+      }
+    },
+    "mode": "SIGNAL (sigma<2 无噪声; blur_motion 每次调用随机 angle, PSNR 对 motion 部件不可用, 最终以信号匹配为准)",
+    "initial_hypothesis": "blur_motion(sev 3-5) -> compression_jpeg(sev 2-4), 物理顺序 blur->JPEG",
+    "suspected": [
+      "blur_motion",
+      "compression_jpeg"
+    ],
+    "ruled_out": [
+      "noise (sigma 低于 2 且与无噪声仿真下限完全一致)",
+      "global contrast/brightness/saturation (三对全局信号在无 global 仿真下即精确复现)",
+      "quantization (unique_G=256)",
+      "oversharpen (detected_raw=false)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false,
+    "triggered": false,
+    "reason": "sigma=1.11<2, 不满足 2<sigma<10 边界门控, Step 0.5 未触发; Qwen/API 不可用"
+  },
+  "noise_6step_check": {
+    "note": "数值为 peeled_noise_check.py 在 blur_motion:3,compression_jpeg:2 剥离残差上的 §B 输出 (残差 std=25.3, 含 motion 随机角度导致的结构失配)",
+    "extreme_pct": 61.65,
+    "vm_slope": 0.4905,
+    "var_slope": 0.0476,
+    "spatial_corr": 0.9794,
+    "rgb_ratio": 1.1661,
+    "cross_ch_corr": 0.8864,
+    "noise_prior_sigma": 2.22,
+    "per_channel_std": {
+      "R": 25.2,
+      "G": 23.3,
+      "B": 27.2
+    },
+    "diagnosis": "NO_NOISE. §B IMPULSE 为已知假阳性 (extreme_pct>50% 且 sigma<5, 由 JPEG/blur 结构残差放大). 决定性证据: 无噪声仿真 (blur_motion:3+compression_jpeg:2, sim_motion3_j2.png) 的 noise_prior sigma=1.11 与 target 完全相同, residual_intensity_corr=-0.429 vs target -0.431, spatial_corr=0.625 vs 0.629; pair1 同样 sigma=0.74 vs 0.74. 即 sigma 为 blur+JPEG 残差噪声底, 非真实噪声."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "Step1 compression: block_boundary=2.0134 (0%FP signal) + dct_zero_ratio=0.857 -> JPEG confirmed. Severity 4 先验 (block_boundary 极高, 对应强压缩). 先单独测试 JPEG 严重度."
+      },
+      "test_result": {
+        "psnr_rgb": 19.65,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "Step1 compression severity scan +1: block_boundary=2.0134 极高, JPEG sev5 可能更匹配. PSNR 对 JPEG-only 受 blur 污染仍低, 但相对排名可用."
+      },
+      "test_result": {
+        "psnr_rgb": 19.44,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "Step1 compression severity scan -1: 确认 JPEG severity 趋势 (4>5, 测 3). JPEG-only PSNR 受未匹配 motion blur 主导, 仅用作相对比较."
+      },
+      "test_result": {
+        "psnr_rgb": 19.7,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "thinking": "Step2 blur: residual_anisotropy=1.8846>1.7 (94% recall motion), PCA=3.342>2.5 (0%FP), gm_ratio=0.2755 -> blur_motion sev~5. 物理顺序 blur->JPEG. 联合测试 motion:5 + JPEG:4."
+      },
+      "test_result": {
+        "psnr_rgb": 19.01,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "thinking": "Step2 severity scan (SKILL 强制): motion:5 使 PSNR 下降 (19.65 -> 19.01), 可能严重度过高. gm_ratio=0.2755 强模糊但 motion:5 过强. 测 motion:4 + JPEG:4."
+      },
+      "test_result": {
+        "psnr_rgb": 21.83,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:4",
+        "thinking": "Step2 severity scan 继续: motion:4 显著改善 (19.01->21.83, CI 8/10), 继续向下测 motion:3 确认最佳严重度."
+      },
+      "test_result": {
+        "psnr_rgb": 21.86,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Step2 cross-family: motion severity 扫描在 21.8dB 平台 (sev3/4), 远低于确定性阶段期望 >30dB. 按 SKILL 反思规则测 PSNR 跨族替代: gaussian (安全默认)."
+      },
+      "test_result": {
+        "psnr_rgb": 23.19,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "thinking": "Step2 severity scan +1: gaussian:4 (23.19dB) 优于 motion, 测 gaussian:5 (gm_ratio=0.2755 表示强模糊)."
+      },
+      "test_result": {
+        "psnr_rgb": 23.17,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "thinking": "Step2 cross-family: glass_score=1.359 >> 0.25 (skill Step2 ELIF 门控) + sigma=1.11<3, DT 优先 motion 但 motion 表现差 -> 测 blur_glass:4 + JPEG:4."
+      },
+      "test_result": {
+        "psnr_rgb": 21.27,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "thinking": "Step1/2 joint: gaussian:4 为当前最佳 blur, JPEG-only 排名不可靠(blur污染). 用 gaussian:4 固定, 扫 JPEG:3 与 5, 以联合 PSNR 选 JPEG 严重度."
+      },
+      "test_result": {
+        "psnr_rgb": 23.69,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:5",
+        "thinking": "Step1 JPEG severity scan +1: gaussian:4 固定, J3=23.69 略优于 J4=23.19, 测 J5 完成 ±1 扫描."
+      },
+      "test_result": {
+        "psnr_rgb": 22.34,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:3",
+        "thinking": "Step2 blur 覆盖 (SKILL Round1: gaussian/lens/motion 至少3种): 已测 gaussian/motion/glass, 测 lens:4 + J3. radial_ratio 内容依赖不单独可信, PSNR 仲裁."
+      },
+      "test_result": {
+        "psnr_rgb": 23.46,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:2",
+        "thinking": "Sim 信号对比: gauss4+J3 的 gm_ratio=0.135 / bb=3.25 / dct=0.906, target=0.2755 / 2.01 / 0.857 -> 模拟过模糊且过压缩. 两信号同向降级: gaussian:3 + J2 (信号驱动, 非枚举)."
+      },
+      "test_result": {
+        "psnr_rgb": 23.87,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:3",
+        "thinking": "Target PCA=3.342 (motion 41%recall 0%FP) + anisotropy=1.885>1.7 两个独立信号指 motion; 之前 motion 测试随机角度 (blur_motion 每调用随机 angle) 可能运气差. 重采样 angle 并保存 sim 供信号对比. gaussian:3+J2=23.87 暂为最佳."
+      },
+      "test_result": {
+        "psnr_rgb": 19.98,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:2",
+        "thinking": "Motion3+J3 sim 信号几乎全匹配 (gm 0.267/0.276, var 0.822/0.820, chroma 0.9395/0.9402, pca 2.56/3.34) 但 bb 2.71>2.01 说明 JPEG 过强; dct 0.867~0.857. 降 JPEG 到 2 再验证. PSNR 受 motion 随机角度限制, 以信号为主."
+      },
+      "test_result": {
+        "psnr_rgb": 19.94,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:2",
+        "thinking": "跨对复核 pair1: 最终候选 motion:3+J2. pair1 信号 bb=2.726 dct=0.906 pca=2.79 aniso=1.33 gm=0.347 sigma=0.74, 与 pair0 同一退化族. PSNR 受 motion 随机角度影响, 主要看 CI 与信号一致性."
+      },
+      "test_result": {
+        "psnr_rgb": 27.8,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_motion:3,compression_jpeg:2",
+        "thinking": "跨对复核 pair2: 最终候选 motion:3+J2. pair2 信号 bb=2.616 dct=0.916 pca=2.65 aniso=2.89 gm=0.327 sigma=0.37, 与前两对同族. 验证信号/CI 一致性."
+      },
+      "test_result": {
+        "psnr_rgb": 26.43,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 101,
+      "hypothesis": {
+        "pipeline": "blur_motion:2,compression_jpeg:2",
+        "thinking": "R1 信号重释(Q1): 三对 target gm_ratio (0.2755/0.3469/0.3269) 均略高于 R0 motion:3+J2 仿真 (0.268/0.306/0.302), 即 target 略锐于 sev3 -> severity 边界候选 motion:2. JPEG 固定 sev2 (bb/dct 三对误差<4%)"
+      },
+      "test_result": {
+        "psnr_rgb": 20.58,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_motion:2,compression_jpeg:2",
+        "thinking": "R1 信号重释(severity 边界, 跨对补全 pair1): 三对 target gm_ratio=0.2755/0.3469/0.3269 均略高于 R0 motion:3 仿真 0.268/0.306/0.302, 提示 target 可能略锐于 sev3; pair0 已测 motion:2 PSNR=20.58 CI 7/10. 本对固定 JPEG:2 (bb/dct 三对误差<4%), 补全 k 对 PSNR 验证."
+      },
+      "test_result": {
+        "psnr_rgb": 28.58,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_motion:2,compression_jpeg:2",
+        "thinking": "R1 信号重释(severity 边界, 跨对补全 pair2): target gm_ratio=0.3269 略高于 R0 motion:3 仿真 0.302, pca=2.652/aniso=2.886 仍指 motion; pair0 motion:2=20.58, pair1=28.58 (差 +0.78 vs motion:3), 本对补全以判断是否达到 CHANGE 门槛 (+2dB)."
+      },
+      "test_result": {
+        "psnr_rgb": 23.9,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_motion:2,compression_jpeg:2",
+      "psnr_rgb": 28.58,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:2",
+      "psnr_rgb": 27.8,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:2",
+      "psnr_rgb": 26.43,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_motion:2,compression_jpeg:2",
+      "psnr_rgb": 23.9,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:2",
+      "psnr_rgb": 23.87,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:3",
+      "psnr_rgb": 23.69,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:3",
+      "psnr_rgb": 23.46,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 23.19,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": 23.17,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:5",
+      "psnr_rgb": 22.34,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:4",
+      "psnr_rgb": 21.86,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:4",
+      "psnr_rgb": 21.83,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:4",
+      "psnr_rgb": 21.27,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_motion:2,compression_jpeg:2",
+      "psnr_rgb": 20.58,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 101
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:3",
+      "psnr_rgb": 19.98,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:2",
+      "psnr_rgb": 19.94,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 19.7,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 19.65,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 19.44,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:4",
+      "psnr_rgb": 19.01,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    }
+  ],
+  "psnr_ranking_note": "round 16/17 分别在 pair1/pair2 上执行 (跨对复核), 其 PSNR 不可与 pair0 的 round 直接比较; round 15 (pair0, 同一 pipeline) 仅 19.94dB 因 blur_motion 随机 angle 抽签不利. blur_motion 不具确定性像素可复现性 -> PSNR 仅作弱排序, 信号匹配为主判据.",
+  "cross_pair_validation": {
+    "pipeline": "blur_motion:3,compression_jpeg:2",
+    "pair0": {
+      "psnr_rgb": 19.94,
+      "ci_pass": "10/10",
+      "signal_match": "bb 2.086/2.013, dct 0.850/0.857, gm 0.268/0.276, var 0.819/0.820, chroma 0.941/0.940"
+    },
+    "pair1": {
+      "psnr_rgb": 27.8,
+      "ci_pass": "10/10",
+      "signal_match": "bb 2.764/2.726, dct 0.915/0.906, gm 0.306/0.347, var 0.937/0.943, chroma 0.959/0.965"
+    },
+    "pair2": {
+      "psnr_rgb": 26.43,
+      "ci_pass": "8/10",
+      "signal_match": "bb 2.601/2.616, dct 0.925/0.916, gm 0.302/0.327, var 0.940/0.937, chroma 0.995/0.992"
+    },
+    "conclusion": "3/3 对全部信号 (block_boundary/dct_zero/gm_ratio/spectral_ratio/anisotropy/PCA/variance_ratio/chroma) 在 1-12% 内一致; JPEG 信号 diff<5% 满足 SKILL 噪声耦合下 JPEG 验证阈值; CI 10/10,10/10,8/10."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_motion",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 2,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "信号链: (1) block_boundary=2.01-2.73 + dct_zero=0.857-0.916 (0%FP) 确认 JPEG, 且 blur_motion:3+J2 仿真在三对 support 上 bb 误差 0.6-3.6%, dct 误差 0.7-1.0% -> JPEG sev2 LIKELY. (2) blur: residual_anisotropy=1.33-2.89 + PCA=2.65-3.34 (四个非方向核 sim PCA~1.0) + gm_ratio 匹配 (sim 0.268-0.306 vs target 0.276-0.347) 指 blur_motion sev3; motion 每调用随机 angle, PSNR 不可复现 (19.9-27.8dB), 故 blur 步骤 UNCERTAIN. (3) 无噪声: target sigma (1.11/0.74) 与无噪声仿真下限完全相同, residual_intensity_corr -0.431 vs -0.429; §B IMPULSE 为已知 extreme_pct 假阳性. (4) 全局: 无 global 仿真即可精确复现 variance_ratio (0.82/0.94) 与 chroma (0.94/0.97). gaussian/lens 族 PSNR 看似更高 (23.5-23.9dB, 因非随机核像素更接近), 但其 PCA~1.0 与 target 3.34 方向性不符, 且 gm_ratio 0.135 过模糊; 作为 alternative 保留.",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "blur_gaussian",
+            "severity": 3
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 2
+          }
+        ],
+        "psnr_rgb_pair0": 23.87,
+        "function_family": "blur_gaussian",
+        "note": "pair0 PSNR 最高 (23.87dB, CI 6/10); 跨族备份, 若训练 PSNR 仲裁则回退到该族"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_motion",
+            "severity": 3
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 3
+          }
+        ],
+        "psnr_rgb_pair0": 19.98,
+        "function_family": "blur_motion",
+        "note": "同族 JPEG+1 备份; bb 信号偏高 (sim 2.71 vs target 2.01), CI 9/10"
+      }
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 support PSNR 24.25 dB, verdict UNCERTAIN (blur_motion 随机角度, PSNR 不可复现)",
+    "mode": "SIGNAL + PSNR (sigma 1.11/0.74/0.37 < 2, 无噪声)",
+    "support_pairs_used": ["clean_0/degraded_0", "clean_1/degraded_1", "clean_2/degraded_2"],
+    "signal_reread_rounds": [
+      {
+        "round": 1,
+        "focus": "global / 对比度边界信号",
+        "signals": {
+          "mean_shift": "-0.4/-0.7/-0.5 (三对均 <1/255)",
+          "clipped_fraction": "0.0061/0.0058/0.0080 (<1%, 无 heavy clipping)",
+          "variance_ratio": "0.8196/0.9433/0.9366 (pair0 0.82 处 contrast 阈值边界)",
+          "contrast_spread_ratio": "0.8771/0.9672/0.9154",
+          "saturation_chroma_ratio": "0.9402/0.9646/0.9923"
+        },
+        "reinterpretation": "pair0 variance_ratio=0.82 与 contrast_spread=0.877 处边界, 但无 global 的 motion:3+J2 仿真复现 variance_ratio 0.819 (差 0.001) 与 chroma 0.941 (差 0.0008); pair1/2 同样 (var 0.937/0.940 vs 0.943/0.937; chroma 0.959/0.995 vs 0.965/0.992) -> 方差下降来自 motion 模糊而非 contrast/gamma/brightness; 无被忽略的 global",
+        "finding": "NO_MISSED_GLOBAL"
+      },
+      {
+        "round": 2,
+        "focus": "noise / gamma 边界信号",
+        "signals": {
+          "noise_prior_sigma": "1.11/0.74/0.37 (<2)",
+          "residual_intensity_corr": "-0.431/-0.264/-0.254 (gamma_suspect)",
+          "peeled_B_pair0": "extreme_pct=65.23, vm_slope=1.1479, var_slope=0.1365, spatial_corr=0.9581, rgb_ratio=1.1363, cross_ch_corr=0.9141, noise_prior_sigma=2.22"
+        },
+        "reinterpretation": "extreme_pct>50% 且 noise_prior sigma=2.22<5 -> SKILL 已知 IMPULSE 假阳性 (motion 随机角度造成的结构残差, spatial_corr=0.958); 无噪声仿真 pair0 sigma=1.11 与 target 完全相同, residual_intensity_corr=-0.429 vs -0.431 -> gamma_suspect 来自 motion 边缘不对称; 无被忽略的 noise/gamma",
+        "finding": "NO_MISSED_NOISE"
+      },
+      {
+        "round": 3,
+        "focus": "blur 子类型/严重度边界 (glass_score, anisotropy, gm_ratio)",
+        "signals": {
+          "glass_score": "1.359/1.087/1.008 (>0.25 全部)",
+          "residual_anisotropy": "1.885/1.326/2.886 (pair1 <1.7 边界)",
+          "blur_pca_ratio": "3.342/2.788/2.652 (>2.5 全部; 非方向核仿真 ~1.0)",
+          "gm_ratio_target_vs_sim_motion3": "0.2755/0.3469/0.3269 vs 0.268/0.306/0.302"
+        },
+        "reinterpretation": "glass_score 高但 PCA (41% recall, 0% FP) 三对均>2.5, 两对 anisotropy>1.7 -> 方向性 motion 核; glass 属非确定性 blur, PSNR 无法 >40 或稳定 +2dB 验证 (R0 glass:4+J4=21.27dB); target gm_ratio 三对均略高于 motion:3 仿真 -> sev2 边界候选, 实测 motion:2+J2 pair0 20.58 / pair1 28.58 / pair2 23.90 (vs sev3 19.94/27.80/26.43), delta +0.64/+0.78/-2.53, 未达 +2dB 门槛且 pair2 退化",
+        "finding": "SEVERITY_BOUNDARY_TESTED_NO_GAIN"
+      }
+    ],
+    "jpeg_recheck": "JPEG sev2 三对仿真: bb 2.086/2.764/2.601 vs target 2.013/2.726/2.616 (误差 <4%), dct 0.850/0.915/0.925 vs 0.857/0.906/0.916 (误差 <1.1%) -> 维持 sev2",
+    "candidates_tested": [
+      {
+        "pipeline": [["blur_motion", 2], ["compression_jpeg", 2]],
+        "signal_source": "gm_ratio target(0.2755/0.3469/0.3269) 略高于 motion:3 仿真(0.268/0.306/0.302) -> severity 下限边界",
+        "per_pair": {
+          "pair0": {"psnr_rgb": 20.58, "ci_pass": "7/10", "round": 101, "note": "中断前 R1 已执行"},
+          "pair1": {"psnr_rgb": 28.58, "ci_pass": "10/10", "round": 19},
+          "pair2": {"psnr_rgb": 23.9, "ci_pass": "7/10", "round": 20}
+        },
+        "delta_vs_r0": {"pair0": 0.64, "pair1": 0.78, "pair2": -2.53},
+        "decision": "REJECT"
+      }
+    ],
+    "candidates_ruled_out": [
+      {"candidate": "glass", "reason": "PCA 方向性否决 + 非确定性 PSNR 不可验证 + R0 glass:4+J4=21.27dB"},
+      {"candidate": "gaussian/lens", "reason": "非方向核 PCA~1.0 与 target 2.65-3.34 不符; R0 gaussian:3+J2=23.87dB 保留为 cross-family alternative"},
+      {"candidate": "noise_*", "reason": "sigma<2; 无噪声仿真 sigma/ric 与 target 一致; §B extreme 为已知假阳性"},
+      {"candidate": "global contrast/brightness/saturation/gamma", "reason": "边界信号由无 global 仿真精确复现"},
+      {"candidate": "quantization/JPEG2000", "reason": "unique_G 229-256 未降; block_boundary/DCT 与 JPEG sev2 三对吻合"}
+    ],
+    "decision": "NO_CHANGE",
+    "pipeline": [["blur_motion", 3], ["compression_jpeg", 2]],
+    "reason": "三轮信号重释未发现被忽略/误判的退化; 唯一新候选 motion:2+J2 未达 >40dB 或 +2dB 门槛且 pair2 退化 (-2.53dB)。维持 R0 管线, 保留 gaussian 跨族与 JPEG+1 备份。",
+    "test_candidate_calls_r1_total": 3,
+    "test_candidate_calls_this_session": 2
+  }
+}

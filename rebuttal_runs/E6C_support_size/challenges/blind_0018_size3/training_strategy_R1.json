@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": true,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "contrast_strengthen_stretch:4 — variance_ratio=2.5192/2.3398/2.0110 (3 supports 一致 !=1.0, Tier A); clipped_fraction 2.1%/12.3%/15.8% + mean_shift 混号 -29/+16/+2 -> 真实色调曲线 contrast，非 JPEG 伪影（full_analysis contrast_pure=True）；符合 FiLM-GCM 门控的 contrast 条件",
+    "compression_jpeg:5 — block_boundary=3.2002/1.7592/1.5333 全 support >1.1（Tier S 0% FP）+ dct_zero_ratio=0.9276 + unique_G=256 -> 结构化局部 JPEG 确认；与 variance_ratio 组合满足 Exp10 L5 的 contrast+结构化局部 FiLM-GCM 触发条件（+3.52 dB；exp38/39 证实 FiLM 在 contrast/stretch 安全有效）",
+    "FiLM-GCM 门控判定：Tier A variance_ratio != 1.0 + 结构化 jpeg 两步同时成立 -> 启用 use_gcm；verdict 虽为 UNCERTAIN，但 §七 允许 Tier S/A 信号覆盖（exp37 失败源于无门控统一加组件，本例门控明确）",
+    "SimpleGate 默认常开：exp39 -32K 参数，8/9 退化安全（L2 +0.78），仅 S5 三退化 -0.86，与本 2 步管线无冲突",
+    "Swin 必需：含 contrast，MDTA/OCAB 在全局/contrast 上崩溃（exp10 L2 Swin 28.70 vs OCAB 18.32）；anisotropy=0.0，无 motion，不满足 OCAB 的 anisotropy>1.7 门控",
+    "noise 排除：noise_prior sigma=0.37 < 2，peeled §B 残差为 tone-curve/JPEG 结构（residual_intensity_corr=-0.68），无 x_distortion 噪声可匹配 -> 不加噪声相关组件",
+    "blur 排除：BLUR_UNLIKELY（gm_ratio=1.33 >1，spectral_slope_ratio=0.926 <1.08），未确认空间模糊",
+    "k=3（support=3）不改变门控：本决策完全基于上述信号阈值，未因 support 数量放宽或收紧任何阈值"
+  ],
+  "rationale": "两步退化 = contrast_strengthen_stretch:4 + compression_jpeg:5，含 contrast -> 按 §六 Step1 选 Direct（RandomCurric 仅在含 contrast 时非首选，且 True Ft 在 2 epoch 下约等于 Direct，不加载 ckpt）。架构在纯 Swin+SimpleGate 基线上仅增加 FiLM-GCM：variance_ratio 2.52/2.34/2.01 三 support 一致（Tier A）且 JPEG 结构化局部以 block_boundary 3.2（Tier S 0% FP）确认，正是 exp10 L5 的 contrast+结构化组合。不启用 ColorPre（FiLM 在结构化局部场景收益更高且 exp38 已证 contrast/stretch 安全）、不启用 OCAB（无 motion/anisotropy）、不启用 CSN/DualBranch/SCA/FPro（盲识别场景禁用或已废弃）。LR=5e-4（FiLM-GCM 的 NaN 规避值），EPOCH=2 与基线公平。"
+}

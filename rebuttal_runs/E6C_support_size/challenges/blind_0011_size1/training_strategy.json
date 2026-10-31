@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "压缩: block_boundary=1.000 (Tier S, 0%FP) → 排除 JPEG; unique_G=198 由 σ=4 模糊整体平滑解释 (reflection final_decision)",
+    "blur: blur_gaussian:4 噪声鲁棒信号 MATCH (spectral_slope diff<0.08, Wiener kernel corr>0.85); motion sev5/3 均 MISMATCH → 初筛 anisotropy=3.1714 的低置信 motion 指向被推翻, 不满足 OCAB 门控 (anisotropy>1.7 需结合 motion 确认)",
+    "全局: variance_ratio=0.5736 但 contrast_detected_raw=false; blur-only 反推 variance_ratio≈0.340/0.5625≈0.604, 与目标差 6%<8% → 方差下降由 σ=4 强模糊解释, 非 contrast; mean_shift=-2.5/255 远小于 brightness 最小档 25.5/255 → 无 contrast Tier A 信号, 不启用 ColorPre / FiLM-GCM (且无结构化 motion/jpeg 配合)",
+    "noise: noise_gaussian_RGB sev2, noise→blur 顺序下类型判别 ≈随机 (54.7%), verdict=UNCERTAIN, sigma=3.09 → 噪声步骤不加任何组件",
+    "support: k=1 单 support (pair0), 门控不因支持数少而放宽; 两步骤均为 UNCERTAIN (Tier 3), 无 Tier S/A 触发条件",
+    "SimpleGate: exp39 默认常开 (-32K 参数, 8/9 退化安全), 不属门控组件"
+  ],
+  "rationale": "blind_0011_size1 为 noise_gaussian_RGB:2 + blur_gaussian:4 两步混合 (Tier 3, 双 UNCERTAIN)。所有 Tier S/A 组件触发信号均不成立: block_boundary=1.000 排除 JPEG; motion anisotropy 在 verify_signals 中被 gaussian:4 全 MATCH 推翻; variance_ratio=0.574 经 blur-only 反推为 σ=4 强模糊所致 (差 6%<8%), 非 contrast; noise 步骤类型不可辨。按 finetune_strategy.md §七 信号门控规则, 采用纯 Swin + SimpleGate + Direct, lr=5e-4, EPOCH=2, batch=16。k=1 仅影响验证强度 (无法跨对复核), 不改变架构门控阈值。"
+}

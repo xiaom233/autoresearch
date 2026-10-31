@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "全局步骤: brightness_darken_shfit_HSV:4, verdict=UNCERTAIN (Tier 1); mean_shift=-45.3, clipped_fraction=0.6692, variance_ratio=0.1926",
+    "full_analysis step4: contrast_from_variance=false, brightness_clip_explains_variance=true, false_positive_checks contrast_from_clipping=true → variance_ratio≠1.0 是重度暗化黑裁剪伪影, 非 Tier A contrast 信号, ColorPre 不触发",
+    "FiLM-GCM 需 Tier A variance_ratio + 结构化局部(motion/jpeg): block_boundary=0.997-0.9992 < 1.1 (Tier S 未触发, 无 JPEG), anisotropy=0 且 spectral_slope_ratio=0.928/1.010/1.091 (无 motion) → 不触发",
+    "OCAB 需 anisotropy_ratio > 1.7 + motion: anisotropy=0 → 不触发",
+    "噪声: noise_prior_sigma=0.62/1.48/0.74 << noise_gaussian sev1 (sigma=12.75) → NO_NOISE, 残差高结构化 (spatial_corr 0.98-0.996)",
+    "单步全局 brightness shift = 低难度场景 (finetune_strategy.md §六 Step 0, exp38 brightness_shift Direct 最安全); 单步无梯度干扰, 不需要 RandomCurric",
+    "verdict=UNCERTAIN → 按 §七 规则不加任何额外组件, 纯 Swin + SimpleGate + Direct",
+    "k=3 support 数量不改变架构门控"
+  ],
+  "rationale": "唯一退化步骤为单步全局 brightness_darken_shfit_HSV:4 (UNCERTAIN)。所有明确信号均未达组件门控: 无 JPEG (block_boundary<1.1)、无 motion (anisotropy=0)、无真实 contrast (variance_ratio 由黑裁剪解释, brightness_clip_explains_variance=true)、无 noise (sigma<<sev1)。据 finetune_strategy.md §六/§七, brightness shift 属低难度, Direct + 纯 Swin + 默认常开 SimpleGate 最安全; UNCERTAIN 步骤不加组件 (exp37: 盲识别场景组件 0/24 胜)。LR=5e-4, EPOCH=2, batch=16 与协议一致。"
+}

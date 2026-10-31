@@ -1,0 +1,718 @@
+{
+  "challenge_id": "blind_0022_size1",
+  "support_size": 1,
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=1.6844 (>1.1, 0% FP) -> JPEG; dct_zero_ratio=0.8248, unique_G=256 (no quantization FP)",
+      "blur": "GLASS_BLUR medium: gm_ratio=0.3604 (strong blur), spectral_slope_ratio=1.161, residual_anisotropy=2.059 (>1.7 -> motion DT), glass_score=0.4594 (>0.25 and sigma<3 -> glass DT), pca_ratio=1.039 -> subtype ambiguous, test glass/motion/gaussian",
+      "noise": "sigma=0.62 <2 -> NO_NOISE per SKILL; step2 YCrCb verdict confidence=low, residual_intensity_corr=-0.2097 (gamma-suspect warning), but variance_ratio=0.8133 is explainable by blur variance loss; treated as no-noise, peeled check scheduled after deterministic pipeline is fixed",
+      "global": "NO_GLOBAL: brightness_mean_shift=-0.1, variance_ratio=0.8133 (contrast_from_variance=false; blur explains variance drop), saturation_chroma_ratio=0.9051"
+    },
+    "mode": "PSNR (sigma=0.62 < 2)",
+    "qwen_gate": {
+      "available": false,
+      "note": "Qwen/API unavailable in this run; gate skipped (sigma=0.62<2 means gate would map to NO_NOISE anyway)"
+    },
+    "suspected": [
+      "compression_jpeg",
+      "blur_glass",
+      "blur_motion",
+      "blur_gaussian"
+    ],
+    "ruled_out": [
+      "brightness",
+      "contrast",
+      "saturation",
+      "quantization (unique_G=256, block_boundary high -> JPEG)"
+    ],
+    "support": "single support (k=1): only pair0 (clean_0/degraded_0). No cross-pair validation possible."
+  },
+  "noise_6step_check": {
+    "note": "Peeled residual of predicted pipeline blur_glass:3,compression_jpeg:1 (peeled_noise_check.py). residual_std=9.7; glass blur uses random pixel shuffle, so residual contains shuffle/JPEG structure -> extreme_pct/vm_slope/spatial_corr inflated (known FP rule: extreme_pct>50% AND noise_prior sigma<5 -> JPEG/blur artifact). Unpeeled run_full_analysis: sigma=0.62.",
+    "extreme_pct": 58.31,
+    "vm_slope": 1.4445,
+    "var_slope": -0.0377,
+    "spatial_corr": 0.9631,
+    "rgb_ratio": 1.0741,
+    "cross_ch_corr": 0.8205,
+    "noise_prior_sigma": 0.99,
+    "residual_intensity_corr_unpeeled": -0.2097,
+    "diagnosis": "NO_NOISE: noise_prior sigma=0.99<2; extreme_pct 58.31%>50% matches known JPEG/blur-artifact false-positive rule (sigma<5 -> ignore IMPULSE); rgb_ratio 1.07<1.4 no YCrCb; var_slope<1.0 no Poisson. Gamma-suspect warning explained by blur/JPEG residual-intensity coupling, variance_ratio=0.8133 consistent with blur variance loss."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "Step1 compression: block_boundary=1.6844>1.1 (0% FP signal) -> JPEG confirmed; scan severity, start sev=1. No noise (sigma=0.62<2), PSNR mode."
+      },
+      "test_result": {
+        "psnr_rgb": 18.62,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3",
+        "thinking": "Step1 JPEG severity scan: middle point sev=3; jpeg:1 gave 18.62dB (blur-dominated, ranking only)"
+      },
+      "test_result": {
+        "psnr_rgb": 18.74,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "Step1 JPEG severity scan: strong endpoint sev=5; block_boundary=1.68 survives heavy blur -> high JPEG severity plausible"
+      },
+      "test_result": {
+        "psnr_rgb": 18.63,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:3",
+        "thinking": "Step2 blur DT: glass_score=0.4594>0.25 + sigma=0.62<3 -> glass candidate; gm_ratio=0.3604 -> strong blur sev~4; JPEG=3 provisional from Step1 scan"
+      },
+      "test_result": {
+        "psnr_rgb": 26.29,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "thinking": "Step2 blur DT: residual_anisotropy=2.059>1.7 -> motion candidate (94% recall); gm_ratio=0.3604 -> sev~4; compare vs glass"
+      },
+      "test_result": {
+        "psnr_rgb": 18.24,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_motion:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "thinking": "Step2 blur DT baseline: gaussian is safe default (MC/MTF confusable); gm_ratio=0.3604 -> sev~4; control for glass/motion"
+      },
+      "test_result": {
+        "psnr_rgb": 24.23,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:3",
+        "thinking": "Severity scan glass (winner 26.29dB @sev4): try sev-1=3; gm_ratio=0.3604 could also mean sev3 with strong JPEG"
+      },
+      "test_result": {
+        "psnr_rgb": 27.37,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "thinking": "Severity scan glass: try sev+1=5; residual_anisotropy=2.06 and gm_ratio=0.36 (usable) suggest strong blur"
+      },
+      "test_result": {
+        "psnr_rgb": 24.66,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,compression_jpeg:3",
+        "thinking": "Severity scan glass continued: sev3=27.37 > sev4=26.29 -> try sev-1=2; verify trend or turn"
+      },
+      "test_result": {
+        "psnr_rgb": 25.32,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:4",
+        "thinking": "JPEG severity scan with fixed glass:3: target block_boundary=1.6844 survives blur -> try sev4"
+      },
+      "test_result": {
+        "psnr_rgb": 26.29,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:5",
+        "thinking": "JPEG severity scan: sev5 endpoint; block_boundary 1.6844 is high after strong blur -> strong JPEG plausible"
+      },
+      "test_result": {
+        "psnr_rgb": 25.34,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:2",
+        "thinking": "JPEG severity scan: low point sev2 to bracket optimum with glass:3"
+      },
+      "test_result": {
+        "psnr_rgb": 27.95,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "JPEG severity scan low endpoint sev1: PSNR monotonic decreasing toward higher sev (j2=27.95>j3=27.37>j4=26.29>j5=25.34), verify jpeg1"
+      },
+      "test_result": {
+        "psnr_rgb": 28.41,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:2",
+        "thinking": "Cross-family check: gaussian sev3 (untested; sev4=24.23) vs glass sev3=27.95; MTF cannot separate gaussian/lens/glass, PSNR arbiter"
+      },
+      "test_result": {
+        "psnr_rgb": 24.98,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "thinking": "Glass severity confirm at best JPEG sev1 (recorded rerun; previous identical test not persisted due to CLI quoting error, PSNR was 25.75): glass shuffle is stochastic, ceiling <40dB"
+      },
+      "test_result": {
+        "psnr_rgb": 25.76,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "thinking": "Glass severity local scan at JPEG sev1: sev2=25.76, sev3=28.41 -> test sev4 to bracket optimum; glass shuffle stochastic so expect +-0.5dB run variance"
+      },
+      "test_result": {
+        "psnr_rgb": 27.03,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1,blur_glass:3",
+        "thinking": "Order check: physical constraint blur->JPEG (blind_challenge priority). Verify blur-first vs JPEG-first; glass shuffle stochastic adds +-0.5dB noise"
+      },
+      "test_result": {
+        "psnr_rgb": 28.54,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1,blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "thinking": "Winner repeat on pair0: quantify glass shuffle stochastic variance (first sample 28.41dB CI 7/10); k=1 single support final check"
+      },
+      "test_result": {
+        "psnr_rgb": 28.41,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,compression_jpeg:1",
+        "thinking": "R1 control: R0 cross-family gaussian test used JPEG sev2 while glass used sev1 (confound). Match JPEG=1 to isolate blur family at the winning JPEG severity. Signal: gm_ratio=0.3604 (strong blur), spectral_slope_ratio=1.1613; gaussian is safe default when glass_score ambiguous."
+      },
+      "test_result": {
+        "psnr_rgb": 25.2,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_lens:3,compression_jpeg:1",
+        "thinking": "R1: blur_lens never tested in R0 (only glass/motion/gaussian). lens is deterministic; if true blur were lens, PSNR should jump toward >40 dB. Signal: glass_score=0.4594 but blur_pca_ratio=1.039 (isotropic), MTF roughness 1.039; gaussian/lens MTF known indistinguishable -> PSNR arbiter at glass-optimal severity 3."
+      },
+      "test_result": {
+        "psnr_rgb": 24.49,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:1",
+        "thinking": "R1 lens severity scan (SKILL mandatory before swapping subtype): lens:3 gave 24.49 dB; blur severity estimated sev4 from gm_ratio=0.3604. Test lens:4 to confirm the deterministic lens family cannot exceed the stochastic-glass score."
+      },
+      "test_result": {
+        "psnr_rgb": 25.05,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,contrast_weaken_scale:1,compression_jpeg:1",
+        "thinking": "R1 boundary-signal recheck (R0 marked NO_GLOBAL): variance_ratio=0.8133 (21% variance loss; glass blur explains only part) and contrast_spread_ratio=0.953 sits just below 1.0; residual_intensity_corr=-0.2031 (gamma-suspect flag) also points to a mild tone-curve-like step. Test mildest contrast loss (scale, sev1) inserted as ISP step before JPEG; glass stays at winning sev3."
+      },
+      "test_result": {
+        "psnr_rgb": 22.25,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,contrast_weaken_scale:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,saturate_weaken_HSV:1,compression_jpeg:1",
+        "thinking": "R1 boundary-signal recheck: saturation_chroma_ratio=0.9051 (9.5% below 1.0, detected_raw=false) is the last unreinterpreted global boundary signal; brightness excluded (mean_shift=-0.1) and contrast excluded by test 22 (22.25 dB). Test mildest desaturation (HSV sev1) after winning glass:3 before JPEG."
+      },
+      "test_result": {
+        "psnr_rgb": 26.14,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,saturate_weaken_HSV:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "compression_jpeg:1,blur_glass:3",
+      "psnr_rgb": 28.54,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:1",
+      "psnr_rgb": 28.41,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:1",
+      "psnr_rgb": 28.41,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:2",
+      "psnr_rgb": 27.95,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:3",
+      "psnr_rgb": 27.37,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:1",
+      "psnr_rgb": 27.03,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:3",
+      "psnr_rgb": 26.29,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:4",
+      "psnr_rgb": 26.29,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_glass:3,saturate_weaken_HSV:1,compression_jpeg:1",
+      "psnr_rgb": 26.14,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_glass:2,compression_jpeg:1",
+      "psnr_rgb": 25.76,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_glass:3,compression_jpeg:5",
+      "psnr_rgb": 25.34,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_glass:2,compression_jpeg:3",
+      "psnr_rgb": 25.32,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:1",
+      "psnr_rgb": 25.2,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:1",
+      "psnr_rgb": 25.05,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:2",
+      "psnr_rgb": 24.98,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_glass:5,compression_jpeg:3",
+      "psnr_rgb": 24.66,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_lens:3,compression_jpeg:1",
+      "psnr_rgb": 24.49,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:3",
+      "psnr_rgb": 24.23,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_glass:3,contrast_weaken_scale:1,compression_jpeg:1",
+      "psnr_rgb": 22.25,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "compression_jpeg:3",
+      "psnr_rgb": 18.74,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 18.63,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": 18.62,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "psnr_rgb": 18.24,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_glass",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 1,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "blur_glass:3 -> compression_jpeg:1 wins pair0 (PSNR 28.41 dB twice, CI 7/10, block_boundary diff 9% pass). Blur family: glass_score=0.4594>0.25 DT trigger; PSNR ranking glass sev3 28.41 > gaussian sev3 24.98 > motion 18.24 (sev4 comparisons 26.29/24.23/18.24); severity scan sev2 25.76 < sev3 28.41 > sev4 27.03 > sev5 24.66. Glass is stochastic (random pixel shuffle), so PSNR<40 is its expected ceiling (SKILL C4), not an error. JPEG: block_boundary=1.6844 (0% FP) confirms presence; severity monotonic j1 28.41 > j2 27.95 > j3 27.37 > j4 26.29 > j5 25.34 -> sev1, with j2 within glass run variance; order check JPEG-first gave equal PSNR 28.54 but block_boundary error 48% and CI 4/10 -> blur->JPEG order kept (physical constraint). No noise (sigma=0.62/0.99<2); no global (mean_shift=-0.1, contrast_spread_ratio=0.953). Single support only (k=1, pair0); no cross-pair validation possible, residual PSNR gap 28.4dB may indicate glass subtype/order approximation.",
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "blur_glass",
+            "severity": 4
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 1
+          }
+        ],
+        "psnr_rgb": 27.03,
+        "function_family": "blur_glass (same family, severity+1)"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_glass",
+            "severity": 3
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 2
+          }
+        ],
+        "psnr_rgb": 27.95,
+        "function_family": "compression_jpeg (JPEG severity alternative)"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_gaussian",
+            "severity": 3
+          },
+          {
+            "function": "compression_jpeg",
+            "severity": 2
+          }
+        ],
+        "psnr_rgb": 24.98,
+        "function_family": "blur_gaussian (cross-family backup; best block_boundary match 1%)"
+      }
+    ],
+    "support_check": "single support (k=1): final candidate verified on pair0 only (twice: 28.41/28.41 dB); no cross-pair validation possible"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "UNCERTAIN (R0 overall verdict); R0 support PSNR 20.76 (k=1)",
+    "support_size": 1,
+    "k1_limitation": "Single support pair (pair0 only). No cross-pair validation or averaging possible; single-pair PSNR evidence cannot support a CHANGE requiring +2 dB. All R1 candidates validated on the same pair0 used by R0.",
+    "reanalysis": {
+      "tool": "run_full_analysis.py",
+      "output": "full_analysis_R1.json",
+      "result_vs_r0": "Signals reproduced exactly: block_boundary=1.6844, unique_G=256, dct_zero_ratio=0.8248, gm_ratio=0.3604, spectral_slope_ratio=1.1613, residual_anisotropy=2.059, glass_score=0.4594, blur_pca_ratio=1.039, noise_prior sigma=0.62, variance_ratio=0.8133, contrast_spread_ratio=0.953, saturation_chroma_ratio=0.9051, mean_shift=-0.1, residual_intensity_corr=-0.2031. No signal drift between rounds."
+    },
+    "signals_reinterpreted": [
+      {
+        "signal": "residual_anisotropy=2.059 (>1.7 motion DT trigger)",
+        "type": "misleading / threshold boundary",
+        "reinterpretation": "Contradicted by blur_pca_ratio=1.039 (isotropic) and by R0 PSNR: blur_motion:4+jpeg3=18.24 dB, 10.2 dB below glass. Anisotropy attributed to glass pixel-shuffle kernel-recovery noise, not motion.",
+        "action": "No motion re-test (already decisively rejected)"
+      },
+      {
+        "signal": "R0 gaussian cross-family comparison (gaussian:3+jpeg2=24.98)",
+        "type": "ignored confound",
+        "reinterpretation": "R0 compared gaussian at JPEG sev2 against glass at JPEG sev1. R1 matched JPEG sev1: gaussian:3+jpeg1=25.20 dB, still 3.2 dB below glass:3+jpeg1=28.41. Blur family ranking robust to the confound.",
+        "action": "Glass family confirmed"
+      },
+      {
+        "signal": "blur_lens never tested in R0",
+        "type": "ignored family",
+        "reinterpretation": "Lens is deterministic; if the target blur were lens a correct severity would exceed 40 dB. Measured lens:3=24.49 dB, lens:4=25.05 dB (SKILL mandatory severity scan around gm_ratio-estimated sev4).",
+        "action": "Lens ruled out; only glass explains the PSNR ceiling"
+      },
+      {
+        "signal": "variance_ratio=0.8133 + contrast_spread_ratio=0.953 (mild variance loss)",
+        "type": "threshold boundary",
+        "reinterpretation": "If part of the 18.7% variance loss were a global contrast step, adding the mildest contrast loss should raise PSNR. glass:3+contrast_weaken_scale:1+jpeg1=22.25 dB (-6.16 dB). Variance loss is fully explained by glass blur.",
+        "action": "Contrast/NO_GLOBAL confirmed"
+      },
+      {
+        "signal": "saturation_chroma_ratio=0.9051 (9.5% below 1.0)",
+        "type": "threshold boundary",
+        "reinterpretation": "glass:3+saturate_weaken_HSV:1+jpeg1=26.14 dB (-2.27 dB vs winner); no desaturation step present.",
+        "action": "Saturation/NO_GLOBAL confirmed"
+      },
+      {
+        "signal": "peeled extreme_pct=58.31%, vm_slope=1.4445, spatial_corr=0.9631, residual_std=9.7",
+        "type": "known false positive",
+        "reinterpretation": "noise_prior sigma 0.62 unpeeled / 0.99 peeled < 2; extreme_pct>50% with sigma<5 matches the documented JPEG/blur-artifact FP rule; peeled residual structure is the glass pixel shuffle (random permutation), not additive noise.",
+        "action": "NO_NOISE retained"
+      }
+    ],
+    "psnr_results_r1": [
+      {"pipeline": "blur_gaussian:3,compression_jpeg:1", "psnr_rgb": 25.20, "ci_pass": "7/10"},
+      {"pipeline": "blur_lens:3,compression_jpeg:1", "psnr_rgb": 24.49, "ci_pass": "7/10"},
+      {"pipeline": "blur_lens:4,compression_jpeg:1", "psnr_rgb": 25.05, "ci_pass": "7/10"},
+      {"pipeline": "blur_glass:3,contrast_weaken_scale:1,compression_jpeg:1", "psnr_rgb": 22.25, "ci_pass": "6/10"},
+      {"pipeline": "blur_glass:3,saturate_weaken_HSV:1,compression_jpeg:1", "psnr_rgb": 26.14, "ci_pass": "6/10"}
+    ],
+    "best_validation": "R0 winner blur_glass:3 -> compression_jpeg:1: 28.41 dB on pair0, reproduced identically in rounds 13 and 18 (glass shuffle is reproducible in this harness, so the 28.41 ceiling is not run noise). Best R1 new candidate 26.14 dB. Neither >40 dB (deterministic bar) nor +2 dB (30.41 dB) reached.",
+    "decision": "NO_CHANGE",
+    "reason": "All five R1 candidates scored below the R0 winner; the untested deterministic lens family and the deconfounded gaussian control confirm glass is the only plausible blur family, and the boundary global signals (variance/contrast/saturation) are explained by glass blur and rejected by PSNR. Noise remains excluded (sigma<2, known FP rule). With k=1 the +2 dB bar is not met by any evidence, so the R0 pipeline blur_glass:3 -> compression_jpeg:1 is retained unchanged."
+  }
+}

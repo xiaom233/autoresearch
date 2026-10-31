@@ -1,0 +1,549 @@
+{
+  "challenge_id": "blind_0001_size1",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=1.0007 (<1.05, 无 8x8 块边界), dct_zero_ratio=0.0212, unique_G_target=16 (clean=256, 每通道 [16,16,16]) → 不是 JPEG，但 16 个离散值强烈提示 4-bit 级别量化的 global quantization",
+      "blur": "gm_ratio=5.219 被噪声/量化破坏不可用; spectral_slope_ratio=0.993 (<1.08), FFT_anisotropy=0.00 → BLUR_UNLIKELY",
+      "noise": "noise_prior_sigma=16.68; intensity_var_corr=0.77; spatial_corr=0.0018; cross_channel_corr=0.0013 → 自动判 POISSON。但 unique_G=16 表明量化误差本身可伪造高强度残差，sigma 可能是量化伪影而非传感器噪声，需剥离量化后重检",
+      "global": "variance_ratio=1.317, clipped_fraction=0.1635 (16.4% 像素饱和), contrast_spread_ratio=1.25, saturation_chroma_ratio=2.66 → 全部与 quantization_hist 的直方图均衡拉伸效应一致（bin 映射非线性能同时抬高方差/chroma/双端 clipping）"
+    },
+    "mode": "SIGNAL (sigma=16.7); 对确定性量化候选采用 PSNR 复现验证 + CI 信号核对",
+    "hypothesis_ranking": [
+      "quantization_hist:2 (c=16 levels) — unique_G=16 精确匹配",
+      "quantization_hist:1/3 (24/8 levels) — 若 cdf 合并bin导致少数级别",
+      "quantization_median:2 (15 levels) — 次选",
+      "noise_poisson:4 — 仅在剥离量化后残差仍显示噪声结构时保留"
+    ]
+  },
+  "qwen_gate": {
+    "available": false,
+    "triggered": false,
+    "note": "sigma>10，按 SKILL 不需边界门控；但量化伪影嫌疑需剥离后重判"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2",
+        "thinking": "信号来源: unique_G_target=16 且每通道均为 [16,16,16] (clean=256), block_boundary=1.0007 排除 JPEG; quantization_hist severity=2 映射 c=16 个直方图 bin → 输出至多 16 个离散级别, 与 unique_G=16 精确吻合。另 variance_ratio=1.317 + clipped_fraction=16.4% 与直方图均衡的拉伸一致。先验证确定性量化能否像素级复现。"
+      },
+      "test_result": {
+        "psnr_rgb": 14.83,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,quantization_hist:2",
+        "thinking": "信号来源: quantization_hist:2 单独复现 16 levels 但 PSNR=14.83dB, 说明量化前的直方图被前序步骤改变; 类别互斥约束下只能由 noise(priority=0)/blur(priority=1) 在前。目标是 16 级直方图均衡后仍多出 +3.2pp 零饱和与 +4.1pp 255饱和 -> 量化前噪声在两端 clipping。σ=12.75 (gaussian_RGB sev1) 对 11.7% 的 0-15 暗像素产生 ~3.4pp 额外零饱和, 与观测吻合。先测 gaussian_RGB:1。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "global:mean_shift (diff=0.0665)",
+          "global:variance_ratio (diff=43%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4,quantization_hist:2",
+        "thinking": "信号来源: gaussian_RGB:1+qhist:2 后 wavelet sigma 比目标低 50% (目标 16.7), 需更强/更强度相关的噪声。full_analysis 主判 POISSON (intensity_var_corr=0.77), Poisson 噪声方差随强度增长可在亮部产生大量 255 饱和 (观测 +4.1pp), 同时提升高频。测试 poisson:4 (c=25, I=0.5 时 sigma≈36)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0580)",
+          "global:variance_ratio (diff=39%)"
+        ],
+        "pipeline": "noise_poisson:4,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,quantization_hist:2",
+        "thinking": "信号来源: gauss1/poisson4 两个 sim 的 mean_shift 均比目标高 ~0.06 (目标 mean_shift≈-0.005 即均值几乎不变, 因为强噪声使直方图平坦化→qhist 映射趋近恒等→均值偏移趋 0)。假设量化前噪声更强: gaussian_RGB:2 (sigma=25.5) 既提高 post-quant sigma (目标 16.7), 又使直方图更平坦, 应同时降低 mean_shift 差异。验证两个 global 信号是否随 sigma 增加而收敛。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0625)",
+          "global:variance_ratio (diff=47%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_impulse:4,quantization_hist:2",
+        "thinking": "信号来源: 目标相对 qhist:2 单步模拟多出 +3.2pp 零值/+4.1pp 255值, 且 gaussian/poisson 的均值偏移方向不符。Impulse (s&p) 在量化前直接注入精确 0/255 像素 → 16 级量化后仍保持极端值, 贡献双端饱和与高强度高频; sev4 (7%) 预期每端 +3.5pp, 与观测 (+3.2/+4.1pp) 量级吻合。测试 impulse:4。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=75%)",
+          "global:mean_shift (diff=0.0459)",
+          "global:variance_ratio (diff=67%)"
+        ],
+        "pipeline": "noise_impulse:4,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,quantization_hist:2",
+        "thinking": "信号来源: 目标的独有组合 = 少的零值(3.19% vs qhist-only 7.25%) + 多的高光饱和(总饱和16.35% vs 9.07%, 推断 255 侧~13%) + chroma_ratio 2.66 (qhist-only 1.43)。乘性 speckle 噪声在亮区放大、可压低暗部占比并大量白色饱和, 是唯一能同时解释三者的噪声族; vm_slope=1.39 (peeled) 亦指向 speckle。测 speckle:5 (sigma=0.42)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0484)",
+          "global:variance_ratio (diff=51%)"
+        ],
+        "pipeline": "noise_speckle:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_speckle:4,quantization_hist:2",
+        "thinking": "speckle:5+qhist 在 sigma/零值/饱和/chroma/contrast 五项均贴近目标, 但 variance_ratio 1.479 高于目标 1.317, mean_shift +11.1 vs -1.2。按强制 severity 扫描: 测 speckle:4 (sigma=0.35), 预期方差降低、饱和略减, 观察 mean_shift 与 variance_ratio 是否同向接近目标。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0540)",
+          "global:variance_ratio (diff=45%)"
+        ],
+        "pipeline": "noise_speckle:4,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:5,quantization_hist:2",
+        "thinking": "信号来源: 目标 chroma_ratio=2.655 远高于 qhist-only(1.43), 可能来自色度通道强噪声 (YCrCb sev5: sigma_l=0.09, sigma_r/b=0.252 → R/B 色度噪声远大于 G)。YCrCb 噪声可在色度上裁剪并抬高 chroma 比, 同时保持亮度结构。与 speckle:5 二选一, 用 global 信号剖面判别。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=96%)",
+          "global:mean_shift (diff=0.0143)",
+          "global:variance_ratio (diff=116%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:1,noise_speckle:5,quantization_hist:2",
+        "thinking": "信号来源: 与 speckle:5+qhist 相比, 目标在所有 global 残差方向上一致偏弱偏暗 (mean_shift -1.2 vs +11.1; clipped 16.4% vs 17.7%; chroma 2.66 vs 2.92; variance_ratio 1.32 vs 1.48), 且目标 16 级共享 cdf 要求 pre-quant 直方图整体下移约 12 级。brightness_darken_shfit_RGB:1 (-25.5 级) 在量化前下移直方图, 预期解释全部四项残差。若过度则换 gamma 型。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0060)",
+          "global:variance_ratio (diff=103%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:1,noise_speckle:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:1,noise_speckle:5,quantization_hist:2",
+        "thinking": "信号来源: darken_shfit_RGB:1 使 mean_shift 误差从 12.3 级降至 1.6 级, 但其 0 端截断把 clipped_fraction 推到 26.8% (目标 16.35%)。gamma 暗化 (gamma=1.4) 映射 0->0, 255->255, 不产生额外端点截断, 可在压低直方图中位数的同时保持 clipped 与 speckle:5 相近 (17.7%)。验证 gamma 型能否同时满足 mean_shift/clipped/variance。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0093)",
+          "global:variance_ratio (diff=84%)"
+        ],
+        "pipeline": "brightness_darken_gamma_RGB:1,noise_speckle:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:1,noise_speckle:5,quantization_hist:2",
+        "thinking": "信号来源: gamma_RGB:1 暗化后 mean_shift/zero/chroma 接近目标, 但 clipped 23.3% 与 variance_ratio 1.58 仍偏高。V 通道 gamma=1.5 (HSV) 按像素乘性暗化 (factor=V^0.5), 保持色相/饱和度结构, 对亮部暗化更强、色度随 V 等比下降, 预期进一步压低 chroma 与白端饱和。比较两种暗化型的 global 剖面。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0056)",
+          "global:variance_ratio (diff=89%)"
+        ],
+        "pipeline": "brightness_darken_gamma_HSV:1,noise_speckle:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2",
+        "thinking": "信号来源: 前三个暗化候选均把噪声放在暗化之后, 使 post-quant sigma 降到 14 左右 (目标 16.68)。若暗化在噪声之后 (物理优先级 brightness=2 的场景), speckle 作用在原始亮度上 → sigma 保持 ~16.9, 随后 gamma 压缩直方图并下移均值。测试该顺序能否同时保住噪声指纹 (sigma/spatial/cross) 并修正 mean_shift。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=86%)"
+        ],
+        "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,brightness_darken_shfit_HSV:1,quantization_hist:2",
+        "thinking": "信号来源: T12 (speckle->gammaRGB 暗化->qhist) 首次达 PARTIAL: mean_shift 误差 0.5 级, sigma 17.9, 但 clipped 26.9% 与 chroma 3.14 过高。HSV V-shift 为乘性暗化 ((V-0.1)/V), 亮端仅 -12.5%, 色度随 V 等比下降 → 预期降低白端饱和与 chroma, 同时保持 mean_shift 修正。比较 T12 与 T13 的 global 剖面。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=74%)"
+        ],
+        "pipeline": "noise_speckle:5,brightness_darken_shfit_HSV:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_speckle:4,brightness_darken_gamma_RGB:1,quantization_hist:2",
+        "thinking": "信号来源: T12 (speckle:5) PARTIAL 但 clipped 26.9% 与 chroma 3.14 偏强, 目标 sigma 16.68 位于 speckle4 (~14) 与 speckle5 (~17.9) 之间; 按 PARTIAL 强制 severity 扫描测 speckle:4, 观察 clipped/chroma/sigma 是否整体更贴近目标 (sigma 阈值 20% 允许 down to 13.3)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0104)",
+          "global:variance_ratio (diff=79%)"
+        ],
+        "pipeline": "noise_speckle:4,brightness_darken_gamma_RGB:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2",
+        "thinking": "R1 基线复测 (当前 R0 pipeline)。信号来源: noise_speckle:5 由 reference-free 残差指纹锁定 (sigma 16.9 vs 16.68, ivc 0.761 vs 0.772, spatial 0.025 vs 0.0018, cross 0.015 vs 0.0013); quantization_hist:2 由 unique_G=16 三通道一致锁定; brightness_darken_gamma_RGB:1 用于解释 qhist 输出 mean_shift (-1.2 vs 无暗化 +11)。本轮用 signal 模式重测记录完整 4 项 global/noise 信号。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=87%)"
+        ],
+        "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,contrast_weaken_scale:1,quantization_hist:2",
+        "thinking": "R1 信号重释: 当前 pipeline 唯一不匹配信号是 variance_ratio (target 1.317 vs sim 1.593, diff 87%)。所有暗化候选把 vr 推高 (1.55-1.64), 方向相反; 而 contrast_spread_ratio=1.25 与 variance_ratio=1.317 低于所有噪声+量化模拟。假设量化前存在轻度对比度削弱 (scale=0.75), 压缩强度分布 -> qhist 输出方差下降, 同时 chroma 2.66 (target) 也低于 sim 2.92。检验该分量能否在保持 sigma 与 mean_shift 的同时把 vr 拉回 1.32 附近。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.1011)",
+          "global:variance_ratio (diff=39%)"
+        ],
+        "pipeline": "noise_speckle:5,contrast_weaken_scale:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,saturate_weaken_HSV:1,quantization_hist:2",
+        "thinking": "R1 信号重释: target chroma_ratio=2.655 低于所有 speckle+qhist 模拟 (2.92-3.14), 且 variance_ratio=1.317 低于 2-step 模拟 1.479。饱和削弱 (S x0.7) 只压缩色度, 预期降低 RGB 联合方差与 chroma, 同时不直接改变亮度均值; 检验能否同时改善 global:variance_ratio 并保持 mean_shift。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0626)",
+          "global:variance_ratio (diff=43%)"
+        ],
+        "pipeline": "noise_speckle:5,saturate_weaken_HSV:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2,contrast_weaken_scale:1",
+        "thinking": "R1 信号重释: 三项残差 (mean_shift -1.2 级需量化前暗化; variance_ratio 1.317 低于所有候选 1.44-1.65; chroma 2.66 低于 sim 2.92) 无法由单一 global 分量同时解释。contrast_weaken_scale:1 置于 qhist 之后: PIL Contrast 以图像自身均值为中心收缩, 保持 mean_shift 不变, 但把 16 级输出的方差与色度同步压低。检验该 4 步组合能否首次让 4 项信号全部匹配。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=134%)"
+        ],
+        "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2,contrast_weaken_scale:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,contrast_weaken_scale:1,quantization_hist:2",
+        "thinking": "R1 测量复跑 (同 R16 假设): 保存模拟图以读取真实 variance_ratio 数值, 消除 diff 无符号歧义 (1.44 vs 1.19)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.1008)",
+          "global:variance_ratio (diff=39%)"
+        ],
+        "pipeline": "noise_speckle:5,contrast_weaken_scale:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "quantization_hist:2",
+      "psnr_rgb": 14.83,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "noise_6step_check": {
+    "_source": "peeled_final.json (剥离 brightness_darken_gamma_RGB:1 + quantization_hist:2 后的残差) + full_analysis.json step2 (target-clean 原始残差)",
+    "peeled_residual": {
+      "extreme_pct": 55.33,
+      "vm_slope": 1.2418,
+      "var_slope": 0.1422,
+      "spatial_corr": 0.6441,
+      "rgb_ratio": 1.2483,
+      "cross_ch_corr": 0.1797,
+      "residual_std": 45.3,
+      "noise_prior_sigma": 20.51
+    },
+    "reference_free_residual_target_minus_clean": {
+      "noise_prior_sigma": 16.68,
+      "unchanged_fraction (impulse_zero_ratio, |R|<0.0043)": 0.0319,
+      "spatial_corr": 0.0018,
+      "cross_channel_corr": 0.0013,
+      "intensity_var_corr": 0.7718,
+      "intensity_scaled_var_corr": -0.6789
+    },
+    "diagnosis": "peeled 残差的 extreme_pct=55.3% / spatial_corr=0.64 是已知量化假阳性 (确定性剥离无法复现噪声条件下的 qhist cdf, 残差含 bin 映射误差), 按 SKILL 失败模式表忽略 IMPULSE 判读。以 reference-free 残差为准: 空间白 (0.0018)、跨通道独立 (0.0013)、方差随强度增长 (ivc=0.772, intensity_scaled_var_corr=-0.679) → 乘性 speckle 特征。逐项模拟验证: noise_speckle:5+qhist 得到 sigma 16.93, ivc 0.761, spatial 0.025, cross 0.015, DT 判读同为 POISSON, 与目标几乎一致; gaussian_RGB/YCrCb 的 ivc 或 cross_channel 明显不符。故噪声子类取 noise_speckle, 严重度 5 (sigma 全表 0.42 对应 post-quant sigma≈16.9 与目标 16.68 最接近; sev4 仅 ~14)。"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_speckle",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "brightness_darken_gamma_RGB",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "quantization_hist",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "support_pairs_verified": 1,
+    "cross_pair_validation": "单 support (k=1), 无法做跨对验证",
+    "final_test": "Round 12: noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2 → verify_signals PARTIAL (3✓/1✗): noise:sigma ✓ noise:clean_residual ✓ global:mean_shift ✓ global:variance_ratio ✗(86%)",
+    "rationale": "quantization_hist:2 由 unique_G=16 (三通道均 16, 共享 cdf) 与 block_boundary=1.0007 锁死; noise_speckle:5 由 reference-free 噪声指纹逐项锁定; 第三步 brightness_darken_gamma_RGB:1 是唯一能解释 qhist 输出 mean_shift 的组合 (所有单 global+噪声模拟均为 +10~+16 级, 目标 -1.2 级, 加暗化后 -0.7 级)。残余 mismatch (variance_ratio 1.59 vs 1.317, clipped 26.9% vs 16.35%, chroma 3.14 vs 2.66) 提示暗化/量化实现细节仍有偏差或存在未建模的弱分量, 故 overall=UNCERTAIN, 保留 2 步解与 HSV-shift 解作 alternatives。若 E6 生成器沿用 blind_challenge.py 的类别互斥规则 (global 至多一步), 则应采用 alternatives[0] (speckle:5+gqhist:2), 因为此时均值偏移无法用任何允许的组合复现。",
+    "psnr_ranking_note": "sigma>2 → PSNR 不可靠, 仅记录 quantization_hist:2 单步的 PSNR=14.83dB (证明量化前存在前序分量), 不作为噪声候选排序依据。"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN, support PSNR 25.04 dB (k=1)",
+    "mode": "SIGNAL (sigma=16.68; PSNR/CI 不用于含噪声候选)",
+    "signal_reanalysis": {
+      "rerun": "run_full_analysis.py pair0 → full_analysis_R1.json, 与 R0 逐项一致 (确定性信号可复现): block_boundary=1.0007, unique_G=16 (三通道 [16,16,16]), sigma=16.68, spectral_slope_ratio=0.993, variance_ratio=1.3173, mean_shift=-1.2 级, clipped=16.35%, chroma=2.6552",
+      "rechecked_signals": {
+        "unique_G / unique_per_channel": "16 / [16,16,16] → quantization_hist:2 (c=16 共享 cdf) 锁定; 且要求其为最后一步: 实测 contrast 置于 qhist 前会把 unique_G 降到 12, 说明任何 qhist 后的 color 变换或 qhist 前的强对比压缩都可能违反该硬约束",
+        "variance_ratio": "target 1.3173; R0 pipeline 实测 1.5914 (diff 87%); 2-step 1.479 (diff 51%); contrast_weaken_scale:1 置于 qhist 前 1.1941 (下冲); 置于 qhist 后 diff 134% (更强下冲) → 目标低于所有可行的 3 步候选",
+        "mean_shift": "target -1.2 级; R0 pipeline -0.7 ✓; 2-step +11.1 ✗; contrast 前置 +24.5 ✗; saturate 前置 diff 0.0626 (≈16 级) ✗ → 只有量化前暗化能同时满足 mean 与 unique_G",
+        "clipped_fraction": "target 16.35%; R0 pipeline 26.89% (偏高 10.5pp); contrast 前置 6.28% (偏低) → 目标介于两者, 暗化强度或实现细节有偏差",
+        "chroma_ratio": "target 2.6552; R0 pipeline 3.14; contrast 前置 2.669 (单项匹配) 但代价是 mean/unique_G 破坏; 2-step 2.92",
+        "noise_fingerprint": "target sigma 16.68 / ivc 0.772 / spatial 0.0018 / cross 0.0013; R0 pipeline 17.91 / 0.826 / 0.0156 / 0.0089 (sigma +7.4% 通过); contrast 前置 15.57 / 0.887 / 0.0279 / 0.0216 → speckle:5 仍是最佳指纹匹配",
+        "blur/compression": "spectral_slope_ratio=0.993 + FFT 各向异性 0 → 无 blur; block_boundary=1.0007 → 无 JPEG"
+      },
+      "boundary_constraints": "三个残差 (mean/variance/chroma) 方向不一致: 量化前 darken 修复 mean 但抬高 variance; 量化前/后 contrast 或 saturation 降低 variance/chroma 但或破坏 mean (前置) 或破坏 unique_G=16 / 方差下冲 (后置)。单步补充分量无法同时满足全部信号。"
+    },
+    "candidates_tested": [
+      {
+        "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2",
+        "note": "R0 pipeline 复测 (基线, R15)",
+        "verdict": "PARTIAL (3✓/1✗): variance_ratio diff 87%; 实测 vr 1.5914 / mean -0.7 级 / clipped 26.89% / chroma 3.14 / sigma 17.91 / unique_G 16",
+        "decision": "KEEP"
+      },
+      {
+        "pipeline": "noise_speckle:5,contrast_weaken_scale:1,quantization_hist:2",
+        "note": "R1 新假设 (R16/R19): 用对比度削弱解释 variance_ratio/chroma 超标",
+        "verdict": "WEAK (2✓/2✗): mean_shift +24.5 级, variance_ratio 1.1941 (diff 39%), unique_G 16→12; 仅 chroma 2.669 匹配",
+        "decision": "REJECT"
+      },
+      {
+        "pipeline": "noise_speckle:5,saturate_weaken_HSV:1,quantization_hist:2",
+        "note": "R1 新假设 (R17): 用色度削弱解释 chroma 与 variance_ratio 超标",
+        "verdict": "WEAK (2✓/2✗): mean_shift diff 0.0626 (≈16 级), variance_ratio diff 43%",
+        "decision": "REJECT"
+      },
+      {
+        "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2,contrast_weaken_scale:1",
+        "note": "R1 新假设 (R18, 4 步): mean 由前置 gamma 暗化修复, variance/chroma 由后置 contrast 收缩修复",
+        "verdict": "PARTIAL (3✓/1✗): variance_ratio diff 134% (方差下冲); 量化后 color 变换违反 unique_G=16 约束风险",
+        "decision": "REJECT"
+      }
+    ],
+    "decision": "NO_CHANGE",
+    "final_pipeline": [
+      ["noise_speckle", 5],
+      ["brightness_darken_gamma_RGB", 1],
+      ["quantization_hist", 2]
+    ],
+    "reason": "R1 未有候选达到 MATCH 或把失配信号集改善 (三个新假设均 ≤3/4, 其中两个 WEAK; 4 步对比度解仍 PARTIAL 且方差下冲 134%)。当前 pipeline 同时满足 unique_G=16 (qhist:2 最后一步)、噪声指纹 (speckle:5) 与 mean_shift (-0.7 vs -1.2 级), 仅 variance_ratio 1.5914 vs 1.3173 残余不匹配; 该偏差方向在单一分量约束下无可行解。k=1 单对证据不足, 维持 R0 pipeline。",
+    "limitations": "k=1 单对 support (clean_0/degraded_0), 无法跨对多数验证, 未放宽任何阈值; 未使用其他 size/挑战/E6B/E6A/test 数据。variance_ratio 残余偏差可能源于 qhist 实现差异或未建模弱分量, 需训练后 PSNR 仲裁。",
+    "test_candidate_calls": 5,
+    "support_pairs_verified": 1
+  }
+}

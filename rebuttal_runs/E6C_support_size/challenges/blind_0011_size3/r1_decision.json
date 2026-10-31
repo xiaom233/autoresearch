@@ -1,0 +1,56 @@
+{
+  "challenge_id": "blind_0011_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_gaussian_RGB", 2], ["blur_gaussian", 4]],
+  "r1_pipeline": [["noise_gaussian_RGB", 2], ["blur_gaussian", 4]],
+  "support_psnr_r0": 23.85,
+  "candidates_tested": [
+    {
+      "candidate": "blur_gaussian:3",
+      "mode": "PSNR (纯确定性)",
+      "pairs": {"pair0": 30.83},
+      "ci": {"pair0": "8/10"},
+      "note": "severity 下界对照; 显著劣于 sev4"
+    },
+    {
+      "candidate": "blur_gaussian:4",
+      "mode": "PSNR (纯确定性)",
+      "pairs": {"pair0": 37.09, "pair1": 39.45, "pair2": 41.59},
+      "mean_psnr": 39.38,
+      "ci": {"pair0": "10/10", "pair1": "9/10", "pair2": "7/10"},
+      "note": "R0 主选; 仅 pair2 >40dB, 均值<40 → 未达 CHANGE 门槛"
+    },
+    {
+      "candidate": "blur_gaussian:5",
+      "mode": "PSNR (纯确定性)",
+      "pairs": {"pair0": 33.36},
+      "ci": {"pair0": "10/10"},
+      "note": "gm_ratio 估计值 (sev5) 的对照; 比 sev4 低 3.7dB → 分析器 severity 误判, sev4 确认"
+    },
+    {
+      "candidate": "blur_lens:4",
+      "mode": "PSNR (纯确定性, 跨族)",
+      "pairs": {"pair0": 31.66},
+      "ci": {"pair0": "8/10"},
+      "note": "gaussian↔lens MTF 混淆的 PSNR 裁决; 比 gaussian:4 低 5.4dB → lens 排除"
+    }
+  ],
+  "test_candidate_calls": 6,
+  "new_candidates": 4,
+  "best_validation": {
+    "pipeline": [["blur_gaussian", 4]],
+    "per_pair_psnr": {"pair0": 37.09, "pair1": 39.45, "pair2": 41.59},
+    "mean_psnr": 39.38,
+    "verdict": "确定性部分双证据确认 (信号 3/3 对 MATCH + PSNR 3/3 对最优)，但纯确定性候选未越过 >40dB 门槛，且 R0 为 SIGNAL 模式无可比的 PSNR 基线、禁止用 PSNR 对含噪管线做比较 → 不足以 CHANGE"
+  },
+  "signal_sources": [
+    "run_full_analysis.py pair0 重跑 (full_analysis_R1.json): gm_ratio=0.0973, spectral_slope_ratio=1.644, residual_anisotropy=3.171, variance_ratio=0.5736, mean_shift=-2.5, chroma_ratio=0.7956, block_boundary=1.000, unique_G=198, noise_prior sigma=3.09 (与 R0 一致, 仅 residual_intensity_corr 0.0285→0.0206)",
+    "peeled_noise_check.py blur_gaussian:4: 剥离残差 std=2.9/2.6/2.0 (pair0/1/2), spatial_corr=0.9926/0.9943/0.9835, peeled wavelet sigma=6.18/1.48/1.24, rgb_ratio=1.79/1.15/1.05, vm_slope=0.287/0.073/0.274",
+    "x_distortion 源码核查: noise_gaussian_RGB sigma=[0.05,0.1,0.15,0.2,0.25]×255=[12.75,25.5,38.25,51,63.75]; blur_gaussian sigma=severity∈[1..5]; 白噪声经 σ=4 高斯核衰减 1/(2√π·4)=1/14.2 → 模糊后噪声 floor sev1≈0.90 / sev2≈1.80 / sev3≈2.69",
+    "R0 reflection.json support_validation: 3/3 对 noise_gaussian_RGB:2+blur_gaussian:4 均 PARTIAL, blur spectral_slope+wiener MATCH, noise sigma MATCH, structured_residual FWHM=22/100/14"
+  ],
+  "reason": "1) blur_gaussian:4 双重确认: R0 信号 3/3 对 MATCH; R1 纯确定性 PSNR 在 pair0 上以 37.09dB 显著优于 sev3(30.83)/sev5(33.36)/lens:4(31.66)，三对同候选 37.09/39.45/41.59 一致。2) 纯确定性候选均值 39.38dB<40、仅 1/3 对超 40，且 R0 无 PSNR 基线 (SIGNAL 模式)，按 k 对阈值不足以 CHANGE (也不允许用 PSNR 对含噪管线做比较)。3) 噪声步: 跨对剥离残差 (2.9/2.6/2.0) 与 blur 后噪声 floor 首次定量对照，pair2 残差≈2.0-2.1 落在 sev2 floor≈1.80 与 sev3 floor≈2.69 之间且更贴近 sev2，维持 R0 的 noise_gaussian_RGB:2; §B 的 YCrCb/speckle 信号经跨对核对为内容依赖伪信号 (rgb_ratio 1.79/1.15/1.05, spatial_corr 0.98-0.99)，无可达多数对 MATCH 的噪声替代。4) variance_ratio 5% 差与 mean_shift -2.5 复核后仍不可用合法 x_distortion 函数在正确幅度复现 (最弱 contrast sev1≈0.56 方差乘子过强)，维持无 global/JPEG 步骤。结论: 维持 R0 pipeline，NO_CHANGE。",
+  "reflect_rounds_used": 1,
+  "budget": {"test_candidate_limit": 15, "test_candidate_used": 6, "new_candidates_limit": 5, "new_candidates_used": 4}
+}

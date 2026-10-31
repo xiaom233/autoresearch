@@ -1,0 +1,46 @@
+{
+  "challenge_id": "blind_0012_size1",
+  "pipeline": [
+    {"function": "blur_motion", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_motion", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 23.81,
+      "ci_pass": "7/10",
+      "function_family": "motion",
+      "note": "DT gm_ratio=0.4012 -> sev4 estimate (gm_ratio contaminated by JPEG -> likely overestimate); bb diff 10% at jpeg:4 slightly above 8% threshold"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_motion", "severity": 3},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 27.18,
+      "ci_pass": "7/10",
+      "function_family": "motion",
+      "note": "best single PSNR observed (random motion angle luck); JPEG-only scan bb diff 6% vs 4% for sev4; combined bb diff 12-13% at jpeg:3"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 22.70,
+      "ci_pass": "6/10",
+      "function_family": "gaussian",
+      "note": "cross-family control: gaussian is deterministic, exact match would score >30dB; 22.70dB rules gaussian out (DT PCA=4.432>2.5 motion 0% FP consistent)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "7/10",
+    "mode": "PSNR (sigma=0.74<2) + signal-mode cross-check",
+    "rationale": "两确定性步退化：JPEG 由 block_boundary=2.7761（0% FP）+ dct_zero_ratio=0.8877 确认，组合仿真在 jpeg:4 时 bb diff 0%/5%（<8%）→ LIKELY；motion blur 由 gm_ratio=0.4012 + PCA=4.432（0% FP）支持，但 blur_motion 每次随机角度导致 PSNR 上限 ~27dB（20-27dB 波动），sev3 vs sev4 无法用 PSNR 决断（mean 23.4 vs 22.8，bb 偏 sev3）→ UNCERTAIN，等训练 PSNR 仲裁。noise_prior sigma=0.74（剥离后 1.48）<2 → NO_NOISE；global 无（mean_shift=-0.4/255, variance_ratio 降低可由 blur+JPEG 解释）。单 support（k=1, pair0），无法跨对验证。"
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "challenge_id": "blind_0001_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "noise_speckle",
+      5
+    ],
+    [
+      "brightness_darken_gamma_RGB",
+      1
+    ],
+    [
+      "quantization_hist",
+      2
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "brightness_darken_gamma_RGB",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "quantization_hist",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "pipeline_steps": [
+    {
+      "function": "noise_speckle",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "brightness_darken_gamma_RGB",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "quantization_hist",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        [
+          "noise_speckle",
+          5
+        ],
+        [
+          "quantization_hist",
+          2
+        ]
+      ],
+      "verify_signals": "WEAK (2✓/2✗): noise:sigma ✓ noise:clean_residual ✓; global:mean_shift +11.1 级 (目标 -1.2) ✗; variance_ratio 1.479 (目标 1.317, diff 51%) ✗",
+      "function_family": "speckle+qhist (2 步解; 若 E6 生成器沿用 blind_challenge.py 的 global 类别互斥规则, 该解为首选)",
+      "note": "clipped 17.7% / chroma 2.92 比 3 步解更接近目标 (16.35% / 2.655), 但无法复现 mean_shift"
+    },
+    {
+      "pipeline": [
+        [
+          "noise_speckle",
+          5
+        ],
+        [
+          "brightness_darken_shfit_HSV",
+          1
+        ],
+        [
+          "quantization_hist",
+          2
+        ]
+      ],
+      "verify_signals": "PARTIAL (3✓/1✗): variance_ratio diff 74%; clipped 20.45% / chroma 2.80 比 gamma 版更接近目标, 但 HSV 转换引入 cross_channel_corr 0.10 (目标 0.0013)",
+      "function_family": "speckle+HSV-V 乘性暗化+qhist",
+      "note": "R0 保留的次选; R1 未改写主 pipeline"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=16.68, PSNR 不可用)",
+    "support_pairs": 1,
+    "support_psnr_r0": 25.04,
+    "test_candidate_calls": 5,
+    "ci_pass_rate": "N/A (sigma>2, 噪声候选不使用 CI/PSNR)",
+    "rationale": "R1 重跑 pair0 信号与 R0 完全一致 (确定性信号可复现)。R0 pipeline 复测 PARTIAL (3✓/1✗): noise:sigma (17.91 vs 16.68, +7.4% < 20%)、noise:clean_residual、global:mean_shift (-0.7 vs -1.2 级) 匹配, 仅 variance_ratio 不匹配 (1.5914 vs 1.3173, diff 87%)。R1 测试的三个新方向均未改善: (1) contrast_weaken_scale:1 置于 qhist 前 → WEAK, mean_shift +24.5 级、unique_G 16→12 破坏 quantization 硬约束, 仅 chroma 2.669 匹配; (2) saturate_weaken_HSV:1 置于 qhist 前 → WEAK, mean_shift diff 0.0626 (≈16 级), variance_ratio diff 43%; (3) contrast_weaken_scale:1 置于 qhist 后 (4 步) → PARTIAL 但 variance_ratio diff 134% (下冲), 方差/色度在量化后收缩属过强补偿。unique_G=16 三通道一致 (block_boundary=1.0007) 锁定 quantization_hist:2 且要求其为最后一步, 排除了 qhist 之后的 color 变换; 而 qhist 之前的 contrast/saturation 分量均把 mean_shift 推离目标。因此唯一同时满足 mean_shift 与 unique_G 的组合仍是量化前 gamma 暗化, 维持 R0 pipeline。残余 variance_ratio 偏差 (目标 1.317 低于所有 3 步候选 1.48-1.65) 在单 support 条件下证据不足以改写。",
+    "single_pair_limitation": "k=1, 仅 pair0; 噪声候选验证仅单对, 无法做跨对多数投票, 未因 k=1 放宽 +2dB/信号阈值",
+    "final_test": "Round 15 (R1 复测): noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2 → verify_signals PARTIAL (3✓/1✗)"
+  }
+}

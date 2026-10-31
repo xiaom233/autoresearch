@@ -1,0 +1,49 @@
+{
+  "challenge_id": "blind_0011_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_gaussian_RGB", 2], ["blur_gaussian", 4]],
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 2, "verdict": "UNCERTAIN"},
+    {"function": "blur_gaussian", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 1},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "function_family": "noise_gaussian_RGB (weaker)",
+      "evidence": "R1 跨对剥离残差 std=2.9/2.6/2.0 与 blur 后噪声 floor 对比: sev1→σ≈0.90, sev2→≈1.80, sev3→≈2.69 (白噪声经 σ=4 高斯核衰减 1/14.2)。最小残差对 pair2≈2.0-2.1 已高于 sev2 floor 且低于 sev3 floor → sev2 为主选; 若 GT 噪声为 sev1 则 pair2 的 2.0 需全部由模糊失配解释，仅作弱备份"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 2},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "function_family": "noise_speckle (跨族备份)",
+      "evidence": "§B vm_slope=0.287(p0)/0.073(p1)/0.274(p2) 在所有对都偏高，但 rgb_ratio 1.79/1.15/1.05 呈内容依赖变化、spatial_corr 0.98-0.99 表明残差以平滑确定性结构为主 → §B 分型被污染; R0 实测 pair0 FWHM=14 略优但 lens:5 反例(FWHM=6 仍错误)证明该判据区分力有限，未达 MATCH，仅备份"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "function_family": "纯确定性 (无噪声)",
+      "evidence": "R1 三对纯确定性 PSNR=37.09/39.45/41.59 (均值 39.38)，仅 pair2>40dB，未达 CHANGE 门槛 (>40dB 或相对上一轮 +2dB；R0 为 SIGNAL 模式无 PSNR 基线，且禁止用 PSNR 对含噪管线做比较)。若训练阶段噪声项无效可回退到此候选"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (noise step, sigma>2) + PSNR (pure deterministic candidates)",
+    "support_pairs": 3,
+    "signal_sources": [
+      "full_analysis_R1.json (pair0 重跑): gm_ratio=0.0973, spectral_slope_ratio=1.644, variance_ratio=0.5736, chroma_ratio=0.7956, block_boundary=1.000, unique_G=198, noise_prior sigma=3.09 — 与 R0 一致 (仅 residual_intensity_corr 0.0285→0.0206)",
+      "peeled_noise_check.py (blur_gaussian:4 剥离): residual std=2.9/2.6/2.0, spatial_corr=0.9926/0.9943/0.9835, peeled wavelet sigma=6.18/1.48/1.24 (pair0 为结构污染离群)",
+      "x_distortion 源码: noise_gaussian_RGB sigma=[12.75,25.5,38.25,51,63.75] (sev1-5), blur_gaussian sigma=sev; 白噪声经 σ=4 高斯核衰减 1/(2√π·4)=1/14.2 → 模糊后 sev1/2/3 σ≈0.90/1.80/2.69",
+      "test_candidate.py PSNR: pair0 gaussian:3=30.83, gaussian:4=37.09, gaussian:5=33.36, lens:4=31.66; gaussian:4 pair1=39.45, pair2=41.59"
+    ],
+    "signal_reinterpretation": "1) estimated_severity=5 (gm_ratio) 系内容依赖误判: 确定性 PSNR 扫描 gaussian:4 比 sev5 高 3.7dB、比 sev3 高 6.3dB，三对 CI 10/10,9/10,7/10 → sev4 确认 (信号与 PSNR 双证据)。2) gaussian↔lens 混淆用 PSNR 排除: lens:4=31.66 比 gaussian:4 低 5.4dB。3) 噪声幅度首次获得跨对下界约束: 三对剥离残差 2.9/2.6/2.0，blur 后 sev2 floor≈1.80 与最小残差对 (pair2≈2.0-2.1) 吻合; sev3 floor≈2.69 已超过 pair2 残差、需系统性相消 → 维持 sev2 (R0 的 1-3 中间值选择获得定量支持)。4) §B 的 YCrCb 信号 (rgb_ratio 1.79) 仅 pair0 出现 (p1/p2=1.15/1.05)，speckle vm_slope 各对均偏高而 spatial_corr 恒 0.98-0.99 → 残差以平滑确定性结构为主，§B 子类型判定无效，gaussian_RGB 默认值维持。5) variance_ratio 0.574 vs blur:4 模拟 0.605 与 mean_shift -2.5 复核: x_distortion 最弱 contrast_weaken sev1 方差乘子≈0.56 过强、brightness sev1 幅度远超 2.5/255，且噪声只会抬高方差 → 亚 severity 未建模差，无合法 global 步骤。",
+    "rationale": "R1 未发现可支持 CHANGE 的新证据: 纯确定性候选 blur_gaussian:4 三对 PSNR 均值 39.38 (<40, 仅 pair2 41.59>40)，未达确定性 CHANGE 门槛; 含噪候选维持 R0 的 noise_gaussian_RGB:2+blur_gaussian:4 (3/3 对 PARTIAL, sigma MATCH, structured_residual 为残余平滑结构)，无新噪声候选能达多数对 MATCH。blur_gaussian:4 由信号 (spectral_slope+wiener 3/3 对 MATCH) 与确定性 PSNR (3 对最优, lens/motion/sev3/sev5 全部更低) 双重确认。"
+  }
+}

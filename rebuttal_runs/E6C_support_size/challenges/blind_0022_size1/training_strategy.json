@@ -1,0 +1,31 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "step3_blur: verdict=UNCERTAIN, glass_score=0.4594>0.25 with sigma=0.62<3 -> glass DT, not motion; motion PSNR 18.24 rejected vs glass 28.41 -> OCAB motion gate (anisotropy>1.7 + motion) NOT met despite residual_anisotropy=2.059; exp37 rule: UNCERTAIN step adds no component",
+    "step1_compression: block_boundary=1.6844>1.1 (Tier S, 0% FP) + dct_zero_ratio=0.8248 -> JPEG LIKELY, but no architecture component maps to JPEG per finetune_strategy.md §七",
+    "step4_global: NO_GLOBAL, contrast_from_variance=false, contrast_spread_ratio=0.953, brightness_mean_shift=-0.1, saturation_chroma_ratio=0.9051; variance_ratio=0.8133 explained by blur variance loss -> no contrast Tier A -> ColorPre/FiLM-GCM disabled (FiLM-GCM additionally requires contrast+structured)",
+    "no noise: noise_prior sigma=0.62 unpeeled / 0.99 peeled < 2; peeled extreme_pct=58.31% matches known JPEG/blur FP rule",
+    "k=1 support does not relax any gate; default Direct + pure Swin + SimpleGate (exp39: -32K, 8/9 safe)"
+  ],
+  "rationale": "Multi-step glass blur + JPEG with UNCERTAIN blur step and no global/noise component evidence: all component gates fail (OCAB needs motion, ColorPre/FiLM-GCM need contrast Tier A), so pure Swin + SimpleGate + Direct is the safe choice per exp37/39 signal-gated protocol; 2-epoch, lr=5e-4 for parameter fairness."
+}

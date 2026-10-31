@@ -1,0 +1,77 @@
+{
+  "challenge_id": "blind_0008_size1",
+  "support_pairs_used": [
+    "pair0"
+  ],
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=0.990 (<1.05), unique_G_target=231 > clean=217, dct_zero_ratio=0.19 -> 无色阶压缩/量化证据",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.046, spectral_slope_ratio=1.050 (<1.08), anisotropy=0 -> 无模糊证据",
+      "noise": "sigma=0.25 (noise_prior) -> 远低于 sigma<2 NO_NOISE 阈值; 残差与强度相关 ric=0.688 更可能来自全局光度变化",
+      "global": "SATURATION_weaken: saturation_chroma_ratio=0.2001 (chroma std 降至 20%), variance_ratio=0.589, contrast_spread_ratio=1.1995, mean_shift=37.1/255 但三通道方向不一致 (brightness_detected=false) -> 去饱和解释方差/均值变化"
+    },
+    "mode": "PSNR (sigma=0.25 < 2)",
+    "qwen_gate": {
+      "available": false,
+      "triggered": false,
+      "reason": "sigma=0.25 < 2, Step 0.5 门控未触发"
+    },
+    "suspected": [
+      "saturate_weaken_HSV (sev 4: S scale=0.2)",
+      "saturate_weaken_YCrCb (sev 3/4)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary=0.99, unique_G 未减少)",
+      "blur (gm_ratio>1, slope_ratio<1.08)",
+      "noise (sigma=0.25)"
+    ],
+    "single_support_note": "k=1, 仅 pair0, 无法做跨对验证; clean.png/degraded.png 与 clean_0.png/degraded_0.png 为同 sha256 别名(pair0), 不构成额外 support"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 100.0,
+    "vm_slope": 0.0,
+    "var_slope": 0.0,
+    "spatial_corr": null,
+    "rgb_ratio": 0.0,
+    "cross_ch_corr": null,
+    "residual_std_after_peel": 0.0,
+    "diagnosis": "NO_NOISE — 剥离 saturate_weaken_HSV:4 后 peeled residual 恒零 (std=0.0, PSNR=inf), 任何噪声/模糊/JPEG 附加步骤都会破坏像素级一致性. §B 的 extreme_pct=100%/IMPULSE 是零残差导致的退化假阳性 (SKILL 已知 FP: extreme_pct>50% 且 noise_prior sigma<5 时忽略), spatial_corr/cross_ch_corr 为 nan 亦由零方差造成. 原始 noise_prior sigma=0.25 < 2, 按协议判 NO_NOISE"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "R1: 信号 saturation_chroma_ratio=0.2001 (chroma std 降至20%) + variance_ratio=0.589 + brightness_detected=false (三通道均值方向不一致) → 去饱和主假设; HSV S scale 在 sev4=0.2 与 chroma 比 0.20 精确吻合; 无 blur/compression/noise 信号, 全局为唯一强信号"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "psnr_note": "MSE=0, 像素级完全一致 (JSON 中 Infinity 为 inf PSNR 的序列化)",
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {"function": "saturate_weaken_HSV", "severity": 4, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "LIKELY",
+    "rationale": "saturate_weaken_HSV:4 在 pair0 上 PSNR=inf (MSE=0, 像素级完全一致), CI 10/10 (全部指标 diff=0). 信号链: saturation_chroma_ratio=0.2001 与 HSV sev4 的 S scale=0.2 吻合; variance_ratio=0.589 与 chroma 缩减一致; brightness_detected=false (三通道均值方向不一致) 排除 brightness; block_boundary=0.990/unique_G 未降排除 JPEG/量化; gm_ratio=1.046/slope_ratio=1.050 排除 blur; noise_prior sigma=0.25 + 剥离后残差恒零排除 noise. 确定性单步退化, PSNR>=40dB → LIKELY, Tier 1",
+    "single_support_note": "k=1 单 support (pair0), 无法做跨对验证; 但像素级精确匹配 (PSNR=inf) 本身即为该对上的完全确定结论"
+  }
+}

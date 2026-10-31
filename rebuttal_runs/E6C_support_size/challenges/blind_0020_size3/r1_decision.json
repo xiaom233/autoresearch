@@ -1,0 +1,64 @@
+{
+  "challenge_id": "blind_0020_size3",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 5],
+    ["contrast_weaken_stretch", 4],
+    ["saturate_weaken_HSV", 3]
+  ],
+  "r1_pipeline": [
+    ["blur_glass", 4],
+    ["contrast_weaken_stretch", 4]
+  ],
+  "support_psnr_r0": 17.91,
+  "candidates_tested": [
+    {
+      "pipeline": [["blur_glass", 5], ["contrast_weaken_stretch", 4], ["saturate_weaken_HSV", 3]],
+      "pairs": {"pair0": 34.82},
+      "note": "DT glass branch first test; +0.53 dB vs R0 gaussian5 on pair0"
+    },
+    {
+      "pipeline": [["blur_glass", 4], ["contrast_weaken_stretch", 4], ["saturate_weaken_HSV", 3]],
+      "pairs": {"pair0": 35.36},
+      "note": "glass severity scan: sev4 > sev5; +1.07 dB vs R0 pair0"
+    },
+    {
+      "pipeline": [["blur_gaussian", 4], ["contrast_weaken_stretch", 4], ["saturate_weaken_HSV", 3]],
+      "pairs": {"pair0": 34.78},
+      "note": "same-severity gaussian control: glass4 beats gaussian4 by 0.58 dB"
+    },
+    {
+      "pipeline": [["blur_glass", 4], ["contrast_weaken_stretch", 4], ["saturate_weaken_HSV", 1]],
+      "pairs": {"pair0": 38.76},
+      "note": "saturation re-scan under stretch4 (R0 only scanned sat under stretch1): sat3 -> sat1 = +3.40 dB"
+    },
+    {
+      "pipeline": [["blur_glass", 4], ["contrast_weaken_stretch", 4]],
+      "pairs": {"pair0": 40.69, "pair1": 38.27, "pair2": 43.57},
+      "note": "saturation boundary test (remove sat entirely): +5.33 dB over sat3 on pair0; accepted winner, validated on all k=3 pairs"
+    }
+  ],
+  "test_candidate_calls": 7,
+  "best_validation": {
+    "pipeline": [["blur_glass", 4], ["contrast_weaken_stretch", 4]],
+    "pair0_0227_psnr": 40.69,
+    "pair1_0459_psnr": 38.27,
+    "pair2_0032_psnr": 43.57,
+    "mean_psnr": 40.84,
+    "r0_pipeline_pair_psnr": {"pair0": 34.29, "pair1": 28.14, "pair2": 36.14},
+    "r0_mean_psnr": 32.86,
+    "delta_mean_db": 7.98,
+    "per_pair_delta_db": {"pair0": 6.40, "pair1": 10.13, "pair2": 7.43},
+    "ci_pass": {"pair0": "9/10", "pair1": "10/10", "pair2": "9/10"}
+  },
+  "signal_sources": [
+    "blur subtype: full_analysis_R1 step3_blur verdict=GLASS_BLUR, glass_score=0.3044 (>0.25 DT glass gate), sigma=0.37<3, gm_ratio=0.1377, spectral_slope_ratio=1.4039; anisotropy=1.4991<1.7 excludes motion; R0 chose gaussian default and never PSNR-tested glass",
+    "blur severity: gm_ratio=0.1377 embeds contrast contraction c=0.6 -> severity 4 fits better than 5 (pair0 glass4 35.36 vs glass5 34.82)",
+    "saturation false positive: full_analysis step4_global false_positive_checks.contrast_from_saturation=true; chroma_ratio=0.5045 is explained by per-channel contrast_weaken_stretch c=0.6; CI unique_G sim-target diff=-30 (28%) signalled over-contraction; sat axis under stretch4: sat3 35.36 -> sat1 38.76 -> no sat 40.69; removing sature_weaken_HSV also fixed unique_G (diff -1/1% pair0, 0% pairs1-2)",
+    "global contrast: variance_ratio=0.1878 (std ratio 0.433), mean_shift=-22.6 (stretch mean->0.5, clean mean~0.589), clipped_fraction=0.0045 preserved by stretch family; stretch sev4 already bracketed by R0 (sev1 26.49 / sev2 29.92 / sev3 32.69 / sev4 34.29 / sev5 27.51)",
+    "no JPEG: block_boundary=1.0024 (<1.1, 0% FP); no noise: noise_prior sigma=0.37 (<2); no quantization: unique_G=106 [106,106,106] fully reproduced by the 2-step pipeline (unique_G error 1%/0%/0% on k=3), so the unique_G<200 rule is satisfied without a compression step",
+    "k=3 support consistency: 40.69/38.27/43.57 dB, CI 9/10, 10/10, 9/10; content spread is small, unlike R0's 28.1-36.1 dB"
+  ],
+  "reason": "Signal reinterpretation (not R0 residual diagnosis) identified two R0 interpretation errors: (a) the blur DT explicitly returns GLASS (glass_score 0.3044 > 0.25) and R0 never tested it; (b) saturation was a false positive — chroma_ratio=0.5045 is produced by contrast_weaken_stretch's per-channel c=0.6 contraction (the full_analysis itself flags contrast_from_saturation=true), and CI unique_G showed over-contraction. Dropping the saturation step and using blur_glass:4 gives 40.69 / 38.27 / 43.57 dB on the same k=3 pairs (mean 40.84, +7.98 dB vs R0 mean 32.86; every pair improves >= 6.4 dB), so CHANGE is unambiguous under the >40 dB / +2 dB rule."
+}

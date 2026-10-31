@@ -1,0 +1,32 @@
+{
+  "challenge_id": "blind_0011_size1",
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 2, "verdict": "UNCERTAIN"},
+    {"function": "blur_gaussian", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 2},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "function_family": "noise_YCrCb",
+      "evidence": "同顺序同 sigma 检查通过 (PARTIAL 3✓/1✗)，但类型对照剥离中 YCrCb 模拟使残差 B 通道 std 升到 5.7，而实际 blur-only 剥离残差 B std 仅 1.8 (最低) → B 通道安静，不支持 YCrCb。保留为跨族备选。"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3},
+        {"function": "blur_gaussian", "severity": 4}
+      ],
+      "function_family": "noise_Gaussian_RGB_severity_variant",
+      "evidence": "noise→blur 顺序下分离噪声与结构不可靠；sev1/2/3 的 sigma 检查均在 20% 阈值内。由 blur-only 剥离残差 std=2.9 反推目标有效噪声 σ≤2.9 (对应原始 sev≤3)，sev2 取中值；sev3 为严重度备选。"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode: sigma=3.09, CI/PSNR 未使用)",
+    "mode": "SIGNAL (sigma=3.09)",
+    "rationale": "两步混合退化 (含噪声, Tier 3)。blur: gaussian sev4 在噪声鲁棒信号上 MATCH (spectral_slope diff<0.08, Wiener kernel corr>0.85)，motion sev5/3 MISMATCH、gaussian sev5 WEAK；noise: gaussian_RGB sev2，noise→blur 顺序 (挑战生成器 priority + 剥离残差高空间相关/FWHM 大; 反向顺序 sigma 差 6177%)，sigma 检查通过但 sev1-3 均通过 → 类型/严重度按 SKILL noise→blur 规则不可靠，标 UNCERTAIN；global 无 (R6 反推 blur-only variance_ratio≈0.604 vs 目标 0.574, 差 6%<8% → 方差/色度下降由强模糊解释，均值偏移 -2.5/255 远小于 brightness 最小档 -25.5/255)；JPEG 排除 (block_boundary=1.000, 0%FP)。k=1 单 support，无法跨对验证。"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": true,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "识别置信: 终选管线 blur_glass:4 + contrast_weaken_stretch:4 在唯一 pair0 两次独立施加 PSNR=40.66/40.67 dB (reflection.json R7/R10), CI 9/10, verdict=LIKELY/Tier1 (predicted_params.json analysis; 确定性退化, PSNR 判据可用)",
+    "ColorPre 门控 (contrast Tier A): full_analysis step4 variance_ratio=0.1878≠1.0 (contrast_from_variance=true), contrast_spread_ratio=0.4362, mean_shift=-22.6 → contrast 信号明确; 跨族对照 brightness_darken_gamma_RGB:2 仅 14.87 dB (reflection R9) 排除 gamma; finetune_strategy §七 Tier A → ColorPre (exp38 +0.62 dB, exp10 SF1 +18.91)",
+    "saturation 禁用场景排除: saturation_chroma_ratio=0.5045 由单一 S 曲线 contrast_weaken_stretch 一并解释 (盲挑战单 global; 40.66 dB 复核无第二 global 残差), 终选管线不含 saturation 步骤, ColorPre 的 saturation 有害场景不适用",
+    "OCAB 不启用: residual_anisotropy=1.5045<1.7, blur_pca_ratio=1.34, glass_score=0.3012 → glass blur 非 motion, 不满足 anisotropy>1.7 + motion 门控",
+    "FiLM-GCM 不启用: 结构化局部为 glass pixel-shuffle, 非 motion/jpeg (anisotropy<1.7; block_boundary=1.0036<1.05 无 JPEG), 不满足 contrast+结构化 门控",
+    "SimpleGate 常开: exp39 -32K 参数, 8/9 退化安全 (L2 +0.78), 默认启用",
+    "无 compression/noise 训练步骤: block_boundary=1.0036<1.05 无 JPEG; noise_prior sigma=0.37 (full_analysis) / 0.74 (peeled, reflection) <2, §B extreme_pct=67.88% 判为 blur 伪影假阳性 → NO_NOISE",
+    "策略 Direct: 管线含 contrast (contrast_weaken_stretch) → finetune_strategy Step1 保守 Direct; True Ft 在 2-epoch 预算下 ≈ Direct (exp37) 不采用",
+    "k=1 (单 support, support_manifest.json) 无跨对验证, 门控不放宽; 上述决策只依赖 Tier A 信号数值, 与 support 数量无关; 训练使用预测管线参数, GT 仅用于最终评估"
+  ],
+  "rationale": "纯 Swin + SimpleGate + Direct, 并因 contrast Tier A 门控启用 ColorPre: 全局退化 contrast_weaken_stretch 经 PSNR 40.66/40.67 dB 高置信确认, variance_ratio=0.1878 为 Tier A 信号, 是 ColorPre 唯一允许触发条件 (exp38 contrast +0.62); blur 为 glass (anisotropy=1.5045<1.7) 非 motion, 不触发 OCAB; 无 motion/jpeg 结构化局部, 不触发 FiLM-GCM; 无 JPEG/噪声步骤。k=1 不放宽门控, 与 size3 采用同一门控逻辑。"
+}

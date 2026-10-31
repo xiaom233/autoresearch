@@ -1,0 +1,238 @@
+{
+  "step1_compression": {
+    "verdict": "COMPRESSION_DETECTED",
+    "confidence": "high",
+    "signals": {
+      "block_boundary": 1.7592,
+      "unique_G_target": 256,
+      "unique_G_clean": 256,
+      "unique_G_ratio": 1.0,
+      "unique_per_channel": [
+        256,
+        256,
+        256
+      ],
+      "dct_zero_ratio": 0.7233
+    },
+    "subtype": "JPEG",
+    "_for_step4": {
+      "block_uniformity": 1.7592,
+      "jpeg_detected": true
+    }
+  },
+  "step2_noise": {
+    "verdict": "GAUSSIAN_YCrCb",
+    "confidence": "low",
+    "signals": {
+      "noise_prior_sigma": 0.74,
+      "impulse_zero_ratio": 0.0345,
+      "spatial_corr": 0.9192,
+      "cross_channel_corr": 0.8466,
+      "residual_intensity_corr": 0.337,
+      "gamma_suspect_from_noise": true
+    },
+    "estimated_severity": 3,
+    "_for_step4": {
+      "sigma": 0.74,
+      "can_fake_contrast": false,
+      "can_fake_saturation": false,
+      "can_fake_brightness": false
+    }
+  },
+  "step3_blur": {
+    "verdict": "BLUR_UNLIKELY",
+    "confidence": "low",
+    "signals": {
+      "gm_ratio": 1.4471,
+      "gm_ratio_usable": true,
+      "spectral_slope_target": -1.0216,
+      "spectral_slope_clean": -1.0949,
+      "spectral_slope_ratio": 0.933
+    },
+    "should_still_test": true,
+    "note": "gm_ratio=1.447 (noise-destroyed), spectral_slope_ratio=0.933 (threshold=1.08)",
+    "suggested_action": "Test 2-3 blur candidates via PSNR — noise/blur coupling can mask blur in both gm and spectral signals"
+  },
+  "step4_global": {
+    "verdict": "SATURATION_strengthen_sev5",
+    "signals": {
+      "brightness_mean_shift": 16.4,
+      "brightness_detected_raw": true,
+      "clipped_fraction": 0.1233,
+      "heavy_clipping": true,
+      "variance_ratio": 2.3398,
+      "contrast_from_variance": false,
+      "contrast_spread_ratio": 1.1093,
+      "contrast_detected_raw": true,
+      "saturation_chroma_ratio": 1.715,
+      "saturation_detected_raw": true,
+      "contrast_saturation_corrected": true,
+      "oversharpen_detected_raw": false
+    },
+    "false_positive_checks": {
+      "brightness_from_jpeg": true,
+      "contrast_from_saturation": true
+    },
+    "confidence": "low"
+  },
+  "failure_risks": [
+    "NOISE_TYPE_UNCERTAIN",
+    "FP_global_risk",
+    "FP_blur_risk",
+    "FP_YCrCb_GAMMA_SUSPECT"
+  ],
+  "recommended_reflection": [
+    "Re-run §B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+    "PSNR verify: test if adding global degradation improves over non-global. Global is already 90% accurate",
+    "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+    "YCrCb noise detected but residual correlated with intensity → may be gamma. Test gamma candidates as alternative."
+  ],
+  "recommended_architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "extra_flags": [
+      "AR_USE_DUAL_BRANCH=1"
+    ],
+    "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+  },
+  "summary": {
+    "detected_degradations": [
+      "compression: COMPRESSION_DETECTED",
+      "noise: GAUSSIAN_YCrCb (sev~3)",
+      "blur: BLUR_UNLIKELY",
+      "global: SATURATION_strengthen_sev5"
+    ],
+    "recommended_search_order": [
+      "compression candidates: JPEG, JPEG2000",
+      "noise candidates: GAUSSIAN_YCrCb+related types",
+      "blur: BLUR_UNLIKELY (gm_ratio_usable=True)",
+      "global candidates (FP checks: {'brightness_from_jpeg': np.True_, 'contrast_from_saturation': True})"
+    ],
+    "total_expected_steps": 4,
+    "confidence": "medium",
+    "failure_risks": [
+      "NOISE_TYPE_UNCERTAIN",
+      "FP_global_risk",
+      "FP_blur_risk",
+      "FP_YCrCb_GAMMA_SUSPECT"
+    ],
+    "reflection_strategies": [
+      "Re-run §B 6-step statistical check. Do NOT use PSNR for noise type selection (experiment: 0/1 PSNR success)",
+      "PSNR verify: test if adding global degradation improves over non-global. Global is already 90% accurate",
+      "PSNR test: verify if blur candidate actually improves PSNR vs noise-only baseline",
+      "YCrCb noise detected but residual correlated with intensity → may be gamma. Test gamma candidates as alternative."
+    ],
+    "recommended_architecture": {
+      "attention_type": "swin",
+      "window_size": 8,
+      "extra_flags": [
+        "AR_USE_DUAL_BRANCH=1"
+      ],
+      "note": "DualBranch: multi-step/uncertain, best robustness (10.1 dB gap)"
+    }
+  },
+  "signal_reliability": {
+    "compression": {
+      "block_boundary": {
+        "accuracy": "0% FP (exp17: 35/35, exp18: 10/10)",
+        "rule": ">1.1 → JPEG confirmed. DO NOT override with PSNR."
+      },
+      "unique_G": {
+        "accuracy": "0% FP for compression presence (exp18: 32/32)",
+        "rule": "<200 → compression EXISTS. But JPEG may not be the cause — test JPEG2000 if PSNR fails."
+      }
+    },
+    "blur": {
+      "hybrid_dt": {
+        "accuracy": "83.4% (3840-case). gaussian=94% lens=79% motion=82% glass=79%. FP(glass)=140",
+        "rule": "Hybrid mode: glass_detected→depth=4, else→depth=3. Best of both worlds."
+      },
+      "depth3": {
+        "accuracy": "72.9%, gaussian=94% (safe default), FP=898"
+      },
+      "depth4": {
+        "accuracy": "75.1%, glass=79% (aggressive), FP(glass)=723"
+      }
+    },
+    "noise": {
+      "dt_depth4_blur_first": {
+        "accuracy": "87.4% (1920-case, GT-stripped). gaussian=97% speckle=82% poisson=80% impulse=90%",
+        "rule": "Trust when PSNR confirms blur→noise order. Use peeled_noise_check.py §B features."
+      },
+      "dt_depth4_noise_first": {
+        "accuracy": "54.7% ≈ random. Blur convolution Gaussianizes noise (CLT).",
+        "rule": "When noise→blur confirmed, mark noise type UNCERTAIN. Classification impossible."
+      }
+    }
+  },
+  "reflection_triggers": [
+    {
+      "trigger": "peeled §B extreme_pct 假阳性",
+      "condition": "extreme_pct>50% AND noise_prior sigma<5 → likely JPEG/blur artifact, not real impulse",
+      "action": "Ignore §B IMPULSE diagnosis. Trust noise_prior type. Test gaussian_RGB and noise_prior type only.",
+      "note": "Known FP: JPEG/blur residuals inflate extreme_pct to 50%+ even without impulse noise."
+    }
+  ],
+  "agent_instructions": {
+    "verification_mode": "PSNR",
+    "reason": "sigma=0.7 < 2 → PSNR可用",
+    "verdict_allowed": "GOOD/LIKELY/UNCERTAIN/POOR",
+    "candidates": [
+      {
+        "step": "compression",
+        "signal": "block_boundary=1.759",
+        "pipeline": "compression_jpeg:3",
+        "verify_with": "compare_degradation.py"
+      },
+      {
+        "step": "blur",
+        "signal": "BLUR_UNLIKELY but should_still_test",
+        "pipeline": "blur_gaussian:1",
+        "optional": true,
+        "verify_with": "compare_degradation.py"
+      },
+      {
+        "step": "noise",
+        "signal": "sigma=0.7, type=GAUSSIAN_YCrCb",
+        "pipeline": "noise_gaussian_YCrCb:3",
+        "alternatives": [
+          "noise_gaussian_RGB:3"
+        ],
+        "verify_with": "compare_degradation.py",
+        "note": ""
+      },
+      {
+        "step": "global",
+        "signal": "variance_ratio=2.340, mean_shift=16.4",
+        "pipeline": "saturate_strengthen_HSV:5",
+        "verify_with": "compare_degradation.py",
+        "fp_checks": {
+          "brightness_from_jpeg": true,
+          "contrast_from_saturation": true
+        }
+      }
+    ],
+    "execution_order": [
+      "1. 按顺序测试每个候选: apply_multi.py → verify_signals.py",
+      "2. 解读 verify_signals.py 输出:",
+      "   MATCH   → 保存, 进入下一步",
+      "   PARTIAL → 【severity 扫描 ±1】: 同类型, sev±1 各测1次 → 选最佳",
+      "   WEAK    → 【severity 扫描 ±2】: 同类型, sev±2 各测1次 → 若改善→保留; 否则换子类型",
+      "   MISMATCH→ 【severity 扫描 ±2】: 先扫 severity, 仍无改善→换子类型 (≤2种替代)",
+      "3. 🔴 severity 扫描是强制步骤, 不可跳过。禁止在 WEAK 时直接换类型而不扫 severity。",
+      "4. 每类退化最多: 1个主候选 + 4个severity扫描 + 2个替代类型 = 7次测试",
+      "5. 所有步骤完成 → 合并 pipeline → 最终 verify_signals.py 确认",
+      "6. 保存 predicted_params.json (verdict 遵守允许值)"
+    ],
+    "severity_scan_rules": {
+      "when": "verify_signals 输出 PARTIAL / WEAK / MISMATCH",
+      "how": "保持函数名不变, severity 从 est-2 扫到 est+2 (限制 1-5 范围内)",
+      "stop": "任一 severity 达到 MATCH → 立即停止扫描",
+      "fallback": "全部 severity 未达 MATCH → 选 score 最高的, 然后尝试换子类型"
+    },
+    "forbidden": [
+      "❌ PSNR<30 时声称 LIKELY",
+      "❌ 测试超过 3 个 severity 候选"
+    ]
+  }
+}

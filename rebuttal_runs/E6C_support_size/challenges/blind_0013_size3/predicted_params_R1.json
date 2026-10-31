@@ -1,0 +1,74 @@
+{
+  "challenge_id": "blind_0013_size3",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["noise_gaussian_YCrCb", 4],
+    ["compression_jpeg", 2]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 2},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": null,
+      "stats": "PASS(pair0 PARTIAL, sigma diff=37%); pair1/pair2 未测 (R1 severity 扫描中间点, 单调收敛至 sev3)",
+      "function_family": "noise_speckle (同乘性族 severity -1 备份)"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 4},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": null,
+      "stats": "R0 管线: pair0 PARTIAL(sigma diff=37%) / pair1 MATCH / pair2 MATCH",
+      "function_family": "noise_gaussian_YCrCb (R0 加性族备份)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL 模式; sigma=4.82>2, PSNR 按协议禁用)",
+    "mode": "SIGNAL (sigma=4.8)",
+    "k": 3,
+    "k_pair_validation": {
+      "pair0": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "3/3 信号匹配 (noise:sigma, noise:clean_residual, compression:block_boundary)"
+      },
+      "pair1": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "3/3 信号匹配"
+      },
+      "pair2": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "3/3 信号匹配"
+      }
+    },
+    "signal_sources": {
+      "speckle_type": "peeled §B vm_slope=2.6336 (>>0.01 speckle 阈值) + intensity_var_corr=0.9535 + rgb_ratio=1.0259 + ch_stds R23.5/G23.1/B22.9 (三通道等量乘性, R0 归因 JPEG 污染未测乘性族)",
+      "multiplicative_content_scaling": "三对 full_analysis sigma=4.82/2.22/1.36 与内容亮度 (clipped_fraction=6.36%/1.08%/0.05%) 同序变化 → 加性噪声无法解释, 乘性噪声自动随强度缩放",
+      "intensity_corr": "residual_intensity_corr=0.3256/0.2128/0.4518 (三对均 gamma_suspect=true) → 乘性噪声假设 (非 gamma: 见 gamma_exclusion)",
+      "gamma_exclusion": "brightness_*_gamma_* 最小强度 (γ=0.8/1.4) 在中灰 0.5 处 mean_shift≈+0.074/-0.121 (19/31 per 255), 观测 max|mean_shift|=4.1/255=0.016 → 全部 gamma 强度定量排除",
+      "impulse_exclusion": "extreme_pct=61.13% >> impulse sev5 amount=10%, 且命中已知 FP 规则 (extreme>50% + JPEG 残留)",
+      "compression": "block_boundary=1.2085/1.514/1.784 三对 0%FP 阳性; speckle:3 搭配下 jpeg:2 在 3 对 bb 均匹配 (R0 已同内容排除 jpeg:1/3)"
+    },
+    "rationale": "R1 信号重释: R0 将 peeled §B 的 vm_slope=2.6336/高 intensity_var_corr=0.9535 归因于 JPEG 污染, 只测了加性 gaussian (RGB:3/4/5, YCrCb:3/4/5), 从未测乘性噪声. 三对 sigma 估计 4.82/2.22/1.36 与内容亮度同序 (clipped 6.36%/1.08%/0.05%), 加性噪声无法解释该内容依赖; 乘性 speckle 天然随强度缩放. severity 扫描 speckle:1→2→3 (pair0 sigma diff 62%→37%→MATCH), speckle:3 在 pair1/pair2 亦 3/3 MATCH → k=3 全对 MATCH (9/9 检查), 相比 R0 (2/3 MATCH, pair0 PARTIAL sigma 37%) 唯一未匹配对升级为 MATCH 且零回退 → CHANGE. 噪声步随机性 → verdict 永不为 LIKELY; compression 因 sigma>2 无 PSNR 仍标 UNCERTAIN; overall UNCERTAIN."
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "challenge_id": "blind_0017_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_gaussian",
+      3
+    ],
+    [
+      "compression_jpeg",
+      4
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:2",
+      "psnr": 28.62,
+      "function_family": "gaussian+jpeg",
+      "stats": {
+        "note": "R0 pair0 PSNR 最高, 但模拟 gm_ratio=0.138 与目标 0.199 严重不符 (过糊), 不采纳"
+      }
+    },
+    {
+      "pipeline": "blur_lens:5,compression_jpeg:3",
+      "psnr": 28.32,
+      "function_family": "lens+jpeg",
+      "stats": {
+        "note": "跨族模糊备选 (MTF 与 gaussian 不可区分), gm=0.157; R1 另测 lens:3+j4=27.63 仍劣于 gaussian"
+      }
+    },
+    {
+      "pipeline": "blur_gaussian:3,contrast_weaken_scale:1,compression_jpeg:4",
+      "psnr": 27.83,
+      "function_family": "gaussian+global+jpeg",
+      "stats": {
+        "note": "为解释 var/chroma 系统性偏低而设的全局假设; 库内最轻档仍过强 (27.83), R1 stretch:1 进一步恶化至 21.77, 不采纳"
+      }
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR (sigma=0.74 < 2, NO_NOISE)",
+    "support_psnr_r0": 23.13,
+    "k_pair_psnr": {
+      "pair0": 28.25,
+      "pair1": 27.36,
+      "pair2": 26.43
+    },
+    "psnr_gap": 0.37,
+    "signal_reanalysis_R1": {
+      "compression": "CONFIRMED JPEG: block_boundary=8.441, unique_G=224 vs clean 249 (ratio 0.90), dct_zero_ratio=0.9561; pair1 独立复核 bb=8.682/dct_zero=0.9413",
+      "blur": "CONFIRMED gaussian:3: gm_ratio=0.1986 vs gaussian:3 模拟 0.1978 (0.4%); spectral_slope 差 0.035 (<0.08); residual_anisotropy=1.408<1.7 (非 motion); glass_score=1.62 远超 glass 标定区间 0.19-0.41 → JPEG 块效应伪信号, 不采信",
+      "noise": "NO_NOISE: noise_prior sigma=0.74 = 模拟基线; peeled §B 残差 spatial_corr=0.9675 → 结构化; extreme_pct=78.78% 为 JPEG 伪影 FP (SKILL 规则: extreme>50% 且 sigma<5 忽略 IMPULSE); rgb_ratio=1.51 由色度残差 (B std 11.9 vs R 8.3/G 7.9) 驱动, 非噪声",
+      "global": "NO_GLOBAL by threshold, 但残余系统性失配: variance_ratio 0.734 (pair1 0.778), contrast_spread 0.867 (0.900), chroma 0.854 (0.905), mean_shift=-0.2 (-1.0), clipped=0.0001 → 疑轻度全局步骤但库内无匹配强度"
+    },
+    "r1_hypotheses_tested": [
+      {
+        "pipeline": "blur_gaussian:3,contrast_weaken_stretch:1,compression_jpeg:4",
+        "pair0_psnr": 21.77,
+        "ci": "4/10",
+        "result": "拒绝: stretch:1 仍为强非线性变换, 远超所需 c≈0.88"
+      },
+      {
+        "pipeline": "blur_lens:3,compression_jpeg:4",
+        "pair0_psnr": 27.63,
+        "ci": "6/10",
+        "result": "拒绝: 跨族模糊劣于 gaussian (28.25/8-10)"
+      },
+      {
+        "pipeline": "blur_gaussian:2,compression_jpeg:4",
+        "pair0_psnr": 27.53,
+        "ci": "6/10",
+        "result": "拒绝: 更轻模糊破坏 gm 匹配, bb 收益不足以补偿"
+      }
+    ],
+    "rationale": "R1 信号重释未发现可改变结论的新证据: compression/blur 主步信号在 3 对上一致且强, 无噪声; 唯一残余失配 (目标 RGB var/spread/chroma 系统性低 10-19% 且均值不变) 无法用库内任何全局函数最轻档解释 (stretch:1=21.77, scale:1=27.83, sat_HSV:1=27.16 全部过强或方向错误), 判为库外全局步骤/编码器差异。R1 三个新候选在 pair0 均无 +2dB 改善 (最高 27.63 < 30.25 阈值), R0 管线在 3 对 support 上完全复现 (28.25/27.36/26.43), 无单对失败 → 保持 R0 管线, 整体 UNCERTAIN 交由训练 PSNR 仲裁。"
+  }
+}

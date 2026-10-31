@@ -1,0 +1,103 @@
+{
+  "challenge_id": "blind_0012_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_motion",
+      3
+    ],
+    [
+      "compression_jpeg",
+      4
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        [
+          "blur_motion",
+          4
+        ],
+        [
+          "compression_jpeg",
+          4
+        ]
+      ],
+      "psnr": 23.81,
+      "ci_pass": "7/10",
+      "function_family": "motion",
+      "note": "single sample; sev3 vs sev4 indistinguishable within random motion-angle scatter (sev3 R1 sample 24.55; gm_ratio severity estimate 4 is JPEG-contaminated)"
+    },
+    {
+      "pipeline": [
+        [
+          "blur_motion",
+          3
+        ],
+        [
+          "compression_jpeg",
+          3
+        ]
+      ],
+      "psnr": 27.18,
+      "ci_pass": "7/10",
+      "function_family": "motion",
+      "note": "best single PSNR (lucky random angle); 6 samples mean 23.37 < jpeg:4 mean 23.75; combined block_boundary diff 12% > 8% threshold at jpeg:3"
+    },
+    {
+      "pipeline": [
+        [
+          "blur_glass",
+          4
+        ],
+        [
+          "compression_jpeg",
+          4
+        ]
+      ],
+      "psnr": null,
+      "ci_pass": null,
+      "function_family": "glass",
+      "note": "SKILL Step2 glass branch (glass_score=1.2361>0.25, residual_anisotropy=1.4348<1.7, sigma=0.74<3); NOT tested at jpeg:4 within R1 budget (5/5 candidates used); glass:4+jpeg:3 R0 = 21.67 dB (< motion samples); glass is random-family so single-pair PSNR cannot confirm; kept as unvalidated cross-family alternative"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "7/10",
+    "mode": "PSNR (sigma=0.74<2) + peeled signal check (sigma=1.48<2 -> NO_NOISE)",
+    "rationale": "R1 信号重释后维持 R0 管线。JPEG: block_boundary=2.7761 (0% FP) + dct_zero_ratio=0.8877 确认，jpeg:4 时组合 block_boundary 差 0%/5% (<8%)，jpeg:3 时 12% → sev4 更受支持。Blur: PCA=4.432>2.5 (0% FP) 支持 motion 族；residual_anisotropy=1.4348<1.7（阈值边界，JPEG 后置各向同性块效应稀释）使 SKILL Step2 树的 glass 分支成立（glass_score=1.2361>0.25），但 glass 为随机核族，单对 PSNR 无法确认，且 R0 glass:4+jpeg:3=21.67 dB 低于 motion 样本 → 仅列为 alternative。确定性对照 gaussian:5+jpeg:4=22.91 / lens:5+jpeg:4=22.65 远低于 40 dB → gaussian/lens 排除。motion severity: sev3 (jpeg:4) R1 样本 24.55，R0 同管线 21.84/24.87（随机角度 ±2.5 dB），sev4 单样本 23.81，sev2=20.44，sev5=22.44 → 无 +2 dB 可靠改善，sev3 维持。无全局退化（mean_shift=-0.4/255, variance_ratio=0.8691 由 blur+JPEG 解释, clipped=0.0005）。剥离后 extreme_pct=52.67% 为已知 JPEG/blur 伪影假阳性（spatial_corr=0.9583 结构化残差），sigma 1.48<2 → NO_NOISE。",
+    "support": {
+      "k": 1,
+      "pairs_used": [
+        "pair0 (clean.png/degraded.png; clean_0.png/degraded_0.png identical aliases per support_manifest.json sha256)"
+      ],
+      "single_pair_limitation": "单对 support，无法跨对验证；motion 角度/glass 核随机导致单对 PSNR 抖动 ±2.5 dB，随机族候选无法用 PSNR 确认；证据不足 → NO_CHANGE（阈值未因 k=1 放宽）"
+    },
+    "deterministic_family_control": {
+      "blur_gaussian:5,compression_jpeg:4": 22.91,
+      "blur_lens:5,compression_jpeg:4": 22.65,
+      "note": "确定性模糊精确复现应 >40 dB；22.6-23.3 dB 排除 gaussian/lens（含 R0 gaussian:3/4、lens:4 样本 22.70-23.25）"
+    },
+    "r1_best_validation": {
+      "pipeline": "blur_motion:3 + compression_jpeg:4",
+      "psnr_rgb": 24.55,
+      "ci_pass": "7/10",
+      "round": 30,
+      "note": "即 R0 管线本身；未超过上一轮最佳单样本 27.18 dB +2 dB，且随机角度抖动覆盖该差异 → 不构成 CHANGE"
+    }
+  }
+}

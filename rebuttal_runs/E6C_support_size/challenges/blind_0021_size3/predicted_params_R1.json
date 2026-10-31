@@ -1,0 +1,75 @@
+{
+  "challenge_id": "blind_0021_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_lens", 4],
+    ["brightness_brighten_shfit_RGB", 1],
+    ["compression_jpeg", 4]
+  ],
+  "pipeline": [
+    {"function": "blur_lens", "severity": 4, "verdict": "UNCERTAIN"},
+    {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr_pair0_same_order": 30.70,
+      "ci_pass_rate": "9/10",
+      "function_family": "blur_cross_family (gaussian vs lens)",
+      "note": "R1 同序对照(blur->brightness->JPEG): 30.70 < lens 34.83 (-4.13dB)。MTF 文档记载 gaussian/lens 不可分，但同序像素级 PSNR 稳健支持 lens。"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 4},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr_pair0": null,
+      "signal_verdict_pair0": "PARTIAL 4/5 (Wiener corr=0.838<0.85)",
+      "function_family": "blur_stochastic (glass pixel shuffle)",
+      "note": "glass 为随机像素打乱，PSNR 无效(SKILL C.4)。同序信号对照劣于 lens(MATCH 5/5)。DT 证据处于边界: flatness=0.4053 仅高于 gaussian/glass 分界 0.39 共 0.015; glass_score=1.023 远超 glass 校准区间 0.19-0.41。"
+    }
+  ],
+  "analysis": {
+    "overall_verdict": "UNCERTAIN",
+    "decision": "NO_CHANGE",
+    "mode": "PSNR (peeled noise_prior sigma=1.48<2 -> NO_NOISE) + signal 模式验证非确定性模糊",
+    "support_psnr_r0": 26.51,
+    "r0_validation": {
+      "pair0": 34.83,
+      "pair1": 38.34,
+      "pair2": 43.15,
+      "ci_pass_rate": "10/10 each"
+    },
+    "change_gate": "确定性候选 >40dB 或相对上一轮 +2dB；随机 blur 用同序信号对照(类比 noise 规则，SKILL C.4)。无候选达标。",
+    "candidates": [
+      {"id": "H1_order", "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4", "mode": "psnr", "k3_psnr": [33.97, 36.66, 42.88], "delta_vs_r0": [-0.86, -1.68, -0.27], "decision": "REJECT"},
+      {"id": "H2_gaussian4", "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4", "mode": "psnr", "pair0_psnr": 30.70, "decision": "REJECT"},
+      {"id": "H3_gaussian5", "pipeline": "blur_gaussian:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4", "mode": "psnr", "pair0_psnr": 27.82, "decision": "REJECT"},
+      {"id": "H4_lens_signal", "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4", "mode": "signal", "pair0": "MATCH 5/5", "decision": "BASELINE"},
+      {"id": "H5_glass_signal", "pipeline": "blur_glass:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4", "mode": "signal", "pair0": "PARTIAL 4/5 (Wiener 0.838)", "decision": "REJECT"}
+    ],
+    "signal_recheck": {
+      "full_analysis_R1": "与 R0 full_analysis.json 逐字段一致，仅 residual_intensity_corr -0.1851 -> -0.1893",
+      "block_boundary": 3.2006,
+      "dct_zero_ratio": 0.903,
+      "gm_ratio": 0.4047,
+      "spectral_slope_ratio": 1.224,
+      "residual_anisotropy": 1.6547,
+      "glass_score": 1.0231,
+      "blur_pca_ratio": 1.258,
+      "blur_flatness": 0.4053,
+      "brightness_mean_shift": 24.0,
+      "variance_ratio": 0.8055,
+      "peeled_noise_sigma": 1.48,
+      "peeled_residual_std": 4.6
+    },
+    "rationale": "R1 信号重释确认 R0 管线。JPEG: block_boundary=3.2006 (0%FP) + dct_zero_ratio=0.903，同序信号 MATCH。brightness: mean_shift=+24.0 精确匹配 shift_RGB:1 (c=0.10, +25.5 经 1.9% 高光限幅)，同序信号 MATCH。blur: lens:4 同序信号 MATCH 5/5 (spectral_slope+Wiener)，k=3 PSNR 34.83/38.34/43.15 全 CI 10/10；同序 gaussian:4=30.70、gaussian:5=27.82 均低 4-7dB；第三合法顺序 brightness->blur->JPEG 在 k=3 全部低于 R0 (-0.86/-1.68/-0.27dB)。glass 仅边界级证据 (flatness=0.4053 vs 分界 0.39；glass_score=1.023 超校准区间 0.19-0.41，疑为 JPEG/clipping 抬高)，同序信号 PARTIAL 劣于 lens MATCH。motion: anisotropy=1.6547<1.7 且 pca=1.258<2.5 (PCA 0%FP) 排除。noise: peeled sigma=1.48<2，extreme_pct=92.14% 属已文档 JPEG/clipping 假阳性，且 3 步已满无 noise 位置。所有确定性替代均未达 +2dB 门控，故 NO_CHANGE。"
+  }
+}

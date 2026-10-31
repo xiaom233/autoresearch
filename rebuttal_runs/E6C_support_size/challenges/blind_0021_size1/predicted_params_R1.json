@@ -1,0 +1,53 @@
+{
+  "challenge_id": "blind_0021_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 3],
+    ["brightness_brighten_shfit_RGB", 1],
+    ["compression_jpeg", 4]
+  ],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+    {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 39.15,
+      "note": "仅顺序备选(亮度先于 blur 导致裁剪位置不同); R1 复核主顺序为像素级精确复现"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 28.6,
+      "note": "blur 跨族备选(旧顺序测得, 仅族级参考); R1 motion=21.91 / glass=26.04 已被逐像素证据排除"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (sigma_peeled lower bound=1.48 < 2, NO_NOISE; 主候选像素级完全复现)",
+    "psnr_rgb": "inf (像素级完全复现; 严格 JSON 记为 99.0)",
+    "support_size": 1,
+    "support_verification": "k=1 单 support: 主候选在唯一 pair0 (clean_0/degraded_0) 上 PSNR=inf, peeled residual std=0.0; clean.png/degraded.png 为 pair0 别名(SHA256 相同), 无独立第二对可交叉验证",
+    "single_pair_limitation": "所有 R1 验证均在同一 pair0 上完成, 无法跨对验证; support PSNR=24.08 归因于 k=1 单对训练泛化不足, 非盲识别错误",
+    "r1_tests": {
+      "test_candidate_calls": 3,
+      "reverify_r0_pipeline_psnr": 99.0,
+      "motion_boundary_psnr": 21.91,
+      "glass_recheck_psnr": 26.04
+    },
+    "rationale": "重跑 run_full_analysis 信号与 R0 一致(block_boundary=3.2006, mean_shift=+24.0, gm_ratio=0.4047, anisotropy=1.6547, glass_score=1.0231, variance_ratio=0.8055)。逐项重释: (1) anisotropy=1.6547 距 motion 阈值 1.7 仅 0.045, R1 实测 blur_motion:3=21.91dB 远低于 inf, motion 排除; (2) glass_score=1.0231>0.25 在 R0 被直接判 FP, R1 单步隔离实测 blur_glass:4=26.04dB, glass 排除; (3) variance/gamma 解释已被 R0 的亮度机制对照及本次像素级复现排除; (4) peeled residual std=0.0 证明无随机成分, §B extreme_pct=100% 为零残差伪影。主候选复测 PSNR=inf, 无候选可超过 inf, 故 NO_CHANGE。",
+    "r1_decision_reason": "所有确定性候选均无法超过 R0 主候选的像素级完全复现(inf); 单对证据不足以支持任何替换"
+  }
+}

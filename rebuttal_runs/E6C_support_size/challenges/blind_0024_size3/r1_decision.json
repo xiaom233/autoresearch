@@ -1,0 +1,42 @@
+{
+  "challenge_id": "blind_0024_size3",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["noise_speckle", 3],
+    ["blur_gaussian", 3],
+    ["saturate_strengthen_HSV", 4]
+  ],
+  "r1_pipeline": [
+    ["blur_gaussian", 3],
+    ["saturate_strengthen_HSV", 3]
+  ],
+  "support_psnr_r0": 20.98,
+  "candidates_tested": [
+    {"id": "C1", "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:4", "mode": "psnr", "pair_psnr": [27.69, 22.69, 21.91], "verdict": "dominated by C4"},
+    {"id": "C2", "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:5", "mode": "psnr", "pair_psnr": [27.44, 21.59, 20.81], "verdict": "REJECT (worse on all pairs)"},
+    {"id": "C3", "pipeline": "blur_gaussian:2,saturate_strengthen_HSV:4", "mode": "psnr", "pair_psnr": [26.78, 22.42, 21.82], "verdict": "REJECT (worse on all pairs)"},
+    {"id": "C4", "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:3", "mode": "psnr", "pair_psnr": [27.91, 23.69, 23.18], "verdict": "ACCEPT (best on all 3 pairs)"},
+    {"id": "BASELINE", "pipeline": "noise_speckle:3,blur_gaussian:3,saturate_strengthen_HSV:4", "mode": "psnr", "pair_psnr": [26.45, 21.54, 20.98], "verdict": "reference only (R0 pipeline re-measured with the same tool; R0 psnr_ranking was empty)"}
+  ],
+  "test_candidate_calls": 15,
+  "best_validation": {
+    "pipeline": "blur_gaussian:3,saturate_strengthen_HSV:3",
+    "pair_psnr": {"pair0": 27.91, "pair1": 23.69, "pair2": 23.18},
+    "r0_pipeline_pair_psnr": {"pair0": 26.45, "pair1": 21.54, "pair2": 20.98},
+    "delta_db": {"pair0": 1.46, "pair1": 2.15, "pair2": 2.20, "mean": 1.94},
+    "threshold_check": ">40 dB: no (27.9/23.7/23.2). +2 dB vs previous round: yes on 2/3 support pairs (pair1 +2.15, pair2 +2.20); pair0 +1.46; all 3 pairs improve; interpreted with the protocol's majority-of-pairs semantics for k>1",
+    "per_pair_ranking": "C4 > C1 > C3 > C2 > BASELINE on pair1/pair2; C4 > C1 > C2 > C3 > BASELINE on pair0"
+  },
+  "signal_sources": [
+    "Per-pair noise_prior sigma under the identical GT pipeline: pair0 3.83, pair1 1.11, pair2 0.49 (R0 support_verification target sigma; verify_signals also reported noise:sigma mismatch 100% on pair2). Pairs1/2 at or below the SKILL sigma<2 NO_NOISE threshold -> noise presence is not consistent across support pairs.",
+    "Peeled residual structure: R0 noise_6step_check spatial_corr=0.9869 (blur_gaussian:3+saturate_strengthen_HSV:4 peel); R1 peeled_noise_check re-run with sat3 peel gives spatial_corr=0.9864, residual_std=10.2. spatial_corr >0.15 by ~6x means the peeled residual is spatially correlated structure (clip/blur mismatch), not noise.",
+    "SKILL noise-DT reliability: under the confirmed noise->blur order, noise-type classification is 54.7% (~random) per full_analysis signal_reliability; R0 itself marked the noise step UNCERTAIN.",
+    "Residual intensity dependence: residual_intensity_corr=0.864 on the raw pair0 residual (R1 full_analysis) -> intensity-dependent deterministic transform (HSV S clamp), matching saturate_strengthen rather than additive noise.",
+    "R0 final_decision's own note: simulated sat4 over-darkened pairs1/2 by ~5 gray levels, 'consistent with severity slightly above truth'; R0 only tested sat5 upward, never sat3 downward.",
+    "HSV saturation severity scale [3,6,12,20,64] for sev1-5 (x_distortion/saturate.py): sev3 (12x) vs sev4 (20x) differ only on low-saturation pixels, so sev3 is a physically plausible untested boundary.",
+    "Noise injection cost: replacing the noise step with deterministic-only reduced the simulation error by +1.24/+1.15/+0.93 dB on pairs 0/1/2; the extra RMS from speckle:3 (~6/10/10 gray levels) exceeds the measured target sigma (~3.8/1.1/0.5), i.e., the simulated noise is mis-scaled under the noise->blur order.",
+    "verify_signals variance_ratio normalizer artifact: pair2 |vr_t-1|=0.0177 gives diff_pct=111% for absolute 0.9626 vs 0.9823; not a valid rejection signal (recorded as boundary/threshold pathology)."
+  ],
+  "reason": "Four signal re-interpretations point the same way: (1) the R0 noise step is unsupported (inconsistent per-pair sigma, structured peel residual, 54.7% undiagnosable type, no PSNR benefit anywhere); (2) R0 bracketed saturation severity only upward and its own mean-shift analysis suspected over-darkening, so the untested sat3 was evaluated; (3) blur_gaussian:3 is confirmed as the PSNR-bracket peak over {2,3,4,5}; (4) compression remains absent on all 3 pairs. The resulting deterministic pipeline blur_gaussian:3 -> saturate_strengthen_HSV:3 improves the 3-pair simulation PSNR over the R0 pipeline by +1.46/+2.15/+2.20 dB (mean +1.94), clearing the +2 dB CHANGE bar on the majority of support pairs. R0 pipeline is retained as the fallback alternative; R1 verdict stays UNCERTAIN because no deterministic candidate exceeds 40 dB and the sat3 choice is a severity-level judgment."
+}

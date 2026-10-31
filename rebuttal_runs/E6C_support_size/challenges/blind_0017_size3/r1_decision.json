@@ -1,0 +1,60 @@
+{
+  "challenge_id": "blind_0017_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_gaussian", 3], ["compression_jpeg", 4]],
+  "r1_pipeline": [["blur_gaussian", 3], ["compression_jpeg", 4]],
+  "support_psnr_r0": 23.13,
+  "k_pairs": 3,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_gaussian:3,compression_jpeg:4",
+      "role": "R0 baseline revalidation",
+      "pair0_psnr": 28.25,
+      "ci": "8/10",
+      "outcome": "REPRODUCED (R0: 28.25)"
+    },
+    {
+      "pipeline": "blur_gaussian:3,contrast_weaken_stretch:1,compression_jpeg:4",
+      "role": "new hypothesis (mild global contrast)",
+      "pair0_psnr": 21.77,
+      "ci": "4/10",
+      "outcome": "REJECTED (no +2dB; much worse)"
+    },
+    {
+      "pipeline": "blur_lens:3,compression_jpeg:4",
+      "role": "new hypothesis (cross-family blur at matched strength)",
+      "pair0_psnr": 27.63,
+      "ci": "6/10",
+      "outcome": "REJECTED (worse than gaussian baseline)"
+    },
+    {
+      "pipeline": "blur_gaussian:2,compression_jpeg:4",
+      "role": "new hypothesis (lighter blur to match block_boundary)",
+      "pair0_psnr": 27.53,
+      "ci": "6/10",
+      "outcome": "REJECTED (worse than g3)"
+    }
+  ],
+  "test_candidate_calls": 6,
+  "best_validation": {
+    "pair0": {"pipeline": "blur_gaussian:3,compression_jpeg:4", "psnr": 28.25, "ci": "8/10"},
+    "pair1": {"pipeline": "blur_gaussian:3,compression_jpeg:4", "psnr": 27.36, "ci": "7/10"},
+    "pair2": {"pipeline": "blur_gaussian:3,compression_jpeg:4", "psnr": 26.43, "ci": "7/10"},
+    "best_new_candidate_pair0": {"pipeline": "blur_lens:3,compression_jpeg:4", "psnr": 27.63},
+    "change_threshold": "+2 dB vs R0 pair0 28.25 → ≥30.25 (or >40 dB); not met by any R1 candidate"
+  },
+  "signal_sources": [
+    "compression_jpeg: block_boundary=8.441 (0%FP 规则), unique_G=224 vs clean 249, dct_zero_ratio=0.9561; pair1 bb=8.682/dct_zero=0.9413 一致",
+    "blur_gaussian:3: gm_ratio=0.1986 vs gaussian:3 模拟 0.1978 (0.4%); spectral_slope 差 0.035<0.08; anisotropy=1.408<1.7 排除 motion; glass_score=1.62 超出 glass 标定 0.19-0.41 → JPEG 块伪影污染",
+    "NO_NOISE: noise_prior sigma=0.74 与 g3j4 模拟基线完全相同; R1 重跑 peeled_noise_check (g3j4): spatial_corr=0.9675 结构化残差, extreme_pct=78.78% 属 JPEG 伪影 FP (SKILL 明确规则), var_slope=-0.057, peeled sigma=1.48 为模糊下的下界",
+    "残余全局失配: variance_ratio 0.734/0.778, contrast_spread 0.867/0.900, chroma 0.854/0.905 (pair0/pair1), mean_shift -0.2/-1.0, clipped≈0 → 需求 c≈0.88 的轻度全局压缩, 库内最轻档 stretch:1/scale:1/sat_HSV:1 均过强 (21.77/27.83/27.16)",
+    "peeled residual rgb_ratio=1.5118 且 B std 11.9 > R 8.3/G 7.9 → 残差以色度为主, 与 chroma 0.854 相符, 非噪声"
+  ],
+  "reason": "R1 信号重释 (pair0 重跑 run_full_analysis + peeled_noise_check, pair1 交叉核对) 未发现推翻 R0 的证据: JPEG (bb 8.44, dct_zero 0.956, unique_G 224) 与 gaussian:3 (gm 0.199≈模拟 0.198, slope 差 0.035) 在 3 对上一致, 无噪声 (sigma 0.74=模拟基线, peeled 残差空间相关 0.97 为结构差异)。唯一残余失配是目标 var/spread/chroma 系统性低 10-19% 而均值不变, 但库内三个全局函数的最轻档全部过强 (stretch:1 21.77, scale:1 27.83, saturate_HSV:1 27.16), 判为库外全局/编码器差异, 不可建模。R1 三个新候选均未达 +2 dB 阈值 (最佳 lens:3+j4 27.63 < 30.25); R0 管线在 k=3 support 上逐对复现 28.25/27.36/26.43, 无异常对。维持 R0 管线 (blur_gaussian:3 → compression_jpeg:4), 依赖训练 PSNR 仲裁。",
+  "limitations": [
+    "k=3, 全部为大分辨率图; 三对信号高度一致 (bb 8.44/8.68, gm 0.178-0.199, sigma 0.74-1.11), 无跨对冲突",
+    "库内 JPEG 严重度离散 (j4 bb≈7.1, j5≈18-22), 目标 bb=8.44 落在 j4 与 j5 之间无对应档; 全局函数无 c≈0.88 的轻档 → 存在不可建模残余, verdict 保持 UNCERTAIN",
+    "本轮未检验噪声候选: sigma<2 且 peeled 残差结构化, 按 SKILL 判据 PSNR 模式有效, 无需 SIGNAL 模式"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "full_analysis.step3_blur.residual_anisotropy=1.6547 < 1.7 -> motion 排除, OCAB 不触发 (Tier A 条件未满足); blur 仲裁为 blur_gaussian:3 (gaussian 28.72 > lens:4 28.60 > gaussian:4 28.35 > glass:4 25.50, anisotropy=1.65 排除 motion)",
+    "full_analysis.step4_global: contrast_from_variance=false, contrast_detected_raw=false; variance_ratio=0.8055 可由 blur+clipping 解释 (final_decision rationale), verdict NOT_GLOBAL -> 无 contrast Tier A 信号, FiLM-GCM / ColorPre 均不触发",
+    "full_analysis.step1_compression.block_boundary=3.2006 (Tier S, 0%FP) -> compression_jpeg:4 确认; 信号表中 JPEG 仅为专项确认, 无对应架构组件开关 -> 纯 Swin",
+    "full_analysis.step4_global.brightness_mean_shift=24.0 -> brightness_brighten_shfit_RGB:1, 加性 shift 属低难度 (finetune_strategy §六 Step 0: 低难度 -> 纯 Swin+SimpleGate)",
+    "reflection.final_decision: pipeline=blur_gaussian:3 -> brightness_brighten_shfit_RGB:1 -> compression_jpeg:4, 唯一 support pair0 复核 PSNR=inf, CI 10/10, 全部 LIKELY, Tier 1 确定性",
+    "finetune_strategy §七: 无 Tier S/A 触发组件 -> 默认 Swin + SimpleGate + Direct (SimpleGate exp39 8/9 安全, D3 JPEG+blur +0.02); k=1 support 不放宽门控"
+  ],
+  "rationale": "Tier 1 确定性三步管线 (gaussian blur + brightness shift + JPEG)，信号无 Tier S/A 组件触发条件：anisotropy=1.6547<1.7 排除 OCAB，无 contrast 排除 FiLM-GCM/ColorPre。按 finetune_strategy §六 Step 0 低难度走纯 Swin，SimpleGate 默认常开 (-32K, 跨退化安全)，Direct 从头训练 (True Ft≈Direct)。full_analysis 中推荐的 DualBranch 按 exp37 盲识别 0/24 胜与本次指令禁用。k=1 不改变门控，LR=5e-4, EPOCH=2。"
+}

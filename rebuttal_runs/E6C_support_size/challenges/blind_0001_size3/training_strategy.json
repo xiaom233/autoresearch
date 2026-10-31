@@ -1,0 +1,32 @@
+{
+  "challenge_id": "blind_0001_size3",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "noise_poisson:5 为 UNCERTAIN: noise_prior sigma=16.68, intensity_var_corr=0.7718 (gaussian_RGB:2 对照仅 0.102), spatial_corr=0.0018, cross_channel_corr=0.0013; verify_signals 在 3 对 support 上 4/4 信号 MATCH, 但 seed 失配按协议噪声步永不 LIKELY → 该步不加任何组件 (finetune_strategy.md §七 Tier C/UNCERTAIN)",
+    "quantization_median:2 为 LIKELY: unique_G_target=16 vs clean 256, unique_per_channel=[16,16,16], block_boundary=1.0007 (<1.1, 0% FP 规则排除 JPEG), dct_zero_ratio=0.0212 → Tier S 确认 compression/quantization 存在; 确定性量化步无对应架构组件门控, 3 对 support 均复现 VR/ms/chroma/clip (verify_signals MATCH)",
+    "无 contrast Tier A 信号: full_analysis step4_global=NO_GLOBAL, contrast_from_variance=false, contrast_saturation_corrected=true (saturation_from_noise FP), variance_ratio=1.3173 由量化+噪声解释而非 contrast; predicted pipeline 无 contrast/scale 步 → FiLM-GCM / ColorPre 门控不满足",
+    "无 motion 结构化信号: step3_blur=BLUR_UNLIKELY (spectral_slope_ratio=0.993), FFT anisotropy=0, PCA=0.0, gm_ratio=5.219 系量化带/噪声抬高 → OCAB 门控 (anisotropy>1.7) 不满足",
+    "各噪声候选的 ivc 对比 (poisson 0.772 vs gaussian 0.102) 属函数选择证据, 不构成架构门控; support k=3 的 3/3 对 MATCH 仅提升识别置信度, 不改变阈值与门控"
+  ],
+  "rationale": "按 finetune_strategy.md §七 信号置信度门控: 管线为 noise_poisson:5 (UNCERTAIN) + quantization_median:2 (LIKELY), 无 contrast (step4=NO_GLOBAL) 且无 motion (anisotropy=0), 所有 Tier S/A 组件门控均不满足, 默认纯 Swin + SimpleGate + Direct。SimpleGate 常开依据 exp39 (-32K, 8/9 退化安全, N -0.01, L2 +0.78), 本管线为噪声+量化、无 motion (S5 是唯一负例)。full_analysis 脚本建议的 DualBranch 不采用: exp37 盲识别场景 0/24 胜, 且 E6-C 指令明确禁用 DualBranch/CSN/SCA/FPro。噪声步 UNCERTAIN 不阻止 Direct+SimpleGate; 2 步管线虽无 contrast (§六 Step 1 可选 RandomCurric), 但本实验统一采用 Direct 以与 support-size 变量解耦, 且 LR=5e-4/EPOCH=2 与基线公平。"
+}

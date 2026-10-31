@@ -1,0 +1,508 @@
+{
+  "challenge_id": "blind_0013_size1",
+  "qwen_gate": {
+    "available": false,
+    "note": "Qwen/API 不可用，按指令跳过 Step 0.5 门控"
+  },
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=1.2085 (>1.1, 0%FP), dct_zero_ratio=0.4274, unique_G=256",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.124, spectral_slope_ratio=0.984 (<1.08), FFT_anisotropy=0, pca=0",
+      "noise": "GAUSSIAN_YCrCb (low confidence): sigma=4.82, cross_channel_corr=0.806, residual_intensity_corr=0.319 (gamma_suspect=True), spatial_corr=0.229",
+      "global": "NO_GLOBAL: variance_ratio=0.893, mean_shift=-4.1/255=0.016, contrast_spread_ratio=0.989, clipped_fraction=0.0636"
+    },
+    "mode": "SIGNAL (sigma=4.8)",
+    "k_pairs": 1,
+    "support_note": "单 support（k=1），无法做跨对验证"
+  },
+  "noise_6step_check": {
+    "measured_on": "peeled residual after stripping compression_jpeg:2 (target - jpeg2(clean))",
+    "extreme_pct": 61.13,
+    "vm_slope": 2.6336,
+    "var_slope": -0.0423,
+    "spatial_corr": 0.5645,
+    "rgb_ratio": 1.0259,
+    "cross_ch_corr": 0.897,
+    "supplementary": {
+      "zero_ratio": 0.0941,
+      "residual_std": 23.3,
+      "peeled_noise_prior_sigma": 9.64,
+      "ch_stds": [
+        23.5,
+        23.1,
+        22.9
+      ],
+      "ivc": 0.9535
+    },
+    "diagnosis": "§B 自动标签 IMPULSE/SPECKLE 为 JPEG 残留伪阳性：对本目录候选模拟图做同样剥离，extreme_pct=52-65%, spatial_corr=0.55-0.57, ivc=0.94-0.95, cross_ch_corr=0.86-0.89，与噪声类型无关；因此 §B 类型判别在 noise→JPEG 混合残差上不可靠。类型判定改用: ch_stds 三通道近等 (rgb_ratio=1.03) → RGB 家族 (排除 YCrCb 的 R/B 偏置)；残余强度 std=23.3 与 gaussian_RGB:3 模拟的 22.2 最接近；verify_signals sigma 随 gaussian 强度 1→2→3→4 单调收敛 (75%→50%→MATCH→38%)。"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "block_boundary=1.2085 (>1.1, 0%FP) → JPEG 确认；sigma=4.8 噪声耦合，用信号验证。初始严重度按 full_analysis 建议 2。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "BLUR_UNLIKELY (gm_ratio=1.124, spectral_slope_ratio=0.984) 但 full_analysis 建议噪声耦合下仍测；用最轻 gaussian:1 检验是否存在轻微模糊。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_gaussian:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,compression_jpeg:2",
+        "thinking": "noise_prior sigma=4.8→剥离后9.6 (0-255尺度)，与 gaussian sev1 (sigma=12.75) 量级最接近；peeled §B ch_stds 近等 (23.5/23.1/22.9) → RGB 型；按物理顺序 noise→JPEG。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=75%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,compression_jpeg:2",
+        "thinking": "§B vm_slope=2.63 (>0.01) 提示乘性噪声；peeled ivc=0.95 (残差-强度相关) 更符合 speckle 的强度依赖方差；测 speckle sev1 (c=0.14 最轻)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)"
+        ],
+        "pipeline": "noise_speckle:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_poisson:1,compression_jpeg:2",
+        "thinking": "var_slope≈0 + ivc=0.95 (强度-方差相关) 与 Poisson 信号一致；poisson 亮度依赖，暗区有效 sigma 更低，可能解释 wavelet sigma 偏低的问题；测最轻 sev1 (c=80)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)"
+        ],
+        "pipeline": "noise_poisson:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,compression_jpeg:4",
+        "thinking": "sigma 方向假设: 模拟 sigma 8.4 > 目标 4.8 (diff 75%)，说明 GT 的 JPEG 可能更强 (q8) 抑制更多噪声；测 jpeg:4 看 sigma 是否下降且 block_boundary 仍匹配。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "compression:block_boundary (diff=20%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_impulse:1,compression_jpeg:2",
+        "thinking": "目标 wavelet sigma=4.8 远低于任何 sev1 稠密噪声模拟 (8-9)，但残差 std=23/extreme 长尾；impulse 稀疏、median 估计低，可能同时解释低 sigma 与重尾。测 sev1 (1% 像素)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=75%)"
+        ],
+        "pipeline": "noise_impulse:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,compression_jpeg:2",
+        "thinking": "全信号对比: 目标 gm_ratio=1.124 高于所有 sev1 噪声模拟 (0.91-0.96)，残差 sigma 4.82 也更高，ms=-4.1 提示高光裁剪更强 → 目标噪声强度可能高于 sev1；测 gaussian_RGB:2 (sigma=25.5)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,compression_jpeg:2",
+        "thinking": "强度趋势: 剥离残差 std 目标 23.3 vs gauss1 11.3 / gauss2 16.8；verify sigma diff 75%→50% 随强度单调收敛；ch_stds 等值排除 YCrCb。按线性外推目标约对应 gaussian sev4 (sigma=51)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=38%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "thinking": "gauss4 信号略过强 (gm 1.263>1.124, sigma 5.6>4.82, std 27.9>23.3)，gauss2 偏弱；按强度序列插值目标在 sev3 (sigma=38.25) 附近。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,contrast_weaken_stretch:2,compression_jpeg:2",
+        "thinking": "gauss3+jpeg2 匹配 gm/sigma/var/std，但目标 mean_shift=-4.1、residual_intensity_corr=0.32、chroma 0.911(vs sim 0.937) 未解释；检验温和 tone 曲线 contrast_weaken_stretch:2 (c=0.9) 是否改善 (global mean_shift/variance_ratio 信号)。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)",
+          "compression:block_boundary (diff=15%)",
+          "global:mean_shift (diff=0.0429)",
+          "global:variance_ratio (diff=546%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,contrast_weaken_stretch:2,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:1,compression_jpeg:2",
+        "thinking": "Blur 控制实验: spectral_slope_ratio=0.984<1.08 + anisotropy=0 → 无 blur；在最终管线中加入最轻 blur:1，检查 blur 信号 (slope/Wiener) 与整体是否变差，确认 blur 是否被噪声掩盖。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=87%)",
+          "compression:block_boundary (diff=18%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_impulse:2,compression_jpeg:2",
+        "thinking": "跨族对照 (impulse 重尾可与 gaussian 混淆): 目标残差重尾/clipping 6.4% 也可能来自 S&P；用等效应力 impulse:2 (3% 像素) 检查 sigma/block_boundary 是否能同时匹配。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=37%)"
+        ],
+        "pipeline": "noise_impulse:2,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "thinking": "R1 seed 稳定性复核: R0 最终管线 (noise_gaussian_RGB:3, compression_jpeg:2) 在 pair0 上曾 MATCH; 重跑验证 MATCH 是否跨 seed 稳定。信号来源: noise_prior sigma=4.82 + ch_stds 近等 (23.5/23.1/22.9, rgb_ratio=1.026) + block_boundary=1.2085."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:2",
+        "thinking": "R1 复核 full_analysis 首选类型 GAUSSIAN_YCrCb: full_analysis 报 cross_channel_corr=0.806 低置信 YCrCb, 而 peeled ch_stds=23.5/23.1/22.9 (rgb_ratio=1.026<1.4) 指向 RGB。直接信号验证该被 R0 推翻的假设, 检查 rgb_ratio/通道 sigma 在模拟侧是否恶化。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:3",
+        "thinking": "R1 阈值边界信号: 目标 dct_zero_ratio=0.4274 高于 jpeg:2 模拟 0.4002 (diff 0.027), 提示 JPEG 可能略强; 按 SKILL severity 扫描规则检查 jpeg:3 (q12) 的 block_boundary 是否仍 <8% 且零比率更接近。信号来源: block_boundary=1.2085, dct_zero_ratio=0.4274."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "compression:block_boundary (diff=14%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:1,noise_gaussian_RGB:3,compression_jpeg:2",
+        "thinking": "R1 被忽略信号重释: residual_intensity_corr=0.319 + gamma_suspect=True + mean_shift=-4.1/255 + variance_ratio=0.8934 指向 gamma 曲线型全局步骤。R0 只测了 shift 型 brightness (sev1=-25.5 过强) 与 contrast, 未测 gamma 型。测最轻 gamma 曲线 brightness_darken_gamma_RGB:1 (gamma=1.4, 物理顺序 brightness→noise→JPEG), 验证 global mean_shift/variance_ratio 是否改善。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0549)",
+          "global:variance_ratio (diff=23%)"
+        ],
+        "pipeline": "brightness_darken_gamma_RGB:1,noise_gaussian_RGB:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_RGB",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=4.8 > 2, PSNR 不可用)",
+    "rationale": "compression_jpeg:2: block_boundary=1.2085 (0%FP 信号) 且模拟 1.228 (diff=1.6%<8%), dct_zero_ratio 0.4002 vs 0.4274 (diff=0.027<0.08)。noise_gaussian_RGB:3: verify_signals 三项全 MATCH (sigma/clean_residual/block_boundary)；强度阶梯 1→2→3→4 的 sigma diff 单调 75%→50%→MATCH→38%，sev3 唯一 MATCH；残差 std 23.3 vs 22.2、gm_ratio 1.124 vs 1.114、variance_ratio 0.893 vs 0.895、ch_stds 近等 (排除 YCrCb)、cross_channel_corr 0.806 vs 0.807 全部吻合。blur 排除: spectral_slope_ratio=0.984<1.08, anisotropy=0；在最终管线加入 blur_gaussian:1 后 sigma diff 87%、block_boundary diff 18% → 明确变差。global 排除: 加入 contrast_weaken_stretch:2 导致 mean_shift diff=0.0429、variance_ratio diff=546% → 无温和 x_distortion global 可拟合。遗留差异: target mean_shift=-4.1/255, chroma_ratio 0.911 vs 0.937, clipped_fraction 0.0636 vs 0.0444 — 幅度远低于任何 sev1 global 函数 (brightness shift sev1=-25.5, saturate weaken sev1=0.7)，判定为 JPEG 编码器/裁剪偏差而非独立退化步。噪声 seed 失配 → noise 步骤永不 LIKELY，整体 UNCERTAIN。",
+    "single_support_note": "k=1：仅 pair0 可分析，最终候选已在本目录唯一 support 上复核，无法做跨对验证。",
+    "alternatives": [
+      {
+        "pipeline": "noise_impulse:2,compression_jpeg:2",
+        "verdict": "PARTIAL",
+        "signals": "sigma diff=37%, block_boundary MATCH, clipped_fraction 0.0636 精确吻合; 但 gm_ratio 1.013 vs 1.124、残差 std 17.4 vs 23.3、spatial_corr 0.143 vs 0.229、cross_ch 0.784 vs 0.806 均劣于 gaussian 方案",
+        "function_family": "noise_impulse"
+      },
+      {
+        "pipeline": "noise_gaussian_RGB:3",
+        "verdict": "参考",
+        "signals": "若训练/评估发现 jpeg 步不必要（块效应由噪声掩盖），可回退为单步噪声",
+        "function_family": "noise_gaussian_RGB"
+      }
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 support PSNR=22.57 (<30) + R0 verdict=UNCERTAIN (Tier 3: noise+JPEG)，E6-C support-size R1 反思",
+    "k_pairs": 1,
+    "k_limitation": "k=1：仅 pair0 可验证，单对噪声大；阈值未放宽（确定性 +2dB / 噪声 WEAK→PARTIAL），证据不足即 NO_CHANGE，无法跨对复核",
+    "mode": "SIGNAL (noise_prior sigma=4.82 ≥ 2, PSNR 不可用)",
+    "rerun_full_analysis": {
+      "output": "full_analysis_R1.json",
+      "consistency": "与 R0 full_analysis.json 逐项一致：block_boundary=1.2085, unique_G=256, dct_zero_ratio=0.4274, noise_prior sigma=4.82, cross_channel_corr=0.806, residual_intensity_corr=0.319, variance_ratio=0.8934, mean_shift=-4.1, clipped_fraction=0.0636, gm_ratio=1.1238, spectral_slope_ratio=0.9844, FFT_anisotropy=0.0"
+    },
+    "rerun_peeled_noise_check": {
+      "pipeline_stripped": "compression_jpeg:2",
+      "extreme_pct": 61.13,
+      "vm_slope": 2.6336,
+      "var_slope": -0.0423,
+      "spatial_corr": 0.5645,
+      "rgb_ratio": 1.0259,
+      "cross_ch_corr": 0.897,
+      "residual_std": 23.3,
+      "ch_stds": [23.5, 23.1, 22.9],
+      "ivc": 0.9535,
+      "noise_prior_sigma": 9.64,
+      "noise_prior_type": "noise_gaussian_RGB",
+      "interpretation": "与 R0 剥离值逐项一致。§B 自动标签 IMPULSE/SPECKLE 为 JPEG 残留伪阳性（extreme_pct>50% + noise_prior<5 已知 FP 规则），在候选模拟图上同样出现；noise_prior 自身判别为 gaussian_RGB（slope=-0.0038 flat）。"
+    },
+    "signals_rechecked": [
+      {"signal": "variance_ratio", "value": 0.8934, "assessment": "10.7% 方差下降，但 contrast_spread_ratio=0.9891 近 1；库内最弱 contrast_weaken_stretch:1 为恒等变换，:2 已由 R0 证伪 (variance_ratio diff 546%)，contrast_weaken_scale:1=0.75 过强 → 无可表示 global"},
+      {"signal": "mean_shift", "value": "-4.1/255 = 0.016", "assessment": "shift 型 brightness sev1=-25.5 过强；gamma 曲线型 R1 实测 WEAK（diff=0.0549）→ 无匹配 global"},
+      {"signal": "clipped_fraction", "value": 0.0636, "assessment": "高于 gaussian_RGB:3+jpeg:2 模拟 0.0444，方向与噪声两端裁剪一致；幅度不足以单独支撑 global 步骤"},
+      {"signal": "residual_intensity_corr", "value": 0.3193, "assessment": "gamma_suspect=True；R1 直接测 gamma 曲线 brightness_darken_gamma_RGB:1 → global 信号恶化，排除"},
+      {"signal": "block_boundary", "value": 1.2085, "assessment": "0%FP，JPEG 确认"},
+      {"signal": "unique_G", "value": 256, "assessment": "= clean 256 → 无 quantization"},
+      {"signal": "dct_zero_ratio", "value": 0.4274, "assessment": "jpeg:2 模拟 0.4002 (diff 0.027)；jpeg:3 使 block_boundary diff 14% → jpeg:2 唯一自洽"},
+      {"signal": "gm_ratio", "value": 1.1238, "assessment": "无 blur（R0 加入 blur_gaussian:1 使 sigma diff 87%、block_boundary diff 18%）"},
+      {"signal": "spectral_slope_ratio", "value": 0.9844, "assessment": "<1.08，无 blur"},
+      {"signal": "anisotropy", "value": 0.0, "assessment": "无 motion blur"},
+      {"signal": "glass_score", "value": "N/A", "assessment": "SKILL glass 门控要求 sigma<3，本挑战 sigma=4.82 → glass 排除"},
+      {"signal": "noise sigma / §B", "value": "4.82 / ch_stds 近等 (rgb_ratio=1.026)", "assessment": "RGB 族；YCrCb 直接验证 PARTIAL (sigma diff=50%) 劣于 RGB:3 的 MATCH"}
+    ],
+    "hypotheses_tested": [
+      {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "signal_source": "R0 管线；noise_prior sigma=4.82 + peeled ch_stds 近等 (rgb_ratio=1.026) + block_boundary=1.2085",
+        "test_result": "MATCH (3✓/0✗: noise:sigma, noise:clean_residual, compression:block_boundary)",
+        "decision": "KEEP（跨 seed 稳定）"
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:2",
+        "signal_source": "full_analysis 首选 GAUSSIAN_YCrCb（cross_channel_corr=0.806），与 peeled rgb_ratio=1.026 矛盾；直接验证 R0 推翻是否正确",
+        "test_result": "PARTIAL (2✓/1✗: noise:sigma diff=50%)",
+        "decision": "REJECT"
+      },
+      {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:3",
+        "signal_source": "dct_zero_ratio=0.4274 高于 jpeg:2 模拟 0.4002 的阈值边界，检查更强 JPEG 是否更拟合",
+        "test_result": "WEAK (1✓/2✗: noise:sigma diff=50%, block_boundary diff=14%)",
+        "decision": "REJECT"
+      },
+      {
+        "pipeline": "brightness_darken_gamma_RGB:1,noise_gaussian_RGB:3,compression_jpeg:2",
+        "signal_source": "residual_intensity_corr=0.319 + gamma_suspect=True + mean_shift=-4.1/255 + variance_ratio=0.8934；R0 只测过 shift 型 brightness/contrast，未测 gamma 曲线型",
+        "test_result": "WEAK (3✓/2✗: global:mean_shift diff=0.0549, global:variance_ratio diff=23%)",
+        "decision": "REJECT"
+      }
+    ],
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3, "verdict": "UNCERTAIN"},
+        {"function": "compression_jpeg", "severity": 2, "verdict": "UNCERTAIN"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "support_psnr_r0": 22.57,
+      "rationale": "R1 重跑 full_analysis 与 peeled_noise_check 均与 R0 逐项一致。4 个候选（含 R0 管线复验）无一优于 R0：YCrCb:3 与 jpeg:3 分别使 noise:sigma/block_boundary 恶化；R0 未测的 gamma 曲线 brightness 使 global:mean_shift/variance_ratio 恶化；R0 管线跨 seed 复核仍 MATCH。遗留 mean_shift/clipped/chroma 差异幅度低于库内任何 sev1 global 函数，归因 JPEG 编码器/裁剪偏差而非独立退化步。k=1 单对限制下证据不足以 CHANGE。",
+      "no_new_alternative": "无新候选达到可替换水平；保留 R0 alternatives（impulse:2+jpeg:2 PARTIAL；gaussian_RGB:3 单步参考）"
+    }
+  }
+}

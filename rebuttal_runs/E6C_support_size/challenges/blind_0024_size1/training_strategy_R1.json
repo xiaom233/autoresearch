@@ -1,0 +1,31 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "压缩: block_boundary=0.9996, unique_G_ratio=0.9102 → 无 JPEG (Tier S 反向)，不启用任何压缩专项组件",
+    "blur: predicted blur_gaussian:3 (LIKELY)，residual_anisotropy=1.1478 < 1.7 且已排除 motion → OCAB 门控不满足 (要求 anisotropy>1.7 + motion)",
+    "global: saturate_strengthen_HSV:5 (UNCERTAIN)，variance_ratio=1.3713 但 full_analysis 明确 contrast_from_variance=false、contrast_from_saturation=true、brightness_clip_explains_variance=true → 方差上升源于饱和裁剪而非 contrast，不构成 contrast 的 Tier A variance_ratio；且无 motion/jpeg 结构化局部 → FiLM-GCM 双门控不满足；saturation 属 ColorPre 禁用场景 (-0.34)",
+    "noise: noise_gaussian_RGB:3 (UNCERTAIN, sigma=3.83 信号模式)，该步骤 UNCERTAIN → 不加组件",
+    "无 Tier S/A 组件信号触发，且 k=1 单 support 无跨对验证 → 不放宽门控，保守纯 Swin + SimpleGate (exp39 8/9 安全，默认常开)"
+  ],
+  "rationale": "三步混合管线 (noise→blur→saturate) 整体 UNCERTAIN/Tier3，仅 blur 步骤 LIKELY 且为各向同性 gaussian (anisotropy 1.148<1.7)，不满足 OCAB；全局步骤为 saturation 且 variance_ratio 可完全由裁剪解释，不满足 contrast Tier A 的 FiLM-GCM/ColorPre 门控；noise 步骤 UNCERTAIN。finetune_strategy.md §七: 信号不满足 → 纯 Swin + Direct 安全兜底。full_analysis 的 DualBranch 推荐遵循指令弃用 (exp37 盲识别 0/24 胜)。k=1 仅降低支撑集规模，不改变架构门控。采用 Direct 从头训练 (True Ft ≈ Direct, exp37/38)，lr=5e-4, epoch=2, batch=16。"
+}

@@ -1,0 +1,47 @@
+{
+  "challenge_id": "blind_0024_size3",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["noise_speckle", 3],
+    ["blur_gaussian", 3],
+    ["saturate_strengthen_HSV", 4]
+  ],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+    {"function": "saturate_strengthen_HSV", "severity": 3, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 4}
+      ],
+      "function_family": "R0 pipeline (noise+blur+saturation)",
+      "sim_psnr_pairs": [26.45, 21.54, 20.98],
+      "evidence": "R0 prediction kept as fallback. Noise type unidentifiable under the noise->blur order (SKILL 54.7% ~ random); R1 measured the R0 pipeline simulation PSNR on the same 3 pairs to enable the +2 dB comparison.",
+      "signal_verdict": "R0: pair0 PARTIAL 5/6; pair1 PARTIAL 4/6; pair2 WEAK 2/6"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 4}
+      ],
+      "function_family": "deterministic (no noise), sat4",
+      "sim_psnr_pairs": [27.69, 22.69, 21.91],
+      "evidence": "Deterministic-only with R0's sat4: improves over the R0 pipeline on all 3 pairs (+1.24/+1.15/+0.93 dB) but is dominated by sat3 on all 3 pairs (+0.22/+1.00/+1.27 dB).",
+      "signal_verdict": "n/a (PSNR mode, deterministic)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "PSNR (R1 pipeline is fully deterministic; PSNR valid. sigma_prior 3.83 on pair0 re-interpreted as saturation-clip artifact, not additive noise)",
+    "ci_pass_rate": "N/A (3-pair simulation PSNR used; R1 candidates have no noise step)",
+    "pair_psnr": {"pair0": 27.91, "pair1": 23.69, "pair2": 23.18},
+    "r0_pipeline_pair_psnr": {"pair0": 26.45, "pair1": 21.54, "pair2": 20.98},
+    "delta_vs_r0_pipeline_db": {"pair0": 1.46, "pair1": 2.15, "pair2": 2.20, "mean": 1.94},
+    "rationale": "No compression (block_boundary 0.9996/1.009/0.997, unique_G 233/237/243; unchanged in R1 re-run of full_analysis on pair0). Blur_gaussian:3 confirmed: peak of the PSNR bracket over {2,3,4,5} on all 3 pairs (sev2 26.78/22.42/21.82; sev4/5 previously WEAK in R0 signal tests; anisotropy 1.148 < 1.7 excludes motion; glass rule not applicable at sigma>3; lens MTF-indistinguishable and failed noise-sigma when tested). Global = saturate_strengthen_HSV, severity 4 -> 3: R0 only bracketed severity upward (sat5: 27.44/21.59/20.81) and R0's own final_decision noted sim sat4 over-darkens pairs1/2 by ~5 gray levels ('consistent with severity slightly above truth'); the untested lower severity 3 improves simulation PSNR on all 3 pairs (27.91/23.69/23.18 vs sat4 27.69/22.69/21.91). HSV severity scale is [3,6,12,20,64] (sev3=12x, sev4=20x): the two differ mainly on low-saturation pixels, so sev3 is physically plausible (verdict kept UNCERTAIN because the 3-pair PSNR stays below 40 dB). Noise step removed: noise exists only as UNCERTAIN in R0 (type unidentifiable under the confirmed noise->blur order, SKILL 54.7% ~ random); the peeled residual is spatially structured (spatial_corr 0.9869 with sat4 peel, 0.9864 with sat3 peel, residual_std 10.2), not noise-like; per-pair noise_prior sigma is inconsistent under the identical GT pipeline (3.83/1.11/0.49; pairs1/2 at or below the SKILL sigma<2 NO_NOISE threshold) and residual_intensity_corr=0.864 shows the pair0 residual is intensity-dependent (saturation clamp). Adding speckle:3 raised the simulation error beyond seed-mismatch expectation on all 3 pairs (extra RMS ~6/10/10 vs target sigma ~3.8/1.1/0.5), so the injected noise is mis-modelled. Change threshold: deterministic candidates need >40 dB or +2 dB vs the previous round; the winning candidate clears +2 dB on the majority of support pairs (pair1 +2.15, pair2 +2.20) and improves every pair (pair0 +1.46, mean +1.94), addressed with the same majority-of-pairs semantics the protocol specifies for k>1 noise comparisons."
+  }
+}

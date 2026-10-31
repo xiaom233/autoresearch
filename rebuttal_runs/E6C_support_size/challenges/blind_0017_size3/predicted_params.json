@@ -1,0 +1,37 @@
+{
+  "challenge_id": "blind_0017_size3",
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:2",
+      "psnr": 28.62,
+      "function_family": "gaussian+jpeg",
+      "stats": {"note": "pair0 PSNR 最高, 但模拟 gm_ratio=0.138 与目标 0.199 不匹配 (过糊)"}
+    },
+    {
+      "pipeline": "blur_lens:5,compression_jpeg:3",
+      "psnr": 28.32,
+      "function_family": "lens+jpeg",
+      "stats": {"note": "跨族模糊备选 (MTF 与 gaussian 不可区分), 模拟 gm_ratio=0.157"}
+    },
+    {
+      "pipeline": "blur_gaussian:3,contrast_weaken_scale:1,compression_jpeg:4",
+      "psnr": 27.83,
+      "function_family": "gaussian+global+jpeg",
+      "stats": {"note": "为解释目标 var/spread/chroma 系统性均低 10-19% 而设的全局假设; 但该强度(0.75)过强, PSNR 与 unique_G 变差, 仅作训练仲裁备选"}
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "8/10 (pair0), 7/10 (pair1), 7/10 (pair2)",
+    "mode": "PSNR (sigma=0.74 < 2, NO_NOISE)",
+    "psnr": 28.25,
+    "psnr_gap": 0.37,
+    "k_pair_psnr": {"pair0": 28.25, "pair1": 27.36, "pair2": 26.43},
+    "rationale": "双确定性退化 (blur→JPEG, 相机优先级顺序)。blur_gaussian:3: 目标 gm_ratio=0.1986 vs 模拟 0.1978 (0.4%), spectral_slope 差 0.035 (<0.08); glass DT 被强 JPEG 块效应污染 (glass_score 1.62 远超 glass 标定 0.19-0.41), glass5+lens5+gaussian3/4/5 全族 PSNR 对比中 gaussian 胜出。compression_jpeg:4: block_boundary 8.44 (j4 模拟 7.1 最接近, j3=5.7, j5=22.0), dct_zero 0.9561 vs 0.9564, unique_G 224 vs 225, cross_ch 0.776 vs 0.783。噪声: 目标 sigma=0.74 与无噪声模拟完全一致 → NO_NOISE。顺序 blur→JPEG 确认 (JPEG→blur 26.75 < 28.25)。残余失配: 目标 RGB var(0.734)/spread(0.867)/chroma(0.854) 系统性低于模拟 (0.912/0.939/0.995) 且均值不变, 库内所有全局函数均过强 (contrast_weaken_scale:1→27.83, saturate_weaken_HSV:1→27.16, contrast_weaken_stretch:2→21.15), 疑有轻度全局色调/色度步骤但无匹配函数; 三对 support PSNR 均 <30 → UNCERTAIN, 交由训练 PSNR 仲裁。"
+  }
+}

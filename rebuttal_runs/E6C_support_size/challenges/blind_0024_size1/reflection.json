@@ -1,0 +1,942 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9996, unique_G_ratio=0.910) — 0%FP 信号明确无 JPEG",
+      "blur": "强模糊。gm_ratio=0.150, spectral_slope_ratio=1.262, residual_anisotropy=1.148(<1.7 排除 motion), glass_score=0.459 但 sigma=3.83>=3 不满足 glass 门控(sigma<3) → gaussian 主假设，lens 为 MTF 不可区分备选",
+      "noise": "sigma=3.83 (noise_prior wavelet)。spatial_corr=0.774 高（blur 后的噪声被平滑→CLT 高斯化），residual_intensity_corr=0.862（clipping 污染），类型判定低置信 → YCrCb 暂定，RGB 对照",
+      "global": "run_full_analysis 报告 BRIGHTNESS_darken_sev3 + SATURATION_strengthen_sev5，但生成器每类别仅一步；mean_shift=-42.9、saturation_chroma_ratio=1.655、clipped_fraction=0.323(零端)、variance_ratio=1.371 更符合 saturate_strengthen（HSV 中 S×c 使 min 通道→0，独立造成暗化+方差上升+裁剪），brightness 可能为假阳性"
+    },
+    "mode": "SIGNAL (sigma=3.83 >= 2, PSNR 不可靠)",
+    "order_hypothesis": "物理顺序 noise(p0) → blur(p1) → global/saturation(p2)，即 noise→blur→saturate",
+    "suspected": [
+      "noise_gaussian_YCrCb(或RGB)",
+      "blur_gaussian(sev≥3)",
+      "saturate_strengthen_HSV(sev4-5)"
+    ],
+    "ruled_out": [
+      "compression_jpeg",
+      "blur_motion",
+      "brightness 作为独立步骤"
+    ],
+    "qwen_gate": {
+      "available": false,
+      "note": "API 不可用，按指令跳过 Step 0.5，记录于此"
+    }
+  },
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py --pipeline 'blur_gaussian:3,saturate_strengthen_HSV:5'（确定性剥离后残差）",
+    "extreme_pct": 74.33,
+    "vm_slope": 1.6902,
+    "var_slope": 36.818,
+    "spatial_corr": 0.9868,
+    "rgb_ratio": 2.0202,
+    "cross_channel_corr": 0.191,
+    "zero_ratio": 0.3519,
+    "residual_std": 10.8,
+    "noise_prior_sigma_on_residual": 7.66,
+    "noise_prior_type_on_residual": "noise_gaussian_RGB",
+    "diagnosis": "剥离线使用饱和裁剪后的确定性管线，残差被 32% 零端裁剪边界的差分主导（extreme_pct=74% 为已知 FP 模式：饱和/JPEG 伪影使 extreme_pct>50%，SKILL 规则要求忽略该 IMPULSE 判定），§B 数值不代表真实噪声类型，仅作记录。真正有判别力的是 target-clean 残差的 §B 指纹（见 target_cosine_fingerprints）：target sigma=3.83 / impulse_zero_ratio=0.0256 / spatial_corr=0.7743 / cross_channel_corr=0.7542 / residual_intensity_corr=0.8617；RGB:3 模拟 = 3.83/0.0265/0.7607/0.7481/0.8633（4 项中 3 项更近）；YCrCb:3 模拟 = 3.83/0.023/0.7605/0.7355/0.8418。注意饱和裁剪使 run_full_analysis 将 RGB 噪声也分类为 GAUSSIAN_YCrCb（sim6 实测同样输出 YCrCb），故其类型判决不可作为证据，指纹匹配优先 → 选 noise_gaussian_RGB:3。spatial_corr=0.77 高说明噪声位于 blur 之前（blur 平滑噪声）；residual_intensity_corr=0.86 高是饱和裁剪与强度的耦合，非 gamma。",
+    "target_cosine_fingerprints": {
+      "noise_prior_sigma": {
+        "target": 3.83,
+        "sim_rgb3": 3.83,
+        "sim_ycrcb3": 3.83
+      },
+      "impulse_zero_ratio": {
+        "target": 0.0256,
+        "sim_rgb3": 0.0265,
+        "sim_ycrcb3": 0.023
+      },
+      "spatial_corr": {
+        "target": 0.7743,
+        "sim_rgb3": 0.7607,
+        "sim_ycrcb3": 0.7605
+      },
+      "cross_channel_corr": {
+        "target": 0.7542,
+        "sim_rgb3": 0.7481,
+        "sim_ycrcb3": 0.7355
+      },
+      "residual_intensity_corr": {
+        "target": 0.8617,
+        "sim_rgb3": 0.8633,
+        "sim_ycrcb3": 0.8418
+      }
+    }
+  },
+  "evidence_exact_signals": {
+    "target_vs_best_sim6": {
+      "mean_shift": [
+        -42.9,
+        -42.9
+      ],
+      "clipped_fraction": [
+        0.3228,
+        0.3345
+      ],
+      "variance_ratio": [
+        1.3713,
+        1.4102
+      ],
+      "contrast_spread_ratio": [
+        0.5149,
+        0.5279
+      ],
+      "saturation_chroma_ratio": [
+        1.6553,
+        1.6263
+      ],
+      "gm_ratio": [
+        0.1503,
+        0.1413
+      ],
+      "spectral_slope": [
+        -1.1822,
+        -1.2145
+      ],
+      "spectral_slope_ratio": [
+        1.2618,
+        1.2962
+      ]
+    },
+    "note": "sim6 = noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:5；除 variance_ratio(+2.8% 绝对) 与残差 FWHM 外全部接近；variance 偏差在 sat3/sat4/sat5、lens/glass、顺序交换下均不收敛，判定为强非线性饱和裁剪对噪声 seed 的放大与信号阈值(8%)失配，不再调参（3 轮终止）。"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:4,saturate_strengthen_HSV:5",
+        "thinking": "初始全管线：noise(p0)->blur(p1)->saturation(p2)；sigma=3.83 暂定YCrCb sev3；gm_ratio=0.15 强模糊先试 gaussian sev4；mean_shift=-42.9/chroma=1.655/clip32% 假设 saturate_strengthen_HSV sev5"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.220)",
+          "noise:sigma (diff=50%)",
+          "noise:structured_residual (FWHM=10.0px)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:4,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "thinking": "R2: 对模拟图重跑 run_full_analysis: slope_ratio(sim)=1.496 > slope_ratio(target)=1.262, gm(sim)=0.116 < gm(target)=0.150 → blur4 过强, 降为3; 全局与噪声信号方向均吻合(argv)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)",
+          "global:variance_ratio (diff=14%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:4",
+        "thinking": "R3 severity扫描: R2 仅 variance_ratio 高14%(sim~1.42 vs target 1.371), 饱和度降一级看是否收敛; 其余信号保持匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)",
+          "global:variance_ratio (diff=14%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "thinking": "R4 噪声类型对照: 剥离残差rgb_ratio=2.02 受饱和裁剪污染不可靠; YCrCb 色度噪声经 x64 饱和放大可能抬高方差, 用 RGB:3 对照检验 variance_ratio 是否收敛"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)",
+          "global:variance_ratio (diff=11%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_YCrCb:5",
+        "thinking": "R5 全局子类型对照: HSV x64 与 YCrCb x16 在多数像素均裁剪, 比较 mean_shift/variance_ratio 哪族更吻合; 噪声保持 R4 较优的 RGB:3"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "noise:structured_residual (FWHM=28.0px)",
+          "global:mean_shift (diff=0.1223)",
+          "global:variance_ratio (diff=442%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_YCrCb:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "thinking": "R6 对照重复(control): 与 R4 完全相同, 检验噪声 seed 对 variance_ratio/gm 的影响幅度; 饱和裁剪非线性放大 seed 差异, 若波动接近阈值则残差不可继续调参"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)",
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,saturate_strengthen_HSV:5,blur_gaussian:3",
+        "thinking": "R7 顺序假设: 若饱和先于模糊, 模糊平滑饱和后的裁剪边界→方差降低且色边界结构不同; 可解释 R4/R6 的 variance 系统偏高 10% 而 slope 已匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "noise:structured_residual (FWHM=12.0px)",
+          "global:mean_shift (diff=0.0160)",
+          "global:variance_ratio (diff=109%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,saturate_strengthen_HSV:5,blur_gaussian:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_glass:4,saturate_strengthen_HSV:5",
+        "thinking": "R8 模糊子类型: DT=GLASS(glass_score=0.459), 且 target residual_intensity_corr=0.86/spatial_corr=0.77 亦符合 shuffle 伪影；glass sev4(sigma1.4,shift3) 检验 slope/wiener/variance 是否更吻合"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.839)",
+          "noise:structured_residual (FWHM=10.0px)",
+          "global:variance_ratio (diff=9%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_glass:4,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:3",
+        "thinking": "R9 饱和severity下扫: sev4/5 信号相同(x20/x64 几乎全部裁剪), 测 sev3(x12) 是否降低裁剪比例从而修复 variance_ratio 10% 偏差"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "thinking": "R1-control: 复跑 R0 主选（R0 R4/R6 两次 PARTIAL 4✓/2✗，variance diff 11%/10%）。R1 信号重跑确认 sigma=3.83、mean_shift=-42.9、gm=0.1503、slope_ratio=1.2618、block_boundary=0.9996 与 R0 一致；本测试作为 R1 新候选的比较基线并估计 noise seed 波动。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)",
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "thinking": "R1-C1: 被忽略信号重释 — peeled §B vm_slope=1.6902 (>0.01 speckle 阈值) 与 var_slope=36.8 虽被饱和裁剪污染，但 R0 仅测了 gaussian_RGB/YCrCb 两种噪声，未测试 speckle/poisson（SKILL Round-1 要求 ≥3 类覆盖）。speckle 为乘性噪声（vm_slope>0），用同管线替换噪声类型检验 sigma/§B 指纹是否更匹配。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)"
+        ],
+        "pipeline": "noise_speckle:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "thinking": "R1-C2: 被忽略信号重释 — peeled §B var_slope=36.818 (>1.0 poisson 阈值)、vm_slope≈高; R0 未测 poisson。用 var_slope>1 的噪声类型检验 sigma/§B 指纹与 variance_ratio 是否更匹配，与 speckle C1 对照。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=12.0px)",
+          "global:variance_ratio (diff=9%)"
+        ],
+        "pipeline": "noise_poisson:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "thinking": "R1-C3: SKILL 强制 severity 扫描 — C1 speckle:3 PARTIAL 5✓/1✗（仅 FWHM 失配），按协议先扫 sev-1；检验 sigma=3.83 匹配是否保持、variance_ratio 与 FWHM 是否改善。peeled vm_slope=1.6902 为 speckle 信号来源。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)"
+        ],
+        "pipeline": "noise_speckle:2,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_speckle:4,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "thinking": "R1-C4: SKILL 强制 severity 扫描 — speckle sev+1；C1(sev3) 与 C3(sev2) 均 5✓/1✗，仅 FWHM=10px 失配；检验 sev4 是否保持 sigma/variance 匹配而改善结构残差。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)",
+          "global:mean_shift (diff=0.0060)",
+          "global:variance_ratio (diff=16%)"
+        ],
+        "pipeline": "noise_speckle:4,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_lens:3,saturate_strengthen_HSV:5",
+        "thinking": "R1-C5: R0 未测 blur 子类型 — full_analysis 明确 gaussian↔lens MTF 不可区分 (signal_reliability lens=79%)，且 R0 只测了 gaussian:3/4 与 glass:4，lens 从未验证；lens 盘状核的低频残差结构可能解释 target FWHM=10px。与 control 同噪声(RGB:3)、同全局(sat5)，隔离模糊变量。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.119)",
+          "noise:sigma (diff=400%)",
+          "noise:structured_residual (FWHM=8.0px)",
+          "global:variance_ratio (diff=21%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_lens:3,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_lens:2,saturate_strengthen_HSV:5",
+        "thinking": "R1-C6: lens severity 扫描 — C5 lens:3 WEAK，spectral_slope diff=0.119 表明模糊过强；按 SKILL severity 扫描 step 降一级 lens:2，检验 slope/sigma/variance 是否回到 PARTIAL 水平。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.173)",
+          "noise:sigma (diff=600%)",
+          "noise:structured_residual (FWHM=6.0px)",
+          "global:variance_ratio (diff=29%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_lens:2,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:2,saturate_strengthen_HSV:5",
+        "thinking": "R1-C7: 模糊 severity 边界检验 — target gm_ratio=0.1503 vs control sim gm=0.1409（sim 略强 6%），R0 只测过 gaussian:3/4 未测 sev2；但 spectral_slope 在 gaussian:3 已匹配 (diff 0.0305<0.08)，sev2 预计 slope_ratio 降至 ~1.2 以下偏离 target 1.2618，用于确认 sev3 是否最佳。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.120)",
+          "noise:sigma (diff=50%)",
+          "noise:structured_residual (FWHM=6.0px)",
+          "global:variance_ratio (diff=22%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:2,saturate_strengthen_HSV:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "rank": 1,
+      "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+      "mode": "signal",
+      "verdict": "PARTIAL",
+      "matched": 4,
+      "mismatched": 2,
+      "rounds": [
+        4,
+        6
+      ],
+      "note": "PSNR 不可用 (sigma=3.83)；主选"
+    },
+    {
+      "rank": 2,
+      "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:3",
+      "mode": "signal",
+      "verdict": "PARTIAL",
+      "matched": 4,
+      "mismatched": 2,
+      "rounds": [
+        9
+      ],
+      "note": "全局 severity 不可区分 (variance 差 10%)"
+    },
+    {
+      "rank": 3,
+      "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+      "mode": "signal",
+      "verdict": "PARTIAL",
+      "matched": 4,
+      "mismatched": 2,
+      "rounds": [
+        2
+      ],
+      "note": "指纹 3/4 项弱于 RGB；variance 差 14%"
+    },
+    {
+      "rank": 4,
+      "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:4",
+      "mode": "signal",
+      "verdict": "PARTIAL",
+      "matched": 4,
+      "mismatched": 2,
+      "rounds": [
+        3
+      ],
+      "note": "与 sat5 信号相同"
+    },
+    {
+      "rank": 5,
+      "pipeline": "noise_gaussian_RGB:3,blur_glass:4,saturate_strengthen_HSV:5",
+      "mode": "signal",
+      "verdict": "WEAK",
+      "matched": 3,
+      "mismatched": 3,
+      "rounds": [
+        8
+      ],
+      "note": "Wiener 核 corr=0.839<0.85 失配"
+    },
+    {
+      "rank": 6,
+      "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:4,saturate_strengthen_HSV:5",
+      "mode": "signal",
+      "verdict": "WEAK",
+      "matched": 3,
+      "mismatched": 3,
+      "rounds": [
+        1
+      ],
+      "note": "blur4 斜率过陡 (diff=0.220)"
+    },
+    {
+      "rank": 7,
+      "pipeline": "noise_gaussian_RGB:3,saturate_strengthen_HSV:5,blur_gaussian:3",
+      "mode": "signal",
+      "verdict": "WEAK",
+      "matched": 2,
+      "mismatched": 4,
+      "rounds": [
+        7
+      ],
+      "note": "顺序错误：variance 差 109%，mean 差 0.016"
+    },
+    {
+      "rank": 8,
+      "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_YCrCb:5",
+      "mode": "signal",
+      "verdict": "WEAK",
+      "matched": 2,
+      "mismatched": 4,
+      "rounds": [
+        5
+      ],
+      "note": "全局子类型错误：variance 差 442%，mean 差 0.122"
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_RGB",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "blur_gaussian",
+        "severity": 3,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "saturate_strengthen_HSV",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "alternatives": [
+      {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "reason": "run_full_analysis 原始类型调用；指纹匹配弱于 RGB"
+      },
+      {
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:3",
+        "reason": "饱和 severity 3-5 在当前信号下不可区分"
+      }
+    ],
+    "rationale": "压缩排除；强 gaussian 模糊 sev3（slope+kernel 双匹配，motion/glass 排除）；全局为 saturate_strengthen_HSV（mean_shift 精确复现、chroma 1.626 vs 1.655、clip 32%；YCrCb 饱和变体强排除；brightness 为饱和裁剪假阳性）；噪声 gaussian_RGB:3（sigma 3.83 精确一致 + 4 项指纹 3 项更近；YCrCb 分类是饱和裁剪导致的伪影）。顺序 noise→blur→saturate 经交换实验确认。残余 variance_ratio 10% 与 FWHM 结构偏差在参数空间内不收敛（饱和非线性裁剪主导），故整体 UNCERTAIN，等待训练 PSNR 仲裁。"
+  },
+  "validation": {
+    "k": 1,
+    "pairs_tested": [
+      "pair0 (clean_0.png/degraded_0.png)"
+    ],
+    "cross_pair_validation": "不可用：单 support（k=1），无法做跨对验证",
+    "final_candidate_recheck": "主选管线在 pair0 上经 2 次独立 seed 复核 (R4/R6)，均 PARTIAL 4✓/2✗，variance 差 11%/10%，结论稳定"
+  },
+  "qwen_gate": {
+    "available": false
+  },
+  "termination": "满足 SKILL 终止条件：已完成 3 轮探索（R1 全覆盖 / R2 二元对照 / R3 severity+子类型），连续多轮无信号级改善 → 标记 UNCERTAIN 保存当前最佳",
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 support PSNR 20.17 + R0 verdict UNCERTAIN → 触发反思（自参照，未使用任何 GT）",
+    "support": {
+      "k": 1,
+      "pairs": [
+        "pair0 (clean_0.png/degraded_0.png)"
+      ],
+      "limitation": "单 support 仅 pair0，无法跨对验证；噪声 seed 与内容依赖波动不可分离。阈值未放宽（未因 k=1 降低 +2dB/信号阈值），证据不足按协议 NO_CHANGE。"
+    },
+    "signal_rerun_pair0": {
+      "output": "full_analysis_R1.json",
+      "vs_R0": "信号逐项一致（仅 residual_intensity_corr 0.8617→0.8627，属重算数值噪声）",
+      "compression": {
+        "block_boundary": 0.9996,
+        "unique_G": 233,
+        "unique_G_ratio": 0.9102,
+        "dct_zero_ratio": 0.4664,
+        "verdict": "NO_COMPRESSION（0%FP 信号，非边界）"
+      },
+      "blur": {
+        "gm_ratio": 0.1503,
+        "spectral_slope_target": -1.1822,
+        "spectral_slope_clean": -0.9369,
+        "spectral_slope_ratio": 1.2618,
+        "residual_anisotropy": 1.1478,
+        "glass_score": 0.4593,
+        "pca_ratio": 1.154,
+        "verdict": "gaussian（anisotropy<1.7 排除 motion；glass_score>0.25 但 sigma=3.83≥3 不满足 glass 门控；lens MTF 不可区分→R1 补测）"
+      },
+      "noise": {
+        "sigma": 3.83,
+        "impulse_zero_ratio": 0.0256,
+        "spatial_corr": 0.7743,
+        "cross_channel_corr": 0.7542,
+        "residual_intensity_corr": 0.8627,
+        "noise_prior_type": "GAUSSIAN_YCrCb(low confidence, 饱和裁剪下分类器失真)",
+        "verdict": "SIGNAL 模式（sigma≥2，PSNR 不可用）"
+      },
+      "global": {
+        "mean_shift": -42.9,
+        "variance_ratio": 1.3713,
+        "contrast_spread_ratio": 0.5149,
+        "clipped_fraction": 0.3228,
+        "saturation_chroma_ratio": 1.6553,
+        "brightness_detected_raw": true,
+        "gamma_suspect": false,
+        "verdict": "saturate_strengthen_HSV:5（brightness 为裁剪假阳性）"
+      }
+    },
+    "peeled_sb6_R1": {
+      "pipeline_stripped": "blur_gaussian:3,saturate_strengthen_HSV:5",
+      "extreme_pct": 74.33,
+      "zero_ratio": 0.3519,
+      "vm_slope": 1.6902,
+      "var_slope": 36.818,
+      "ivc": 0.5414,
+      "spatial_corr": 0.9868,
+      "rgb_ratio": 2.0202,
+      "cross_ch_corr": 0.191,
+      "residual_std": 10.8,
+      "noise_prior_sigma_on_residual": 7.66,
+      "noise_prior_type_on_residual": "noise_gaussian_RGB（平谱）",
+      "diagnosis": "数值与 R0 完全一致。extreme_pct=74.33%>50% 且 target-clean sigma=3.83<5 → SKILL 已知假阳性模式（饱和裁剪边界主导残差），忽略 §B IMPULSE/spECKLE/POISSON 自动判定；peeled 残差 sigma 7.66 明显高于 target-clean 3.83，证明剥离管线不能完全解释信号（裁剪非线性残差结构），§B 数值仅作记录。"
+    },
+    "signal_reinterpretation": [
+      {
+        "signal": "peeled vm_slope=1.6902 (>0.01), var_slope=36.818 (>1.0)",
+        "R0_treatment": "判为裁剪污染的 §B 数值，未测试 speckle/poisson",
+        "R1_finding": "R0 未覆盖的噪声类型确有测试必要（SKILL Round-1 要求 ≥3 类）。实测 speckle:2/3 → PARTIAL 5✓/1✗（仅 structured_residual 失配）；poisson:3 → PARTIAL 4✓/2✗。但 speckle 的 5✓ 仅来自 global:variance_ratio（全局信号）阈值补偿，噪声 §B 指纹 cross_channel_corr 0.7776 vs target 0.7542、residual_intensity_corr 0.8729 vs 0.8627、chroma 1.5558 vs 1.6553、gm 0.1361 vs 0.1503 均劣于 control(RGB3)。故不采纳 CHANGE。"
+      },
+      {
+        "signal": "target §B 指纹 vs sim 定量对比（run_full_analysis on sim）",
+        "R0_treatment": "RGB 在 4 项指纹中 3 项更近",
+        "R1_finding": "R1 复核确认：RGB3 在 cross_ch(0.7501 vs 目标 0.7542)、ric(0.8625 vs 0.8627) 上明显更近；speckle 在 impulse_zero 与 variance 上更近。综合权衡无支配性胜者，且 pair verdict 仍 PARTIAL → 维持 RGB。"
+      },
+      {
+        "signal": "spectral_slope 边界：target -1.1822 / ratio 1.2618 vs control sim -1.2127 / 1.2944（diff 0.0305<0.08）",
+        "R0_treatment": "gaussian:3 匹配；gaussian:4 过强",
+        "R1_finding": "补测未覆盖的 gaussian:2 与 lens:2/3：gaussian:2 → WEAK(diff 0.120)，lens:3 → WEAK(diff 0.119)，lens:2 → WEAK(diff 0.173)。blur_gaussian:3 为唯一可行解。"
+      },
+      {
+        "signal": "brightness_detected_raw=True / mean_shift=-42.9",
+        "R0_treatment": "判为饱和裁剪假阳性",
+        "R1_finding": "反证确认：仅含 saturate_strengthen_HSV:5 的模拟图被 run_full_analysis 同样判为 'BRIGHTNESS_darken_sev3; SATURATION_strengthen_sev5'，即 brightness 调用是饱和裁剪的固有假阳性，无需加入 brightness 步骤。"
+      },
+      {
+        "signal": "noise:structured_residual FWHM=10px（全部候选均失配）",
+        "R0_treatment": "归因于饱和强非线性裁剪对噪声 seed 的放大",
+        "R1_finding": "speckle/poisson/lens/blur2 均无法修复 FWHM（8-12px），验证其为裁剪边界结构而非噪声类型错误；该信号不指向任何可行动修正。"
+      }
+    ],
+    "fingerprint_comparison": {
+      "source": "run_full_analysis on simulated images",
+      "columns": [
+        "target",
+        "control_RGB3_blur3_sat5",
+        "speckle3_blur3_sat5",
+        "speckle2_blur3_sat5"
+      ],
+      "noise_prior_sigma": [
+        3.83,
+        3.83,
+        3.83,
+        3.83
+      ],
+      "impulse_zero_ratio": [
+        0.0256,
+        0.0264,
+        0.0257,
+        0.0265
+      ],
+      "spatial_corr": [
+        0.7743,
+        0.7608,
+        0.7632,
+        0.753
+      ],
+      "cross_channel_corr": [
+        0.7542,
+        0.7501,
+        0.7776,
+        0.777
+      ],
+      "residual_intensity_corr": [
+        0.8627,
+        0.8625,
+        0.8729,
+        0.87
+      ],
+      "mean_shift": [
+        -42.9,
+        -42.8,
+        -43.6,
+        -42.9
+      ],
+      "clipped_fraction": [
+        0.3228,
+        0.3344,
+        0.334,
+        0.334
+      ],
+      "variance_ratio": [
+        1.3713,
+        1.4089,
+        1.3521,
+        1.3875
+      ],
+      "contrast_spread_ratio": [
+        0.5149,
+        0.526,
+        0.5019,
+        0.5149
+      ],
+      "saturation_chroma_ratio": [
+        1.6553,
+        1.6229,
+        1.5558,
+        1.5611
+      ],
+      "gm_ratio": [
+        0.1503,
+        0.1409,
+        0.1361,
+        0.1318
+      ],
+      "spectral_slope": [
+        -1.1822,
+        -1.2127,
+        -1.2113,
+        -1.2262
+      ],
+      "block_boundary": [
+        0.9996,
+        1.0338,
+        0.9534,
+        1.0277
+      ]
+    },
+    "candidates_R1": [
+      {
+        "round": 10,
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "verdict": "PARTIAL",
+        "matched": 4,
+        "mismatched": [
+          "noise:structured_residual(FWHM=10px)",
+          "global:variance_ratio(diff=10%)"
+        ],
+        "role": "control（R0 主选复跑，结果与 R0 R4/R6 一致）"
+      },
+      {
+        "round": 11,
+        "pipeline": "noise_speckle:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "verdict": "PARTIAL",
+        "matched": 5,
+        "mismatched": [
+          "noise:structured_residual(FWHM=10px)"
+        ],
+        "role": "新候选：speckle（vm_slope 信号）"
+      },
+      {
+        "round": 12,
+        "pipeline": "noise_poisson:3,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "verdict": "PARTIAL",
+        "matched": 4,
+        "mismatched": [
+          "noise:structured_residual(FWHM=12px)",
+          "global:variance_ratio(diff=9%)"
+        ],
+        "role": "新候选：poisson（var_slope 信号）"
+      },
+      {
+        "round": 13,
+        "pipeline": "noise_speckle:2,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "verdict": "PARTIAL",
+        "matched": 5,
+        "mismatched": [
+          "noise:structured_residual(FWHM=10px)"
+        ],
+        "role": "speckle severity 下扫"
+      },
+      {
+        "round": 14,
+        "pipeline": "noise_speckle:4,blur_gaussian:3,saturate_strengthen_HSV:5",
+        "verdict": "WEAK",
+        "matched": 3,
+        "mismatched": [
+          "noise:structured_residual(FWHM=10px)",
+          "global:mean_shift(diff=0.006)",
+          "global:variance_ratio(diff=16%)"
+        ],
+        "role": "speckle severity 上扫"
+      },
+      {
+        "round": 15,
+        "pipeline": "noise_gaussian_RGB:3,blur_lens:3,saturate_strengthen_HSV:5",
+        "verdict": "WEAK",
+        "matched": 2,
+        "mismatched": [
+          "blur:spectral_slope(diff=0.119)",
+          "noise:sigma(diff=400%)",
+          "noise:structured_residual(FWHM=8px)",
+          "global:variance_ratio(diff=21%)"
+        ],
+        "role": "新候选：lens 子类型（MTF 不可区分）"
+      },
+      {
+        "round": 16,
+        "pipeline": "noise_gaussian_RGB:3,blur_lens:2,saturate_strengthen_HSV:5",
+        "verdict": "WEAK",
+        "matched": 2,
+        "mismatched": [
+          "blur:spectral_slope(diff=0.173)",
+          "noise:sigma(diff=600%)",
+          "noise:structured_residual(FWHM=6px)",
+          "global:variance_ratio(diff=29%)"
+        ],
+        "role": "lens severity 扫描"
+      },
+      {
+        "round": 17,
+        "pipeline": "noise_gaussian_RGB:3,blur_gaussian:2,saturate_strengthen_HSV:5",
+        "verdict": "WEAK",
+        "matched": 2,
+        "mismatched": [
+          "blur:spectral_slope(diff=0.120)",
+          "noise:sigma(diff=50%)",
+          "noise:structured_residual(FWHM=6px)",
+          "global:variance_ratio(diff=22%)"
+        ],
+        "role": "模糊 severity 边界检验（gm 边界信号）"
+      }
+    ],
+    "budget": {
+      "test_candidate_calls": 8,
+      "new_candidate_families": 4,
+      "run_full_analysis_calls": 4,
+      "peeled_noise_check_calls": 1,
+      "limits": "≤5 新候选族 / ≤15 test_candidate — 未超限"
+    },
+    "decision": "NO_CHANGE",
+    "reason": "R1 信号重跑与 R0 一致；压缩排除，blur_gaussian:3 经 lens:2/3 与 gaussian:2 对照确认为唯一可行解，saturate_strengthen_HSV:5 由 mean/chroma/clip/spread 精确匹配且 brightness 假阳性获反证确认，噪声维持 gaussian_RGB:3（§B 指纹 cross_ch/ric 更近）。R0 未覆盖的 speckle/poisson 候选实测：speckle:2/3 达到 5✓/1✗，但改善仅来自 global:variance_ratio（全局信号），chroma/gm/cross_ch/ric 同时变差，pair verdict 仍为 PARTIAL（未发生 WEAK→PARTIAL/MATCH），无候选达到 MATCH；poisson/lens/blur2 均 WEAK。k=1 单对 support 证据不足且阈值不放宽 → 按协议 NO_CHANGE，管线与 R0 逐项相同。",
+    "termination": "本轮完成 1 轮信号重释 + 4 候选族验证，无候选达到 MATCH 或支配性改善；k=1 证据不足，直接 NO_CHANGE（未消耗 3 轮上限，因无可行动的新假设）。"
+  }
+}

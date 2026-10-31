@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "noise_impulse 稀疏指纹: zero_ratio=0.8999 (pair0) / 0.9001 (pair2)，90% 像素与 clean 位精确相同；x_distortion noise_impulse sev5 amount=0.10 精确对应，sev4 对照 CI 7/10 且 impulse_total_pct 误差约 30% 被排除",
+    "CI 内容无关指标 3 对 support 全部 10/10 (pair0/1/2)，impulse_total_pct 误差 -0.004%/-0.002%/+0.015%，跨 support 一致",
+    "peeled_sb6_p0: spatial_corr=0.3457 ≈ 10% 独立脉冲理论值 0.33，cross_channel_corr=0.0046，rgb_ratio=1.0367 → 逐通道独立 salt&pepper；noise_prior_sigma=0.0 源于稀疏残差 MAD，非无噪声",
+    "step1 compression: block_boundary=0.994, unique_G=256, dct_zero_ratio=0.016 → 无 Tier S 压缩信号 (§七 block_boundary>1.1 未触发)，不启用 JPEG 专项",
+    "step3 blur: gm_ratio=5.334, spectral_slope_ratio=0.901 → 无模糊；无 anisotropy_ratio>1.7 + motion 信号 → OCAB 门控不满足",
+    "step4 global FP: variance_ratio=2.1846 / chroma_ratio=3.253 / clipped_fraction=0.1007 为低置信 FP — 90% 像素位精确不变与任何全局 LUT (必然改动几乎全部像素) 矛盾，且 IMPULSE 的 _for_step4.sigma=0.0 阻断噪声修正；contrast 步骤未达 Tier A，且无结构化局部 (motion/jpeg) → FiLM-GCM 门控不满足；ColorPre 仅 contrast Tier A 才启用，本挑战不启用",
+    "SimpleGate: exp39 默认常开 (-32K 参数, 8/9 退化安全, N -0.01 dB)",
+    "k=3 support 不改变架构门控 (阈值不放宽)"
+  ],
+  "rationale": "预测为单步 noise_impulse:5 (UNCERTAIN，噪声步骤按协议不标 LIKELY)。Tier 2 随机退化：噪声与注意力类型无关，唯一可靠信号是稀疏脉冲指纹 (zero_ratio=0.90 + CI 10/10×3 对)，确定性组件均无 Tier S/A 依据 — full_analysis 的 contrast/saturation 信号被 90% 位精确不变这一硬约束证伪为脉冲极值假阳性，且无 motion/jpeg 结构化步骤。按 §七 兜底规则采用纯 Swin + SimpleGate + Direct，lr=5e-4，EPOCH=2，batch=16，不加任何组件；support 数量 k=3 不影响门控。"
+}

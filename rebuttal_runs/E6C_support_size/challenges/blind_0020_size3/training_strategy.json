@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "pipeline=blur_gaussian:5 + contrast_weaken_stretch:4 + saturate_weaken_HSV:3, overall verdict=UNCERTAIN, tier=3 (predicted_params.json / reflection.json final_decision)",
+    "OCAB gate fails: full_analysis step3_blur residual_anisotropy=1.4991 < 1.7, no motion; blur is gaussian (gm_ratio=0.1377, spectral_slope_ratio=1.4039), glass_score=0.3044 marginal",
+    "FiLM-GCM gate fails: block_boundary=1.0024 < 1.1 and JPEG sims inflated block_boundary >190% => no JPEG; no motion (anisotropy 1.50) => no structured local degradation paired with contrast",
+    "ColorPre not triggered: variance_ratio=0.1878 (Tier A contrast) is confounded — FP checks contrast_from_saturation=true, brightness_contrast_both=true, gamma_suspect=true; pipeline contains saturate_weaken_HSV:3 (ColorPre documented harmful/disabled on saturation -0.34), and verified transform is contrast_weaken_stretch while ColorPre is only validated on contrast_scale; §七 signal-conflict rule -> pure Swin fallback",
+    "no noise: noise_prior_sigma=0.37 < 2 (full_analysis step2_noise)",
+    "cross-pair k=3 PSNR 34.29 / 28.14 / 36.14 dB (mean 32.86 < 40, blur sev 3-5 PSNR-insensitive) -> UNCERTAIN, no gate relaxation for k=3",
+    "SimpleGate default on (exp39 8/9 safe, no motion triple-degradation here); Direct required for contrast-containing multi-step pipeline (finetune_strategy §六 Step 1)"
+  ],
+  "rationale": "3-step deterministic pipeline dominated by global tone (contrast_weaken_stretch + saturate_weaken_HSV) plus strong gaussian blur; all per-step verdicts UNCERTAIN. OCAB (anisotropy 1.499 < 1.7) and FiLM-GCM (no motion/JPEG structured local) gates are not met. The only Tier A signal, contrast variance_ratio=0.1878, is confounded by concurrent saturation (contrast_from_saturation=true, gamma_suspect) and ColorPre's documented disable scenario is saturation/HSV; per finetune_strategy §七 conflict rule and CLAUDE.md 全局退化只用 Swin, fall back to pure Swin + SimpleGate + Direct. k=3 provides no threshold relaxation. LR=5e-4, EPOCH=2, batch=16 per Phase 5 fairness rules."
+}

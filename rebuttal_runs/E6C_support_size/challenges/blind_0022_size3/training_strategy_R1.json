@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression_jpeg sev2 LIKELY: full_analysis.json step1 block_boundary=1.6844 (>1.1, Tier S 0%FP), unique_G=256/256/256, dct_zero_ratio=0.8232 → JPEG 确认, 仅 JPEG 专项/无组件开关",
+    "无 contrast (决定 FiLM-GCM/ColorPre 不启用): full_analysis.json step4_global verdict=NO_GLOBAL, brightness_mean_shift=-0.1, variance_ratio=0.8135 但 contrast_from_variance=false, contrast_spread_ratio=0.9514, saturation_chroma_ratio=0.9042; reflection.json ruled_out 明确 variance_ratio 0.81-0.92 由 blur+JPEG 解释 → 不满足 FiLM-GCM/ColorPre 所需的 contrast Tier A variance_ratio",
+    "blur 步骤 UNCERTAIN (glass sev3): predicted_params.json analysis.verdict=UNCERTAIN, tier=3; step3_blur GLASS_BLUR confidence=medium, gm_ratio=0.3606, glass_score=0.4575 → 非高置信, 按 §七 Tier B/C 走 Swin 基线, 不加组件",
+    "OCAB 不启用: residual_anisotropy=2.0181 虽 >1.7, 但 PSNR 仲裁排除 motion (reflection.json: motion:4+jpeg:4=17.99dB, 远低于 glass 系 26-33dB; 最终管线为 blur_glass), 门控要求 anisotropy>1.7 且 motion 成立, 本挑战 motion 不成立 → OCAB 不启用",
+    "无噪声: reflection.json noise_6step_check 诊断 NO_NOISE (剥离后 noise_prior sigma=0.99<2, extreme_pct=55.12% 命中已知 JPEG/blur 伪影假阳性规则) → 无噪声专项需求",
+    "SimpleGate 常开: finetune_strategy.md §七 exp39 -32K 参数, 8/9 退化安全, 默认开",
+    "k=3 support 数量不改变门控: 三对复核 PSNR 27.93/31.25/32.70 dB 与 CI 6/7/6 (reflection.json cross_pair_validation), 一致支持 glass3+jpeg2 方向但 glass 为无种子随机 shuffle 永不 LIKELY, 因此不放宽任何 Tier 阈值"
+  ],
+  "rationale": "管线为纯局部两步退化 (blur_glass:3 UNCERTAIN + compression_jpeg:2 LIKELY), 无 contrast/无噪声, 不含 Tier A 结构化 contrast 信号, motion 已被 PSNR 排除, 因此不满足 OCAB/FiLM-GCM/ColorPre 任一组件触发条件; 按 finetune_strategy.md §六 Step1 纯局部退化用 Direct, §七 默认纯 Swin + SimpleGate + Direct (exp37 盲识别场景组件 0/24 胜, exp39 SimpleGate 安全常开)。full_analysis.json 的 recommended_architecture 建议 DualBranch 与现行指令和 exp37 证据冲突 (DualBranch 不使用), 不采纳。k=3 不改架构门控, 无需因 support 少降低阈值。"
+}

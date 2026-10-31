@@ -1,0 +1,897 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "MILD_COMPRESSION_POSSIBLE (block_boundary=1.002 < 1.05, unique_G=211 vs clean 253, dct_zero_ratio=0.507)",
+      "blur": "GLASS_BLUR (glass_score=0.505>0.25, gm_ratio=0.299, spectral_slope_ratio=1.093, anisotropy=1.244<1.7)",
+      "noise": "GAUSSIAN_YCrCb sigma=1.48 (estimated sev 5), spatial_corr=0.476, cross_ch_corr=0.933",
+      "global": "NO_GLOBAL (variance_ratio=0.869, mean_shift=-0.5, no clipping)"
+    },
+    "mode": "PSNR (sigma=1.48 < 2, PSNR usable)",
+    "suspected": [
+      "blur_glass",
+      "blur_gaussian (alternative)",
+      "mild compression_jpeg (weak, block_boundary~1.0)",
+      "noise borderline (sigma 1.48, likely blur-contaminated residual)"
+    ],
+    "ruled_out": [
+      "motion blur (anisotropy 1.244 < 1.7)",
+      "global contrast/brightness/saturation (variance_ratio 0.869 close to 1, mean_shift -0.5/255)"
+    ]
+  },
+  "noise_6step_check": {
+    "status": "no_noise_step_in_final_pipeline (sigma=1.48<2 at full_analysis; peeled residual on final pipeline is glass-shuffle artifact)",
+    "peeled_residual_pipeline": "blur_glass:2",
+    "peeled_residual_std": 4.7,
+    "extreme_pct": 58.53,
+    "vm_slope": 4.7141,
+    "var_slope": 0.1094,
+    "spatial_corr": 0.9509,
+    "rgb_ratio": 1.0636,
+    "cross_ch_corr": 0.9084,
+    "channel_stds": [
+      4.6,
+      4.7,
+      4.9
+    ],
+    "diagnosis": "§B on peeled residual reports IMPULSE/SPECKLE-like numbers, but this is the documented extreme_pct>50% + sigma<5 false-positive mode: glass pixel-shuffle uses seedless np.random (helper.shuffle_pixels_njit) so target vs simulation shuffle positions differ, producing a structured residual with 4-5px correlation (shift<=2). rgb_ratio=1.06 and near-equal channel stds (4.6/4.7/4.9) rule out YCrCb; no impulse (CI impulse_total_pct diff=0.000); wavelet sigma is content-dependent (target: pair0 1.48, pair1 4.08, pair2 0.37) -> not additive iid noise. No noise step predicted."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:5",
+        "thinking": "Step2 blur DT: anisotropy=1.244<1.7 (not motion), glass_score=0.505>0.25 and sigma=1.48<3 -> glass candidate; gm_ratio=0.299 implies heavy blur -> start sev 5"
+      },
+      "test_result": {
+        "psnr_rgb": 28.42,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "Round2 cross-family: glass:5 PSNR=28.42<30, gm_ratio=0.299 heavy smoothing, test gaussian baseline at sev5 (SKILL: lens/gaussian MTF indistinguishable, gaussian safe default)"
+      },
+      "test_result": {
+        "psnr_rgb": 28.53,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_lens:5",
+        "thinking": "Peeled residual after gaussian:5 has spatial_corr=0.99 + residual std 9.5 >> sigma 3 -> strong structured mismatch, blur model wrong; lens (radial mask, sigma=10 at sev5) is much stronger smoothing than gaussian:5; test lens cross-family at sev5"
+      },
+      "test_result": {
+        "psnr_rgb": 28.77,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:4",
+        "thinking": "Severity scan: lens:5 best so far (28.77dB, hf_lf diff 5%); SKILL mandates severity scan before subtype switch; test lens:4 to locate severity"
+      },
+      "test_result": {
+        "psnr_rgb": 30.7,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_lens:3",
+        "thinking": "Severity scan downward: lens:4 (30.70dB) > lens:5 (28.77dB); test lens:3 to find peak"
+      },
+      "test_result": {
+        "psnr_rgb": 33.46,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "Severity scan: lens:3 (33.46dB CI 9/10) > lens:4 (30.70) > lens:5 (28.77); peak may be lower; test lens:2 (radius 3)"
+      },
+      "test_result": {
+        "psnr_rgb": 33.61,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "Cross-family check at matched sharpness: lens:2 33.61dB CI 10/10; gaussian:5 was 28.53 but severity unscanned; test gaussian:2 (sigma=2) to compare subtype at similar blur strength"
+      },
+      "test_result": {
+        "psnr_rgb": 34.02,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:2",
+        "thinking": "PSNR plateau 33.6-34.0 across lens:2/gaussian:2 with CI 10/10 -> deterministic part matched but residual floor ~5.4 std remains; peeled wavelet sigma=2.97 (underestimate, blur attenuates). Equal ch_stds (5.3/5.4/5.6) + rgb_ratio 1.07 -> gaussian RGB not YCrCb. Test noise sev1 (sigma 12.75) before blur gaussian:2 in signal mode"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=4.0px)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "Structured residual FWHM=4px + spatial_corr 0.97 -> pixel-shuffle-style artifact; glass_score=0.505 was the DT verdict; glass:5 was undertested at wrong severity; scan glass:3 (sigma 1.2, shift 2, iter 2)"
+      },
+      "test_result": {
+        "psnr_rgb": 32.2,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "Severity bracket: gaussian:2=34.02 > gaussian:5=28.53, peak unresolved between; test gaussian:3 (sigma=3); gm_ratio=0.299 suggests stronger than sev2"
+      },
+      "test_result": {
+        "psnr_rgb": 32.0,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "Severity bracket closure: gaussian:2 (34.02) > gaussian:3 (32.00) > gaussian:5 (28.53); test gaussian:1 (sigma=1) to check if peak is at sev2"
+      },
+      "test_result": {
+        "psnr_rgb": 30.72,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:2",
+        "thinking": "FWHM=4px on residual == 2*sigma of gaussian:2 kernel -> pre-blur noise residual is EXPECTED to look structured; thus signal PARTIAL is consistent with exact GT noise->blur. Confirm magnitude in PSNR mode: different seed gives residual~sqrt(2)*attenuated noise; if ~40dB, pipeline correct"
+      },
+      "test_result": {
+        "psnr_rgb": 33.47,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_gaussian_RGB:1,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "Cross-pair check of pair0 winner gaussian:2 (34.02dB there); pair1 signals: gm=0.260 stronger gradient loss, sigma=4.08, var_ratio=0.760"
+      },
+      "test_result": {
+        "psnr_rgb": 27.88,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "Cross-pair check of gaussian:2 on pair2 (mild signals: gm=0.564, sigma=0.37, var_ratio=0.988)"
+      },
+      "test_result": {
+        "psnr_rgb": 37.41,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "Pair1 is the worst at gaussian:2 (27.88dB); pair1 signals show stronger loss (gm=0.260, var_ratio=0.760, sigma=4.08). If blur severity truly higher, gaussian:3 should raise pair1 PSNR"
+      },
+      "test_result": {
+        "psnr_rgb": 25.72,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "glass:3=32.20, glass:5=28.42; glass shuffle shift=2-4px matches residual FWHM=4px and content-dependent wavelet sigma (pair1 4.08 vs pair2 0.37) better than additive noise; scan glass:2 (sigma 0.9, shift 2, iter 1)"
+      },
+      "test_result": {
+        "psnr_rgb": 34.66,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "glass:2 gave CI 10/10 all-diff-0.000 + PSNR 34.66; shuffle is np.random (no seed) so PSNR capped. Bracket severity: glass:1 (sigma0.7,shift1,iter1) should show smaller shuffle texture; expect overshoot/ZC mismatch if sev too low"
+      },
+      "test_result": {
+        "psnr_rgb": 32.86,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Final candidate validation on pair1 (k=3 support for cross-pair consistency). glass:2 on pair0: CI 10/10 all-zero diffs, PSNR 34.66; shuffle RNG caps PSNR"
+      },
+      "test_result": {
+        "psnr_rgb": 28.44,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Final candidate validation on pair2 (k=3 support). glass:2 matched pair0/pair1 CI 10/10 all-zero; pair2 signals mild (gm=0.564)"
+      },
+      "test_result": {
+        "psnr_rgb": 38.91,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Final confirmation + save simulated image for independent run_full_analysis signal-profile comparison (expected: gm_ratio~0.3, glass_score>0.25, content-dependent wavelet sigma)"
+      },
+      "test_result": {
+        "psnr_rgb": 34.65,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "R1 anchor re-validation pair0: full_analysis_R1 fingerprint identical to R0 (gm_ratio 0.2989, glass_score 0.5049, sigma 1.48, var_ratio 0.8686); R0 sim_glass2 fingerprint matched target to <=0.001 on all signals. Confirm stochastic-shuffle PSNR ceiling."
+      },
+      "test_result": {
+        "psnr_rgb": 34.67,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "R1 anchor re-validation pair1: pair1 signals gm_ratio 0.2603, glass_score 0.4663, sigma 4.08 (content-dependent), var_ratio 0.760; glass:2 R0 PSNR 28.44 CI 10/10. Confirm on fresh shuffle draw."
+      },
+      "test_result": {
+        "psnr_rgb": 28.47,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "R1 anchor re-validation pair2: pair2 signals gm_ratio 0.5644, spectral_slope_ratio 1.0646 (BLUR_UNLIKELY borderline), sigma 0.37, var_ratio 0.9875; glass:2 R0 PSNR 38.91 CI 10/10. Confirm mild-blur pair."
+      },
+      "test_result": {
+        "psnr_rgb": 38.87,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "thinking": "R1 H1 missed-compression: full_analysis_R1 step1 flags MILD_COMPRESSION_POSSIBLE (unique_G 211/253=0.834, dct_zero_ratio 0.5074) and run_full_analysis recommends should_still_test=true; R0 never tested JPEG. block_boundary 1.0019 <1.05 and glass:2 sim reproduces unique_G/dct_zero_ratio (212/0.5068), so expectation is no improvement; test mild JPEG:1 after blur on pair0."
+      },
+      "test_result": {
+        "psnr_rgb": 32.08,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 38.91,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 38.87,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 37.41,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 34.67,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 34.66,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 34.65,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 34.02,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_lens:2",
+      "psnr_rgb": 33.61,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1,blur_gaussian:2",
+      "psnr_rgb": 33.47,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_lens:3",
+      "psnr_rgb": 33.46,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 32.86,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 32.2,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_glass:2,compression_jpeg:1",
+      "psnr_rgb": 32.08,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 32.0,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "psnr_rgb": 30.72,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_lens:4",
+      "psnr_rgb": 30.7,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_lens:5",
+      "psnr_rgb": 28.77,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 28.53,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 28.47,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 28.44,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_glass:5",
+      "psnr_rgb": 28.42,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 27.88,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 25.72,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    }
+  ],
+  "qwen_gate": {
+    "available": false,
+    "triggered": false,
+    "reason": "sigma=1.48 < 2; SKILL Step 0.5 gate not triggered"
+  },
+  "support_validation": {
+    "k": 3,
+    "note": "k=3 support pairs used for cross-pair validation (no single-support limitation)",
+    "per_pair_full_analysis_signals": {
+      "pair0": {
+        "block_boundary": 1.0019,
+        "unique_G": "211/253",
+        "noise_prior_sigma": 1.48,
+        "gm_ratio": 0.2989,
+        "anisotropy": 1.244,
+        "glass_score": 0.5049,
+        "variance_ratio": 0.8686,
+        "mean_shift": -0.5
+      },
+      "pair1": {
+        "block_boundary": 1.0028,
+        "unique_G": "250/256",
+        "noise_prior_sigma": 4.08,
+        "gm_ratio": 0.2603,
+        "anisotropy": 1.4424,
+        "glass_score": 0.4663,
+        "variance_ratio": 0.76,
+        "mean_shift": -0.5
+      },
+      "pair2": {
+        "block_boundary": 0.9979,
+        "unique_G": "227/252",
+        "noise_prior_sigma": 0.37,
+        "gm_ratio": 0.5644,
+        "anisotropy": "n/a",
+        "glass_score": "n/a (BLUR_UNLIKELY)",
+        "variance_ratio": 0.9875,
+        "mean_shift": -0.4
+      }
+    },
+    "final_candidate_results": {
+      "blur_glass:2 (pair0)": {
+        "psnr_rgb": 34.66,
+        "ci": "10/10 (all 10 metrics diff=0.000)"
+      },
+      "blur_glass:2 (pair1)": {
+        "psnr_rgb": 28.44,
+        "ci": "10/10 (all diff<=0.004)"
+      },
+      "blur_glass:2 (pair2)": {
+        "psnr_rgb": 38.91,
+        "ci": "10/10 (all diff<=0.001)"
+      }
+    },
+    "simulation_signal_profile_check": {
+      "compare": "run_full_analysis on sim_glass2_pair0.png vs clean reproduces target fingerprint",
+      "target_pair0": {
+        "sigma": 1.48,
+        "variance_ratio": 0.8686,
+        "mean_shift": -0.5,
+        "glass_score": 0.5049,
+        "block_boundary": 1.0019,
+        "noise_verdict": "GAUSSIAN_YCrCb (false positive)"
+      },
+      "sim_glass2": {
+        "sigma": 1.5,
+        "variance_ratio": 0.868,
+        "mean_shift": -0.5,
+        "glass_score": 0.5,
+        "block_boundary": 1.001,
+        "noise_verdict": "GAUSSIAN_YCrCb (false positive)"
+      },
+      "conclusion": "identical signal profile -> glass:2 confirmed"
+    }
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_glass",
+        "severity": 2,
+        "verdict": "LIKELY"
+      }
+    ],
+    "alternatives": [
+      {
+        "pipeline": [
+          {
+            "function": "blur_gaussian",
+            "severity": 2
+          }
+        ],
+        "psnr_pair0": 34.02,
+        "ci": "9/10",
+        "reason": "cross-family backup; cannot reproduce glass shuffle fingerprint (overshoot diff 45%)"
+      },
+      {
+        "pipeline": [
+          {
+            "function": "blur_lens",
+            "severity": 2
+          }
+        ],
+        "psnr_pair0": 33.61,
+        "ci": "10/10 pair0",
+        "reason": "same MTF family backup; fails pair-level consistency less sharply but no shuffle texture"
+      }
+    ],
+    "overall_verdict": "LIKELY",
+    "rationale": "SKILL blur DT: anisotropy=1.244<1.7 (not motion), glass_score=0.505>0.25 (pixel-shuffle HF residual) -> glass. Severity scan (pair0 PSNR): glass5=28.42, glass3=32.20, glass1=32.86, glass2=34.66(CI 10/10 all-zero); gaussian5=28.53, gaussian3=32.00, gaussian2=34.02(CI 9/10); lens5=28.77, lens4=30.70, lens3=33.46, lens2=33.61. glass:2 uniquely matches all 10 content-independent CI metrics to ~0.000 on all 3 support pairs. PSNR stays 28-39 dB because helper.shuffle_pixels_njit uses seedless np.random (SKILL C4: non-deterministic glass/jitter PSNR cannot reach 40, do not chase). block_boundary~1.0 (0%FP) rules out JPEG; no global (variance_ratio explained by blur content-dependently; mean_shift=-0.5/255<0.005); noise_prior sigma content-dependent (1.48/4.08/0.37) rules out additive iid noise; CI impulse_total_pct diff=0.000 rules out impulse.",
+    "confidence": "high on type, medium-high on severity"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict LIKELY (blur_glass:2) but support PSNR 26.79 dB < 35; triggered for signal reinterpretation",
+    "prior_pipeline": [
+      {"function": "blur_glass", "severity": 2}
+    ],
+    "signal_reanalysis": {
+      "pair0_rerun": {
+        "source": "run_full_analysis.py --target degraded.png --clean clean.png --output full_analysis_R1.json",
+        "block_boundary": 1.0019,
+        "unique_G": "211/253 (ratio 0.834)",
+        "dct_zero_ratio": 0.5074,
+        "gm_ratio": 0.2989,
+        "spectral_slope_target": -1.1852,
+        "spectral_slope_ratio": 1.0927,
+        "residual_anisotropy": 1.244,
+        "glass_score": 0.5049,
+        "noise_prior_sigma": 1.48,
+        "spatial_corr": 0.4762,
+        "cross_channel_corr": 0.9327,
+        "residual_intensity_corr": -0.0124,
+        "variance_ratio": 0.8686,
+        "contrast_spread_ratio": 0.9197,
+        "mean_shift": -0.5,
+        "clipped_fraction": 0.0,
+        "verdicts": "MILD_COMPRESSION_POSSIBLE (block_boundary far below 1.05) / GAUSSIAN_YCrCb high confidence / GLASS_BLUR / NO_GLOBAL"
+      },
+      "pair1": {
+        "source": "full_analysis_p1.json",
+        "block_boundary": 1.0028,
+        "unique_G_ratio": 0.9766,
+        "dct_zero_ratio": 0.3975,
+        "gm_ratio": 0.2603,
+        "spectral_slope_ratio": 1.1005,
+        "residual_anisotropy": 1.4424,
+        "glass_score": 0.4663,
+        "noise_prior_sigma": 4.08,
+        "residual_intensity_corr": 0.4333,
+        "variance_ratio": 0.76,
+        "contrast_spread_ratio": 0.8537
+      },
+      "pair2": {
+        "source": "full_analysis_p2.json",
+        "block_boundary": 0.9979,
+        "unique_G_ratio": 0.9008,
+        "dct_zero_ratio": 0.7932,
+        "gm_ratio": 0.5644,
+        "spectral_slope_ratio": 1.0646,
+        "noise_prior_sigma": 0.37,
+        "residual_intensity_corr": -0.0474,
+        "variance_ratio": 0.9875,
+        "contrast_spread_ratio": 0.9948
+      },
+      "simulation_fingerprint": {
+        "source": "R0 full_analysis_sim_glass2.json vs full_analysis.json",
+        "note": "glass:2 simulation on pair0 reproduces every target signal except mtf_roughness",
+        "unique_G": "sim 212 vs target 211",
+        "dct_zero_ratio": "sim 0.5068 vs target 0.5074",
+        "gm_ratio": "sim 0.2985 vs target 0.2989",
+        "glass_score": "sim 0.5048 vs target 0.5049",
+        "noise_prior_sigma": "sim 1.48 vs target 1.48",
+        "variance_ratio": "sim 0.8682 vs target 0.8686",
+        "contrast_spread_ratio": "sim 0.9197 vs target 0.9197",
+        "mean_shift": "both -0.5",
+        "block_boundary": "sim 1.0008 vs target 1.0019",
+        "blur_density": "sim 0.8437 vs target 0.8437",
+        "only_discrepancy": "mtf_roughness 0.999 (sim) vs 0.8767 (target)"
+      },
+      "peeled_noise_R1": {
+        "source": "peeled_noise_check.py --pipeline blur_glass:2 on pair0 -> peeled_noise_R1.json",
+        "residual_std": 4.7,
+        "extreme_pct": 58.45,
+        "vm_slope": 4.968,
+        "var_slope": 0.0577,
+        "spatial_corr": 0.9511,
+        "rgb_ratio": 1.0635,
+        "cross_channel_corr": 0.908,
+        "ch_stds": [4.6, 4.7, 4.9],
+        "noise_prior_sigma": 2.97,
+        "diagnosis": "Matches SKILL reflection_triggers entry (extreme_pct>50% AND sigma<5) for glass-shuffle structured residuals: near-equal channel stds, rgb_ratio 1.06, no impulse in CI. No noise step."
+      }
+    },
+    "overlooked_or_boundary_signals": [
+      {
+        "signal": "MILD_COMPRESSION_POSSIBLE / unique_G 211 (ratio 0.834) / dct_zero_ratio 0.5074",
+        "hypothesis": "missed mild JPEG (the only R0 should_still_test flag never probed)",
+        "test": "blur_glass:2,compression_jpeg:1 on pair0 (minimum JPEG severity, applied last per pipeline constraints)",
+        "result": "rejected: 32.08 dB (-2.59 vs anchor 34.67); CI 6/10; block_boundary diff 101% (simulated blockiness about 2x target); unique_G diff -12 (5%); overshoot_ratio diff 37%. The target block signal is fully explained by the glass:2 simulation (unique_G 212 vs 211, dct_zero_ratio 0.5068 vs 0.5074)."
+      },
+      {
+        "signal": "GAUSSIAN_YCrCb high confidence, sigma 1.48/4.08/0.37 across pairs 0/1/2",
+        "hypothesis": "missed additive noise",
+        "test": "cross-pair sigma consistency + peeled_noise_R1 on glass:2 residual",
+        "result": "rejected: 11x sigma spread across pairs is not additive iid noise; glass:2 simulation on pair0 reproduces sigma 1.48 exactly and the peeled residual is the documented extreme_pct>50%+sigma<5 false-positive mode (spatial_corr 0.951, vm_slope 4.97, var_slope 0.058, near-equal ch_stds). R0 noise+gaussian probe was also below the anchor (33.47 vs 34.66 on pair0)."
+      },
+      {
+        "signal": "pair1 residual_intensity_corr 0.4333 with gamma_suspect",
+        "hypothesis": "missed gamma step on pair1",
+        "test": "cross-pair comparison against the pair0 simulation fingerprint",
+        "result": "rejected: pairs 0/2 have ric -0.0124/-0.0474 and the same pipeline applies to all support pairs; a global gamma step would break the exact pair0 identity (variance_ratio 0.8686 vs sim 0.8682, contrast_spread_ratio 0.9197 vs sim 0.9197, mean_shift -0.5 both). Pair1 ric is content-dependent shuffle residual."
+      },
+      {
+        "signal": "run_full_analysis estimated glass severity 5 (gm_ratio only) vs R0 scan peak at severity 2",
+        "hypothesis": "severity misestimated",
+        "test": "R1 anchor re-validation + R0 severity scan",
+        "result": "severity 2 confirmed: target gm_ratio 0.2989 equals glass:2 simulation 0.2985; R1 anchor 34.67 dB vs R0 glass:1 32.86 and glass:3 32.20 on pair0. The DT severity-5 estimate is a gm_ratio-only artifact."
+      },
+      {
+        "signal": "mtf_roughness target 0.8767 vs sim 0.999",
+        "hypothesis": "different blur subtype",
+        "test": "R0 gaussian/lens scans + R1 anchor reproducibility",
+        "result": "not severity/subtype-discriminative: all other kernel signals match (blur_density 0.8437 exact, pca 1.124 vs 1.118, glass_score 0.5049 vs 0.5048, gm_ratio 0.2985 vs 0.2989) and gaussian:2/lens:2 remain below the anchor on pair0 (34.02/33.61). Noted as the single residual fingerprint discrepancy."
+      }
+    ],
+    "hypotheses_tested": [
+      {
+        "pipeline": "blur_glass:2",
+        "role": "anchor re-validation",
+        "psnr_pair0": 34.67,
+        "psnr_pair1": 28.47,
+        "psnr_pair2": 38.87,
+        "ci": "10/10 on all 3 pairs",
+        "decision": "RETAIN"
+      },
+      {
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "role": "H1 missed mild compression",
+        "psnr_pair0": 32.08,
+        "ci": "6/10 on pair0",
+        "decision": "REJECT"
+      }
+    ],
+    "change_criterion_check": {
+      "rule": "pure deterministic candidates need >40 dB or +2 dB vs previous round on all k pairs; noise-containing candidates need signal improvement instead",
+      "anchor_psnr_R1": {"pair0": 34.67, "pair1": 28.47, "pair2": 38.87},
+      "anchor_psnr_R0": {"pair0": 34.66, "pair1": 28.44, "pair2": 38.91},
+      "alternatives_vs_anchor_delta": {
+        "blur_gaussian:2": {"pair0": -0.65, "pair1": -0.59, "pair2": -1.46},
+        "blur_lens:2": {"pair0": -1.06},
+        "blur_glass:2,compression_jpeg:1": {"pair0": -2.59}
+      },
+      "conclusion": "no candidate reaches >40 dB or +2 dB on all 3 pairs; glass:2 remains the unique best"
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "blur_glass", "severity": 2, "verdict": "LIKELY"}
+      ],
+      "overall_verdict": "LIKELY",
+      "confidence": "high on type, medium-high on severity",
+      "rationale": "R1 signal reanalysis reproduced the R0 identification on all signals and all 3 support pairs (R1 anchor 34.67/28.47/38.87 dB, CI 10/10, |delta| <= 0.04 dB vs R0). The untested mild-compression signal was probed with the minimum JPEG step and rejected. Noise/global/gamma alternatives are inconsistent with the cross-pair signal pattern and the glass:2 simulation fingerprint. No candidate meets the change criterion, so the pipeline stays blur_glass:2."
+    },
+    "support_psnr_interpretation": {
+      "support_psnr_r0": 26.79,
+      "simulation_ceiling_by_pair": {"pair0": 34.67, "pair1": 28.47, "pair2": 38.87},
+      "explanation": "blur_glass uses seedless random pixel shuffle, so target pixels cannot be reproduced even with the correct function and severity (SKILL C4 warns not to chase 40 dB for non-deterministic glass). The per-pair simulation ceilings are 34.67/28.47/38.87 dB and are dominated by pair1 near 28.5 dB; a specialist trained on glass-simulated data cannot exceed that shuffle-induced residual on the GT pairs. Support PSNR 26.79 < 35 is therefore consistent with a stochastic-blur evaluation ceiling, not with a wrong pipeline; no validated alternative pipeline exists."
+    },
+    "budget": {
+      "test_candidate_calls": 4,
+      "new_candidates_tested": 1,
+      "run_full_analysis_calls": 1,
+      "peeled_noise_check_calls": 1,
+      "signal_reinterpretation_rounds": 1
+    },
+    "limitations": [
+      "k=3 support pairs only; pair-level PSNR differences are dominated by content-dependent shuffle residuals",
+      "support PSNR cannot be re-measured in R1 (no retraining allowed), so the decision uses simulation PSNR + content-independent CI as the protocol prescribes",
+      "mtf_roughness remains the single mismatched fingerprint signal (0.8767 target vs 0.999 sim); not sufficient to overturn the identification given the matched gm_ratio, glass_score, pca, density and noise floor"
+    ]
+  }
+}

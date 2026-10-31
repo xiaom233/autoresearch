@@ -1,0 +1,83 @@
+{
+  "challenge_id": "blind_0013_size3",
+  "round": "R2",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_gaussian_YCrCb", 4],
+    ["compression_jpeg", 2]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_speckle",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 2},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": null,
+      "stats": "同乘性族 severity -1 备份: pair0 sigma diff=37% (PARTIAL); R2 上界对照 speckle:4 -> sigma diff=38% (PARTIAL, 过冲) → sev3 为 k=3 唯一 MATCH 强度",
+      "function_family": "noise_speckle (同乘性族备份)"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 4},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "psnr": null,
+      "stats": "R0 管线: pair0 PARTIAL(sigma 37%) / pair1 MATCH / pair2 MATCH; R1/R2 乘性假设 k=3 全对 MATCH, 保留为加性族跨族备份",
+      "function_family": "noise_gaussian_YCrCb (加性族备份)"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL 模式; sigma=4.82>2, PSNR 按协议禁用)",
+    "mode": "SIGNAL (sigma=4.8)",
+    "k": 3,
+    "k_pair_validation": {
+      "pair0": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "R2 新种子复核 (round 31): 3/3 信号匹配 (noise:sigma, noise:clean_residual, compression:block_boundary)"
+      },
+      "pair1": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "R2 新种子复核 (round 32): 3/3 信号匹配"
+      },
+      "pair2": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "R2 新种子复核 (round 33): 3/3 信号匹配"
+      }
+    },
+    "r2_controls": {
+      "speckle_upper_bound": "noise_speckle:4 + jpeg:2 (pair0, round 26) -> PARTIAL, noise:sigma diff=38% (过冲) → sev3 唯一最优",
+      "blur_omission": "noise_speckle:3 + blur_gaussian:1 + jpeg:2 (pair0, round 27) -> WEAK (noise:sigma diff=87%, bb diff=16%) → 无 blur",
+      "jpeg_upper_bound": "noise_speckle:3 + jpeg:3 (pair1, round 28) -> WEAK (bb diff=28%, sigma diff=50%) → jpeg:2 确认",
+      "jpeg_lower_bound": "noise_speckle:3 + jpeg:1 (pair1, round 29) -> WEAK (bb diff=14%, sigma diff=50%) → jpeg:2 确认",
+      "order_reversal": "compression_jpeg:2 -> noise_speckle:3 (pair0, round 30) -> WEAK (sigma diff=379%, bb diff=13%) → noise→JPEG 顺序确认"
+    },
+    "signal_sources": {
+      "speckle_type": "peeled §B vm_slope=2.6336 (>>0.01, 260×) + intensity_var_corr=0.9535 + rgb_ratio=1.0259 + ch_stds R23.5/G23.1/B22.9 + 三对 sigma 随内容亮度缩放 (4.82/2.22/1.36 vs clipped 6.36%/1.08%/0.05%)",
+      "speckle_severity": "R1 扫描 sev1 62% → sev2 37% → sev3 MATCH; R2 上界 sev4 过冲 38% → sev3 唯一",
+      "compression": "block_boundary=1.2085/1.514/1.784 三对 0%FP 阳性; R2 在 speckle:3 下 jpeg:1/3 于 pair1 均 WEAK (bb 14%/28%) → jpeg:2 唯一",
+      "order": "R2 反转顺序 WEAK (sigma 379%, bb 13%) → noise→JPEG (存储最后) 物理顺序确认",
+      "blur_exclusion": "spectral_slope_ratio=0.9844, FFT anisotropy=0.00; R2 在正确噪声模型下加 blur_gaussian:1 → WEAK (sigma 87%, bb 16%)",
+      "global_exclusion": "三对 NO_GLOBAL; variance_ratio=0.8934/1.065/1.104 跨对方向不一致, mean_shift=-4.1/-0.5/-0.9 与 pair0 强裁剪 (clipped 6.36%) 一致 → 无独立 global 步",
+      "impulse_exclusion": "extreme_pct=61.13% 命中已知 FP 规则 (extreme>50% + JPEG 残留), 且 impulse sev5 amount=10% ≪ 61% → 排除",
+      "gamma_exclusion": "最小强度 gamma (γ=0.8/1.4) 中灰 mean_shift≈±19-31/255 ≫ 观测 max|mean_shift|=4.1/255 → 定量排除"
+    },
+    "rationale": "R2 信号重释复跑 (full_analysis_R2.json / peeled_noise_R2.json) 与 R1 完全一致: bb=1.2085, slope_ratio=0.9844, sigma=4.82, vm_slope=2.6336, ivc=0.9535. R2 针对 R1 未覆盖的边界补齐 5 项对照: speckle sev4 过冲 (38%)、正确噪声模型下 blur 对照 WEAK、jpeg:1/3 在 speckle:3 下均 WEAK、反转顺序 WEAK → 无一达到 MATCH, 无法满足 k=3 多数对 WEAK→PARTIAL/MATCH 的 CHANGE 判据 (R1 基线本身已 3/3 MATCH). R1 管线在新随机种子下 3 对复核仍 3/3 MATCH (9/9) → NO_CHANGE. 噪声步随机 seed 永不 LIKELY; compression 因 sigma>2 无 PSNR 仍 UNCERTAIN; overall UNCERTAIN."
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "challenge_id": "blind_0012_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 4],
+    ["compression_jpeg", 3]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 3,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_motion", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "support_psnr_per_pair": [30.97, 19.56, 25.05],
+      "support_psnr_mean": 25.19,
+      "signal_verdict": "angle-agnostic spectral_slope matched motion:5 in 2/2 R0 signal draws; wiener split (MATCH, then PARTIAL 0.299); PSNR mean 0.86 dB below sev4 control",
+      "function_family": "blur_motion",
+      "status": "same-family severity alternative; not adopted (fails +2 dB rule; motion angle random per apply)"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "support_psnr": 23.25,
+      "signal_verdict": "MISMATCH (spectral_slope diff 0.131, wiener 0.480)",
+      "function_family": "blur_gaussian",
+      "status": "cross-family backup; clearly worse than motion family"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "PSNR (sigma 0.74/0.74/0.37 < 2) + signal interpretation",
+    "k_pairs": 3,
+    "r1_summary": "R1 re-ran full analysis on pair0 (all values reproduced exactly: block_boundary 2.7761, gm_ratio 0.4012, PCA 4.432, sigma 0.74, NO_GLOBAL) and re-interpreted threshold/bias-prone signals. The only defensible correction hypothesis was blur_motion severity 4 -> 5: gm_ratio is measured on the final JPEG image whose block artifacts add gradient energy, so the severity estimate is a lower bound; pair2 gm_ratio 0.3619 lies only 0.012 above the sev5 cutoff 0.35; angle-agnostic spectral_slope matched sev5 in 2/2 R0 signal draws (sev4 borderline at 0.081-0.083 vs 0.08 threshold, sev3 0.129). Cross-support PSNR validation on all 3 pairs: R0 control motion:4+jpeg:3 = 22.29/32.30/23.56 (mean 26.05, CI 7-10/10); candidate motion:5+jpeg:3 = 30.97/19.56/25.05 (mean 25.19, CI 9-10/10), mean delta -0.86 dB, per-pair +8.68/-12.74/+1.49. No draw > 40 dB and no +2 dB mean gain -> NO_CHANGE. blur_motion draws angle U(-90,90) per apply, so the same pipeline spans 20.2-32.3 dB across draws; this variance exceeds the sev4/sev5 effect, so PSNR cannot arbitrate severity. JPEG=3 remains LIKELY (block_boundary 2.776/3.372/4.099, 0%FP detection; R0 bb-diff calibration 8-9% at sev3 vs 23-37% at sev1/2/4). No noise (sigma<2 on all pairs; peeled residual structured, spatial_corr 0.9735); no global step (mean_shift -0.4/-0.6/-0.7 of 255, contrast_spread 0.927-0.983, pair2 clipped_fraction 0.2034 is content/sky clipping).",
+    "cross_support_verification": {
+      "pair0": {"block_boundary": 2.7761, "dct_zero_ratio": 0.8877, "gm_ratio": 0.4012, "anisotropy": 1.4348, "pca_ratio": 4.432, "sigma": 0.74, "psnr_motion4_jpeg3": 22.29, "psnr_motion5_jpeg3": 30.97},
+      "pair1": {"block_boundary": 3.3721, "dct_zero_ratio": 0.9356, "gm_ratio": 0.4099, "anisotropy": 1.7754, "pca_ratio": 4.335, "sigma": 0.74, "psnr_motion4_jpeg3": 32.30, "psnr_motion5_jpeg3": 19.56},
+      "pair2": {"block_boundary": 4.0992, "dct_zero_ratio": 0.945, "gm_ratio": 0.3619, "anisotropy": 1.6206, "pca_ratio": 4.323, "sigma": 0.37, "psnr_motion4_jpeg3": 23.56, "psnr_motion5_jpeg3": 25.05},
+      "result": "CONSISTENT degradation family across 3 pairs (motion blur + JPEG, no noise, no global); severity 4 vs 5 not separable by PSNR under random motion angle"
+    }
+  }
+}

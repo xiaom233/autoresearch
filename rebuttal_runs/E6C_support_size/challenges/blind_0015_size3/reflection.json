@@ -1,0 +1,1026 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "MILD_COMPRESSION_POSSIBLE (block_boundary=1.0038 <1.05, unique_G=203/256, dct_zero_ratio=0.521) — 弱信号, 可能由全局暗化 clipping 造成",
+      "blur": "BLUR_UNLIKELY (gm_ratio=0.478 但 spectral_slope_ratio=0.9996) — 梯度下降更可能由全局强度变换(clipping/gamma)而非模糊造成",
+      "noise": "noise_prior_sigma=0.74 < 2 → NO_NOISE (Run FULL verdict GAUSSIAN_YCrCb confidence=low, 不可信); residual_intensity_corr=0.674 提示强度相关变换(gamma/brightness)",
+      "global": "BRIGHTNESS_darken (mean_shift=-42.9, variance_ratio=0.718, clipped_fraction=0.3199, confidence=high); gamma 需作为替代假设(R4)"
+    },
+    "mode": "PSNR (sigma=0.74 < 2, noise-free)",
+    "suspected": [
+      "brightness_darken_shfit_HSV",
+      "brightness_darken_gamma_*",
+      "brightness_darken_shfit_RGB"
+    ],
+    "ruled_out": [
+      "noise_* (sigma=0.74)",
+      "blur (slope_ratio=1.000)"
+    ]
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_HSV:3",
+        "thinking": "R1: run_full_analysis 全局信号 mean_shift=-42.9, variance_ratio=0.718, clipped=0.32 → 首测 darken_shfit_HSV sev3"
+      },
+      "test_result": {
+        "psnr_rgb": 21.76,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:3",
+        "thinking": "R1: residual_intensity_corr=0.674 + gm_ratio=0.478(梯度随强度衰减) → gamma 型暗化假设, RGB 通道 gamma=2.1"
+      },
+      "test_result": {
+        "psnr_rgb": 23.11,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_HSV:3",
+        "thinking": "R2: gamma_RGB=23.11dB 改善但仍低; RGB gamma 全部通道变暗会破坏色相, 改测 HSV 仅 V 通道 gamma=2.2"
+      },
+      "test_result": {
+        "psnr_rgb": 22.8,
+        "ci_pass": "1/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:2,blur_gaussian:2",
+        "thinking": "R1: 目标 gm=0.478 远低于纯全局模拟(0.77-1.05)+ms=-42.9 → 暗化后仍有额外梯度衰减, 加 gaussian 模糊; RGB 均匀 shift sev2 (c=0.15→-38) 更接近 ms 量级且不破坏饱和度"
+      },
+      "test_result": {
+        "psnr_rgb": 25.49,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:2,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3",
+        "thinking": "R1: T4 的 sat=0.9033 与目标 0.9002 几乎一致(RGB均匀shift特征); 但目标 clip=0.32/var=0.718 更强暗化 → 测 shiftRGB sev3 单独基线, 获取其 ms/var/clip/gm"
+      },
+      "test_result": {
+        "psnr_rgb": 26.72,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+        "thinking": "R1: shiftRGB3 单独信号 ms/var/clip/uniqG 几乎完全匹配(uniqG=203 精确) → 全局锁定; 剩余 gm 0.869→0.478 与 dctzr 0.335→0.521 需轻度模糊, blur2 过强(dctzr 0.774) → 测 blur_gaussian:1"
+      },
+      "test_result": {
+        "psnr_rgb": 28.79,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,brightness_darken_shfit_RGB:3",
+        "thinking": "R2: 信号向量已高度匹配(gm/var/ms/spread/sat/bb) 但 PSNR=28.79; 生成器允许 blur(priority1)→brightness(priority2) 顺序, 顺序影响 clipping 像素值 → 翻转顺序二元对比"
+      },
+      "test_result": {
+        "psnr_rgb": 28.6,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,brightness_darken_shfit_RGB:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "thinking": "R2: gaussian1 信号匹配但 PSNR 仅 28.8; lens 与 gaussian MTF 不可区分(SKILL C-3) → 跨族二元对比 blur_lens(radius3)"
+      },
+      "test_result": {
+        "psnr_rgb": 29.17,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:1",
+        "thinking": "R3: lens2=29.17dB 优于 gaussian1=28.79, 做 lens severity 扫描 ±1 (radius2)"
+      },
+      "test_result": {
+        "psnr_rgb": 28.84,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:3",
+        "thinking": "R3: lens 家族胜出(lens2=29.17), 继续扫 severity±1 (radius4)"
+      },
+      "test_result": {
+        "psnr_rgb": 29.16,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_motion:1",
+        "thinking": "R2: SKILL 全覆盖要求 blur 至少 3 族; gaussian/lens 均 ~29dB 平台 → 测 motion(radius5), FFT anisotropy=0 预判低概率"
+      },
+      "test_result": {
+        "psnr_rgb": 25.92,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_glass:1",
+        "thinking": "R2: blur 族覆盖最后一项 glass(sigma0.7+shuffle shift1); 目标 zero_crossing 偏高曾提示 shuffle 类纹理, 交叉验证"
+      },
+      "test_result": {
+        "psnr_rgb": 26.69,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_lens:2,brightness_darken_shfit_RGB:3",
+        "thinking": "R3: lens2=29.17dB 最优; 生成器允许 blur→brightness 顺序 → 二元对比翻序, 检验 clipping 交互"
+      },
+      "test_result": {
+        "psnr_rgb": 28.89,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2,brightness_darken_shfit_RGB:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+        "thinking": "R2: blur 家族 gaussian severity 扫描 (sev1=28.79); 残差 std=11.7 结构化, 需更强调模糊核"
+      },
+      "test_result": {
+        "psnr_rgb": 29.35,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:3",
+        "thinking": "R2: gaussian severity 扫描 continue: sev2=29.35 上升 → 测 sev3"
+      },
+      "test_result": {
+        "psnr_rgb": 28.85,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,brightness_darken_shfit_RGB:3",
+        "thinking": "R3: gaussian2 为当前最优(29.35); 顺序二元对比 blur→brightness 检验生成器 priority 排列"
+      },
+      "test_result": {
+        "psnr_rgb": 29.04,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,brightness_darken_shfit_RGB:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_glass:2",
+        "thinking": "R3: 目标 zero_crossing/overshoot 高于 gaussian 模拟, dct_zero 低于 gaussian1 → glass(0.9,shift2) 局部 scramble 可能同时解释; glass1=26.69 → 扫 sev2"
+      },
+      "test_result": {
+        "psnr_rgb": 26.37,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:4",
+        "thinking": "R3: lens 家族 sev1/2/3=28.84/29.17/29.16 平台, 测 radius6(sev4) 完成家族扫描"
+      },
+      "test_result": {
+        "psnr_rgb": 28.44,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+        "thinking": "跨对验证: support pair1 (不同内容) 复核最终候选, 检验全局+模糊是否一致"
+      },
+      "test_result": {
+        "psnr_rgb": 29.24,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+        "thinking": "跨对验证: support pair2 复核同一候选"
+      },
+      "test_result": {
+        "psnr_rgb": 27.55,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+        "thinking": "跨对验证 pair1: HF/overshoot 显示目标锐于 gaussian2 → 复核 gaussian1"
+      },
+      "test_result": {
+        "psnr_rgb": 29.5,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+        "thinking": "跨对验证 pair2: gaussian1 复核 (pair1 上 gaussian1 优于 gaussian2)"
+      },
+      "test_result": {
+        "psnr_rgb": 27.29,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "thinking": "跨对验证 pair1: 跨族对比 lens2 (pair0 上 29.17/CI9, 与 gaussian 仅差 0.2dB)"
+      },
+      "test_result": {
+        "psnr_rgb": 29.31,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "thinking": "跨对验证 pair2: lens2 完成 3 对跨族对比"
+      },
+      "test_result": {
+        "psnr_rgb": 27.47,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:1,brightness_darken_shfit_RGB:2",
+        "thinking": "R1 signal reinterpretation: target ms=-42.9,var=0.7181,spread=0.7844,sat=0.9002,clip=0.3199 vs R0 shiftRGB3 sim ms=-42.2,var=0.7414,spread=0.8062,sat=0.9183,clip=0.3228 -> target more compressed (var/spread/sat 2-3% lower) but slightly LESS clipped; residual_intensity_corr=0.677/gamma_suspect suggests nonlinear intensity curve. Hypothesis: gamma1(gamma=1.4)+shift2(c=0.15) compressive curve reproduces 4 signals simultaneously; no blur yet to isolate global curve."
+      },
+      "test_result": {
+        "psnr_rgb": 23.74,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:1,brightness_darken_shfit_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2",
+        "thinking": "R1 signal reinterpretation: generator allows one fn/category (blind_challenge.py), so pipeline=global+noise+blur. R0 never tested noise: noise_prior sigma=0.74/1.4/1.5 varies with content across pairs (multiplicative signature); peeled residual vm_slope=0.92, ivc=0.99, cross_ch_corr=0.98. Speckle applied AFTER darkening (brightness priority0 before noise, shuffled) acts on the dark image -> effective sigma ~1 level, below R0's absolute sigma<2 cutoff. Order brightness->speckle->blur. Verify via signals not PSNR (noise seed mismatch)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.737)",
+          "noise:structured_residual (FWHM=6.0px)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "thinking": "R1 control: R0 main prediction WITHOUT noise, same signal mode as R26 speckle variant, to attribute the noise:sigma match to the added speckle step (not to blur-mismatch residual)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.737)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+        "thinking": "R1: lens2 wiener_kernel corr=0.737 (<0.9) suggests wrong kernel. Test gaussian2 in signal mode: if wiener corr becomes >0.9 while PSNR stays ~29, the blur is correct and the PSNR plateau must come from a missing stochastic component (noise). Blur DT alternative per SKILL (gaussian default when anisotropy=0)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.751)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "thinking": "R1 control sim generation: save no-noise lens2 simulation image to compare wavelet noise_prior sigma vs target (0.74) and vs speckle sim, to judge whether target roughness is real noise or blur-mismatch artifact."
+      },
+      "test_result": {
+        "psnr_rgb": 29.17,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_glass:1",
+        "thinking": "R1: signal vector shows target blur is milder than lens2 (gm target 0.478 vs lens2 sim 0.365; dctzr 0.521 vs 0.692) but stronger than shift-only (gm 0.869). All deterministic blur families cap at ~29 dB => stochastic component signature. FFT anisotropy=0.00 => isotropic; glass (gaussian0.7+random pixel shuffle) is the only isotropic stochastic blur and had CI 9/10. Verify via signals (shuffle realization is random, PSNR unusable)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.612)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_glass:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "thinking": "R1 signal 重释 control: R0 主预测在 pair1 上建立 signal verdict 基线 (pair0 在 round27 已为 PARTIAL). 信号来源: peeled residual spatial_corr=0.9724/ivc=0.9869 结构化, noise_prior sigma=1.73 (<2) -> noise 存在性存疑, 先确认无噪声基线在各对上的 verdict."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.729)",
+          "global:variance_ratio (diff=14%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "thinking": "R1 signal 重释 control: R0 主预测在 pair2 上建立 signal verdict 基线. pair1 control=WEAK (variance_ratio diff=14% 不匹配, wiener corr=0.729). 若 noise 候选在多数对把 WEAK 提升为 PARTIAL/MATCH 才可 CHANGE."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.675)",
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 33,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2",
+        "thinking": "R1 噪声候选 A: 被忽略信号 vm_slope=0.9203 + ivc=0.9869 (peeled residual) 提示乘性噪声; 且噪声在生成器中必须先于 blur (priority noise=0 < blur=1) -> 模糊会削平噪声, 导致 sigma 低估. 在 pair1 上验证 speckle1 是否把 WEAK 提升为 PARTIAL/MATCH."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.729)",
+          "noise:structured_residual (FWHM=4.0px)",
+          "global:variance_ratio (diff=15%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 34,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_gaussian_RGB:1,blur_lens:2",
+        "thinking": "R1 噪声候选 B: noise_prior 类型推断 GAUSSIAN_YCrCb 但 rgb_ratio=1.0561<1.4 排除 YCrCb -> gaussian_RGB. 噪声须先于 blur (priority 0<1), gaussian_RGB:1=sigma12.75 经 lens3 平滑后 sigma 下降, 与观测 noise_prior=1.73 的下界相容. 在 pair1 验证是否 WEAK->PARTIAL/MATCH."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.729)",
+          "noise:structured_residual (FWHM=4.0px)",
+          "global:variance_ratio (diff=33%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_gaussian_RGB:1,blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 35,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_gaussian_RGB:1,blur_lens:2",
+        "thinking": "R1 噪声候选 B (pair0): pair1 上 gaussian_RGB1 仍 WEAK (3/3, variance_ratio diff 33% 反而变大 -> 加噪使方差偏差扩大, 说明 target 方差低于无噪 sim). 在 pair0 复核, 检查 noise:sigma / structured_residual / variance_ratio 三项."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.736)",
+          "noise:structured_residual (FWHM=6.0px)",
+          "global:mean_shift (diff=0.0059)",
+          "global:variance_ratio (diff=17%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_gaussian_RGB:1,blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 36,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2",
+        "thinking": "R1 噪声候选 A (pair2): 完成 speckle1 的 k=3 signal 验证. pair1 上 speckle1=WEAK (noise:sigma 匹配但 structured_residual FWHM=4.0px 与 variance_ratio diff=15% 不匹配). 检查 pair2 是否达到 PARTIAL/MATCH."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.675)",
+          "noise:sigma (diff=50%)",
+          "global:variance_ratio (diff=11%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 37,
+      "hypothesis": {
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_gaussian_RGB:1,blur_lens:2",
+        "thinking": "R1 噪声候选 B (pair2): 完成 gaussian_RGB1 的 k=3 signal 验证. pair1 WEAK (variance_ratio diff 33%), pair0 WEAK (2/4, mean_shift 0.0059 越界). 检查 pair2 是否 PARTIAL/MATCH."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.675)",
+          "noise:sigma (diff=50%)",
+          "global:mean_shift (diff=0.0075)",
+          "global:variance_ratio (diff=23%)"
+        ],
+        "pipeline": "brightness_darken_shfit_RGB:3,noise_gaussian_RGB:1,blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+      "psnr_rgb": 29.5,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+      "psnr_rgb": 29.35,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+      "psnr_rgb": 29.31,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+      "psnr_rgb": 29.24,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+      "psnr_rgb": 29.17,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+      "psnr_rgb": 29.17,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 29
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:3",
+      "psnr_rgb": 29.16,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:2,brightness_darken_shfit_RGB:3",
+      "psnr_rgb": 29.04,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_lens:2,brightness_darken_shfit_RGB:3",
+      "psnr_rgb": 28.89,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:3",
+      "psnr_rgb": 28.85,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:1",
+      "psnr_rgb": 28.84,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+      "psnr_rgb": 28.79,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_gaussian:1,brightness_darken_shfit_RGB:3",
+      "psnr_rgb": 28.6,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:4",
+      "psnr_rgb": 28.44,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+      "psnr_rgb": 27.55,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2",
+      "psnr_rgb": 27.47,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+      "psnr_rgb": 27.29,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3",
+      "psnr_rgb": 26.72,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_glass:1",
+      "psnr_rgb": 26.69,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_glass:2",
+      "psnr_rgb": 26.37,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:3,blur_motion:1",
+      "psnr_rgb": 25.92,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "brightness_darken_shfit_RGB:2,blur_gaussian:2",
+      "psnr_rgb": 25.49,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:1,brightness_darken_shfit_RGB:2",
+      "psnr_rgb": 23.74,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:3",
+      "psnr_rgb": 23.11,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_darken_gamma_HSV:3",
+      "psnr_rgb": 22.8,
+      "ci_pass": "1/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_darken_shfit_HSV:3",
+      "psnr_rgb": 21.76,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "noise_6step_check": {
+    "method": "peeled_noise_check.py, pipeline stripped = brightness_darken_shfit_RGB:3,blur_lens:2",
+    "extreme_pct": 70.53,
+    "vm_slope": 0.9203,
+    "var_slope": 0.0103,
+    "spatial_corr": 0.9724,
+    "rgb_ratio": 1.0561,
+    "cross_ch_corr": 0.9788,
+    "residual_std": 8.9,
+    "ivc": 0.9869,
+    "diagnosis": "NO_NOISE. extreme_pct 70.5% 为掩膜假阳性(残差 70% 位于 clipping 边界附近), spatial_corr=0.97 表明残差是结构化(模糊核差异/clipping 边界), 非白噪声; noise_prior sigma=0.74 (pair0), 1.4 (pair1), 1.5 (pair2) 均 < 2。SKILL 已知 FP: peeled extreme_pct>50% + sigma<5 → 忽略 IMPULSE。"
+  },
+  "cross_pair_verification": {
+    "note": "所有候选在 3 对 support 上复核, pipeline 为同 scenario 同一退化; iterations 中 round19-24 为 pair1/pair2 验证",
+    "psnr_matrix": {
+      "brightness_darken_shfit_RGB:3,blur_gaussian:1": {
+        "pair0": 28.79,
+        "pair1": 29.5,
+        "pair2": 27.29,
+        "mean": 28.53
+      },
+      "brightness_darken_shfit_RGB:3,blur_gaussian:2": {
+        "pair0": 29.35,
+        "pair1": 29.24,
+        "pair2": 27.55,
+        "mean": 28.71
+      },
+      "brightness_darken_shfit_RGB:3,blur_lens:2": {
+        "pair0": 29.17,
+        "pair1": 29.31,
+        "pair2": 27.47,
+        "mean": 28.65
+      }
+    },
+    "ci_matrix": {
+      "brightness_darken_shfit_RGB:3,blur_gaussian:1": [
+        "8/10",
+        "8/10",
+        "7/10"
+      ],
+      "brightness_darken_shfit_RGB:3,blur_gaussian:2": [
+        "8/10",
+        "6/10",
+        "4/10"
+      ],
+      "brightness_darken_shfit_RGB:3,blur_lens:2": [
+        "9/10",
+        "9/10",
+        "8/10"
+      ]
+    },
+    "global_step_signal_consistency": "target vs shiftRGB3-only sim (pair0): ms -42.9/-42.2, var 0.7181/0.7414, clip 0.3199/0.3228, spread 0.7844/0.8062, sat 0.9002/0.9183, unique_G 203/203 精确一致",
+    "order": "brightness→blur 优于 blur→brightness: gaussian1 28.79 vs 28.60; gaussian2 29.35 vs 29.04; lens2 29.17 vs 28.89"
+  },
+  "budget": {
+    "test_candidate_calls": 24,
+    "limit": 25,
+    "rounds": 24,
+    "termination_reason": "预算接近上限(24/25), 无候选 PSNR>=30; 3 轮以上探索完成 → 按 SKILL 终止规则保存当前最佳并标记 UNCERTAIN"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "brightness_darken_shfit_RGB",
+        "severity": 3,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "blur_lens",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "全局暗化步骤跨 3 对信号精确匹配(uniqG=203 精确, ms/var/clip/spread/sat 2%内) → LIKELY; 剥离后残差结构化(非噪声, spatial_corr 0.97)且 gm 0.869→0.478 证实存在模糊, 但 gaussian/lens/glass/motion 全族扫描均 25.9-29.5dB, gaussian↔lens MTF 不可区分, 模糊子类型/严重度无法由 PSNR 仲裁 → UNCERTAIN. lens2 跨 3 对 CI 最稳定(9/9/8) 故选为主预测, gaussian2(平均PSNR最高 28.71)/gaussian1 作为 alternatives.",
+    "alternatives": [
+      {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:2",
+        "psnr_mean": 28.71,
+        "family": "gaussian"
+      },
+      {
+        "pipeline": "brightness_darken_shfit_RGB:3,blur_gaussian:1",
+        "psnr_mean": 28.53,
+        "family": "gaussian"
+      }
+    ]
+  },
+  "qwen_gate": {
+    "available": false,
+    "reason": "Qwen/API unavailable in E6-C environment"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 overall_verdict=UNCERTAIN + E6C support PSNR=18.16 -> R1 反思",
+    "r0_pipeline": [["brightness_darken_shfit_RGB", 3], ["blur_lens", 2]],
+    "support_psnr_r0": 18.16,
+    "signal_reinterpretation": {
+      "rerun_pair0": "run_full_analysis.py -> full_analysis_R1.json 与 R0 一致: block_boundary=1.0038, gm_ratio=0.4782, spectral_slope_ratio=0.9996, noise_prior sigma=0.74, mean_shift=-42.9, variance_ratio=0.7181, clipped_fraction=0.3199, unique_G=203",
+      "cross_pair": "run_full_analysis pair1/pair2: pair1 variance_ratio=0.815/mean_shift=-48.6/sigma=1.4, pair2 variance_ratio=0.638/mean_shift=-43.9/sigma=1.5; 两对均 NO_COMPRESSION (block_boundary<1.05), 全局均判 BRIGHTNESS_darken_sev3",
+      "ignored_signal_variance_ratio": "R0 以 pair0 的 3% 差异判全局 LIKELY, 但 verify_signals 控制组显示 pair1/pair2 variance_ratio 差 14%/10%; 加入 gaussian_RGB 噪声后扩至 33%/23% -> target 方差系统性低于 亮度3+blur 仿真, 提示残余对比度压缩或模糊核差异. 该差异无法用单一步 global 函数解释 (saturate/contrast sev1 需 25%+ 变化), 确定性族已全扫且无候选 +2dB",
+      "ignored_signal_vm_slope": "peeled residual vm_slope=0.9203 + ivc=0.9869 表面像 speckle, 但 peeled zero_ratio=0.3225 (32.25% 像素残差恰为0, 即 clipping 区) + spatial_corr=0.9724 -> 方差-均值相关主要来自 32% clipping 结构, 非乘性噪声证据",
+      "false_positive_extreme_pct": "peeled §B extreme_pct=70.53% 触发 IMPULSE(confidence=high), 属 SKILL 记录假阳性 (extreme_pct>50% 且 noise_prior sigma<5); peeled noise_prior sigma=1.73<2 -> 忽略 IMPULSE",
+      "wiener_kernel": "控制组三对 wiener corr=0.737/0.729/0.675, 全部候选 0.61-0.75 均 <0.85 -> 核不可辨识 (SKILL: gaussian<->lens MTF 不可区分), 不作为判别依据",
+      "order": "brightness->blur 优于 blur->brightness: pair0 29.17 vs 28.89dB (lens2); peeled zero_ratio 0.3225 vs 0.3475 (target clipped=0.3199)",
+      "noise_identifiability": "生成器约束 noise(priority0) 先于 blur(priority1), 噪声被模糊削平; SKILL 记录 noise->blur 下 §B 仅 54.7%≈随机; verify_signals 的 structured_residual/FWHM 检查假设噪声在确定性退化之后, 与此顺序相悖 -> 噪声候选系统性无法达到 MATCH"
+    },
+    "candidates": [
+      {"id": "control_r0", "pipeline": "brightness_darken_shfit_RGB:3,blur_lens:2", "mode": "signal", "verdicts": {"pair0": "PARTIAL 3✓/1✗ (round27)", "pair1": "WEAK 2✓/2✗ (round31)", "pair2": "WEAK 2✓/2✗ (round32)"}, "notes": "variance_ratio 差 14%/10%, wiener 不匹配"},
+      {"id": "A_speckle1", "pipeline": "brightness_darken_shfit_RGB:3,noise_speckle:1,blur_lens:2", "mode": "signal", "verdicts": {"pair0": "PARTIAL 4✓/2✗ (round26)", "pair1": "WEAK 3✓/3✗ (round33)", "pair2": "WEAK 3✓/3✗ (round36)"}, "notes": "noise:sigma pair0/pair1 匹配但 pair2 差 50%; structured_residual FWHM=4.0px 恒不匹配; 无多数对 WEAK->PARTIAL/MATCH"},
+      {"id": "B_gaussian_RGB1", "pipeline": "brightness_darken_shfit_RGB:3,noise_gaussian_RGB:1,blur_lens:2", "mode": "signal", "verdicts": {"pair0": "WEAK 2✓/4✗ (round35)", "pair1": "WEAK 3✓/3✗ (round34)", "pair2": "WEAK 2✓/4✗ (round37)"}, "notes": "加性噪声使 variance_ratio 差 17-33%、mean_shift 0.0059-0.0075 越界, 全局信号恶化"}
+    ],
+    "deterministic_budget": "R0 已扫 gaussian1-3 / lens1-4 / glass1-2 / motion1 + 顺序翻转, 三对 PSNR 25.9-29.5dB; 本轮无新确定性候选可达 >40dB 或相对 R0 +2dB (gaussian2 mean 28.71 vs R0 lens2 28.65)",
+    "change_criteria_check": {
+      "deterministic": "FAIL: 无 >40dB 或 +2dB",
+      "noise": "FAIL: 无多数对由 WEAK 提升至 PARTIAL/MATCH (speckle pair1/pair2 WEAK; gaussian_RGB 三对 WEAK)"
+    },
+    "decision": "NO_CHANGE",
+    "decision_reason": "信号重释确认全局暗化 brightness_darken_shfit_RGB:3 (k=3 mean_shift 全匹配, unique_G=203 与 shift-only 仿真精确相等); 残余方差差与结构化残差提示未建模成分, 但确定性候选无 +2dB、噪声候选 k=3 无多数对 WEAK->PARTIAL/MATCH (且 gaussian_RGB 使全局信号变差) -> 按 REFLECT_INSTRUCTIONS 判据保持 R0 pipeline 逐项相同, 整体 UNCERTAIN 留待训练 PSNR 仲裁",
+    "support_psnr_note": "R0 support PSNR 18.16 明显低于确定性仿真保真度 29.35dB, 提示存在未建模成分; k=3 的可用信号工具无法定证其类型",
+    "budget": {"new_candidates": 2, "test_candidate_calls": 7, "limit_calls": 15, "reused_prior_iterations": [26, 27], "note": "round25-30 为本目录既有 R1 探索记录, 本轮 (31-37) 补齐 k=3 验证"},
+    "timing": {"round_start_utc": "2026-10-31T02:20:00Z", "round_end_utc": "2026-10-31T02:34:00Z", "note": "详见 agent_timing_R1.json"},
+    "isolation": "仅读取本挑战目录 degraded_*/clean_* (k=3)、full_analysis.json、peeled 结果、predicted_params.json、reflection.json、r0_result.json; 未访问 GT/.gt_mappings/exp41/其他挑战/logs/experiments/test_metrics"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "challenge_id": "blind_0012_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 4],
+    ["compression_jpeg", 3]
+  ],
+  "r1_pipeline": [
+    ["blur_motion", 4],
+    ["compression_jpeg", 3]
+  ],
+  "support_psnr_r0": 24.82,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_motion:4,compression_jpeg:3",
+      "type": "R0 pipeline control revalidation (all 3 support pairs)",
+      "psnr_per_pair": [22.29, 32.30, 23.56],
+      "mean_psnr": 26.05,
+      "ci_per_pair": ["7/10", "9/10", "10/10"],
+      "rounds": [26, 27, 28]
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:3",
+      "type": "new candidate (all 3 support pairs)",
+      "psnr_per_pair": [30.97, 19.56, 25.05],
+      "mean_psnr": 25.19,
+      "ci_per_pair": ["10/10", "9/10", "10/10"],
+      "per_pair_delta_vs_control": [8.68, -12.74, 1.49],
+      "delta_mean_vs_control": -0.86,
+      "rounds": [29, 30, 31]
+    }
+  ],
+  "test_candidate_calls": 6,
+  "test_candidate_budget": 15,
+  "best_validation": {
+    "best_mean_psnr": 26.05,
+    "best_mean_pipeline": "blur_motion:4,compression_jpeg:3",
+    "best_single_draw": 32.3,
+    "best_single_draw_pipeline": "blur_motion:4,compression_jpeg:3 (pair1)",
+    "threshold_check": "no PSNR > 40 dB; candidate mean delta -0.86 dB < +2 dB -> CHANGE not allowed"
+  },
+  "signal_sources": [
+    "block_boundary 2.7761/3.3721/4.0992 on 3 pairs (>1.1, 0%FP JPEG detection) + dct_zero_ratio 0.8877/0.9356/0.9450 -> compression_jpeg confirmed; R0 bb-diff calibration sev3 8-9% vs sev1 37%, sev2 28%, sev4 23% -> jpeg:3 LIKELY",
+    "unique_G 256/256/256 on 3 pairs (unique_G_ratio 1.016/1.000/1.000) -> no quantization",
+    "blur PCA kernel ratio 4.432/4.335/4.323 (>2.5, motion 0%FP) + spectral_slope_ratio 1.3742/1.3278/1.2259 + gm_ratio 0.4012/0.4099/0.3619 -> motion blur family robust across all 3 pairs",
+    "anisotropy 1.4348/1.7754/1.6206: pair1 >1.7 motion core; pair0 1.43 below DT threshold but overridden by PCA (0%FP motion) -> DT conflict documented, family unchanged",
+    "glass_score 1.2361/0.9776/1.1324 (>0.25): glass DT trigger, but glass PSNR 21.31 (jpeg4) / 21.67 (jpeg3) < motion 29.44 best; score inflated by JPEG/blur artifacts -> rejected",
+    "noise_prior sigma 0.74/0.74/0.37 (<2) on all pairs -> NO_NOISE; peeled §B after motion:4+jpeg:3: sigma 1.48, extreme_pct 63.33, spatial_corr 0.9735, var_slope -0.0825, vm_slope 0.8211, rgb_ratio 1.0487, cross_ch_corr 0.9238 -> extreme_pct>50% is the documented JPEG/blur false positive, structured residual = motion-angle mismatch",
+    "residual_intensity_corr 0.3902/-0.0469/-0.2625 inconsistent sign across pairs -> gamma_suspect false positive under blur+JPEG; no gamma step",
+    "mean_shift -0.4/-0.6/-0.7 of 255, contrast_spread_ratio 0.9272/0.9740/0.9832, variance_ratio 0.8691/0.9086/0.9775 -> NO_GLOBAL (variance loss explained by blur); pair2 clipped_fraction 0.2034 with unchanged mean/spread = content/sky clipping",
+    "R1 sev5 hypothesis signals: gm_ratio measured on final JPEG image (block artifacts add gradient energy -> severity lower bound); pair2 gm 0.3619 only 0.012 above sev5 cutoff 0.35; spectral_slope diff matched motion:5 in 2/2 R0 signal draws vs motion:4 borderline 0.081-0.083 (threshold 0.08) and motion:3 0.129"
+  ],
+  "reason": "NO_CHANGE. All 3 support pairs consistently show motion blur + JPEG with no noise and no global step. The only R1 correction hypothesis (motion severity 4 -> 5) is supported by bias/threshold re-interpretation (gm_ratio upward-biased by post-blur JPEG; pair2 near sev5 cutoff; angle-agnostic spectral_slope matched sev5 twice), but fails the mandated PSNR decision rule on all 3 pairs: R0 control mean 26.05 dB vs candidate mean 25.19 dB (delta -0.86 dB < +2 dB; per-pair +8.68/-12.74/+1.49) and no draw > 40 dB. Because x_distortion blur_motion draws the angle U(-90,90) per apply, the same pipeline spans 20.2-32.3 dB across draws; this within-pipeline variance exceeds the sev4/sev5 effect, so single-draw cross-support PSNR cannot arbitrate severity. Per protocol, insufficient evidence -> NO_CHANGE; R1 pipeline is item-for-item identical to R0.",
+  "limitations": "k=3 pairs used (all available). Motion-angle randomness limits PSNR-based severity resolution; a >40 dB aligned-angle draw is a lottery and was not pursued. Severity 4 vs 5 remains the open uncertainty carried into R2/training arbitration."
+}

@@ -1,0 +1,35 @@
+{
+  "challenge_id": "blind_0001_size3",
+  "round": "R1",
+  "decision": "CHANGE",
+  "r0_pipeline": [
+    ["noise_poisson", 5],
+    ["quantization_median", 2]
+  ],
+  "pipeline": [
+    {"function": "noise_poisson", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "quantization_median", "severity": 1, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [["noise_poisson", 5], ["quantization_median", 2]],
+      "function_family": "R0 fallback",
+      "evidence": "R0 管线, 3 对 verify_signals MATCH, 但 unique_per_channel=15 vs target 16; pair0 clipped_fraction 0.150 vs target 0.1635; pair1 sigma 16.93 vs target 17.17",
+      "note": "仅在最终仲裁否决 median:1 时使用"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL (sigma=16.7 → 噪声 seed 失配, PSNR 不可用)",
+    "support_psnr_r0": 29.99,
+    "trigger": "R0 verdict=UNCERTAIN; support PSNR 29.99 dB",
+    "change_basis": "确定性步 severity 修正: quantization_median 2→1。R0 认定的唯一残余偏差 unique_G 15 vs target 16 并非实现版本差异, 而是 severity 错误: median:1 在全部 3 对上使 unique_per_channel 精确等于 [16,16,16] (target 同), 且 sigma/clip/slope/ms 数值全面更接近。3/3 对 verify_signals MATCH (每对 4/4 信号), 满足 '多数对 PARTIAL/MATCH' 的变更门槛。",
+    "per_step_signal_sources": {
+      "noise_poisson:5": "noise_prior sigma 16.68/17.17/10.38 (target) vs 16.68/17.17/10.50 (sim median1); intensity_var_corr 0.772/0.829/0.908 vs 0.769/0.835/0.912; impulse_zero_ratio pair0/1/2 0.0319/0.0384/0.1336 与 sim 完全一致; pois:4 对照 WEAK (sigma -21%, VR -45%) → sev5 确认",
+      "quantization_median:1": "unique_per_channel=[16,16,16] 三对恒定 (sim 与 target 完全一致; median:2 为 15); block_boundary=0.9935/0.9991/1.0000 (target 1.0007/0.9995/1.0011, 排除 JPEG); sim 复现 VR/ms/clip/chroma/slope/gm/dct_zero_ratio (pair0 dct_zero 0.0213 vs 0.0212)"
+    },
+    "cross_pair_match": "3/3 对 verify_signals MATCH (noise:sigma, noise:clean_residual, global:mean_shift, global:variance_ratio 各 4/4)",
+    "support_used": ["clean_0/degraded_0", "clean_1/degraded_1", "clean_2/degraded_2"]
+  }
+}

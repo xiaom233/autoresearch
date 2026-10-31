@@ -1,0 +1,35 @@
+{
+  "challenge_id": "blind_0013_size1",
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_impulse", "severity": 2},
+        {"function": "compression_jpeg", "severity": 2}
+      ],
+      "verdict": "PARTIAL",
+      "matched_signals": ["compression:block_boundary", "noise:clean_residual"],
+      "mismatched_signals": ["noise:sigma (diff=37%)"],
+      "notes": "跨族对照: clipped_fraction 0.0636 与目标精确吻合, 但 gm_ratio/残差std/spatial_corr/cross_channel_corr 均劣于 gaussian 方案",
+      "function_family": "noise_impulse"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 3}
+      ],
+      "verdict": "参考",
+      "notes": "若训练/评估显示 jpeg 步不必要可回退单步；block_boundary=1.2085 支持保留 jpeg",
+      "function_family": "noise_gaussian_RGB"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (signal mode, no CI)",
+    "mode": "SIGNAL (sigma=4.8 > 2, PSNR 不可用)",
+    "rationale": "噪声+JPEG 混合 (Tier 3)。compression_jpeg:2 由 block_boundary=1.2085 (0%FP) 与模拟 1.228 (diff 1.6%) 确认；noise_gaussian_RGB:3 由 verify_signals 三项 MATCH (sigma/clean_residual/block_boundary) 确认，强度阶梯 sev1-4 的 sigma diff 单调 75%→50%→MATCH→38%；全信号对比 gm_ratio 1.124 vs 1.114、残差 std 23.3 vs 22.2、variance_ratio 0.893 vs 0.895、ch_stds 三通道近等 (rgb_ratio=1.03, 排除 YCrCb)、cross_channel_corr 0.806 vs 0.807 均吻合。blur 排除 (spectral_slope_ratio=0.984, anisotropy=0; 加入 blur_gaussian:1 后 sigma diff=87%/block_boundary diff=18% 恶化)；global 排除 (contrast_weaken_stretch:2 使 mean_shift diff=0.0429, variance_ratio diff=546%)。遗留 mean_shift=-4.1/255、chroma 0.911 vs 0.937、clipped 0.064 vs 0.044 幅度低于任何 sev1 global 函数，判为 JPEG 编码器/裁剪偏差。噪声 seed 失配 → 噪声步骤永不 LIKELY → 整体 UNCERTAIN。k=1 单 support，无法跨对验证。"
+  }
+}

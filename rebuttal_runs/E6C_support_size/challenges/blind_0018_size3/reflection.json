@@ -1,0 +1,738 @@
+{
+  "challenge_id": "blind_0018_size3",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED block_boundary=3.20 (pair0), 1.76 (p1), 1.53 (p2); unique_G=256 target -> JPEG artifacts, not quantization",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.331/1.447/1.248 (>1, sharper than clean), spectral_slope_ratio 0.926-0.976 (<1.08); no anisotropy (0.0)",
+      "noise": "noise_prior sigma=0.37 (pair0), 0.74 (p1), 2.22 (p2, borderline); residual_intensity_corr -0.68/0.34/0.20 + gamma_suspect -> residual is global-tonemap structure, not random noise",
+      "global": "variance_ratio=2.52/2.34/2.01, clipped_fraction 2.1%/12.3%/15.8%, mean_shift -29.0/+16.4/+2.1 -> contrast strengthen (channel differences amplified, heavy highlight/shadow clipping)"
+    },
+    "visual_check": "pair0/1/2 all show amplified channel differences, saturated colors, clipped highlights/shadows and visible 8x8 blockiness",
+    "mode": "PSNR (sigma=0.37 < 2; pair0 primary)",
+    "suspected": [
+      "contrast_strengthen_scale (sev2-4)",
+      "compression_jpeg (sev2-5)"
+    ],
+    "ruled_out": [
+      "blur (gm_ratio>1, slope ratio<1)",
+      "noise (sigma<0.8 on pairs 0/1; residual==tonemap)",
+      "quantization (unique_G=256)",
+      "gamma (mixed-sign mean shift across pairs impossible for fixed gamma)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false
+  },
+  "noise_6step_check": {
+    "note": "sigma=0.37 < 2 -> no random noise on pair0; §B values below are from peeled_noise_check.py after stripping 'contrast_strengthen_stretch:4,compression_jpeg:5' (residual std=7.1 is tone-curve/JPEG residual mismatch, not noise)",
+    "extreme_pct": 92.03,
+    "vm_slope": 1.8403,
+    "var_slope": -0.0351,
+    "spatial_corr": 0.9037,
+    "rgb_ratio": 1.0972,
+    "cross_ch_corr": 0.9654,
+    "diagnosis": "NO_NOISE. peeled §B IMPULSE flag is the documented JPEG-artifact false positive (extreme_pct>50% with wavelet sigma 0.74<5 -> ignore §B IMPULSE per SKILL). noise_prior sigma 0.37-0.74 < 2 on pair0/pair1; residual_intensity_corr -0.68 indicates intensity-dependent tonemap, not sensor noise. Minimum x_distortion noise = sigma 12.75 (gaussian_RGB sev1) -> no noise function can match."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:3",
+        "thinking": "block_boundary=3.20 (0%FP) -> JPEG; variance_ratio=2.52+clip 2.1% -> contrast_strengthen_scale sev2 (c=1.7, var~2.9 clipped); standard order ISP contrast before storage JPEG"
+      },
+      "test_result": {
+        "psnr_rgb": 17.06,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:2,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:3,contrast_strengthen_scale:2",
+        "thinking": "Same severities, reverse order: JPEG artifacts first then contrast gain amplifies 8x8 blocking -> explains block_boundary 3.20 vs typical q12 ~1.5"
+      },
+      "test_result": {
+        "psnr_rgb": 16.98,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:3,contrast_strengthen_scale:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:2,compression_jpeg:2",
+        "thinking": "mean shift mixed sign across pairs (-29/+16/+2) rules out gamma; stretch maps per-channel mean->0.5 (mixed signs); target only 2.1% extreme pixels -> bounded logistic, not LUT clip; variance_ratio 2.52; JPEG block_boundary=3.2"
+      },
+      "test_result": {
+        "psnr_rgb": 19.08,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:2,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:2",
+        "thinking": "stretch c=4 (sev2) too weak visually vs target (target yellow->orange, water crushed); severity scan +1: c=6"
+      },
+      "test_result": {
+        "psnr_rgb": 24.29,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:2",
+        "thinking": "severity scan continued: stretch c=6 ->24.29dB (+5.2); test c=8"
+      },
+      "test_result": {
+        "psnr_rgb": 26.07,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:5,compression_jpeg:2",
+        "thinking": "stretch severity scan +1 (c=10): 24.29(c6) -> 26.07(c8), continue"
+      },
+      "test_result": {
+        "psnr_rgb": 23.81,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:5,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:3",
+        "thinking": "stretch sev4 (c=8) is PSNR peak (26.07); block_boundary target-sim=+0.19 -> JPEG too mild, scan +1 to q12"
+      },
+      "test_result": {
+        "psnr_rgb": 25.93,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2,contrast_strengthen_stretch:4",
+        "thinking": "Order test: JPEG first then stretch would amplify residual block steps making target block_boundary 3.2 while keeping unique_G=256 (LUT re-spread)"
+      },
+      "test_result": {
+        "psnr_rgb": 25.16,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2,contrast_strengthen_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:4",
+        "thinking": "JPEG severity scan +1 (q8): block_boundary target-sim decreased 0.19->0.138 from jpeg2->3, continue stronger"
+      },
+      "test_result": {
+        "psnr_rgb": 26.09,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:4",
+        "thinking": "Cross-support check (pair1): transfer best pair0 candidate"
+      },
+      "test_result": {
+        "psnr_rgb": 22.98,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "complete JPEG severity scan at stretch sev4: block_boundary diff +0.082 at jpeg4 still positive (target blockier), zero_crossing diff trending to 0 with stronger JPEG; test q5"
+      },
+      "test_result": {
+        "psnr_rgb": 31.07,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:5,compression_jpeg:5",
+        "thinking": "severity scan at jpeg5: check stretch +1"
+      },
+      "test_result": {
+        "psnr_rgb": 24.65,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:5,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:5",
+        "thinking": "severity scan at jpeg5: check stretch -1"
+      },
+      "test_result": {
+        "psnr_rgb": 23.98,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "Cross-support verification (pair1) of leading candidate stretch:4+jpeg:5"
+      },
+      "test_result": {
+        "psnr_rgb": 28.27,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "Cross-support verification (pair2) of leading candidate stretch:4+jpeg:5"
+      },
+      "test_result": {
+        "psnr_rgb": 26.13,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,saturate_weaken_HSV:1,compression_jpeg:5",
+        "thinking": "Residual signal gap: sim chroma_ratio 1.27 vs target 1.11, var 2.94 vs 2.52 -> test mild chroma-weaken (S*0.7) inserted before JPEG"
+      },
+      "test_result": {
+        "psnr_rgb": 28.23,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,saturate_weaken_HSV:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "Control test for BLUR_UNLIKELY (gm_ratio 1.33 > 0.85): sim gm_ratio 1.394 slightly above target 1.331, test sigma=1 blur before ISP contrast"
+      },
+      "test_result": {
+        "psnr_rgb": 28.32,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "R1-control: 去除 global 步的对照 (SKILL Round2 control test)。R0 17 次测试无该项。信号: variance_ratio=2.5192, contrast_spread_ratio=1.2946 (pair0) 需要 global 解释; 若 jpeg-only PSNR 远低于 R0 31.07 则确认 global 步不可省。"
+      },
+      "test_result": {
+        "psnr_rgb": 14.04,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "R1: 重释 brightness 信号。residual_intensity_corr=-0.6855 + gamma_suspect=True (pair0) → 残差强度依赖; R0 用 mixed-sign mean_shift(-29.0/+16.4/+2.1) 排除固定 brightness, 但 stretch 逐通道均值归一化会抹去前置 brightness 的均值位移, 只留下曲线形状差异 (sim var 2.94 > target 2.52 at stretch:4)。brightness 为 priority-0 可先于 contrast; 测暗化 gamma=1.4 前置。"
+      },
+      "test_result": {
+        "psnr_rgb": 23.21,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+        "thinking": "R1: brightness 前置的对称方向。darken_gamma:1 前置 = 23.21dB (-7.9 vs 31.07); 若真值为 brighten 方向则反向应改善。信号同 R19: residual_intensity_corr=-0.6855, gamma_suspect=True; stretch 归一化使前置 brightness 均值不可辨, 仅曲线形状 (sim var 2.94 vs target 2.52)。测 brighten gamma=0.8 前置。"
+      },
+      "test_result": {
+        "psnr_rgb": 25.54,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:4,saturate_strengthen_HSV:1,compression_jpeg:5",
+        "thinking": "R1: 重释 saturation 信号。full_analysis_p1 (pair1) verdict=SATURATION_strengthen_sev5, saturation_chroma_ratio=1.715, contrast_saturation_corrected=true; pair0=1.1105/pair2=0.966 与此矛盾 (内容依赖)。R0 只测过 saturate_weaken:1 (28.23, -2.84)。saturation 与 JPEG 同 priority=2, ISP 内先于存储; 测 strengthen S+10% 插入 stretch 与 JPEG 之间。"
+      },
+      "test_result": {
+        "psnr_rgb": 20.28,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:4,saturate_strengthen_HSV:1,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:5",
+        "thinking": "R1: global 子类型对等测试。R0 仅在 scale:2+jpeg:3 (17.06) 拒绝 scale, JPEG 严重度未匹配。信号: pair1/pair2 clipped_fraction=12.3%/15.8% 与 PIL scale 硬 clip 一致; 但 pair0 clipped=2.1% 且 mean_shift=-29.0 (PIL ImageEnhance.Contrast 保均值, 无法产生 -29) 应排除 scale。测 scale c=2.1 + 胜出 JPEG 严重度 q5 于 pair0。"
+      },
+      "test_result": {
+        "psnr_rgb": 17.64,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:3,compression_jpeg:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 31.07,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_gaussian:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 28.32,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 28.27,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,saturate_weaken_HSV:1,compression_jpeg:5",
+      "psnr_rgb": 28.23,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 26.13,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:4",
+      "psnr_rgb": 26.09,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:2",
+      "psnr_rgb": 26.07,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:3",
+      "psnr_rgb": 25.93,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 25.54,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "compression_jpeg:2,contrast_strengthen_stretch:4",
+      "psnr_rgb": 25.16,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:5,compression_jpeg:5",
+      "psnr_rgb": 24.65,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:2",
+      "psnr_rgb": 24.29,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:3,compression_jpeg:5",
+      "psnr_rgb": 23.98,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:5,compression_jpeg:2",
+      "psnr_rgb": 23.81,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5",
+      "psnr_rgb": 23.21,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:4",
+      "psnr_rgb": 22.98,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:4,saturate_strengthen_HSV:1,compression_jpeg:5",
+      "psnr_rgb": 20.28,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:2,compression_jpeg:2",
+      "psnr_rgb": 19.08,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:3,compression_jpeg:5",
+      "psnr_rgb": 17.64,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:2,compression_jpeg:3",
+      "psnr_rgb": 17.06,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "compression_jpeg:3,contrast_strengthen_scale:2",
+      "psnr_rgb": 16.98,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "compression_jpeg:5",
+      "psnr_rgb": 14.04,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "contrast_strengthen_stretch",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 1,
+    "mode": "PSNR (sigma=0.37 < 2)",
+    "rationale": "1) JPEG: block_boundary 3.20/1.76/1.53 in all three supports (0% FP signal) + dct_zero_ratio 0.93 -> JPEG confirmed; unique_G=256 rules out quantization. 2) Global: variance_ratio 2.52/2.34/2.01 with only 2.1%/12.3%/15.8% clipped and mixed-sign mean_shift (-29/+16/+2). Mixed sign is impossible for a fixed gamma/brightness; LUT scale variant (contrast_strengthen_scale) produced 16% extreme pixels vs target 2.1% -> ruled out. Logistic contrast_strengthen_stretch maps per-channel means toward 0.5, explains mixed signs and low clipping. 3) Severity scan at jpeg:5 on pair0: stretch c=6/8/10 -> 23.98/31.07/24.65 dB; at stretch:4: jpeg q18/q12/q8/q5 -> 26.07/25.93/26.09/31.07 dB. Peak is sharp at stretch:4 + jpeg:5, CI 10/10 with all content-independent diffs <=3% (block_boundary 2%, unique 0%, zero_crossing 2%). 4) Order: stretch->JPEG (31.07) beats JPEG->stretch (25.16, unique_R 134 vs target 256; a final pointwise map cannot regenerate unique values). 5) Rejected 3rd steps: saturate_weaken_HSV:1 (28.23) and blur_gaussian:1 (28.32) both lowered PSNR; 2 consecutive no-improvement rounds -> stop. 6) Cross-support verification with the same pipeline: pair1 28.27 dB CI 10/10, pair2 26.13 dB CI 10/10. Residual PSNR 26-31 dB (not infinite) attributed to small tone-curve/JPEG-quantization sensitivity differences; no parameter combination reached >31.07 within the 17-test budget.",
+    "alternatives": [],
+    "support_verification": [
+      {
+        "pair": 0,
+        "psnr_rgb": 31.07,
+        "ci_pass": "10/10",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5"
+      },
+      {
+        "pair": 1,
+        "psnr_rgb": 28.27,
+        "ci_pass": "10/10",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5"
+      },
+      {
+        "pair": 2,
+        "psnr_rgb": 26.13,
+        "ci_pass": "10/10",
+        "pipeline": "contrast_strengthen_stretch:4,compression_jpeg:5"
+      }
+    ],
+    "candidate_tests": 17,
+    "stopping_reason": "Clear severity peaks for both steps; 2 consecutive non-improving tests (saturate_weaken, blur) -> protocol termination; budget 17/25"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (support PSNR 19.70; R0 simulation PSNR pair0/1/2 = 31.07/28.27/26.13)",
+    "signal_rerun": {
+      "script": "run_full_analysis.py --target degraded.png --clean clean.png --output full_analysis_R1.json",
+      "pair": 0,
+      "result": "All step verdicts identical to R0: block_boundary=3.2002 JPEG_DETECTED; sigma=0.37 no noise; gm_ratio=1.3308, spectral_slope_ratio=0.9259, anisotropy=0.0 blur unlikely; variance_ratio=2.5192, mean_shift=-29.0 contrast_strengthen_sev4. Re-run confirms signal stability, no new signal appeared."
+    },
+    "signal_reinterpretation": [
+      {
+        "signal": "block_boundary",
+        "values_pair012": [3.2002, 1.7592, 1.5333],
+        "reassessment": "JPEG on all three supports; 0%FP signal per SKILL. CI block_boundary diff at jpeg:5 is 2% on pair0. No reinterpretation possible.",
+        "action": "keep compression_jpeg:5"
+      },
+      {
+        "signal": "unique_G / dct_zero_ratio",
+        "values": {"unique_G_target": 256, "unique_G_clean_pair0": 252, "dct_zero_ratio_pair012": [0.9276, 0.7233, 0.5732]},
+        "reassessment": "Target has MORE unique G than clean -> no color quantization, no histogram quantization. JPEG confirmed.",
+        "action": "keep; quantization ruled out"
+      },
+      {
+        "signal": "variance_ratio / contrast_spread_ratio",
+        "values_pair012": {"variance_ratio": [2.5192, 2.3398, 2.011], "contrast_spread_ratio": [1.2946, 1.1093, 1.2479]},
+        "reassessment": "Variance ratio 2.0-2.5 with spread ratio only 1.1-1.3 indicates a nonlinear S-curve (tails stretched more than IQR), not a linear gain. R0 simulation at stretch:4 had var 2.94 vs target 2.52, but severity scan shows c=6 (23.98) and c=10 (24.65) are worse than c=8 (31.07), so the var gap is not resolvable by severity.",
+        "action": "keep contrast_strengthen_stretch:4"
+      },
+      {
+        "signal": "clipped_fraction",
+        "values_pair012": [0.0212, 0.1233, 0.1583],
+        "reassessment": "Content-dependent clipping; pair0 clips only 2.1% while pair1/2 clip 12-16%. This pattern matters for subtype: PIL contrast_strengthen_scale preserves the image mean and can only shift it via hard clipping, which on pair0 (bright content, mean_shift -29.0) would require ~16% clipped pixels (R0 measured 16% extremes) vs target 2.1%. The bounded per-channel stretch explains low clipping on pair0 and higher clipping on darker pair1/2.",
+        "action": "keep stretch, scale rejected (directly re-tested at matched jpeg:5, see H3)"
+      },
+      {
+        "signal": "mean_shift",
+        "values_pair012_255": [-29.0, 16.4, 2.1],
+        "reassessment": "Mixed sign across supports. Fixed monotone tone curves (gamma/brightness, all 8 brightness_* variants) shift all image means in one direction and are impossible. contrast_strengthen_stretch normalizes each channel by its own mean, so the output channel mean lands near 0.5*255 and the shift sign depends on the clean image's brightness -> mixed signs are the expected signature, not an anomaly.",
+        "action": "keep stretch; fixed gamma/brightness rejected"
+      },
+      {
+        "signal": "residual_intensity_corr / gamma_suspect",
+        "values_pair012": [-0.6855, 0.337, 0.2007],
+        "reassessment": "R0 used this to suspect gamma. After stretch+jpeg the peeled residual std=7.1 is dominated by tone-curve/JPEG quantization structure (per peeled_noise_check), which is inherently intensity-dependent (strongest near the curve's steep mid-tones, -0.69 on pair0; sign varies with content on pair1/2). This does not indicate an additional gamma step. New idea: a priority-0 brightness step BEFORE the mean-normalizing stretch would be hidden in mean_shift but would reshape the curve; tested both gamma directions (H1) -> 23.21/25.54 dB, both worse.",
+        "action": "keep; gamma alternative rejected by tests"
+      },
+      {
+        "signal": "noise sigma / peeled §B six-step",
+        "values": {"noise_prior_sigma_pair012": [0.37, 0.74, 2.22], "peeled_R1": {"extreme_pct": 92.03, "vm_slope": 1.8403, "var_slope": -0.0351, "spatial_corr": 0.9037, "rgb_ratio": 1.0972, "cross_ch_corr": 0.9654, "residual_std": 7.1}},
+        "reassessment": "Reran peeled_noise_check.py in R1 on the retained pipeline (peeled_noise_check_R1.json). §B flags IMPULSE (extreme_pct 92.03%) but this is the documented false positive (extreme_pct>50% with noise_prior sigma<5; JPEG/tone residual inflates extremes). Minimum x_distortion noise = gaussian_RGB sev1 sigma=0.05 (12.75/255 levels); measured sigma 0.37-0.74 is far below any producible noise. no blur/noise step.",
+        "action": "NO_NOISE confirmed"
+      },
+      {
+        "signal": "gm_ratio / spectral_slope_ratio / anisotropy / glass_score",
+        "values_pair012": {"gm_ratio": [1.3308, 1.4471, 1.2484], "spectral_slope_ratio": [0.9259, 0.933, 0.9763], "anisotropy": 0.0},
+        "reassessment": "gm_ratio >1 means target is sharper than clean (JPEG overshoot/gradient amplification); spectral_slope_ratio <1.08 and anisotropy=0 exclude blur. R0 control blur_gaussian:1 = 28.32 dB (< 31.07).",
+        "action": "no blur"
+      },
+      {
+        "signal": "saturation_chroma_ratio",
+        "values_pair012": [1.1105, 1.715, 0.966],
+        "reassessment": "Pair1 alone suggests saturation strengthen (its full_analysis verdict is SATURATION_strengthen_sev5), but pair0/pair2 are ~1.0 (no chroma gain) and one pipeline is shared by all supports. The pair1 value is content/JPEG-chroma confounded. Direct test of saturation strengthen inserted before JPEG (H2) = 20.28 dB, far below baseline; R0's weaken direction was 28.23 dB. Neither direction fits.",
+        "action": "no saturation step"
+      }
+    ],
+    "correction_hypotheses": [
+      {
+        "id": "H1",
+        "hypothesis": "A priority-0 brightness gamma precedes contrast and is hidden by the stretch's per-channel mean normalization",
+        "signal_source": "residual_intensity_corr=-0.6855 + gamma_suspect=True (pair0); sim var 2.94 vs target 2.52 at stretch:4; SKILL priority rule allows brightness before contrast",
+        "tests": [
+          {"pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5", "pair": 0, "psnr_rgb": 23.21, "verdict": "rejected"},
+          {"pipeline": "brightness_brighten_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5", "pair": 0, "psnr_rgb": 25.54, "verdict": "rejected"}
+        ],
+        "outcome": "Both directions 5.5-7.9 dB below R0; no brightness preconditioning."
+      },
+      {
+        "id": "H2",
+        "hypothesis": "A saturation strengthen step exists (ISP, before JPEG storage)",
+        "signal_source": "pair1 saturation_chroma_ratio=1.715 and pair1 verdict SATURATION_strengthen_sev5; R0 only tested the weaken direction",
+        "tests": [
+          {"pipeline": "contrast_strengthen_stretch:4,saturate_strengthen_HSV:1,compression_jpeg:5", "pair": 0, "psnr_rgb": 20.28, "verdict": "rejected"}
+        ],
+        "outcome": "10.8 dB below baseline; pair0 chroma 1.1105 contradicts a shared saturation-strengthen step."
+      },
+      {
+        "id": "H3",
+        "hypothesis": "Global subtype is PIL contrast scale rather than stretch; R0's rejection used a mismatched JPEG severity",
+        "signal_source": "clipped_fraction 12.3%/15.8% on pair1/pair2 fits hard-clipping scale; R0 tested only scale:2+jpeg:3 (17.06)",
+        "tests": [
+          {"pipeline": "contrast_strengthen_scale:3,compression_jpeg:5", "pair": 0, "psnr_rgb": 17.64, "verdict": "rejected"}
+        ],
+        "outcome": "13.4 dB below baseline; scale preserves the global mean and cannot produce pair0 mean_shift -29.0 (while clip 2.1%). Stretch confirmed."
+      },
+      {
+        "id": "H4",
+        "hypothesis": "Control: the global step may be unnecessary (JPEG alone explains target)",
+        "signal_source": "SKILL Round-2 control test (remove one step) was missing from R0's 17 tests",
+        "tests": [
+          {"pipeline": "compression_jpeg:5", "pair": 0, "psnr_rgb": 14.04, "verdict": "rejected"}
+        ],
+        "outcome": "17 dB below baseline; contrast step essential."
+      }
+    ],
+    "noise_recheck": {
+      "script": "peeled_noise_check.py --pipeline contrast_strengthen_stretch:4,compression_jpeg:5",
+      "output": "peeled_noise_check_R1.json",
+      "six_step": {"extreme_pct": 92.03, "vm_slope": 1.8403, "var_slope": -0.0351, "spatial_corr": 0.9037, "rgb_ratio": 1.0972, "cross_ch_corr": 0.9654},
+      "residual_std": 7.1,
+      "noise_prior_sigma": 0.74,
+      "diagnosis": "NO_NOISE. §B IMPULSE flag ignored per documented FP rule (extreme_pct>50% with wavelet sigma<5). Measured sigma 0.37-0.74 is below the minimum producible noise (gaussian_RGB sev1 sigma=0.05*255=12.75). Residual is tone-curve/JPEG structure, not random noise."
+    },
+    "candidates_summary": [
+      {"pipeline": "compression_jpeg:5 (control)", "psnr_pair0": 14.04, "ci": "6/10"},
+      {"pipeline": "brightness_darken_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5", "psnr_pair0": 23.21, "ci": "7/10"},
+      {"pipeline": "brightness_brighten_gamma_RGB:1,contrast_strengthen_stretch:4,compression_jpeg:5", "psnr_pair0": 25.54, "ci": "9/10"},
+      {"pipeline": "contrast_strengthen_stretch:4,saturate_strengthen_HSV:1,compression_jpeg:5", "psnr_pair0": 20.28, "ci": "7/10"},
+      {"pipeline": "contrast_strengthen_scale:3,compression_jpeg:5", "psnr_pair0": 17.64, "ci": "7/10"}
+    ],
+    "decision": "NO_CHANGE",
+    "decision_rationale": "Fresh full analysis reproduced every R0 step verdict. Five new signal-driven candidates (global control, pre-stretch brightness gamma both directions, saturation strengthen, matched-severity scale subtype) all failed: best R1 pair0 PSNR = 25.54 dB vs R0 31.07 dB, so neither >40 dB nor +2 dB was reached. The retained pipeline's per-step signals are all consistent (JPEG 0%FP, stretch mean-normalization explains mixed-sign mean shifts, no producible noise/blur). Two reinterpretation rounds without improvement -> protocol termination; R0 pipeline retained unchanged.",
+    "limits": [
+      "k=3 support pairs (0469/0353/0313); pair0 is primary and all new candidates were screened on pair0 because none came within 5 dB of the R0 baseline.",
+      "x_distortion severities are integers 1-5; a true non-integer tone-curve/JPEG parameter would make the simulation plateau at 26-31 dB. This is library-resolution mismatch, not a missing degradation.",
+      "support PSNR 19.70 is compatible with the 2.1-15.8% clipped pixels (information loss) plus small support; it is not by itself evidence of a missing step."
+    ],
+    "test_candidate_calls": 5,
+    "scripts_used": {"run_full_analysis": 1, "peeled_noise_check": 1, "test_candidate": 5},
+    "r0_predicted_params_untouched": true
+  }
+}

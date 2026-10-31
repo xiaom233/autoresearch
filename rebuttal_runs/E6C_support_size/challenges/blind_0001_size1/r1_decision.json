@@ -1,0 +1,77 @@
+{
+  "challenge_id": "blind_0001_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_speckle", 5],
+    ["brightness_darken_gamma_RGB", 1],
+    ["quantization_hist", 2]
+  ],
+  "r1_pipeline": [
+    ["noise_speckle", 5],
+    ["brightness_darken_gamma_RGB", 1],
+    ["quantization_hist", 2]
+  ],
+  "support_psnr_r0": 25.04,
+  "support_pairs": 1,
+  "candidates_tested": [
+    {
+      "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2",
+      "role": "R0 pipeline 复测 (基线)",
+      "mode": "signal",
+      "verdict": "PARTIAL (3✓/1✗)",
+      "matched": ["noise:sigma", "noise:clean_residual", "global:mean_shift"],
+      "mismatched": ["global:variance_ratio (diff=87%)"],
+      "measured": {"variance_ratio": 1.5914, "mean_shift_levels": -0.7, "clipped_fraction": 0.2689, "chroma_ratio": 3.14, "sigma": 17.91, "unique_G": 16},
+      "decision": "KEEP"
+    },
+    {
+      "pipeline": "noise_speckle:5,contrast_weaken_scale:1,quantization_hist:2",
+      "role": "新假设: 对比度削弱解释 variance_ratio/chroma 超标",
+      "mode": "signal",
+      "verdict": "WEAK (2✓/2✗)",
+      "matched": ["noise:sigma", "noise:clean_residual"],
+      "mismatched": ["global:mean_shift (diff=0.1008)", "global:variance_ratio (diff=39%)"],
+      "measured": {"variance_ratio": 1.1941, "mean_shift_levels": 24.5, "clipped_fraction": 0.0628, "chroma_ratio": 2.669, "sigma": 15.57, "unique_G": 12},
+      "decision": "REJECT"
+    },
+    {
+      "pipeline": "noise_speckle:5,saturate_weaken_HSV:1,quantization_hist:2",
+      "role": "新假设: 色度削弱解释 chroma/variance_ratio",
+      "mode": "signal",
+      "verdict": "WEAK (2✓/2✗)",
+      "matched": ["noise:sigma", "noise:clean_residual"],
+      "mismatched": ["global:mean_shift (diff=0.0626)", "global:variance_ratio (diff=43%)"],
+      "decision": "REJECT"
+    },
+    {
+      "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2,contrast_weaken_scale:1",
+      "role": "新假设 (4 步): mean 由量化前暗化修复, variance/chroma 由量化后对比度收缩修复",
+      "mode": "signal",
+      "verdict": "PARTIAL (3✓/1✗)",
+      "matched": ["noise:sigma", "noise:clean_residual", "global:mean_shift"],
+      "mismatched": ["global:variance_ratio (diff=134%)"],
+      "decision": "REJECT (方差下冲; 量化后 color 变换违反 unique_G=16 硬约束风险)"
+    }
+  ],
+  "test_candidate_calls": 5,
+  "best_validation": {
+    "pipeline": "noise_speckle:5,brightness_darken_gamma_RGB:1,quantization_hist:2",
+    "verdict": "PARTIAL",
+    "matched": ["noise:sigma", "noise:clean_residual", "global:mean_shift"],
+    "mismatched": ["global:variance_ratio (diff=87%)"],
+    "target_variance_ratio": 1.3173,
+    "simulated_variance_ratio": 1.5914,
+    "target_mean_shift_levels": -1.2,
+    "simulated_mean_shift_levels": -0.7
+  },
+  "signal_sources": {
+    "quantization_hist:2": "unique_G=16 且 unique_per_channel=[16,16,16] (clean=256), block_boundary=1.0007 (排除 JPEG) → 16 级共享 cdf 量化; 要求 qhist 为最后一步 (其后任何 color 变换会产生非 16 值)",
+    "noise_speckle:5": "reference-free 残差: spatial_corr=0.0018, cross_channel_corr=0.0013, intensity_var_corr=0.7718, intensity_scaled_var_corr=-0.6789 → 乘性白噪声; 模拟 speckle:5 指纹最接近 (sigma 16.93 vs 16.68, ivc 0.761 vs 0.772)",
+    "brightness_darken_gamma_RGB:1": "qhist 输出 mean_shift: 目标 -1.2 级; 所有噪声+量化 2 步模拟为 +10~+16 级, 量化前 gamma 暗化后 -0.7 级 (误差 0.5 级 < 1.275 级阈值), 且 gamma 端点保持、不破坏 16 级量化与跨通道独立性",
+    "contrast/saturation 排除": "量化前 contrast_weaken_scale:1 → mean +24.5 级且 unique_G 16→12; 量化后 contrast_weaken_scale:1 → variance_ratio 1.317→下冲 (diff 134%); saturate_weaken_HSV:1 → mean diff 0.0626",
+    "blur 排除": "spectral_slope_ratio=0.993 (阈值 1.08), FFT 各向异性 0",
+    "排除说明": "所有判断基于 R1 重跑信号与 support pair0 模拟, 未使用 R0 模型 residual 反推退化类型"
+  },
+  "reason": "R1 未找到优于 R0 pipeline 的候选: 三个新假设均未把任何信号集从 ≤3/4 提升到 4/4。唯一 PARTIAL 的 4 步对比度解方差下冲 (diff 134%) 且量化后 color 变换与 unique_G=16 硬约束冲突。当前 pipeline 在 mean_shift、噪声指纹与 16 级量化三项上同时成立, 仅 variance_ratio 残余不匹配 (1.591 vs 1.317), 该偏差方向无法由任何满足 unique_G=16 且 mean_shift 通过的分量解释。k=1 单对证据不足, 故 NO_CHANGE, 保留 R0 alternatives (2 步解 / HSV-shift 解)。"
+}

@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "per-step verdict: noise_gaussian_RGB:2=UNCERTAIN, blur_glass:5=LIKELY, contrast_weaken_scale:1=UNCERTAIN, compression_jpeg:4=UNCERTAIN (predicted_params analysis.verdict=UNCERTAIN, tier=3)",
+    "OCAB 门控不满足: full_analysis.residual_anisotropy=1.2897 < 1.7, 且 blur 子型为 glass 非 motion (finetune_strategy §七 需 Tier A anisotropy>1.7 + motion)",
+    "FiLM-GCM/ColorPre 门控不满足: global 步骤 confidence=low, FP 检查 contrast_from_saturation=true, 全部候选 verify_signals 均为 WEAK; variance_ratio=0.4574 虽异常但 contrast 归因不明确 (contrast/ saturation/ gamma 混淆), 不构成 Tier A 明确的 contrast, k=1 不放宽门控",
+    "JPEG 确认: block_boundary=4.0534 (Tier S, 0% FP, dct_zero_ratio=0.888), 但可用组件列表中无 JPEG 专项架构开关, 走纯 Swin",
+    "noise 步骤 UNCERTAIN 且 sigma≈4 与 glass+JPEG 伪影底噪不可区分, 不触发任何组件",
+    "SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全 (仅 S5 motion -0.86), 本挑战无 motion"
+  ],
+  "rationale": "4 步混合退化 (noise→glass:5→contrast:1→jpeg:4), 仅 blur_glass:5 为 LIKELY; anisotropy=1.29 排除 motion/OCAB, contrast 步骤 UNCERTAIN 且与 saturation 混淆 (contrast_from_saturation=true) 不满足 Tier A 明确门控, 故纯 Swin + SimpleGate + Direct 最安全 (exp37 盲识别场景组件 0/24 胜). 不因 k=1 单 support 放宽阈值."
+}

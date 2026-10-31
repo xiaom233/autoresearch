@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "OCAB 不触发: full_analysis step3 blur BLUR_UNLIKELY, FFT anisotropy=0（远低于 Tier A 阈值 >1.7）, spectral_slope_ratio=0.9979, 无 motion blur 证据",
+    "FiLM-GCM 不触发: 需 contrast + 结构化局部(motion/jpeg) Tier A。本挑战 global 为 saturate_strengthen_YCrCb（chroma_ratio=2.1606 色度增强, luma 保持; verify_signals R10 poisson+saturate_YCrCb:3 4/4 MATCH）, variance_ratio=2.028 由色度缩放+52.6% clipping 驱动, 非 contrast; 且无结构化局部 (block_boundary=0.9998, unique_G=256/256, 无 JPEG/无 blur)",
+    "ColorPre 不触发: 仅 contrast Tier A 启用, 本挑战是 saturation 而非 contrast; finetune_strategy.md §七 明确 saturation 场景 ColorPre 有害 (-0.34)",
+    "noise 步骤 verdict=UNCERTAIN (noise_poisson sev1, sigma=5.56 为 clipping 污染的下界; 噪声本身不触发任何架构组件)",
+    "CSN/DualBranch/SCA/FPro 不启用: DualBranch 盲识别场景 exp37 0/24 胜; CSN 在纯全局退化灾难; SCA 已废弃; 均不满足 Tier S/A 组件门控",
+    "SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全 (仅 motion×3 S5 -0.86), 本挑战无 motion",
+    "k=1 单 support pair 不放宽门控: 无跨 pair 验证, 危机场景应更保守, 纯 Swin + Direct 兜底",
+    "策略 Direct: 管线无 contrast (saturation 属全局退化, §二表推荐 Direct + 纯 Swin, 组件 ≈0dB); noise UNCERTAIN + global 混合场景 Direct 最安全, 不用 RandomCurric 引入额外风险"
+  ],
+  "rationale": "blind_0009_size1 预测管线为 noise_poisson:1 (UNCERTAIN) + saturate_strengthen_YCrCb:3 (LIKELY, Tier 3 overall UNCERTAIN)。确定性信号: 无 compression (block_boundary=0.9998, unique_G=256)、无 blur (spectral_slope_ratio=0.9979, anisotropy=0)、全局为色度饱和度增强 (chroma_ratio=2.1606) 而非 contrast。按 finetune_strategy.md §七 信号门控: OCAB 需 anisotropy>1.7 (不满足), FiLM-GCM 需 contrast+结构化 (saturation 且无结构化, 不满足), ColorPre 仅 contrast Tier A 且对 saturation 有害 (不满足)。故采用纯 Swin + SimpleGate + Direct, lr=5e-4, 2 epoch, bs=16; k=1 不改变门控。"
+}

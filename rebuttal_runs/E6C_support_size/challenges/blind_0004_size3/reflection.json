@@ -1,0 +1,979 @@
+{
+  "challenge_id": "blind_0004_size3",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=1.0118 (<1.05), unique_G target/clean=250/256, dct_zero_ratio=0.4457",
+      "blur": "BLUR_UNLIKELY verdict is low-confidence. gm_ratio=0.6488 (<0.85 strongly suggests blur), spectral_slope target/clean=1.057 (near 1.08 threshold), FFT anisotropy=0.00, pca=0.0 → isotropic blur family (gaussian primary, lens alternative)",
+      "noise": "noise_prior sigma=0.74 (<2 → NO_NOISE). Type hint GAUSSIAN_YCrCb confidence=low; spatial_corr=0.8258 and cross_channel_corr=0.7443 are computed on the full residual and are contaminated by blur structure, not interpretable as noise",
+      "global": "NO_GLOBAL: variance_ratio=0.945, mean_shift=-0.5, contrast_spread_ratio=0.9628, saturation_ratio=0.972. clipped_fraction=0.0603. residual_intensity_corr=0.3654 raises gamma-suspect flag (to re-check after blur is stripped)"
+    },
+    "mode": "PSNR (sigma=0.74 < 2, PSNR usable)",
+    "hypothesis_ranking_initial": [
+      "H1: blur_gaussian (sev to be scanned) — gm_ratio=0.648 with zero anisotropy",
+      "H2: blur_lens (MTF indistinguishable from gaussian) — alternative",
+      "H3: mild JPEG — block_boundary signal says no (1.0118) but should_still_test",
+      "H4: gamma/contrast global — variance_ratio≈0.95 and ric=0.365, weak"
+    ]
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "H1: run_full_analysis gm_ratio=0.6488 (strong gradient loss), spectral_slope_ratio=1.057, FFT anisotropy=0.00, pca=0.0 -> isotropic blur, gaussian default. sigma well below 2 so PSNR mode. Starting at sev2 (sigma=2) as midpoint estimate from gm_ratio drop."
+      },
+      "test_result": {
+        "psnr_rgb": 25.71,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "H1 severity scan: sev2 gives only 25.71dB, too low; gm_ratio=0.6488 suggests stronger blur. Scan sev3 (sigma=3) before switching family."
+      },
+      "test_result": {
+        "psnr_rgb": 24.86,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4",
+        "thinking": "H1 severity scan continued: if sev3 still low, sev4 (sigma=4) tests whether gm_ratio=0.648 corresponds to heavy gaussian."
+      },
+      "test_result": {
+        "psnr_rgb": 23.74,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "H1 severity scan: PSNR declined monotonically sev2(25.71) -> sev3(24.86) -> sev4(23.74), so check sev1 to see if true severity is below 2; gm_ratio=0.648 may be lowered by another coupled step."
+      },
+      "test_result": {
+        "psnr_rgb": 25.1,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_lens:3",
+        "thinking": "H2 alternative isotropic family: SKILL C says gaussian/lens MTF indistinguishable; gaussian sev1-4 all <26dB, so test lens mid severity (gamma=3.0,sigma=6) as cross-family candidate for gm_ratio=0.648."
+      },
+      "test_result": {
+        "psnr_rgb": 25.48,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2",
+        "thinking": "H3 compression control: block_boundary=1.0118 and unique_G 250/256 say NO_JPEG, but run_full_analysis advises should_still_test (mild JPEG can evade). Test jpeg sev2 as control; if PSNR < blur candidates, compression absence confirmed."
+      },
+      "test_result": {
+        "psnr_rgb": 23.16,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "H3 compression scan: second jpeg severity (4) to bracket; block_boundary 1.0118 makes JPEG unlikely, this closes the should_still_test requirement."
+      },
+      "test_result": {
+        "psnr_rgb": 22.48,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,compression_jpeg:1",
+        "thinking": "H1+H3 order test: single-step blur tops out ~25.7dB and single-step jpeg ~23.2dB, neither reproduces target; block_boundary=1.0118 is below JPEG threshold but blur before JPEG can mask block edges (pair2 bb=0.981). Physical order blur->jpeg; test q25 (jpeg sev1) after gaussian sev2."
+      },
+      "test_result": {
+        "psnr_rgb": 25.06,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_lens:1",
+        "thinking": "H2 lens family scan: gaussian sev1-4 all plateau ~25dB with no sharp peak, so test deterministic disk-kernel lens at low radii (lens sev1 r=2, sev2 r=3); MTF of gaussian/lens is known indistinguishable, PSNR decides."
+      },
+      "test_result": {
+        "psnr_rgb": 25.15,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "H2 lens family scan: gaussian sev1-4 all plateau ~25dB with no sharp peak, so test deterministic disk-kernel lens at low radii (lens sev1 r=2, sev2 r=3); MTF of gaussian/lens is known indistinguishable, PSNR decides."
+      },
+      "test_result": {
+        "psnr_rgb": 25.61,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_motion:1",
+        "thinking": "H5 motion family: the flat ~25dB plateau across gaussian/lens sev1-4 indicates structural mismatch, not severity. FFT anisotropy was never computed (script early-returned on BLUR_UNLIKELY), so motion remains untested. Motion sev1 (radius=5,sigma=3, random angle) can reduce gm_ratio to ~0.6."
+      },
+      "test_result": {
+        "psnr_rgb": 21.27,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_motion:2",
+        "thinking": "H5 motion severity scan: if motion sev1 is closer than gaussian, scan sev2 (radius=10,sigma=5) to see whether PSNR responds to severity; random angle per call sampled."
+      },
+      "test_result": {
+        "psnr_rgb": 24.59,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_motion:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "H6 glass family: pixel-shuffle blur (sigma=0.9 shift=2 x1) leaves high-frequency shuffle residue; glass_score was not computed due to early return. Glass is the remaining plausible isotropic subtype that can drop gm_ratio to ~0.6."
+      },
+      "test_result": {
+        "psnr_rgb": 24.4,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "H1 completeness: close gaussian severity range with sev5 (sigma=5) to confirm the PSNR plateau is not a severity issue; gm_ratio=0.648 would predict sev3 by the script's table, but PSNR curve shows no peak."
+      },
+      "test_result": {
+        "psnr_rgb": 22.77,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "Signal-mode diagnosis of best PSNR candidate (25.71dB): PSNR plateau across all blur families suggests shape/severity mismatch; Wiener kernel self-consistency and spectral-slope diff should reveal whether gaussian sigma=2 is structurally close."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.718)"
+        ],
+        "pipeline": "blur_gaussian:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "Wiener kernel cross-check for alternative family: gaussian2 kernel corr=0.718<0.9; compare disk (lens r=3) and glass kernels to find the shape that best explains target kernel."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.703)"
+        ],
+        "pipeline": "blur_lens:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Wiener kernel cross-check for alternative family: gaussian2 kernel corr=0.718<0.9; compare disk (lens r=3) and glass kernels to find the shape that best explains target kernel."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.662)"
+        ],
+        "pipeline": "blur_glass:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:1",
+        "thinking": "H3 JPEG mild (q25) alone was never tested (only q18/q8). block_boundary=1.0118 is below the 1.05 threshold but mild JPEG sensitivity is uncalibrated; q25 could explain the ~25dB ceiling and structured residual if blur kernel estimate is corrupted by block quantization."
+      },
+      "test_result": {
+        "psnr_rgb": 23.29,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1,blur_gaussian:2",
+        "thinking": "Effective-sigma probe within gaussian family: single severities plateau at ~25dB with no sharp peak, so test whether target PSF corresponds to an effective sigma between integer steps (sigma_eff=2.24 and 2.83). Diagnostic only; final pipeline must be a legal single-step blur."
+      },
+      "test_result": {
+        "psnr_rgb": 25.58,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,blur_gaussian:2",
+        "thinking": "Effective-sigma probe within gaussian family: single severities plateau at ~25dB with no sharp peak, so test whether target PSF corresponds to an effective sigma between integer steps (sigma_eff=2.24 and 2.83). Diagnostic only; final pipeline must be a legal single-step blur."
+      },
+      "test_result": {
+        "psnr_rgb": 25.05,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2,blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "",
+        "thinking": "Control test (Round2 rule: best candidate vs baseline with step removed): measure identity PSNR between degraded_0 and clean_0 to quantify how much signal any blur candidate actually explains. If identity is ~25dB, the blur step contributes almost nothing and the flat plateau is explained by a pervasive small perturbation."
+      },
+      "test_result": {
+        "psnr_rgb": 23.45,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "Cross-pair validation/severity arbitration on pair1 (gm_ratio=0.519 suggests sev3-4 by table, but pair0 PSNR favored sev2): compare gaussian sev2 vs sev3 to see whether the 25dB plateau and severity ordering reproduce on a second support image."
+      },
+      "test_result": {
+        "psnr_rgb": 28.99,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "Cross-pair validation/severity arbitration on pair1 (gm_ratio=0.519 suggests sev3-4 by table, but pair0 PSNR favored sev2): compare gaussian sev2 vs sev3 to see whether the 25dB plateau and severity ordering reproduce on a second support image."
+      },
+      "test_result": {
+        "psnr_rgb": 27.97,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "Cross-pair validation on pair2 (mandatory k-pair check for final candidate): same pipeline blur_gaussian:2, verify PSNR/CI consistency with pairs 0-1."
+      },
+      "test_result": {
+        "psnr_rgb": 32.6,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "Severity lower-bound sanity on pair1: pair0 showed sev2 (25.71) > sev1 (25.10); check whether sev1 can overtake sev2 on another image before fixing final severity=2."
+      },
+      "test_result": {
+        "psnr_rgb": 28.68,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "R1 diagnostic: regenerate pair0 with R0 best candidate and save simulated image; purpose is to run full_analysis on the simulation to isolate how much of the target variance_ratio/contrast_spread/chroma/clipping deficit a pure gaussian:2 blur explains. Signal source: variance_ratio=0.945, contrast_spread_ratio=0.9628, saturation_chroma_ratio=0.972, clipped_fraction=0.0603, unique_G_ratio=0.977 (ignored in R0)."
+      },
+      "test_result": {
+        "psnr_rgb": 25.71,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R1 signal reinterpretation: target gm_ratio=0.649 and spectral_slope_ratio=1.057 are much milder than the gaussian:2 simulation (gm=0.442, slope_ratio=1.132), and target variance_ratio=0.945 > sim 0.905, i.e. gaussian:2 over-blurs. Glass blur was only tested at sev2 (24.40 dB) in R0; sev1 is the untested mild end of the irregular-kernel family, and glass_score could not be computed because run_full_analysis early-returned on BLUR_UNLIKELY. k=3 validation pair 0."
+      },
+      "test_result": {
+        "psnr_rgb": 24.29,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R1 signal reinterpretation: target gm_ratio=0.649 and spectral_slope_ratio=1.057 are much milder than the gaussian:2 simulation (gm=0.442, slope_ratio=1.132), and target variance_ratio=0.945 > sim 0.905, i.e. gaussian:2 over-blurs. Glass blur was only tested at sev2 (24.40 dB) in R0; sev1 is the untested mild end of the irregular-kernel family, and glass_score could not be computed because run_full_analysis early-returned on BLUR_UNLIKELY. k=3 validation pair 1."
+      },
+      "test_result": {
+        "psnr_rgb": 26.69,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R1 signal reinterpretation: target gm_ratio=0.649 and spectral_slope_ratio=1.057 are much milder than the gaussian:2 simulation (gm=0.442, slope_ratio=1.132), and target variance_ratio=0.945 > sim 0.905, i.e. gaussian:2 over-blurs. Glass blur was only tested at sev2 (24.40 dB) in R0; sev1 is the untested mild end of the irregular-kernel family, and glass_score could not be computed because run_full_analysis early-returned on BLUR_UNLIKELY. k=3 validation pair 2."
+      },
+      "test_result": {
+        "psnr_rgb": 30.45,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_lens:1",
+        "thinking": "R1 signal reinterpretation: target is milder than gaussian:2 (gm 0.649 vs sim 0.442; variance_ratio 0.945 vs sim 0.905; dct_zero 0.446 vs sim 0.752). SKILL C says gaussian/lens MTF indistinguishable; R0 tested lens only at sev1 pair0 (25.15), sev2 pair0 (25.61), sev3 pair0 (25.48). Disk kernel has a flatter passband than gaussian of similar radius and could reproduce mild gradient loss with lower variance reduction. k=3 validation pair 0."
+      },
+      "test_result": {
+        "psnr_rgb": 25.15,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_lens:1",
+        "thinking": "R1 signal reinterpretation: target is milder than gaussian:2 (gm 0.649 vs sim 0.442; variance_ratio 0.945 vs sim 0.905; dct_zero 0.446 vs sim 0.752). SKILL C says gaussian/lens MTF indistinguishable; R0 tested lens only at sev1 pair0 (25.15), sev2 pair0 (25.61), sev3 pair0 (25.48). Disk kernel has a flatter passband than gaussian of similar radius and could reproduce mild gradient loss with lower variance reduction. k=3 validation pair 1."
+      },
+      "test_result": {
+        "psnr_rgb": 28.61,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_lens:1",
+        "thinking": "R1 signal reinterpretation: target is milder than gaussian:2 (gm 0.649 vs sim 0.442; variance_ratio 0.945 vs sim 0.905; dct_zero 0.446 vs sim 0.752). SKILL C says gaussian/lens MTF indistinguishable; R0 tested lens only at sev1 pair0 (25.15), sev2 pair0 (25.61), sev3 pair0 (25.48). Disk kernel has a flatter passband than gaussian of similar radius and could reproduce mild gradient loss with lower variance reduction. k=3 validation pair 2."
+      },
+      "test_result": {
+        "psnr_rgb": 32.32,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "R1 severity re-arbitration: simulation of blur_gaussian:2 on pair0 shows it over-blurs relative to target (sim gm=0.442 vs target 0.649; sim variance_ratio 0.905 vs target 0.945; sim dct_zero 0.752 vs target 0.446), so the milder sev1 must be checked on the remaining k-pair. R0 measured sev1 on pair0 (25.10) and pair1 (28.68) vs sev2 25.71/28.99; pair2 was never scanned."
+      },
+      "test_result": {
+        "psnr_rgb": 32.27,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "R1 cross-family completion: blur_lens:1 scored CI 9/9/9 across k=3 (better than gaussian:2 CI 6/4/8) while PSNR was only 0.3-0.6 dB lower, and target statistics lie between gaussian sev1 and sev2. R0 tested lens:2 only on pair0 (25.61, CI 7/10); validate it on the remaining k pairs before keeping it as the cross-family alternative."
+      },
+      "test_result": {
+        "psnr_rgb": 29.0,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "R1 cross-family completion: blur_lens:1 scored CI 9/9/9 across k=3 (better than gaussian:2 CI 6/4/8) while PSNR was only 0.3-0.6 dB lower, and target statistics lie between gaussian sev1 and sev2. R0 tested lens:2 only on pair0 (25.61, CI 7/10); validate it on the remaining k pairs before keeping it as the cross-family alternative."
+      },
+      "test_result": {
+        "psnr_rgb": 32.55,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2,noise_gaussian_RGB:1",
+        "thinking": "R1 residual-structure screen: after stripping gaussian:2 the residual std is 13.2 with dct_zero target 0.446 vs blur-only simulation 0.752, gm target 0.649 vs sim 0.442, variance_ratio 0.945 vs sim 0.905 — all three higher in target, which is also what a small additive perturbation on top of blur can produce. noise_prior sigma is 0.74 (<2) and peeled sigma 1.48, but wavelet estimators are known to under-read when blur/JPEG is present. Signal-mode test with the mildest legal noise severity checks whether any noise component is required; PSNR is invalid here."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.721)",
+          "noise:sigma (diff=1467%)",
+          "noise:structured_residual (FWHM=4.0px)"
+        ],
+        "pipeline": "blur_gaussian:2,noise_gaussian_RGB:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 32.6,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_lens:2",
+      "psnr_rgb": 32.55,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_lens:1",
+      "psnr_rgb": 32.32,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "psnr_rgb": 32.27,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 30.45,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_lens:2",
+      "psnr_rgb": 29.0,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 28.99,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "psnr_rgb": 28.68,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_lens:1",
+      "psnr_rgb": 28.61,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 27.97,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 26.69,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 25.71,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 25.71,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_lens:2",
+      "psnr_rgb": 25.61,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:1,blur_gaussian:2",
+      "psnr_rgb": 25.58,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_lens:3",
+      "psnr_rgb": 25.48,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_lens:1",
+      "psnr_rgb": 25.15,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_lens:1",
+      "psnr_rgb": 25.15,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "psnr_rgb": 25.1,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_gaussian:2,compression_jpeg:1",
+      "psnr_rgb": 25.06,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:2,blur_gaussian:2",
+      "psnr_rgb": 25.05,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 24.86,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_motion:2",
+      "psnr_rgb": 24.59,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 24.4,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 24.29,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:4",
+      "psnr_rgb": 23.74,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "",
+      "psnr_rgb": 23.45,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "compression_jpeg:1",
+      "psnr_rgb": 23.29,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "compression_jpeg:2",
+      "psnr_rgb": 23.16,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 22.77,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "compression_jpeg:4",
+      "psnr_rgb": 22.48,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_motion:1",
+      "psnr_rgb": 21.27,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    }
+  ],
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py after stripping blur_gaussian:2 on pair0 (structured residual, so type signals are invalid; recorded for audit)",
+    "extreme_pct": 58.8,
+    "vm_slope": 1.8126,
+    "var_slope": 0.737,
+    "spatial_corr": 0.98,
+    "rgb_ratio": 1.0692,
+    "cross_ch_corr": 0.8043,
+    "noise_prior_sigma_peeled": 1.48,
+    "noise_prior_sigma_raw_pair0": 0.74,
+    "diagnosis": "NO_NOISE. Raw wavelet sigma=0.74 (<2) on all three pairs (0.74/1.11/0.74). The run_full_analysis GAUSSIAN_YCrCb hint is a documented blur-induced false positive: blur synchronously smooths RGB channels (cross_ch_corr 0.74-0.96) and creates residual-intensity correlation (ric 0.37 on pair0), which the script maps to gamma_suspect/YCrCb; peeled residual has spatial_corr=0.98 and FFT-invisible white noise (sigma_peeled=1.48<2), i.e., deterministic structure, not random noise. extreme_pct is the known sign-counting artifact on structured residuals."
+  },
+  "qwen_gate": {
+    "available": false,
+    "note": "SKILL Step 0.5 gate condition was contradictory signals (noise verdict GAUSSIAN_YCrCb while noise_prior sigma<2 and blur present). Qwen/API not available; skipped and resolved via peeled residual noise_prior (1.48<2 -> NO_NOISE)."
+  },
+  "support_validation": {
+    "k": 3,
+    "final_candidate": "blur_gaussian:2",
+    "pair0": {
+      "psnr_rgb": 25.71,
+      "ci_pass": "6/10"
+    },
+    "pair1": {
+      "psnr_rgb": 28.99,
+      "ci_pass": "4/10"
+    },
+    "pair2": {
+      "psnr_rgb": 32.6,
+      "ci_pass": "8/10"
+    },
+    "severity_ordering": {
+      "pair0": "sev2 25.71 > sev1 25.10 > sev3 24.86 > sev4 23.74 > sev5 22.77",
+      "pair1": "sev2 28.99 > sev1 28.68 > sev3 27.97"
+    },
+    "note": "All k=3 support pairs use the same best pipeline and the same sev2>sev1/sev3 ordering where scanned; PSNR differs across pairs due to content. Cross-pair family checks (lens/glass/motion/jpeg) were run on pair0 only."
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_gaussian",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "alternatives": [
+      {
+        "pipeline": "blur_lens:2",
+        "function_family": "blur_disk",
+        "psnr_rgb_pair0": 25.61,
+        "ci_pass": "7/10",
+        "reason": "cross-family isotropic candidate; Wiener corr 0.703 vs 0.718 gaussian"
+      },
+      {
+        "pipeline": "blur_gaussian:3",
+        "function_family": "blur_gaussian",
+        "psnr_rgb_pair0": 24.86,
+        "psnr_rgb_pair1": 27.97,
+        "reason": "severity +1 backup (gm_ratio table would predict sev3-4 on pairs 1-2, but PSNR prefers sev2 on both scanned pairs)"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 1,
+    "rationale": "Single deterministic isotropic blur: gm_ratio=0.649/0.519/0.571 (pairs 0/1/2), spectral_slope_ratio 1.04-1.06, block_boundary 1.012/1.001/0.981 (no JPEG, 0%FP signal), noise_prior sigma 0.74/1.11/0.74 <2 (NO_NOISE), global stats near-identity (mean_shift -0.5/-0.5/-0.4, variance_ratio 0.945/0.949/0.991, chroma 0.972/0.977/0.992). Among all tested families (gaussian sev1-5, lens sev1-3, glass 2, motion 1-2, jpeg 1/2/4, blur+jpeg, identity control 23.45dB) gaussian sev2 is best on all three pairs. Verdict stays UNCERTAIN: PSNR 25.7-32.6dB is below the 40dB LIKELY threshold and Wiener kernel corr=0.718<0.9, i.e., the exact PSF is not reproduced by any legal integer severity; residual is structured (spatial_corr 0.98, std 13.2) yet non-random. The run_full_analysis BLUR_UNLIKELY verdict is a false negative caused by the blur-induced YCrCb noise FP forcing the spectral-slope branch (slope_ratio 1.057 just below 1.08); gm_ratio is meaningful here and indicates blur. Budget hit the 25-test hard cap; no further deterministic hypothesis (global steps are excluded by first-order stats; additive noise excluded by wavelet sigma) remains within x_distortion's discrete severities.",
+    "psnr_ranking_note": "psnr_ranking contains entries from all three support pairs; pipeline comparison is only valid within the same pair."
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "verdict=UNCERTAIN; R0 support PSNR 24.95 dB",
+    "mode": "PSNR for deterministic candidates; signal mode for the noise candidate",
+    "signal_reinterpretation": {
+      "ignored_signal_1_simulation_inversion": {
+        "method": "Regenerated pair0 with R0 pipeline (blur_gaussian:2), then ran run_full_analysis on simulate(clean) vs clean and compared its statistics to target vs clean.",
+        "values": {
+          "gm_ratio": {"target": 0.6485, "sim_gaussian2": 0.4418},
+          "spectral_slope_ratio": {"target": 1.0569, "sim_gaussian2": 1.1324},
+          "variance_ratio": {"target": 0.945, "sim_gaussian2": 0.9052},
+          "contrast_spread_ratio": {"target": 0.9628, "sim_gaussian2": 0.9341},
+          "saturation_chroma_ratio": {"target": 0.972, "sim_gaussian2": 0.9511},
+          "dct_zero_ratio": {"target": 0.4457, "sim_gaussian2": 0.7519},
+          "unique_G": {"target": 250, "sim_gaussian2": 249},
+          "clipped_fraction": {"target": 0.0603, "sim_gaussian2": 0.051},
+          "mean_shift": {"target": -0.5, "sim_gaussian2": -0.5}
+        },
+        "conclusion": "gaussian:2 over-blurs on every second-order statistic; the target lies between legal sev1 and sev2. unique_G (250 vs 249), chroma (0.972 vs 0.951), clipping (0.060 vs 0.051) and mean_shift (identical) are explained by blur plus image content, so quantization, brightness and saturation steps are excluded. A global contrast step cannot fix the gm/variance gap either: any scaling that lifts gm_ratio from 0.442 to 0.649 would lift variance_ratio far above 0.945."
+      },
+      "ignored_signal_2_boundary_clipping_residual_intensity_corr": {
+        "values": {"clipped_fraction": 0.0603, "clean_clipped_baseline_via_sim": 0.051, "residual_intensity_corr": 0.3721, "mean_shift": -0.5, "variance_ratio": 0.945},
+        "conclusion": "Heavy-clipping flag is content-driven (a pure blur simulation already shows 5.1% clipping) and mean_shift is unchanged; no brightness/contrast/gamma step is supported. residual_intensity_corr is reproduced by the blur simulation (0.417) and is not a gamma indicator."
+      },
+      "noise_recheck": {
+        "values": {"raw_sigma": [0.74, 1.11, 0.74], "peeled_sigma_pair0": 1.48, "peeled_spatial_corr": 0.98, "peeled_var_slope": 0.737, "peeled_extreme_pct": 58.8, "signal_screen": "blur_gaussian:2,noise_gaussian_RGB:1 -> WEAK; noise:sigma diff=1467%; structured_residual FWHM=4.0px"},
+        "conclusion": "NO_NOISE. The peeled residual is structured blur-mismatch (spatial_corr 0.98), and the mildest legal noise severity is already 15x the target noise estimate."
+      }
+    },
+    "hypotheses_tested": [
+      {"pipeline": "blur_glass:1", "signal_source": "target gm_ratio 0.649 is milder than gaussian:2 simulation gm 0.442; glass sev1 was never tested (only glass:2 pair0 in R0); glass_score unavailable because run_full_analysis early-returned on BLUR_UNLIKELY", "k3_psnr": [24.29, 26.69, 30.45], "ci": ["7/10", "8/10", "10/10"], "conclusion": "REJECT"},
+      {"pipeline": "blur_lens:1", "signal_source": "SKILL C: gaussian/lens MTF indistinguishable; disk kernel has flatter passband and could give mild gradient loss (gm 0.649) with variance_ratio 0.945; lens:1 was only tested on pair0 in R0", "k3_psnr": [25.15, 28.61, 32.32], "ci": ["9/10", "9/10", "9/10"], "conclusion": "REJECT on PSNR (below R0 pipeline); best CI, lens family retained as alternative"},
+      {"pipeline": "blur_lens:2", "signal_source": "lens:1 nearly tied with R0 gaussian:2 and had the best CI; complete its k=3 evidence (R0 had pair0 only)", "k3_psnr": [25.61, 29.0, 32.55], "ci": ["7/10 (R0)", "8/10", "9/10"], "conclusion": "TIE (max +0.01 dB on pair1) -> below +2 dB CHANGE threshold; kept as alternative"},
+      {"pipeline": "blur_gaussian:1", "signal_source": "simulation inversion shows target is milder than gaussian:2 (gm 0.649 vs 0.442; variance 0.945 vs 0.905); complete the k=3 severity check (pair2 was never scanned)", "k3_psnr": [25.10, 28.68, 32.27], "ci": ["7/10", "8/10", "8/10"], "conclusion": "REJECT as CHANGE (0.31-0.61 dB below R0); kept as milder-severity backup"},
+      {"pipeline": "blur_gaussian:2,noise_gaussian_RGB:1", "signal_source": "target dct_zero (0.446) lower than blur-only simulation (0.752), gm and variance higher than simulation - a pattern also compatible with a small additive perturbation; wavelet sigma may under-read under blur", "mode": "signal", "result": "WEAK: matched blur:spectral_slope only; noise:sigma diff=1467%, structured_residual FWHM=4.0px", "conclusion": "REJECT"}
+    ],
+    "decision": "NO_CHANGE",
+    "pipeline": [{"function": "blur_gaussian", "severity": 2, "verdict": "UNCERTAIN"}],
+    "rationale": "R1 reanalysis confirms a single mild isotropic blur. Simulation inversion is the decisive new signal: gaussian:2 slightly over-blurs and the target sits between sev1 and sev2, but no legal x_distortion blur reproduces the target PSF (k=3 PSNR 24.3-32.6 dB across 5 newly validated candidates), and global/quantization/noise steps are quantitatively excluded. No candidate gains +2 dB or reaches 40 dB, so the R0 pipeline is retained item-by-item; lens:2 is statistically tied with better CI and becomes the primary cross-family alternative.",
+    "test_candidate_calls": 11
+  }
+}

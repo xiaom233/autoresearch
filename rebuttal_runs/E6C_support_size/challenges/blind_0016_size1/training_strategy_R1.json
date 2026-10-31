@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "ocab",
+    "window_size": 16,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 30
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "blur 步骤: residual_anisotropy=1.8846 > 1.7 (Tier A, 0% FP) + blur_pca_ratio=3.342 > 2.5 (0% FP), full_analysis step3 subtype_confidence=high, mtf_roughness=0.9379/spectral_slope_ratio=1.2243 支持 motion; gaussian 模拟 PCA=1.04/aniso=1.48 与目标不符 → 启用 OCAB (motion blur, exp10 +1.19)",
+    "blur severity 备选 3 vs 4 未定 (gm_ratio=0.2755, |Δgm| 0.034(sev4) vs 0.098(sev3); verdict=UNCERTAIN): 仅影响退化参数, 不改变架构门控",
+    "compression 步骤: block_boundary=2.0134 > 1.1 (Tier S, 0% FP) + dct_zero_ratio=0.857, motion4+jpeg1 模拟 bb=1.917 (Δ4.8%) → compression_jpeg sev1 LIKELY; JPEG 无对应 Tier A/S 组件, 由网络隐式处理",
+    "global 步骤: NO_GLOBAL; variance_ratio=0.8196 由 motion4+jpeg1 模拟 0.8018 解释, contrast_from_variance=false, mean_shift=-0.4, saturation_chroma_ratio=0.9402 → 不满足 Tier A contrast 条件, 不启用 FiLM-GCM/ColorPre",
+    "noise: noise_prior sigma=1.11 < 2, peeled 复核 extreme_pct=52.91 属 JPEG/blur 假阳性, rgb_ratio=1.1517<1.4 → NO_NOISE, 无噪声组件需求",
+    "window_size=16: 严重 motion blur 配置 (full_analysis recommended_architecture; CLAUDE.md 规则 10 motion blur → OCAB+ws16)",
+    "embed_dim=30: OCAB 参数公平性强制要求 (dim=64 时 OCAB 膨胀至 2.1M/4.7×基线; dim=30 约 467K/+2.9%, finetune_strategy §五)",
+    "SimpleGate: exp39 默认常开, -32K 参数, 8/9 退化安全"
+  ],
+  "rationale": "本挑战为 JPEG(sev1, LIKELY) + motion blur(sev3/4, UNCERTAIN) 两步局部退化, 无全局/噪声。motion 步骤具备 Tier A 双信号 (anisotropy 1.8846>1.7 与 PCA 3.342>2.5, 均 0% FP 且 subtype_confidence=high), 满足 OCAB 门控 (anisotropy>1.7 + motion), 按 §七 启用 OCAB+ws16 并设 embed_dim=30 对齐参数; JPEG 仅有 Tier S block_boundary 信号, 无对应组件, 不额外加组件。contrast 信号不成立 (variance_ratio 由 JPEG+blur 模拟解释, contrast_from_variance=false), 故 FiLM-GCM/ColorPre 均不启用。无 contrast 且为两步局部退化, 训练策略取 Direct (lr=5e-4, 2 epoch, batch=16)。support 数量 k=1 不作为放宽/收紧门控的依据, 本决策完全由 Tier S/A 信号驱动。"
+}

@@ -1,0 +1,131 @@
+{
+  "challenge_id": "blind_0008_size3",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION: block_boundary=0.990 (<1.05), unique_G_ratio=1.065 (>1.0) -> no JPEG/quantization signal",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.046 (>0.85), spectral_slope_ratio=1.050 (<1.08), FFT_anisotropy=0 -> no blur evidence",
+      "noise": "NO_NOISE: noise_prior_sigma=0.25 (<2) -> Step0.5 gate: skip noise fine diagnosis; spatial_corr=0.987 and residual_intensity_corr=0.70 are explained by global color transform (desaturation), not noise",
+      "global": "SATURATION_weaken candidate: saturation_chroma_ratio=0.200 (chroma reduced to ~20%), variance_ratio=0.589, mean_shift=37.1. Pair0 channel means 128.5/98.0/19.7 -> 128.8/122.3/106.7: B and G move toward max channel, R (max) unchanged -> HSV saturation scaling signature. mean_shift is a byproduct of desaturation (B channel +87), not brightness."
+    },
+    "mode": "PSNR (sigma=0.25 < 2, PSNR reliable)",
+    "visual_check": "degraded pair0 is a strongly desaturated version of clean (yellow-green -> grey-green); no visible blur, noise, or blocking",
+    "qwen_gate": {
+      "available": false
+    },
+    "suspected": [
+      "saturate_weaken_HSV (sev 4, s=0.2 matches chroma_ratio=0.200)",
+      "saturate_weaken_YCrCb (sev 3, c=0.2 also matches chroma_ratio=0.200)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary=0.990, unique_G not reduced)",
+      "blur_* (gm_ratio=1.046, slope_ratio=1.05, anisotropy=0)",
+      "noise_* (sigma=0.25)"
+    ]
+  },
+  "noise_6step_check": {
+    "applicable": false,
+    "reason": "noise_prior_sigma=0.25 < 2 -> per Step0.5 gate NO_NOISE, peeled noise check not triggered",
+    "extreme_pct": null,
+    "vm_slope": null,
+    "var_slope": null,
+    "spatial_corr": 0.9874,
+    "rgb_ratio": null,
+    "cross_ch_corr": 0.1459,
+    "diagnosis": "no random noise; high spatial_corr/residual_intensity_corr originate from deterministic global color transform"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "信号: saturation_chroma_ratio=0.200 -> HSV scaling s=0.2 对应 sev4; pair0 通道均值 B:19.7->106.7, G:98->122, R(max):128.5->128.8 仅小变 -> HSV 保 V 缩 S 的特征; variance_ratio=0.589 与 mean_shift 为去饱和副产物; 无 noise(sigma=0.25)/blur/compression 信号"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "跨对复核 pair1: 用 pair0 确认的管线验证 support 一致性 (k=3)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "saturate_weaken_HSV:4",
+        "thinking": "跨对复核 pair2: 用 pair0 确认的管线验证 support 一致性 (k=3)"
+      },
+      "test_result": {
+        "psnr_rgb": Infinity,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:4",
+      "psnr_rgb": Infinity,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    }
+  ],
+  "cross_pair_verification": {
+    "pairs_tested": 3,
+    "pipeline": "saturate_weaken_HSV:4",
+    "results": [
+      {"pair": 0, "target": "degraded_0.png (alias degraded.png)", "psnr_rgb": Infinity, "ci_pass": "10/10"},
+      {"pair": 1, "target": "degraded_1.png", "psnr_rgb": Infinity, "ci_pass": "10/10"},
+      {"pair": 2, "target": "degraded_2.png", "psnr_rgb": Infinity, "ci_pass": "10/10"}
+    ],
+    "conclusion": "同一管线在全部 k=3 support 对上逐像素完全一致 (PSNR=inf)，退化在 support 内完全共享"
+  },
+  "final_decision": {
+    "pipeline": [
+      {"function": "saturate_weaken_HSV", "severity": 4, "verdict": "LIKELY"}
+    ],
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "rationale": "确定性全局退化: saturate_weaken_HSV sev4 (S scale=0.2) 在 pair0/1/2 三对 support 上均 PSNR=inf、CI=10/10 逐像素一致。信号链: saturation_chroma_ratio=0.200 = S scale 0.2 (sev4); 无 compression (block_boundary=0.990), 无 blur (gm_ratio=1.046, slope_ratio=1.05, anisotropy=0), 无 noise (sigma=0.25)。variance_ratio=0.589 与 mean_shift=37.1 为去饱和导致的副产物 (B 通道均值 19.7->106.7)，非 brightness/contrast。",
+    "alternatives_note": "PSNR=inf 无歧义, 无需 alternatives; YCrCb 变体 (c=0.2, sev3) 未测, 因 HSV 已逐像素复原"
+  }
+}

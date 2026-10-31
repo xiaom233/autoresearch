@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "blur_lens:4 verdict=UNCERTAIN; residual_anisotropy=1.6547 < 1.7 (full_analysis step3_blur) and blur is lens, not motion -> OCAB gate NOT met",
+    "blur UNCERTAIN -> per §七 no component for this step (exp37 rule)",
+    "variance_ratio=0.8055 (step4_global) but contrast_detected_raw=false, contrast_from_variance=false, contrast_spread_ratio=0.9226; predicted pipeline has no contrast step -> no ColorPre/FiLM-GCM (variance drop attributable to lens blur smoothing)",
+    "brightness_brighten_shfit_RGB:1 verdict=LIKELY with mean_shift=+24/255; brightness is global Tier C/低难度, ColorMLP not gated (requires brightness_HSV high confidence)",
+    "compression_jpeg:4 LIKELY, block_boundary=3.2006 (Tier S, 0%FP) + dct_zero_ratio=0.903; JPEG has no component mapping in §七",
+    "noise ruled out: peeled sigma=1.48 < 2 (reflection noise_6step_check) -> no noise-related component",
+    "SimpleGate default-on: -32K params, exp39 8/9 degradations safe",
+    "k=3 support validation (pair0 34.83 / pair1 38.34 / pair2 43.15 dB, CI 10/10) does not relax any architecture gate"
+  ],
+  "rationale": "3-step deterministic pipeline (lens blur + brightness shift + JPEG), no contrast and no motion. No Tier S/A gate for OCAB (anisotropy 1.6547<1.7), FiLM-GCM (no contrast step), ColorPre (no contrast), or ColorMLP (not brightness_HSV). Blur step is UNCERTAIN, so no component on that step. Default pure Swin + SimpleGate + Direct is the safe choice; k=3 does not loosen thresholds."
+}

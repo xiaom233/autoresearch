@@ -1,0 +1,62 @@
+{
+  "challenge_id": "blind_0023_size3",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"},
+    {"function": "contrast_weaken_scale", "severity": 1, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "contrast_weaken_scale", "severity": 1}
+      ],
+      "function_family": "blur:gaussian",
+      "psnr": null,
+      "stats": "bb-optimal blur family: gauss5+jpeg4 block_boundary 4.135/4.819 vs target 4.054/4.862 (pairs0/1), but raw spectral_slope off by 0.26/0.23 (>threshold 0.08)",
+      "reason": "Use if glass (pixel-shuffle) is wrong; block_boundary favors gaussian while slope/gm favor glass"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "saturate_weaken_HSV", "severity": 1}
+      ],
+      "function_family": "global:saturation",
+      "psnr": null,
+      "stats": "mean_shift 6.00 vs target 5.40 (best mean match) but chroma_ratio 0.605 vs target 0.786 (over-desaturation) and variance 0.613 vs 0.456",
+      "reason": "Alternative if the global step is saturation rather than contrast; matches the consistent positive mean shift but not the variance/chroma ratios"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "function_family": "2-step (no global)",
+      "psnr": null,
+      "stats": "slope+wiener match on 3/3 pairs, but variance +34..44% high and mean -5.4/-6.1/-2.4 low vs target",
+      "reason": "Conservative fallback if the global step is a false positive from blur/JPEG coupling"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4},
+        {"function": "contrast_weaken_scale", "severity": 1}
+      ],
+      "function_family": "blur:lens",
+      "psnr": null,
+      "stats": "lens5+jpeg4 on pair0: slope diff 0.134, bb -10%, var 0.636",
+      "reason": "DT 'lens alternative' (gaussian/lens MTF indistinguishable); weaker evidence than glass/gaussian"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode; sigma=4.0 >= 2)",
+    "mode": "SIGNAL (raw noise_prior sigma pair0=3.95 is JPEG-artifact inflated; pair1/2 sigma=1.1/0.4; blur+JPEG sims alone reproduce sigma≈3.95, so NO noise step)",
+    "rationale": "Compression: block_boundary=4.05/4.86/7.03 (0%FP JPEG), dct_zero_ratio 0.889/0.908/0.924, JPEG severity 4 (jpeg5 raises bb +58%; jpeg4 is closest on all pairs). Blur: gm_ratio 0.123/0.208/0.408, FFT anisotropy 1.24-1.31 (<1.7 -> not motion); glass chosen because raw spectral_slope matches glass5+jpeg4 within 0.03-0.06 on 3/3 pairs (gaussian5 is off 0.22-0.26 on all pairs), gm matches on pairs1/2, wiener kernel corr >0.85 on 3/3. Global: cross-pair target/baseline ratios (glass5+jpeg4) are consistent -> variance x0.718/0.745/0.743, chroma x0.901/0.885/0.853, spread x0.838/na/0.829, mean +5.4/+6.1/+2.4: a linear contrast weaken with effective scale ~0.85. Target unique_G 246/218/236 << JPEG-only sims 255-256 and below contrast-after-JPEG sim (192 at sev1), so the contrast step is applied AFTER JPEG with a milder effective scale than the current library sev1 (c=0.75). Severity 1 is the closest available (var 0.358 vs target 0.456, undershoot 22%; no-contrast overshoots 39%). Noise: no noise step (cross-pair sigma 1.1/0.4; peeled residual structure-dominated, spatial_corr 0.977).",
+    "severity_scan_done": ["blur gaussian 4/5, glass 5, lens 5", "jpeg 4/5", "contrast 1, stretch 1, saturate 1, brighten HSV 1"],
+    "residual_uncertainty": "Global contrast severity is milder in GT (effective c~0.85) than any current severity (sev1=0.75); mean shift (+5.4/+5.8/+2.0) only partially explained by PIL L-pivot (+2.2). Blur subtype glass vs gaussian is a genuine cross-signal conflict (slope/gm -> glass; block_boundary magnitude -> gaussian)."
+  }
+}

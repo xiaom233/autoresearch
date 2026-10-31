@@ -1,0 +1,72 @@
+{
+  "challenge_id": "blind_0005_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_impulse", 5]
+  ],
+  "r1_pipeline": [
+    ["noise_impulse", 5]
+  ],
+  "support_psnr_r0": 44.53,
+  "candidates_tested": [
+    {
+      "candidate": "C0_baseline_revalidation",
+      "pipeline": "noise_impulse:5",
+      "mode": "signal",
+      "pairs": {
+        "pair0": "MATCH (2✓/0✗)",
+        "pair1": "MATCH (2✓/0✗)",
+        "pair2": "MATCH (2✓/0✗)"
+      },
+      "calls": 3,
+      "outcome": "R0 管线在 3/3 support 对信号层面通过，作为 R1 基线与上限"
+    },
+    {
+      "candidate": "C1_severity_boundary",
+      "pipeline": "noise_impulse:4",
+      "mode": "signal",
+      "pairs": {
+        "pair0": "MATCH (2✓/0✗)"
+      },
+      "calls": 1,
+      "outcome": "signal 模式对 impulse severity 不敏感（sev4 亦 MATCH）；sev4 被确定性 zero_ratio=0.8999（对应 amount=0.10 而非 0.07）与 R0 CI（sev4 7/10、impulse_total_pct 误差 30%）排除"
+    },
+    {
+      "candidate": "C2_missed_global_hypothesis",
+      "pipeline": "noise_impulse:5,contrast_strengthen_scale:5",
+      "mode": "signal",
+      "pairs": {
+        "pair0": "WEAK (1✓/3✗; global:variance_ratio diff=534%, mean_shift diff=0.0302)",
+        "pair1": "WEAK (1✓/3✗; global:variance_ratio diff=219%, mean_shift diff=0.0497)",
+        "pair2": "WEAK (1✓/3✗; global:variance_ratio diff=701%, mean_shift diff=0.0549)"
+      },
+      "calls": 3,
+      "outcome": "拒绝：'漏检 contrast 全局步'假设在 3/3 对使信号恶化"
+    },
+    {
+      "candidate": "C3_dense_noise_alternative",
+      "pipeline": "noise_gaussian_RGB:2",
+      "mode": "signal",
+      "pairs": {
+        "pair0": "WEAK (1✓/1✗; noise:sigma diff=950%)"
+      },
+      "calls": 1,
+      "outcome": "拒绝：稠密噪声族与 90% bit-exact 零残差指纹互斥"
+    }
+  ],
+  "test_candidate_calls": 8,
+  "best_validation": "noise_impulse:5：signal MATCH (noise:sigma + noise:clean_residual，2✓/0✗) on 3/3 support pairs；叠加确定性证据 zero_ratio=0.8999=1-0.10（sev5 amount=0.10）、clipped_fraction 0.1007/0.100、R0 CI 10/10（impulse_total_pct 误差≤0.022%）；R0 support PSNR 44.53 dB。",
+  "signal_sources": [
+    "zero_ratio=0.8999（peeled §B, pair0，residual=target-clean 无确定性步可剥离）→ 1-0.1001 逐通道元素级 bit-exact = 稀疏脉冲指纹",
+    "cross_channel_corr=0.0046 + rgb_ratio=1.0367 → 每通道独立 s&p（非 YCrCb）",
+    "spatial_corr=0.3457 ≈ 1/3 → 独立稀疏脉冲经 3x3 邻域均值的理论相关",
+    "var_slope=0.1529<1.0 → 非 poisson；vm_slope=9.88 为全零 patch 伪影；extreme_pct=95% 为零残差计入 res<=0 的伪影",
+    "full_analysis clipped_fraction=0.1007(pair0)/0.100(pair2) 跨对一致 → amount≈0.10 = sev5",
+    "block_boundary=0.994/1.006、unique_G=256/214(=clean)、dct_zero≈0.015 → 无压缩；JPEG 会破坏 90% bit-exact",
+    "gm_ratio=5.334/3.404、spectral_slope_ratio=0.901/0.970、anisotropy=0.00 → 无模糊；卷积会改变几乎所有像素",
+    "global variance_ratio=2.185/1.239、chroma_ratio=3.253/13.831 → 脉冲极值假阳性（pair0/pair2 判读不一致；R1 impulse+contrast 实测 variance_ratio 偏差 +219~701%）",
+    "peeled_noise_check 内部 noise_prior sigma≈23.2/gaussian_RGB（residual+128 vs clean 错配输入）为误报；full_analysis 同图 noise_prior sigma=0.0 有效"
+  ],
+  "reason": "R1 信号重释与 8 次 test_candidate（4 条管线）均未发现可推翻 R0 的新证据：noise_impulse:5 基线在 3/3 support 对 signal MATCH（已是判定上限），sev 边界由确定性 bit-exact 指纹与跨对 CI 锁定为 5；'漏检全局步'与稠密噪声替代均被 signal 拒绝。按变更规则（含噪候选须多数对由 WEAK→PARTIAL/MATCH）无候选优于基线 → NO_CHANGE，pipeline 与 R0 逐项相同（noise_impulse:5，UNCERTAIN）。"
+}

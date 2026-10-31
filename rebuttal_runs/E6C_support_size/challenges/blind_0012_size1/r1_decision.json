@@ -1,0 +1,74 @@
+{
+  "challenge_id": "blind_0012_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 3],
+    ["compression_jpeg", 4]
+  ],
+  "r1_pipeline": [
+    ["blur_motion", 3],
+    ["compression_jpeg", 4]
+  ],
+  "support_psnr_r0": 21.3,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_gaussian:5,compression_jpeg:4",
+      "psnr_rgb": 22.91,
+      "ci_pass": "8/10",
+      "purpose": "确定性族对照：R0 仅测 gaussian 3/4，补 sev5 以排除 gaussian",
+      "result": "REJECT: 确定性模糊精确复现应 >40 dB，22.91 dB 排除 gaussian"
+    },
+    {
+      "pipeline": "blur_lens:5,compression_jpeg:4",
+      "psnr_rgb": 22.65,
+      "ci_pass": "6/10",
+      "purpose": "确定性跨族缺口：lens 从未在 jpeg:4 下测过（R0 lens:4+jpeg:3=22.76）",
+      "result": "REJECT: lens 排除"
+    },
+    {
+      "pipeline": "blur_motion:2,compression_jpeg:4",
+      "psnr_rgb": 20.44,
+      "ci_pass": "7/10",
+      "purpose": "severity 下界（gm_ratio 估计 sev4 受 JPEG 污染偏高）",
+      "result": "REJECT: 低于 sev3 样本"
+    },
+    {
+      "pipeline": "blur_motion:5,compression_jpeg:4",
+      "psnr_rgb": 22.44,
+      "ci_pass": "7/10",
+      "purpose": "severity 上界",
+      "result": "REJECT: 低于 sev3 样本"
+    },
+    {
+      "pipeline": "blur_motion:3,compression_jpeg:4",
+      "psnr_rgb": 24.55,
+      "ci_pass": "7/10",
+      "purpose": "R0 所选管线随机角度重采样复核",
+      "result": "BEST R1: 24.55 dB；R0 同管线样本 21.84/24.87（mean 23.75, range 2.9 dB）；未达 +2 dB 可靠改善"
+    }
+  ],
+  "test_candidate_calls": 5,
+  "best_validation": {
+    "pipeline": "blur_motion:3,compression_jpeg:4",
+    "psnr_rgb": 24.55,
+    "ci_pass": "7/10",
+    "round": 30,
+    "previous_round_best_psnr": 27.18,
+    "delta_db": -2.63,
+    "note": "R1 最佳候选即 R0 管线本身；相对上一轮最佳单样本 -2.63 dB，且 motion 随机角度抖动 ±2.5 dB 覆盖差异；无 >40 dB 确定性匹配，无 +2 dB 改善"
+  },
+  "signal_sources": [
+    {"signal": "block_boundary=2.7761", "source": "full_analysis_R1 step1", "use": "JPEG 确认（0% FP），sev4 组合差 0%/5% < jpeg:3 的 12%"},
+    {"signal": "dct_zero_ratio=0.8877; unique_G target=256 vs clean=252", "source": "full_analysis_R1 step1", "use": "JPEG 而非 quantization"},
+    {"signal": "blur_pca_ratio=4.432 (>2.5, 0% FP, 41% recall)", "source": "full_analysis_R1 step3", "use": "motion 族主证据（维持 R0）"},
+    {"signal": "residual_anisotropy=1.4348 < 1.7", "source": "full_analysis_R1 step3", "use": "被忽略的阈值边界：SKILL Step2 motion 分支不成立；JPEG 后置块效应稀释各向异性，削弱但不推翻 PCA 证据"},
+    {"signal": "glass_score=1.2361 > 0.25 (sigma=0.74<3)", "source": "full_analysis_R1 step3", "use": "被覆盖的 glass 分支：glass 列为 alternative；随机核族单对 PSNR 无法确认"},
+    {"signal": "gm_ratio=0.4012; spectral_slope_ratio=1.3742", "source": "full_analysis_R1 step3", "use": "强低通模糊存在；gm_ratio 的 severity=4 估计受 JPEG 污染（偏高），PSNR 均值 sev3 23.75 vs sev4 23.81 打平"},
+    {"signal": "variance_ratio=0.8691; mean_shift=-0.4/255; contrast_spread_ratio=0.9272; clipped_fraction=0.0005; residual_intensity_corr=0.3946", "source": "full_analysis_R1 step4/step2", "use": "无全局退化；gamma_suspect 来自模糊+JPEG 结构化残差，不可用"},
+    {"signal": "extreme_pct=52.67%; vm_slope=0.6669; spatial_corr=0.9583; rgb_ratio=1.1117; var_slope=-0.0903", "source": "peeled_noise_check R1 (blur_motion:3,compression_jpeg:4)", "use": "extreme_pct>50% 为已知 JPEG/blur 伪影假阳性；结构化残差 → §B 不可用"},
+    {"signal": "noise_prior sigma=0.74 (raw) / 1.48 (peeled)", "source": "full_analysis_R1 step2 + peeled noise_prior", "use": "sigma<2 → NO_NOISE"}
+  ],
+  "reason": "R1 信号重释未发现可支持的更优管线。JPEG 已由 block_boundary=2.7761（0% FP）确认，且 jpeg:4 的组合块边界差（0%/5%）优于 jpeg:3（12%）；blur 族由 PCA=4.432（0% FP）支持 motion，确定性对照 gaussian:5+jpeg:4=22.91、lens:5+jpeg:4=22.65（应 >40 dB 才能匹配）排除 gaussian/lens；motion severity 在随机角度噪声内无法区分（sev3 的 jpeg:4 样本 21.84/24.55/24.87，sev4 单样本 23.81，sev2=20.44，sev5=22.44），无 +2 dB 可靠改善；glass 分支（glass_score=1.2361, anisotropy=1.4348<1.7）为被覆盖信号，但 glass 为随机核族且未在 jpeg:4 下验证（R1 候选预算 5/5 已用尽），R0 glass:4+jpeg:3=21.67 dB 低于 motion 样本，仅列为 alternative。剥离后 sigma=1.48<2，无噪声；无全局退化。k=1 单对无法跨对验证，随机族 PSNR 抖动 ±2.5 dB，证据不足，按规则不放宽阈值 → NO_CHANGE，管线与 R0 逐项相同。",
+  "single_pair_note": "k=1（仅 pair0）；所有验证均为单对；motion 角度与 glass 核每次随机，单对 PSNR 不可作为随机族确认依据；未因 k=1 放宽 +2 dB 阈值"
+}

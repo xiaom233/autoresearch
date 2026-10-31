@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "OCAB 不满足: full_analysis step3 residual_anisotropy=1.2898 (反射报告 1.24-1.31) < 1.7 阈值, 且 blur subtype=blur_glass (pixel-shuffle), 非 motion",
+    "FiLM-GCM/ColorPre 不满足明确门控: variance_ratio=0.456 虽偏离 1.0 (Tier A), 但 global 步骤 verdict=UNCERTAIN 且 false_positive_checks.contrast_from_saturation=true (contrast 可能源于 saturation 冒充); predicted_params alternatives 中同样保留 saturate_weaken_HSV:1 替代",
+    "最终候选 verify_signals 在 3/3 support 对均 WEAK: sim variance_ratio 0.358 vs target 0.456 (-22%), mean_shift 2.00 vs 5.40, chroma 0.654 vs 0.786; 全局步骤仿真不匹配, contrast Tier A 信号不'明确' -> 不启用 ColorPre/FiLM-GCM (k=3 不放宽)",
+    "JPEG 结构化信号 Tier S: block_boundary=4.0538/4.862/7.034 (0%FP), dct_zero_ratio=0.8885, unique_G=246; 仅确认压缩类型, 不触发额外组件",
+    "全部 3 步 verdict=UNCERTAIN, overall UNCERTAIN tier 3 -> finetune_strategy.md §七 安全兜底: 纯 Swin + Direct; 组件仅限 0%FP (anisotropy/block_boundary) 或明确 contrast 信号, 本挑战均不满足",
+    "SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全 (L2 +0.78), 唯一负项为 motion x3 (S5 -0.86), 本管线无 motion",
+    "策略含 contrast_weaken_scale -> §六 Step 1 Direct (保守); True Ft 不推荐 (exp37 -0.04 dB ≈ Direct)"
+  ],
+  "rationale": "blind_0023_size3 管线为 blur_glass:5 + compression_jpeg:4 + contrast_weaken_scale:1, 三步全部 UNCERTAIN (SIGNAL 模式, sigma gate)。blur 子类型 glass 且 anisotropy<1.7, 不启用 OCAB。全局步骤存在 contrast-vs-saturation 归因冲突且仿真验证 3/3 对 WEAK (方差/均值均不匹配), Tier A variance_ratio 不足以支撑明确 contrast, 按 §七 不启用 FiLM-GCM/ColorPre。JPEG 由 Tier S block_boundary 确认但不触发组件。按 finetune_strategy.md 默认与 exp37 盲识别兜底原则, 采用纯 Swin + SimpleGate + Direct, lr=5e-4, EPOCH=2, batch=16; 数据公平性不因 support k=3 放宽任何门控。"
+}

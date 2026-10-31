@@ -1,0 +1,35 @@
+{
+  "challenge_id": "blind_0001_size3",
+  "round": "R1",
+  "pipeline_R1": [["noise_poisson", 5], ["quantization_median", 1]],
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "noise_poisson:5 为 UNCERTAIN: 全管线 3 对 support MATCH (4/4), target sigma 16.68/17.17/10.38 vs sim median:1 16.68/17.17/10.50, intensity_var_corr 0.772/0.829/0.908 vs 0.769/0.835/0.912; poisson:4 对照 WEAK (sigma -21%, VR -45%) 确认 sev5; R1 新增 impulse:3/5 与 speckle:5/4/3 实测 WEAK/PARTIAL 排除 (speckle:4 仅 VR 差 10%, 仍劣于 poisson VR 误差 <0.1%); seed 失配按协议噪声步永不 LIKELY → 该步不触发任何架构组件 (finetune_strategy.md §七 UNCERTAIN/Tier C)",
+    "quantization_median:1 为 LIKELY: unique_per_channel=[16,16,16] 在 3 对 support 与 target 精确一致 (R0 median:2 为 15; R1 修正为 sev1); block_boundary 0.9935/0.9991/1.0000 vs target 1.0007/0.9995/1.0011 (<1.1, 0% FP 规则排除 JPEG); dct_zero_ratio 0.0213 vs target 0.0212; pair0 clip 0.1638 vs 0.1635 → Tier S unique_G<200 确认量化存在, 但量化/无 JPEG 步骤无对应架构组件门控",
+    "无 contrast Tier A 信号: step4_global=NO_GLOBAL, contrast_from_variance=false, contrast_saturation_corrected=true, saturation_from_noise=true; variance_ratio 1.3173/1.1433/1.0812 由 poisson+median 管线在 3 对精确复现 (sim 1.3180/1.1429/1.0815), 属噪声+量化伪影而非 contrast → FiLM-GCM / ColorPre 门控不满足; predicted pipeline 无 contrast/scale/stretch 步",
+    "无 motion 结构化信号: step3_blur=BLUR_UNLIKELY, spectral_slope_ratio 0.993/0.982/0.994, gm_ratio 5.22 系噪声/量化带抬高, FFT anisotropy=0 → OCAB 门控 (anisotropy>1.7 + motion) 不满足",
+    "k=3 support 的 3/3 对 MATCH 仅提升识别置信度/severity 定位精度 (median 2→1), 不改变任何组件门控阈值; 按 E6-C 指令 k 数量不放宽门控",
+    "SimpleGate 默认常开: exp39 -32K, 8/9 退化安全 (N -0.01, L2 +0.78); 本管线为噪声+量化、无 motion, 避开了唯一负例 S5 三退化 (-0.86)"
+  ],
+  "rationale": "按 finetune_strategy.md §七 信号置信度门控逐步骤判断: R1 管线为 noise_poisson:5 (UNCERTAIN, seed 失配) + quantization_median:1 (LIKELY, unique_per_channel=16 精确签名), 无 contrast (step4=NO_GLOBAL, VR 由噪声+量化复现, contrast_from_variance=false) 且无 motion (slope_ratio≈0.99, anisotropy=0), 所有 Tier S/A 组件门控均不满足 → 默认纯 Swin + SimpleGate + Direct。R1 变更仅修正量化 severity (2→1), 不改变架构门控; R0 策略与 R1 一致 (纯 Swin+SG+Direct), 保持跨轮可比。full_analysis 脚本建议的 DualBranch 不采用: exp37 盲识别场景 0/24 胜, 且 E6-C 指令禁用 DualBranch/CSN/SCA/FPro。k=3 support 不放宽门控。LR=5e-4、EPOCH=2、batch=16 与基线公平; 训练策略统一 Direct 以与 support-size 变量解耦。"
+}

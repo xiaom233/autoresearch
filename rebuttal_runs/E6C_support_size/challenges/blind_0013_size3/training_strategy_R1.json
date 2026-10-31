@@ -1,0 +1,35 @@
+{
+  "challenge_id": "blind_0013_size3",
+  "round": "R1",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "R1 管线: noise_speckle:3 → compression_jpeg:2, 两步骤均 verdict=UNCERTAIN (噪声随机步永不为 LIKELY; sigma=4.82>2 → PSNR 禁用), overall UNCERTAIN / Tier 3 (predicted_params_R1.json)",
+    "compression: block_boundary=1.2085/1.514/1.784 (三对, Tier S 0%FP) 确认 JPEG sev2; R1 中以 speckle:3 搭配在 pair0/pair1/pair2 的 bb 均匹配 (k=3 全 9/9)。但 finetune_strategy.md §七 组件表无 JPEG 专项组件 (无对应架构开关), 故不改变架构",
+    "noise: R1 重释为乘性 speckle:3 (peeled §B vm_slope=2.6336 >> 0.01, intensity_var_corr=0.9535, 三对 sigma=4.82/2.22/1.36 与内容亮度 clipped_fraction=6.36%/1.08%/0.05% 同序, rgb_ratio=1.0259)。噪声步 verdict=UNCERTAIN (Tier C 级), 且噪声对注意力类型不敏感 (~0 dB) → 不加任何组件",
+    "blur: BLUR_UNLIKELY — spectral_slope_ratio=0.9844 (<1.08), anisotropy=0.00, gm_ratio=1.1238 被噪声抬高 → OCAB 条件 (anisotropy>1.7 + motion) 不满足",
+    "global: NO_GLOBAL — variance_ratio=0.8934 (pair0), contrast_from_variance=false, contrast_detected_raw=false, contrast_spread_ratio=0.9891, mean_shift=-4.1 未达亮度阈值, clipped_fraction=0.0636 归因噪声边缘饱和; 三对 variance_ratio 0.893/1.065/1.104 跨对不一致 → 非 Tier A contrast → ColorPre 与 FiLM-GCM 均不触发",
+    "SimpleGate: 默认常开 (exp39 -32K 参数, 8/9 退化安全, 仅 S5 -0.86)",
+    "k=3 support 不改变架构门控, 不放宽任何阈值 (STRATEGY_INSTRUCTIONS 规则)"
+  ],
+  "rationale": "R1 将 R0 的 noise_gaussian_YCrCb:4 改为 noise_speckle:3 (k=3 全部 support 对 9/9 信号 MATCH), 但退化构成不变: 纯局部噪声 + JPEG 两步, 无 contrast、无 blur、无 motion。按 finetune_strategy.md §七 信号门控: variance_ratio 未被分析确认为 contrast (NO_GLOBAL, 跨对不一致) → ColorPre/FiLM-GCM 不启用; anisotropy=0 → OCAB 不启用; JPEG 的 Tier S block_boundary 仅用于确认压缩步骤, 无对应组件。因此 R1 架构与 R0 一致: 纯 Swin + SimpleGate + Direct。策略选 Direct 而非 RandomCurric: 管线为纯局部多步但盲识别整体 UNCERTAIN (噪声步永不确定), True Ft ≈ Direct 已由 exp37/38 双确认, Direct 从零训练最保守稳定; 且与 R0 保持同架构同策略, 使 R1 与 R0 的差异仅来自管线修正, 便于 E6-C support-size 对比归因。lr=5e-4, EPOCH_BUDGET=2, batch=16 与基线一致。"
+}

@@ -1,0 +1,113 @@
+{
+  "challenge_id": "blind_0022_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_glass",
+      3
+    ],
+    [
+      "compression_jpeg",
+      1
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_glass",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        [
+          "blur_glass",
+          4
+        ],
+        [
+          "compression_jpeg",
+          1
+        ]
+      ],
+      "psnr_rgb": 27.03,
+      "ci_pass": "7/10",
+      "function_family": "blur_glass",
+      "note": "same-family severity+1 backup (R0); R1 did not re-test (glass sev scan already monotone around sev3)"
+    },
+    {
+      "pipeline": [
+        [
+          "blur_glass",
+          3
+        ],
+        [
+          "compression_jpeg",
+          2
+        ]
+      ],
+      "psnr_rgb": 27.95,
+      "ci_pass": "6/10",
+      "function_family": "compression_jpeg",
+      "note": "JPEG severity+1 backup (R0); within glass run variance of winner"
+    },
+    {
+      "pipeline": [
+        [
+          "blur_gaussian",
+          3
+        ],
+        [
+          "compression_jpeg",
+          2
+        ]
+      ],
+      "psnr_rgb": 24.98,
+      "ci_pass": "8/10",
+      "function_family": "blur_gaussian",
+      "note": "cross-family backup (R0); R1 deconfounded control gaussian:3,jpeg:1 = 25.20 dB still 3.2 dB below glass"
+    },
+    {
+      "pipeline": [
+        [
+          "compression_jpeg",
+          1
+        ],
+        [
+          "blur_glass",
+          3
+        ]
+      ],
+      "psnr_rgb": 28.54,
+      "ci_pass": "4/10",
+      "function_family": "blur_glass",
+      "note": "order-swap (R0): PSNR +0.13 dB only, block_boundary error 48% (vs 9%) and CI 4/10 -> rejected; below +2 dB CHANGE threshold and violates blur-before-JPEG physical constraint"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR (sigma=0.62<2, no noise)",
+    "support_size": 1,
+    "support_psnr_r0": 20.76,
+    "per_step_verdict": [
+      {
+        "function": "blur_glass",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 1,
+        "verdict": "LIKELY"
+      }
+    ],
+    "rationale": "R1 signal re-analysis (full_analysis_R1.json) reproduced R0 signals exactly: block_boundary=1.6844 (JPEG, 0% FP), gm_ratio=0.3604 + glass_score=0.4594 (glass), sigma=0.62 (<2, no noise), variance_ratio=0.8133, contrast_spread_ratio=0.953, saturation_chroma_ratio=0.9051 (all below detection), residual_intensity_corr=-0.2031. Five R1 candidates tested on the single support pair (k=1): gaussian:3+jpeg1=25.20 (deconfounded cross-family control, R0 had JPEG sev mismatch), lens:3+jpeg1=24.49, lens:4+jpeg1=25.05 (lens family never tested in R0; deterministic, would exceed 40 dB if true), glass:3+contrast_weaken_scale:1+jpeg1=22.25 (variance_ratio/contrast_spread_ratio boundary signal ruled out), glass:3+saturate_weaken_HSV:1+jpeg1=26.14 (saturation_chroma_ratio boundary signal ruled out). Best R1 candidate 26.14 < R0 best 28.41; neither >40 dB nor +2 dB threshold met -> NO_CHANGE. Glass:3->JPEG:1 retained. Noise: unpeeled sigma=0.62 / peeled 0.99 < 2, peeled extreme_pct=58.31% matches known JPEG/glass-artifact FP rule (sigma<5), §B vm_slope/spatial_corr inflated by glass pixel-shuffle residual (std 9.7) -> NO_NOISE unchanged. k=1 limitation: all validation on pair0 only; no cross-pair averaging, single-pair evidence cannot reach +2 dB."
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "challenge_id": "blind_0013_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["noise_gaussian_RGB", 3], ["compression_jpeg", 2]],
+  "r1_pipeline": [["noise_gaussian_RGB", 3], ["compression_jpeg", 2]],
+  "support_psnr_r0": 22.57,
+  "candidates_tested": [
+    {
+      "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+      "role": "R0 管线跨 seed 复核",
+      "signal_source": "noise_prior sigma=4.82 + peeled ch_stds 近等 (rgb_ratio=1.026) + block_boundary=1.2085",
+      "result": "MATCH (3✓/0✗: noise:sigma, noise:clean_residual, compression:block_boundary)",
+      "decision": "KEEP"
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:2",
+      "role": "full_analysis 首选类型复核 (R0 以 rgb_ratio 推翻)",
+      "signal_source": "cross_channel_corr=0.806 低置信 YCrCb vs peeled rgb_ratio=1.026",
+      "result": "PARTIAL (2✓/1✗: noise:sigma diff=50%)",
+      "decision": "REJECT"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:3,compression_jpeg:3",
+      "role": "JPEG severity 阈值边界 (dct_zero_ratio=0.4274 > jpeg:2 模拟 0.4002)",
+      "signal_source": "dct_zero_ratio=0.4274, block_boundary=1.2085",
+      "result": "WEAK (1✓/2✗: noise:sigma diff=50%, block_boundary diff=14%)",
+      "decision": "REJECT"
+    },
+    {
+      "pipeline": "brightness_darken_gamma_RGB:1,noise_gaussian_RGB:3,compression_jpeg:2",
+      "role": "R0 未测的 gamma 曲线型全局候选",
+      "signal_source": "residual_intensity_corr=0.319 + gamma_suspect=True + mean_shift=-4.1/255 + variance_ratio=0.8934",
+      "result": "WEAK (3✓/2✗: global:mean_shift diff=0.0549, global:variance_ratio diff=23%)",
+      "decision": "REJECT"
+    }
+  ],
+  "test_candidate_calls": 4,
+  "best_validation": {
+    "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+    "mode": "signal",
+    "verdict": "MATCH",
+    "matched_signals": ["noise:sigma", "noise:clean_residual", "compression:block_boundary"],
+    "mismatched_signals": []
+  },
+  "signal_sources": [
+    "重跑 run_full_analysis: block_boundary=1.2085, unique_G=256, dct_zero_ratio=0.4274, noise_prior sigma=4.82, variance_ratio=0.8934, mean_shift=-4.1, gm_ratio=1.1238, spectral_slope_ratio=0.9844, anisotropy=0.0 (与 R0 完全一致)",
+    "重跑 peeled_noise_check (剥 jpeg:2): extreme_pct=61.13, vm_slope=2.6336, var_slope=-0.0423, spatial_corr=0.5645, rgb_ratio=1.0259, cross_ch_corr=0.897, residual_std=23.3, ch_stds=[23.5,23.1,22.9], noise_prior=9.64/gaussian_RGB (与 R0 一致; §B IMPULSE/SPECKLE 为已知 JPEG 残留假阳性)",
+    "verify_signals 四候选: gaussian_RGB:3+jpeg:2 MATCH; YCrCb:3 PARTIAL(sigma 50%); jpeg:3 WEAK(bb 14%/sigma 50%); gamma brightness WEAK(ms 0.0549/vr 23%)"
+  ],
+  "reason": "R1 信号重释未发现可改善 R0 管线的候选: 无 blur (slope/anisotropy 双信号排除), 无 quantization (unique_G=256), 唯一 JPEG 严重度自洽点为 jpeg:2 (jpeg:3 使 block_boundary 恶化 14%), 噪声类型 RGB 优于 full_analysis 首选的 YCrCb (sigma diff 50%), R0 未测的 gamma 曲线 brightness 亦使 global 信号恶化。R0 管线跨 seed 复核稳定 MATCH。遗留 mean_shift/clipped/chroma 差异低于库内任何 sev1 global 幅度, 归因编码器/裁剪偏差。k=1 单对, 证据不足以 CHANGE。"
+}

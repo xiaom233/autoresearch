@@ -1,0 +1,53 @@
+{
+  "challenge_id": "blind_0023_size1",
+  "pipeline": [
+    {"function": "noise_gaussian_RGB", "severity": 2, "verdict": "UNCERTAIN"},
+    {"function": "blur_glass", "severity": 5, "verdict": "LIKELY"},
+    {"function": "contrast_weaken_scale", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 2},
+        {"function": "blur_lens", "severity": 5},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": null,
+      "signal_note": "lens:5 spectral_slope 差 0.113（glass:5 为 0.02-0.04）；按 SKILL gaussian↔lens MTF 不可区分，保留跨族备选",
+      "function_family": "blur_lens"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_RGB", "severity": 2},
+        {"function": "blur_glass", "severity": 5},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": null,
+      "signal_note": "jpeg sev3 为次优：full-context bb diff 17%（sev4 为 11-18%），dct_zero 0.861 vs 目标 0.888；若真实编码器更温和时可能为真值",
+      "function_family": "compression_jpeg_q12"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "contrast_weaken_scale", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": null,
+      "signal_note": "无噪声版本：目标全部噪声诊断（sigma=3.95, GAUSSIAN_YCrCb 指纹）可由 glass+JPEG 伪影完全复现，noise 步骤存在性未证实",
+      "function_family": "no_noise"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode)",
+    "mode": "SIGNAL (noise_prior sigma≈4.0 ≥ 2; PSNR 不可靠)",
+    "rationale": "blur_glass:5 LIKELY：多随机种子下 spectral_slope（目标 -1.3796，模拟 -1.37~-1.42）与 Wiener 核均 MATCH，glass_score 1.38/1.44/1.49 一致；对照 gaussian:5（slope 差 0.222）、lens:5（0.113）、glass:4（0.143）均失败。compression_jpeg 存在性确定（bb=4.053，0% FP），severity=4 最优（bb diff 11%，sev3 33%、sev5 39%；dct_zero 0.905 vs 目标 0.888）。contrast_weaken_scale:1：variance_ratio 0.457 vs 无全局基线 0.637、spread 0.640、chroma 0.786 三者由 c=0.75 的等比缩放方向可解释；stretch 因均值映射 0.5（+29/255）排除，saturation_HSV:2 方差降幅不足（28%）且 chroma 方向相反。噪声：无噪声模拟图的 noise_prior 指纹（sigma=3.95、spatial_corr、cross_channel、ric）与目标几乎一致，真实噪声不可测量；按物理顺序 noise→blur 置于最前并取保守 sev2，标记 UNCERTAIN。剩余系统偏差（幅度 ~+13%、均值 +3.3/255）指向目标生成端 JPEG 编码器版本差异（等效更温和的 q10-12），非管线结构错误。",
+    "support_note": "k=1 单 support（clean_0/degraded_0，clean.png/degraded.png 为同文件别名）；全部候选均在该对验证，无法做跨对验证",
+    "test_candidate_calls": 17,
+    "qwen_gate": "unavailable (skipped)"
+  }
+}

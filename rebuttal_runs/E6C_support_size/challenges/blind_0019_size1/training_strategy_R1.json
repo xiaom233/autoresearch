@@ -1,0 +1,31 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression_jpeg:3 LIKELY — block_boundary=3.983 (Tier S, 0% FP) + dct_zero_ratio=0.913 (full_analysis.json step1_compression); JPEG 在 §七 门控表中只做确认，无对应组件开关",
+    "blur_lens:4 UNCERTAIN — gm_ratio=0.426 (强模糊), spectral_slope_ratio=1.245, blur_pca_ratio=1.227; 全管线 PSNR lens 29.48 vs gaussian 29.02 (Δ0.46dB); motion:4 实测仅 19.03dB 被 PSNR 否定 (reflection.json L127-136), 故 residual_anisotropy=3.955 不构成 motion 证据，OCAB 门控 'anisotropy>1.7 + motion' 不满足",
+    "saturate_weaken_HSV:5 LIKELY — variance_ratio=0.9102 但 contrast_spread_ratio=1.0036, contrast_detected_raw=false; contrast_weaken_scale:2 实测 18.54dB 被否, 而 saturate_weaken_HSV:5 提升 20.70→29.48dB (+8.6dB, YCrCb 24.70 / brightness 19.27 均被否) (reflection.json L203-250, L379-394, L458-461): 方差下降来自色度饱和削弱而非 contrast → ColorPre/FiLM-GCM 的 contrast Tier A 门控不满足; saturation 属 §七 Tier C → 不加组件",
+    "确定性子类型判定: noise_prior sigma=1.11 < 2, peeled sigma=1.98 NO_NOISE, spatial_corr=0.968 + cross_ch_corr=1.0 为 JPEG/blur 结构化残差 (peeled_noise_check.json, reflection.json L15-26) — 三步均为确定性退化",
+    "support k=1: 单 support 对, 门控不放宽 — 架构判定与 k=3 完全一致 (STRATEGY_INSTRUCTIONS 第3条)"
+  ],
+  "rationale": "管线为 blur_lens:4(UNCERTAIN) + saturate_weaken_HSV:5(LIKELY) + compression_jpeg:3(LIKELY)，无 noise、无 contrast（contrast 已被 PSNR 明确否定）。按 finetune_strategy.md §七 信号门控：JPEG Tier S 仅确认存在，无组件；blur UNCERTAIN 且 motion 被 PSNR 否定 → 不触发 OCAB；saturation 为 Tier C → 禁止 ColorPre/FiLM-GCM。无任何 Tier A contrast+结构化 组合，DualBranch/CSN/SCA/FPro 按指令不使用。故采用默认纯 Swin + SimpleGate + Direct，lr=5e-4，EPOCH=2，batch=16，embed_dim=64；含全局退化（saturation）时 Direct 最安全（§二 saturation: Direct + 纯 Swin），且 exp37 盲识别场景纯 Swin 23/24 胜。"
+}

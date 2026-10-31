@@ -1,0 +1,93 @@
+{
+  "challenge_id": "blind_0022_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_glass",
+      3
+    ],
+    [
+      "compression_jpeg",
+      2
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_glass",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "pipeline_objects": [
+    {
+      "function": "blur_glass",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        [
+          "blur_glass",
+          4
+        ],
+        [
+          "compression_jpeg",
+          2
+        ]
+      ],
+      "psnr": {
+        "pair0": 26.68,
+        "pair1": 30.39,
+        "pair2": 32.37
+      },
+      "function_family": "glass blur (severity+1 sibling) + jpeg",
+      "source": "R0 已测; R1 未复测"
+    },
+    {
+      "pipeline": [
+        [
+          "blur_gaussian",
+          4
+        ],
+        [
+          "compression_jpeg",
+          2
+        ]
+      ],
+      "psnr": {
+        "pair0": 24.5
+      },
+      "function_family": "gaussian blur + jpeg (跨族备份)",
+      "source": "R0 已测; R1 跨族 gaussian:3 亦仅 24.99 dB"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR (pair0 noise_prior sigma=0.62 < 2, 无噪声)",
+    "order": "blur -> compression_jpeg (物理/generator 约束; R0 反序对照 bb 误差 48%)",
+    "per_step_verdict": {
+      "blur_glass:3": "UNCERTAIN (非确定性随机 pixel shuffle, 按 SKILL 永不 LIKELY; 结构信号与模拟高度一致)",
+      "compression_jpeg:2": "LIKELY (block_boundary=1.684/2.099/2.647 三对均 >>1.05, 0%FP; 模拟 bb=1.707, 误差 1.3%)"
+    },
+    "r1_signal_recheck": "pair0 重跑 run_full_analysis 与 R0 完全一致 (bb=1.6844, gm_ratio=0.3606, slope_ratio=1.1621, sigma=0.62); 新增: 对 R0 最终管线模拟图跑 run_full_analysis, 补齐 R0 未做的全局信号对比 (variance_ratio/contrast_spread/saturation/dct_zero_ratio/clipped_fraction/residual_intensity_corr)",
+    "r1_candidates": "4 次 test_candidate (pair0): glass:3+jpeg:2 复现 27.93; gaussian:3+jpeg:2 24.99; lens:3+jpeg:2 24.34; motion:2+jpeg:2 20.75 — 无一接近 +2 dB 门槛 (pair0 需 >=29.93) 或 >40 dB",
+    "change_gate": "未满足: 确定性候选需 >40 dB (全部 <25 dB) 或相对 R0 +2 dB/全部 k 对 (最佳候选即 R0 管线本身). NO_CHANGE",
+    "rationale": "结构信号: 模拟(glass:3+jpeg:2) vs 目标: block_boundary 1.7067/1.6844 (+1.3%), spectral_slope_ratio 1.1671/1.1621 (+0.4%), gm_ratio 0.3499/0.3606 (-3.0%), residual_anisotropy 2.09/2.02 → blur 强度与 JPEG 强度均匹配. 目标 variance_ratio/spread/chroma 比模拟低 3-5% (隐含全局 scale≈0.967), 但 x_distortion 任何全局函数的最弱档均远强于该幅度 (contrast_weaken_scale sev1=0.75 → 方差×0.56; contrast_weaken_stretch sev1 为 img/(img+mean) 强非线性变换; saturate_weaken_HSV sev1=0.7; brightness shift 最小 0.1=25.5 级; gamma 最小 0.8/1.4) → 3-5% 偏差不可由漏检 global 步骤实现, 归因于 glass 随机 shuffle realization + JPEG 量化. 噪声: 三对 sigma=0.62/0.74/0.37, 剥离后 sigma=0.99, 加性噪声最低档 sigma=12.75, impulse 最低 1% 但 pair1 clipped_fraction=0.0 → NO_NOISE. quantization (unique_G=256/224/246 未<200), brightness (mean_shift<=0.2), oversharpen (overshoot 误差 11%), motion (anisotropy 跨对不一致 2.02/1.56, motion:2 仅 20.75 dB) 均排除. glass 为随机 shuffle, PSNR 无法 >40; 三对 27.93/31.25/32.70 dB 为该管线的合理上限, 故不改.",
+    "support_psnr_r0": 25.4,
+    "support_psnr_note": "support PSNR 偏低主要受 glass 随机 shuffle 近不可逆 + k=3 小 support 限制; R1 未找到任何可提高拟合的候选 (所有替代更差), 不将其作为改管线依据"
+  }
+}

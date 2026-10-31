@@ -1,0 +1,1027 @@
+{
+  "challenge_id": "blind_0013_size3",
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN, support PSNR 24.92 (k=3)",
+    "signal_reinterpretation": {
+      "ignored_signals": [
+        "peeled §B vm_slope=2.6336 (speckle 阈值 >0.01, 约 260×) — R0 归因 JPEG 块效应污染, 未测任何乘性噪声族",
+        "intensity_var_corr=0.9535 + residual_intensity_corr=0.3256/0.2128/0.4518 (三对) — R0 归因 gamma_suspect, 未做定量排除",
+        "三对 noise_prior sigma=4.82/2.22/1.36 与内容亮度 (clipped_fraction=6.36%/1.08%/0.05%) 同序变化 — 加性噪声为常数 sigma, 无法解释该内容依赖; 乘性噪声随强度自动缩放"
+      ],
+      "misjudged": "R0 将 vm_slope/intensity 相关统一归因 JPEG 污染, 其'YCrCb 类型确认'仅对照了加性 gaussian (RGB:3/4/5, YCrCb:3/4/5), 未覆盖乘性 speckle; 该遗漏由 R1 补齐",
+      "boundary_signals": "pair0 variance_ratio=0.8934 / mean_shift=-4.1 / clipped=6.36% 与强噪声+零均值高斯裁剪一致 (不均衡负偏移), 非 brightness; 三对 NO_GLOBAL 不变"
+    },
+    "hypotheses": [
+      {
+        "pipeline": "noise_speckle:1,compression_jpeg:2",
+        "signal_source": "vm_slope=2.6336 + intensity_var_corr=0.9535 + ch_stds R23.5/G23.1/B22.9 均衡 + rgb_ratio=1.0259 (RGB 等量乘性) + noise→JPEG 物理顺序",
+        "result": "pair0 PARTIAL (2/3, noise:sigma diff=62%)",
+        "test_round": 21
+      },
+      {
+        "pipeline": "noise_speckle:2,compression_jpeg:2",
+        "signal_source": "SKILL 强制 severity 扫描 (PARTIAL → est+1); sev1 62% 方向未收敛",
+        "result": "pair0 PARTIAL (2/3, noise:sigma diff=37%)",
+        "test_round": 22
+      },
+      {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "signal_source": "severity 扫描单调收敛 62%→37%→?; 乘性噪声预期同时解释三对内容依赖 sigma",
+        "result": "pair0 MATCH (3/3), pair1 MATCH (3/3), pair2 MATCH (3/3) — k=3 共 9/9 信号检查通过",
+        "test_round": "23,24,25"
+      }
+    ],
+    "ruled_out_without_tool": {
+      "gamma": "x_distortion 无独立 gamma; brightness_*_gamma_* 最弱强度 γ=0.8(brighten)/1.4(darken) 在中灰 0.5 处 mean_shift≈+0.074/-0.121 (19/31 per 255) ≫ 观测 max|mean_shift|=4.1/255=0.016 → 全部 gamma 强度被信号定量排除",
+      "impulse": "extreme_pct=61.13% ≫ impulse sev5 amount=10%, 且命中已知 FP 规则 (extreme>50% + JPEG 残留)",
+      "blur": "三对 BLUR_UNLIKELY (spectral_slope_ratio 0.984/0.976/0.967, anisotropy=0), R0 blur 对照 WEAK",
+      "contrast/saturation/brightness": "三对 NO_GLOBAL; variance_ratio 跨对不一致 (0.893/1.065/1.104) 不支持统一 global 步"
+    },
+    "k_pair_validation": {
+      "pair0": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "3/3 (noise:sigma, noise:clean_residual, compression:block_boundary)"
+      },
+      "pair1": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "3/3"
+      },
+      "pair2": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "3/3"
+      }
+    },
+    "r0_comparison": "R0 = noise_gaussian_YCrCb:4 → compression_jpeg:2: pair0 PARTIAL (sigma 37%) / pair1 MATCH / pair2 MATCH (2/3 MATCH). R1 = noise_speckle:3 → compression_jpeg:2: 3/3 MATCH (9/9). 唯一未匹配对 pair0 PARTIAL→MATCH, 其余保持 MATCH, 零回退 → CHANGE",
+    "cost": {
+      "test_candidate_calls": 5,
+      "candidates_unique": 3,
+      "run_full_analysis": 1,
+      "peeled_noise_check": 1,
+      "budget": "≤15 test_candidate / ≤5 新候选 内"
+    },
+    "decision": "CHANGE",
+    "final_pipeline": [
+      [
+        "noise_speckle",
+        3
+      ],
+      [
+        "compression_jpeg",
+        2
+      ]
+    ],
+    "rationale": "R1 信号重释发现 R0 遗漏的乘性噪声假设: peeled §B vm_slope=2.6336 (260× speckle 阈值) + intensity_var_corr=0.9535 + 三对 sigma 与内容亮度同序缩放 + RGB 通道均衡. 加性 gaussian 需要 pair0 sev5 而 pair1/2 sev4 的跨对矛盾, 乘性 speckle:3 单强度即可在 k=3 全部 support 对 MATCH (9/9), 严格优于 R0 (2/3). 噪声步按规则保持 UNCERTAIN, compression_jpeg:2 因 sigma>2 无 PSNR 仍 UNCERTAIN, overall UNCERTAIN.",
+    "limitations": "k=3; 噪声为随机 seed, 每对独立抽样 (3 次独立复现均 MATCH); 未改动 R0 predicted_params.json; 未读取任何 GT/其他挑战/训练日志",
+    "files": {
+      "full_analysis_R1": "full_analysis_R1.json",
+      "peeled_noise_R1": "peeled_noise_R1.json",
+      "predicted_params_R1": "predicted_params_R1.json",
+      "r1_decision": "r1_decision.json"
+    }
+  },
+  "reflection_R2": {
+    "round": "R2",
+    "trigger": "R1 verdict=UNCERTAIN; support PSNR R0 24.92 -> R1 27.82 (Delta +2.90, k=3; 以 r0_result/r1_result 为准)",
+    "signal_reinterpretation": {
+      "rerun": "run_full_analysis pair0 -> full_analysis_R2.json 与 R1 逐值一致 (block_boundary=1.2085, spectral_slope_ratio=0.9844, noise sigma=4.82, variance_ratio=0.8934, mean_shift=-4.1, clipped=6.36%); peeled_noise_check compression_jpeg:2 -> peeled_noise_R2.json 逐值一致 (vm_slope=2.6336, intensity_var_corr=0.9535, var_slope=-0.0423, rgb_ratio=1.0259, cross_ch_corr=0.897, ch_stds R23.5/G23.1/B22.9)",
+      "ignored_signals": [
+        "R1 的 blur 对照仅在 YCrCb:5 下执行 (WEAK), 噪声模型已换成 speckle:3, 该对照不能直接迁移 -> R2 在正确噪声下补齐",
+        "R1 排除 jpeg:1/3 时的噪声模型同为 YCrCb -> R2 在 speckle:3 下同内容复核 JPEG 双边界",
+        "R1 在 speckle:3 达到 MATCH 即停止, 未验证 severity 上界 (sev4) 是否过冲 -> R2 补齐上界",
+        "R1 顺序反转对照仅在 YCrCb:5 下做过 -> R2 在 speckle:3 下复核物理顺序"
+      ],
+      "misjudged": "无新证据推翻 R1 的归因; R2 未发现被 R1 误判的确定性信号, 重点在排除 R1 对照与噪声模型不匹配的混杂",
+      "boundary_signals": "peeled §B extreme_pct=61.13% 触发自动 IMPULSE 判定, 但命中已知 FP 规则 (extreme>50% + JPEG 残留), 且 impulse sev5 amount=10% << 61% -> 维持排除; peeled noise_prior sigma=9.64 为污染残差 (剥离 jpeg 无法还原 noise->jpeg 顺序) 上的高估, 完整残差 sigma=4.82 更可信"
+    },
+    "hypotheses": [
+      {
+        "pipeline": "noise_speckle:4,compression_jpeg:2",
+        "signal_source": "peeled §B vm_slope=2.6336 支持乘性族; R1 sev1 62%->sev2 37%->sev3 MATCH 单调收敛, 需测上界确认是否过冲",
+        "result": "pair0 PARTIAL (2/3, noise:sigma diff=38% 过冲)",
+        "test_round": 26
+      },
+      {
+        "pipeline": "noise_speckle:3,blur_gaussian:1,compression_jpeg:2",
+        "signal_source": "full_analysis BLUR_UNLIKELY (spectral_slope_ratio=0.9844, anisotropy=0.00) 但 R1 blur 对照噪声模型错误; 在正确噪声下复核遗漏 blur 的可能",
+        "result": "pair0 WEAK (noise:sigma diff=87%, block_boundary diff=16%); blur 信号虽匹配但整体验证恶化 -> 无 blur",
+        "test_round": 27
+      },
+      {
+        "pipeline": "noise_speckle:3,compression_jpeg:3",
+        "signal_source": "pair1 raw block_boundary=1.514 (三对最高, 对 jpeg severity 最敏感); 在 speckle:3 下同内容比较 jpeg 上界",
+        "result": "pair1 WEAK (block_boundary diff=28%, noise:sigma diff=50%) -> 排除 jpeg:3",
+        "test_round": 28
+      },
+      {
+        "pipeline": "noise_speckle:3,compression_jpeg:1",
+        "signal_source": "同内容 jpeg 下界对照, 与 jpeg:2 (R1 MATCH) 比较",
+        "result": "pair1 WEAK (block_boundary diff=14%, noise:sigma diff=50%) -> 排除 jpeg:1",
+        "test_round": 29
+      },
+      {
+        "pipeline": "compression_jpeg:2,noise_speckle:3",
+        "signal_source": "物理约束 noise<JPEG (存储最后); R2 在正确噪声模型下复核反转顺序的可判别性",
+        "result": "pair0 WEAK (noise:sigma diff=379%, block_boundary diff=13%) -> noise->JPEG 顺序确认",
+        "test_round": 30
+      }
+    ],
+    "ruled_out_without_tool": {
+      "gamma": "x_distortion 无独立 gamma; 最小强度 brightness gamma (γ=0.8/1.4) 中灰 mean_shift≈19-31/255 >> 观测 max|mean_shift|=4.1/255 -> 定量排除 (R1 结论维持)",
+      "impulse": "extreme_pct=61.13% 命中已知 FP (extreme>50% + JPEG 残留), 且 >> impulse sev5 amount=10% -> 排除",
+      "poisson": "peeled var_slope=-0.0423 (<1.0) -> 排除 poisson",
+      "global": "三对 NO_GLOBAL; variance_ratio=0.8934/1.065/1.104 跨对方向不一致, mean_shift=-4.1/-0.5/-0.9 与 pair0 强裁剪 (6.36%) 一致 -> 无独立 contrast/brightness/saturation 步",
+      "noise_type": "vm_slope=2.6336 (260x speckle 阈值) + intensity_var_corr=0.9535 + 三对 sigma 随内容亮度同序缩放 + RGB 通道均衡 -> speckle, R0 的加性族 (RGB) 已在 R0 跨对 WEAK 排除"
+    },
+    "k_pair_validation": {
+      "pair0": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "R2 新随机种子复核 (round 31): 3/3 (noise:sigma, noise:clean_residual, compression:block_boundary)"
+      },
+      "pair1": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "R2 新随机种子复核 (round 32): 3/3"
+      },
+      "pair2": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "R2 新随机种子复核 (round 33): 3/3"
+      }
+    },
+    "r1_comparison": "R1 基线 = noise_speckle:3 -> compression_jpeg:2: 3/3 MATCH (rounds 23-25, 9/9 信号). R2 5 项新对照: speckle:4 PARTIAL (38%), blur 对照 WEAK, jpeg:3 WEAK (bb 28%), jpeg:1 WEAK (bb 14%), 反转顺序 WEAK (sigma 379%) -> 无一达到 MATCH, 无候选超越 R1; R1 管线新种子复核仍 3/3 MATCH -> NO_CHANGE",
+    "cost": {
+      "test_candidate_calls": 8,
+      "candidates_unique": 5,
+      "run_full_analysis": 1,
+      "peeled_noise_check": 1,
+      "budget": "≤15 test_candidate / ≤5 新候选 内 (5 新候选 + 3 次终选 k=3 复核)"
+    },
+    "decision": "NO_CHANGE",
+    "final_pipeline": [
+      [
+        "noise_speckle",
+        3
+      ],
+      [
+        "compression_jpeg",
+        2
+      ]
+    ],
+    "rationale": "R2 信号重释复跑与 R1 逐值一致, 未发现新的被忽略信号. 针对 R1 对照的噪声模型混杂, R2 在正确 speckle:3 模型下补齐 5 项边界对照: speckle severity 上界 (sev4 过冲 38%), blur 遗漏 (WEAK: sigma 87%/bb 16%), JPEG 双边界 (jpeg:1 bb 14%, jpeg:3 bb 28%, 均 WEAK), 顺序反转 (WEAK: sigma 379%/bb 13%). 全部 ≤ PARTIAL, 不满足 k=3 多数对 WEAK->PARTIAL/MATCH 的 CHANGE 判据 (R1 基线已 3/3 MATCH). R1 管线在 R2 新随机种子下 3 对复核 3/3 MATCH (9/9 信号), 可复现 -> NO_CHANGE. 噪声步保持 UNCERTAIN (随机 seed 永不 LIKELY), compression_jpeg:2 因 sigma>2 无 PSNR 仍 UNCERTAIN, overall UNCERTAIN.",
+    "limitations": "k=3 (仅 support 3 对, 不补数据); 噪声为随机 seed, 每对独立抽样; 未改动 R0/R1 文件; 未读取任何 GT/其他挑战/训练日志/test_metrics",
+    "files": {
+      "full_analysis_R2": "full_analysis_R2.json",
+      "peeled_noise_R2": "peeled_noise_R2.json",
+      "predicted_params_R2": "predicted_params_R2.json",
+      "r2_decision": "r2_decision.json",
+      "agent_timing_R2": "agent_timing_R2.json"
+    }
+  },
+  "qwen_gate": {
+    "available": false,
+    "note": "Qwen/API 不可用；sigma=4.8 处于边界区间 (2<sigma<10)，门控触发但跳过，改由 §B + verify_signals 判定"
+  },
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=1.2085 (>1.05, 0%FP), dct_zero_ratio=0.4274, unique_G=256 (256/256/256)",
+      "blur": "BLUR_UNLIKELY: gm_ratio=1.1238, spectral_slope_target=-0.9317 vs clean=-0.9465, ratio=0.9844 (<1.08), anisotropy=0.00, pca=0.0",
+      "noise": "GAUSSIAN_YCrCb (low confidence): sigma=4.82, spatial_corr=0.2287, cross_channel_corr=0.8059, residual_intensity_corr=0.3244, gamma_suspect=true",
+      "global": "NO_GLOBAL: variance_ratio=0.8934, mean_shift=-4.1 (未达亮度阈值), clipped_fraction=0.0636 (noise 边缘饱和导致), contrast_spread_ratio=0.9891"
+    },
+    "mode": "SIGNAL (sigma=4.8)",
+    "suspected": [
+      "compression_jpeg (strong)",
+      "noise_gaussian (YCrCb vs RGB 待验证)",
+      "gamma 伪装 YCrCb 可能 (residual_intensity_corr=0.324)"
+    ],
+    "ruled_out": [
+      "blur (spectral_slope_ratio=0.984, gm_ratio 被噪声抬高; 仍留 1 次对照测试)",
+      "contrast/brightness/saturation (variance_ratio=0.893, spread=0.989, mean_shift=-4.1 均轻微，归因于噪声平滑)"
+    ],
+    "cross_pair_support": {
+      "pair1": "full_analysis_p1.json: COMPRESSION_DETECTED (bb=1.514), BLUR_UNLIKELY (slope 0.976, anisotropy 0), Noise GAUSSIAN_YCrCb sigma=2.2, NO_GLOBAL (vr=1.065, ms=-0.5)",
+      "pair2": "full_analysis_p2.json: COMPRESSION_DETECTED (bb=1.784), BLUR_UNLIKELY (slope 0.967, anisotropy 0), Noise GAUSSIAN_YCrCb sigma=1.4, NO_GLOBAL (vr=1.104, ms=-0.9)",
+      "note": "raw block_boundary 随内容波动 1.21/1.51/1.78，但同内容比较下 jpeg:2 在三对均匹配；sigma 估计随内容 4.8/2.2/1.4，跨对 severity 判定必须用同内容 verify_signals 对照"
+    }
+  },
+  "noise_6step_check": {
+    "extreme_pct": 61.13,
+    "vm_slope": 2.6336,
+    "var_slope": -0.0423,
+    "spatial_corr": 0.5645,
+    "rgb_ratio": 1.0259,
+    "cross_ch_corr": 0.897,
+    "residual_std": 23.3,
+    "peeled_pipeline": "compression_jpeg:2",
+    "diagnosis": "⚠️ 剥离残差被污染: 顺序为 noise→JPEG, 剥离 jpeg(clean) 无法干净还原噪声——DCT 量化边界使 residual_std=23.3、extreme_pct=61%(known FP: extreme>50% 时 §B IMPULSE 不可信), vm/spatial/cross_ch 均被块效应放大; noise_prior 在污染残差上 sigma=9.64 (vs 完整残差 4.82). §B 类型 UNRELIABLE, 噪声类型改由 run_full_analysis 三对一致判 GAUSSIAN_YCrCb + verify_signals 跨对对照 (RGB 类型在 pair1/pair2 全部 WEAK, YCrCb:4 MATCH) 决定; var_slope=-0.04 排除 Poisson."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:2",
+        "thinking": "R1-A: block_boundary=1.2085(0%FP)确认JPEG; sigma=4.82+noise_prior类型推断YCrCb; 物理顺序 noise→JPEG(存储最后). 初测 jpeg sev=2, noise sev=3"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+        "thinking": "R1-B: PARTIAL(sigma diff 50%)→强制severity扫描+1. 剥离残差std=23.3+extreme 61%表明噪声在JPEG之前(量化放大), 保持顺序, YCrCb sev 3→4"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=37%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:5,compression_jpeg:2",
+        "thinking": "R1-C: sev4 sigma误差37%<50%, 方向正确, 继续扫描至 sev5 (上限)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:5,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:5,compression_jpeg:2",
+        "thinking": "R2-同族对照: 跨族替代验证 YCrCb vs RGB. 目标 cross_channel_corr=0.806, ch_stds R23.5/G23.1/B22.9 均衡; 但 noise_prior 原始报告判 YCrCb, 需排除 RGB"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:5,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "thinking": "R2b: RGB 替代类型自身 severity 扫描. RGB:5 偏差100%(疑似过强)→降 to sev3, 对比 YCrCb:5 的 MATCH"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2,noise_gaussian_YCrCb:5",
+        "thinking": "R2-顺序对照: 物理约束 noise<JPEG(存储最后). 反转顺序应使 block_boundary 被噪声衰减→预期 mismatch, 验证顺序可判别性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=1004%)",
+          "compression:block_boundary (diff=17%)"
+        ],
+        "pipeline": "compression_jpeg:2,noise_gaussian_YCrCb:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:5,blur_gaussian:1,compression_jpeg:2",
+        "thinking": "R2-blur对照: BLUR_UNLIKELY(slope_ratio=0.984, anisotropy=0)但应测1次. 若加轻微 blur 后 spectral_slope 失配→确认无 blur; 若仍 MATCH→需复核"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=87%)",
+          "compression:block_boundary (diff=23%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:5,blur_gaussian:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:5,compression_jpeg:2",
+        "thinking": "K对验证 pair1: 终选 YCrCb:5+jpeg:2 在 support pair1 上复核 (跨对一致性)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=25%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:5,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "thinking": "K对验证 pair1: 对照类型 RGB:3+jpeg:2 在同一 support 上复核, 与 YCrCb:5 (PARTIAL sigma25%) 比较"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:5,compression_jpeg:2",
+        "thinking": "K对验证 pair2: 终选 YCrCb:5+jpeg:2 在 support pair2 上复核 (跨对一致性)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=33%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:5,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "thinking": "K对验证 pair2: 对照类型 RGB:3+jpeg:2 复核, 与 YCrCb:5 (PARTIAL sigma33%) 比较"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=100%)",
+          "compression:block_boundary (diff=8%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+        "thinking": "K对-severity复核 pair1: sev5 偏差25%, 对照 sev4 判定跨对最优 severity"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+        "thinking": "K对-severity复核 pair2: sev5 偏差33%, 对照 sev4 判定跨对最优 severity"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:3",
+        "thinking": "JPEG severity 对照 pair0: 三对 raw bb=1.21/1.51/1.78 内容差异大, 用同内容比较排除 jpeg:3"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)",
+          "compression:block_boundary (diff=17%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:3",
+        "thinking": "JPEG severity 对照 pair1: raw bb=1.514 建议 jpeg:3, 但需同内容比较; 与 jpeg:2 的 MATCH 对照"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "compression:block_boundary (diff=34%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:1",
+        "thinking": "JPEG severity 下界对照 pair0: 排除 jpeg:1, 与 jpeg:2 的 bb 匹配对照"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:1",
+        "thinking": "JPEG severity 判别 pair1: jpeg:1 与 jpeg:2(MATCH) 对照, 确定压缩强度"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "compression:block_boundary (diff=10%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:1",
+        "thinking": "JPEG severity 判别 pair2: jpeg:1 与 jpeg:2(MATCH) 对照, 确定压缩强度"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=67%)",
+          "compression:block_boundary (diff=14%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,compression_jpeg:2",
+        "thinking": "RGB 同severity公平对照 pair1: 排除RGB:4与YCrCb:4(MATCH)等效的可能"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=150%)",
+          "compression:block_boundary (diff=12%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:4,compression_jpeg:2",
+        "thinking": "RGB 同severity公平对照 pair2: 排除RGB:4与YCrCb:4(MATCH)等效的可能"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=233%)",
+          "compression:block_boundary (diff=20%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:4,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,compression_jpeg:2",
+        "thinking": "R1-C1 乘性噪声重释(pair0): peeled §B vm_slope=2.63>>0.01(speckle 信号, R0 归因 JPEG 污染未测), intensity_var_corr=0.9535, residual_intensity_corr=0.3256(gamma_suspect), 三对 full_analysis sigma 4.82/2.22/1.36 随内容亮度(clipped 6.36%/1.08%/0.05%)变化→乘性噪声; ch_stds R23.5/G23.1/B22.9 均衡+rgb_ratio=1.026→RGB 三通道等量乘性噪声; 顺序 noise→JPEG 物理约束"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=62%)"
+        ],
+        "pipeline": "noise_speckle:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2,compression_jpeg:2",
+        "thinking": "R1-C2 speckle severity 扫描(pair0): speckle:1 PARTIAL 但 sigma diff=62% > YCrCb:4 的 37%, 按 SKILL PARTIAL→severity+1 扫描, 判断乘性噪声强度方向 (est+1)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=37%)"
+        ],
+        "pipeline": "noise_speckle:2,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R1-C3 speckle severity 扫描(pair0): sev1 diff=62% → sev2 diff=37%, 单调下降说明模拟 sigma 仍偏低, 继续 est+2 扫至 sev3 (SKILL 强制 severity 扫描)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R1-C3 跨对验证 pair1: speckle:3 在 pair0 MATCH(3/3); 乘性噪声随内容亮度自动缩放, 预期可同时解释三对 sigma 4.82/2.22/1.36 的内容依赖差异"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R1-C3 跨对验证 pair2: speckle:3 已在 pair0/pair1 双 MATCH(各3/3); 完成 k=3 全对验证以判定 CHANGE (要求多数对 WEAK→PARTIAL/MATCH, 本候选目标 3/3 MATCH)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "noise_speckle:4,compression_jpeg:2",
+        "thinking": "R2-1 speckle severity 上界(pair0): R1 sev1 62%→sev2 37%→sev3 MATCH, 单调收敛; 检查 sev4 是否仍在 20% 阈值内或开始过冲. 信号来源: peeled §B vm_slope=2.6336 + intensity_var_corr=0.9535 + 三对 sigma 随内容缩放"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=38%)"
+        ],
+        "pipeline": "noise_speckle:4,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,blur_gaussian:1,compression_jpeg:2",
+        "thinking": "R2-2 blur 遗漏对照(pair0): R1 blur 对照仅在 YCrCb:5 下做过(WEAK), 噪声模型已改为 speckle:3, 需在正确噪声下复核. 信号: spectral_slope_ratio=0.984 (<1.08), FFT anisotropy=0.00, gm_ratio=1.124 被噪声抬高不可用"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=87%)",
+          "compression:block_boundary (diff=16%)"
+        ],
+        "pipeline": "noise_speckle:3,blur_gaussian:1,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:3",
+        "thinking": "R2-3 JPEG 上界复核(pair1): R1 排除 jpeg:3 时噪声模型为 YCrCb:4, 现用 speckle:3 复核. 信号: pair1 raw block_boundary=1.514 (三对中最高、对 jpeg severity 最敏感), 同内容比较"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "compression:block_boundary (diff=28%)"
+        ],
+        "pipeline": "noise_speckle:3,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:1",
+        "thinking": "R2-4 JPEG 下界复核(pair1): 同内容比较 jpeg:1 vs jpeg:2(MATCH), 信号: pair1 block_boundary=1.514; 若 jpeg:1 bb 失配则 jpeg:2 唯一"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "compression:block_boundary (diff=14%)"
+        ],
+        "pipeline": "noise_speckle:3,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:2,noise_speckle:3",
+        "thinking": "R2-5 顺序反转对照(pair0): R1 反转对照在 YCrCb:5 下 WEAK; 现用 speckle:3 复核物理顺序 noise→JPEG(存储最后). 若反转后 bb/sigma 双向失配则顺序确认"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=379%)",
+          "compression:block_boundary (diff=13%)"
+        ],
+        "pipeline": "compression_jpeg:2,noise_speckle:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R2-终选复核 pair0 (新种子): R1 管线在 R2 轮重新确认, 上述 5 项对照均未超越 (speckle:4 过冲 38%, blur 加入 WEAK, jpeg:1/3 WEAK, 反转 WEAK)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R2-终选复核 pair1 (新种子): 与 pair0 同管线, 跨对一致性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 33,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "thinking": "R2-终选复核 pair2 (新种子): 与 pair0/pair1 同管线, 完成 k=3 全对确认"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:3,compression_jpeg:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+      "psnr_rgb": null,
+      "verdict": "pair0 PARTIAL(37%) / pair1 MATCH / pair2 MATCH",
+      "mode": "signal",
+      "round": "2,12,13",
+      "rank_note": "🏆 最终选择: 跨对 2/3 MATCH, 1/3 PARTIAL(sigma 37%), bb 3/3 匹配"
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:5,compression_jpeg:2",
+      "psnr_rgb": null,
+      "verdict": "pair0 MATCH / pair1 PARTIAL(25%) / pair2 PARTIAL(33%)",
+      "mode": "signal",
+      "round": "3,8,10",
+      "rank_note": "severity +1 备份, 跨对 1/3 MATCH"
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:1",
+      "psnr_rgb": null,
+      "verdict": "pair0 MATCH / pair1 WEAK(bb10%) / pair2 WEAK(bb14%)",
+      "mode": "signal",
+      "round": "16,17,18",
+      "rank_note": "jpeg 下界, 跨对被排除"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:3,compression_jpeg:2",
+      "psnr_rgb": null,
+      "verdict": "pair0 MATCH / pair1 PARTIAL(50%) / pair2 WEAK(100%)",
+      "mode": "signal",
+      "round": "5,9,11",
+      "rank_note": "跨族备份, 跨对劣于 YCrCb:4"
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:3,compression_jpeg:2",
+      "psnr_rgb": null,
+      "verdict": "pair0 PARTIAL(sigma 50%)",
+      "mode": "signal",
+      "round": "1",
+      "rank_note": "severity 不足"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:5,compression_jpeg:2",
+      "psnr_rgb": null,
+      "verdict": "pair0 PARTIAL(sigma 100%)",
+      "mode": "signal",
+      "round": "4",
+      "rank_note": "RGB 过强"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:4,compression_jpeg:2",
+      "psnr_rgb": null,
+      "verdict": "pair1 WEAK(150%) / pair2 WEAK(233%)",
+      "mode": "signal",
+      "round": "19,20",
+      "rank_note": "RGB 同 severity 对照, 排除"
+    },
+    {
+      "pipeline": "compression_jpeg:2,noise_gaussian_YCrCb:5",
+      "psnr_rgb": null,
+      "verdict": "pair0 WEAK(sigma 1004%, bb17%)",
+      "mode": "signal",
+      "round": "6",
+      "rank_note": "反转顺序对照, 排除"
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:5,blur_gaussian:1,compression_jpeg:2",
+      "psnr_rgb": null,
+      "verdict": "pair0 WEAK(bb23%)",
+      "mode": "signal",
+      "round": "7",
+      "rank_note": "blur 对照, 排除 blur"
+    },
+    {
+      "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:3",
+      "psnr_rgb": null,
+      "verdict": "pair0 WEAK(bb17%) / pair1 WEAK(bb34%)",
+      "mode": "signal",
+      "round": "14,15",
+      "rank_note": "jpeg 上界, 排除"
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_YCrCb",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 3,
+    "rationale": "signal 模式 (sigma=4.82>2, PSNR 禁用). compression: block_boundary=1.209/1.514/1.784 三对 0%FP 阳性, 同内容对照 jpeg:2 bb 3/3 匹配, jpeg:1/3 在 pair1/pair2 WEAK→ jpeg:2. noise: 三对 full_analysis 均 GAUSSIAN_YCrCb; pair0 severity 扫描 3→4→5 (50%→37%→MATCH), 跨对复核 sev4 pair1/pair2 双 MATCH vs sev5 PARTIAL→最终 sev4. 类型: RGB 各 severity 在 pair1/pair2 全部 WEAK→排除 RGB. 顺序: 反转 WEAK→noise→jpeg. blur/global 均排除 (blur 对照 WEAK, 三对 NO_GLOBAL). 含随机噪声步按规则永不 LIKELY, 整体 UNCERTAIN.",
+    "k_pair_validation": {
+      "pair0": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+        "verdict": "PARTIAL",
+        "detail": "sigma diff=37%, bb 匹配"
+      },
+      "pair1": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "3/3 信号匹配"
+      },
+      "pair2": {
+        "pipeline": "noise_gaussian_YCrCb:4,compression_jpeg:2",
+        "verdict": "MATCH",
+        "detail": "3/3 信号匹配"
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "challenge_id": "blind_0010_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    {"function": "blur_gaussian", "severity": 1, "verdict": "LIKELY"},
+    {"function": "brightness_darken_gamma_HSV", "severity": 5, "verdict": "LIKELY"}
+  ],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 1, "verdict": "LIKELY"},
+    {"function": "brightness_darken_gamma_HSV", "severity": 5, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "brightness_darken_gamma_HSV", "severity": 5}],
+      "psnr": 43.97,
+      "ci_pass_rate": "6/10",
+      "function_family": "global_brightness (gamma HSV, no blur)",
+      "inherited_from": "R0",
+      "stats": {"note": "R0 alternative 保留: 全局统计匹配但 gm_ratio 0.380 vs target 0.251 (缺平滑步骤); 主管线已像素级精确, 仅作跨族备份"}
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_darken_shfit_HSV", "severity": 4},
+        {"function": "blur_gaussian", "severity": 1}
+      ],
+      "psnr": 34.94,
+      "ci_pass_rate": "6/10",
+      "function_family": "global_brightness (additive V-shift) + gaussian blur",
+      "inherited_from": "R0",
+      "stats": {"note": "R0 alternative 保留: clip/unique_G 与 target 不符 (加法 shift 子类型错误); 主管线已像素级精确, 仅作跨族备份"}
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR",
+    "best_psnr_db": "inf",
+    "support_psnr_r0": 30.26,
+    "k": 1,
+    "decision": "NO_CHANGE",
+    "single_pair_limitation": "k=1, 仅 pair0, 无法做跨对验证; 阈值未因 k=1 放宽; 确定性退化下残差恒为 0 的单对精确复现是强证据, 但跨图泛化/参数是否随图变化无法在本目录检验",
+    "r1_checks": [
+      "run_full_analysis.py 重跑 pair0 → full_analysis_R1.json 与 R0 full_analysis.json 完全一致 (仅 residual_intensity_corr 0.9362→0.9366 数值噪声)",
+      "peeled_noise_check.py --pipeline 'blur_gaussian:1,brightness_darken_gamma_HSV:5' → residual std=0.0, zero_ratio=1.0; §B IMPULSE (extreme_pct=100%) 为零残差已知伪影; sigma=0.62<2 → NO_NOISE",
+      "test_candidate 控制: 主管线 PSNR=inf, CI 10/10 (全部 10 项 diff=0) → R0 像素级精确复现可重复",
+      "边界候选 compression_jpeg:1 追加在精确管线之后: 43.03 dB, CI 6/10, block_boundary 差异 +106% → JPEG 步骤会改变像素, 与精确复现互斥 → 无 compression 步骤",
+      "边界候选 saturate_weaken_HSV:1 追加在精确管线之后: 45.73 dB (<inf), 像素被改变 → saturation 步骤与精确复现互斥 → chroma_ratio=0.2891 完全由 gamma V 缩放+截断解释"
+    ],
+    "rationale": "R1 信号重释未发现被忽略/误判的新退化: full_analysis 信号与 R0 一致; 两个此前未在最终管线上验证的边界信号 (JPEG: block_boundary=0.9992/dct_zero_ratio=0.8886; saturation: chroma_ratio=0.2891) 经 test_candidate 验证均为伪信号——任何追加步骤都会破坏 inf 的像素级精确复现。噪声由剥离残差 std=0.0 + sigma=0.62 排除。gaussian:1→gamma:5 的顺序由精确复现唯一确定 (逆序仅 52.10 dB, R0)。R0 主管线 PSNR=inf 已是上限, 无候选可满足 CHANGE 判据 (>40 dB 或 +2 dB 均不可能超越 inf; 45.73/43.03 dB 候选均严格劣于 inf)。support PSNR 30.26<35 不是参数误差: 66.9% 像素被截断为纯黑 (heavy_clipping=true), 恢复信息不可逆丢失, 属训练容量/预算限制, 参数层面无可改动。决定 NO_CHANGE。"
+  }
+}

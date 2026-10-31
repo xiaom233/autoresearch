@@ -1,0 +1,1465 @@
+{
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_JPEG: block_boundary=1.002 (<<1.1, 0% FP signal). unique_G=106 low but explainable by heavy blur smoothing; dct_zero_ratio=0.86. unique_G<200 alone not conclusive here.",
+      "blur": "STRONG BLUR: gm_ratio=0.138, spectral_slope_ratio=1.404, FFT anisotropy=1.50 (<1.7 no motion), glass_score=0.304 (marginal >0.25, low confidence), pca_ratio=1.5. gaussian first, glass/motion alternatives.",
+      "noise": "NO_NOISE: noise_prior_sigma=0.37 (<2). spatial_corr=0.963 / cross_ch_corr=0.975 are blur-mismatch residual artifacts, not noise. residual_intensity_corr=0.575 consistent with blur/global residual structure.",
+      "global": "STRONG LOW-CONTRAST + DARKENING: variance_ratio=0.188, mean_shift=-22.6, saturation_chroma_ratio=0.505, contrast_spread_ratio=0.436, clipped_fraction=0.0045. contrast_weaken_scale + darkening (shift/gamma) suspected; gamma is alternative hypothesis."
+    },
+    "mode": "PSNR (noise_prior sigma=0.37 < 2)",
+    "suspected": [
+      "blur_gaussian (sev4-5)",
+      "contrast_weaken_scale (sev3-4)",
+      "brightness_darken (shift/gamma)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (block_boundary=1.002)",
+      "noise (sigma=0.37)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false,
+    "triggered": false,
+    "reason": "sigma=0.37 (<2) -> NO_NOISE, Step 0.5 boundary gate not triggered"
+  },
+  "noise_6step_check": {
+    "applicable": false,
+    "note": "sigma=0.37 < 2 -> NO_NOISE. Raw residual values from run_full_analysis (blur-contaminated, judged non-noise):",
+    "extreme_pct": "impulse_zero_ratio=0.0204 (2.0%, near-zero clipping artifact, no impulse)",
+    "vm_slope": "not reported (noise step verdict GAUSSIAN_YCrCb, confidence low)",
+    "var_slope": "not reported",
+    "spatial_corr": 0.9631,
+    "rgb_ratio": "not reported; cross_channel_corr=0.9753",
+    "cross_ch_corr": 0.9753,
+    "residual_intensity_corr": 0.5749,
+    "diagnosis": "High spatial/channel correlation is from blur mismatch residual (residual = target-clean includes blur kernel error), not noise. PSNR mode valid."
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3",
+        "thinking": "R1: gm_ratio=0.138+slope_ratio=1.404 -> strong blur (gaussian first, anisotropy=1.5<1.7 excludes motion); variance_ratio=0.188 & chroma_ratio=0.505 -> contrast_weaken_scale sev3 (scale 0.45); mean_shift=-22.6 tested next"
+      },
+      "test_result": {
+        "psnr_rgb": 20.35,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "R1 decomposition: blur alone baseline to measure whether contrast step helps. gm_ratio=0.138 raw implies blur alone should still be far from target's low contrast; if PSNR ~ similar to blur+contrast, contrast direction is wrong"
+      },
+      "test_result": {
+        "psnr_rgb": 15.05,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1",
+        "thinking": "R1: mean_shift=-22.6 not explained by contrast (PIL contrast preserves L-mean); darken_shfit_RGB sev1 = -25.5/255 closest severity. Add on top of best-so-far blur_gaussian5+contrast3 (20.35dB)"
+      },
+      "test_result": {
+        "psnr_rgb": 26.34,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1",
+        "thinking": "R2 subtype: glass_score=0.304 marginal, radial/lens not excluded; lens-5 (disk radius=8) disambiguates gaussian vs lens; globals fixed at best-so-far contrast3+darken1"
+      },
+      "test_result": {
+        "psnr_rgb": 26.34,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_lens:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:4,brightness_darken_shfit_RGB:1",
+        "thinking": "R2 severity: variance_ratio=0.188 is lower than sev3 scale 0.45 alone; test stronger contrast sev4 (scale 0.3) with darken fixed"
+      },
+      "test_result": {
+        "psnr_rgb": 25.08,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:4,brightness_darken_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1",
+        "thinking": "R2 global re-interpretation: target has 0.455% pure-black pixels vs sim 0% -> tonal op must preserve 0; PIL contrast_weaken_scale lifts blacks toward mean. contrast_weaken_stretch maps mean->0.5 (mean_shift=-22.6 => clean mean~0.589) and derivative c/(4m)~0.43 => variance_ratio~0.188 exactly; per-channel normalization also explains chroma_ratio=0.505"
+      },
+      "test_result": {
+        "psnr_rgb": 26.49,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,compression_jpeg:1",
+        "thinking": "R3: target pure-black fraction 0.455% (clean 0.846%, contrast-only sim 0%) -> zeros partially lifted, impossible for scale (lifts all) yet unique_G=106 needs coarse level rounding; JPEG q25 last step in physical order can lift black flats and coarsen levels, block_boundary masked by heavy blur (bb=1.002 not >1.1, weak negative evidence)"
+      },
+      "test_result": {
+        "psnr_rgb": 26.21,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1",
+        "thinking": "R3 severity scan: zero_crossing_density target - sim = +0.117 (target retains more local detail than sigma=5 sim) -> test weaker gaussian sev4; contrast3+darken1 fixed as best combo"
+      },
+      "test_result": {
+        "psnr_rgb": 26.35,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_gamma_RGB:1",
+        "thinking": "R3 darken subtype: residual_intensity_corr=0.575 + both brightness/contrast raw signals triggered -> gamma darken alternative to linear shift (gamma1=1.4; on mean~0.59 gives ~-28 mean shift and compresses dark-end rounding); test vs best 26.34dB"
+      },
+      "test_result": {
+        "psnr_rgb": 24.57,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_gamma_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:2",
+        "thinking": "R3 darken severity scan: shift sev1=-25.5 overshoots nothing yet but PIL contrast blends toward L-mean which can add positive RGB mean shift; target mean_shift=-22.6; test shift sev2=-38.25 to bracket"
+      },
+      "test_result": {
+        "psnr_rgb": 21.76,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:1",
+        "thinking": "R3 saturation check: saturation_chroma_ratio=0.505 (FP check contrast_from_saturation=true, contrast0.45 explains most); add mild saturate_weaken_HSV sev1 (scale0.7) to test if residual chroma overshoot exists vs best 26.34dB"
+      },
+      "test_result": {
+        "psnr_rgb": 26.65,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:2",
+        "thinking": "R3 severity scan: sat sev1 (scale0.7) improved 26.34->26.65 and hf_lf 0%; chroma_ratio=0.505 may need stronger desaturation; scan sat sev2 (scale0.55)"
+      },
+      "test_result": {
+        "psnr_rgb": 26.8,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:3",
+        "thinking": "R3 severity scan: sat sev2 improved 26.65->26.80; continue scanning sat sev3 (scale0.4) to locate chroma optimum"
+      },
+      "test_result": {
+        "psnr_rgb": 26.89,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,compression_jpeg:1",
+        "thinking": "R3 coherent alternative: stretch1 already best single global (26.49) and predicts mean->0.5 (mean_shift -22.6), preserves zeros (target 0.453% vs scale-sim 0%); JPEG q25 last could lift ~half the black flats (0.843->~0.45) and coarsen levels (146->~106). Test whether block artifacts stay near target low bb"
+      },
+      "test_result": {
+        "psnr_rgb": 26.37,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:3",
+        "thinking": "R3 blur severity: gm_ratio=0.138 ~ blur_factor(0.31)xcontrast_scale(0.45); sigma3 gives gradient ratio ~0.3, lower than sigma5; sigma4 vs5 tied (26.34/26.35) suggesting blur not dominant, verify with sigma3 under best globals"
+      },
+      "test_result": {
+        "psnr_rgb": 26.85,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,saturate_weaken_HSV:2",
+        "thinking": "R3 global family: stretch1 = best single global (26.49, mean->0.5 per-channel, preserves target's 0.453% black pixels) but under-desaturated vs target chroma_ratio=0.505; combine stretch1 with sat sev2 to test whether stretch family overtakes scale family (26.89)"
+      },
+      "test_result": {
+        "psnr_rgb": 27.51,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,saturate_weaken_HSV:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,saturate_weaken_HSV:3",
+        "thinking": "R4 severity scan: stretch1+sat2=27.51 best and zeros diff now 2% (target black regions preserved -> stretch family confirmed); scan sat sev3 (scale0.4) vs sev2"
+      },
+      "test_result": {
+        "psnr_rgb": 27.71,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,saturate_weaken_HSV:4",
+        "thinking": "R4 severity scan: stretch1+sat3=27.71 (+0.20 over sat2); scan sat sev4 (scale0.2) to locate chroma optimum before validation"
+      },
+      "test_result": {
+        "psnr_rgb": 27.76,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,saturate_weaken_HSV:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:2,saturate_weaken_HSV:3",
+        "thinking": "R4 global strength: stretch sev2 (c=0.9) compresses less aggressively than sev1 (c=1.0); variance_ratio=0.188 plus blur loss may need milder stretch; keep sat3"
+      },
+      "test_result": {
+        "psnr_rgb": 29.92,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:2,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:3,saturate_weaken_HSV:3",
+        "thinking": "R4 severity scan: stretch2 (c=0.9) jumped 27.71->29.92; scan stretch3 (c=0.8) along same axis to find optimum"
+      },
+      "test_result": {
+        "psnr_rgb": 32.69,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:3,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "R4 severity scan: stretch3 (c=0.8)=32.69 continues monotone improvement along severity axis; scan stretch4 (c=0.6)"
+      },
+      "test_result": {
+        "psnr_rgb": 34.29,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:5,saturate_weaken_HSV:3",
+        "thinking": "R4 severity scan: stretch4 (c=0.6)=34.29 still monotone; test stretch5 (c=0.4) to close severity axis"
+      },
+      "test_result": {
+        "psnr_rgb": 27.51,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:5,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,brightness_darken_shfit_RGB:1,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "R5 final refinement: stretch4 sim leaves only 0.063% pure-black vs target 0.453% (diff=0.390, 86% err); stretch re-normalizes per-channel mean so a pre-stretch darken (-25.5, priority0/2 before contrast) is mean-transparent but clips blacks -> test darken between blur and stretch"
+      },
+      "test_result": {
+        "psnr_rgb": 26.55,
+        "ci_pass": "2/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,brightness_darken_shfit_RGB:1,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "CROSS-PAIR VALIDATION pair1 (image 0459): best pair0 pipeline (34.29dB) re-checked on support pair 1; same parameters, different content"
+      },
+      "test_result": {
+        "psnr_rgb": 28.14,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "CROSS-PAIR VALIDATION pair2 (image 0032): same best pipeline re-checked on support pair 2; completes k=3 verification"
+      },
+      "test_result": {
+        "psnr_rgb": 36.14,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "R1信号重释: step3_blur verdict=GLASS_BLUR (glass_score=0.3044>0.25, sigma=0.37<3, gm_ratio=0.1377, spectral_slope_ratio=1.4039, anisotropy=1.4991<1.7排除motion)。R0误将glass判为gaussian且从未PSNR验证glass。保留R0最佳global (stretch4+sat3)。"
+      },
+      "test_result": {
+        "psnr_rgb": 34.82,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "R1 blur severity 扫描: glass5=34.82dB (较gaussian5 34.29 +0.53)。glass_score=0.3044触发DT glass分支, 但gm_ratio=0.1377包含contrast收缩, 真实blur强度可能低于sev5; 扫描glass4。global保持R0最佳stretch4+sat3。"
+      },
+      "test_result": {
+        "psnr_rgb": 35.36,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "R1 对照: glass4=35.36dB (+1.07 vs R0 gaussian5 34.29)。需排除'提升来自severity而非subtype': 同severity gaussian4 vs glass4直接对比。R0在scale族下blur4/5 PSNR持平(26.35/26.34), 未在stretch族下验证。global保持stretch4+sat3。"
+      },
+      "test_result": {
+        "psnr_rgb": 34.78,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:1",
+        "thinking": "R1 global重释: CI unique_G=-30 (28%, sim唯一色数不足) 表明收缩过强; 目标chroma_ratio=0.5045, 若stretch4(c=0.6)与sat相乘→0.24远低于0.5, 提示sat被过降。R0仅在stretch1下扫过sat sev1-4, 未在stretch4下验证; 测试sat sev1(s=0.7, 0.6*0.7=0.42最接近0.5045)。blur=glass4(35.36dB最佳)。"
+      },
+      "test_result": {
+        "psnr_rgb": 38.76,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "thinking": "R1 saturation边界测试: sat3=35.36 -> sat1=38.76 (+3.40dB, s=0.7)。继续向s=1(无sat)外推: 目标chroma_ratio=0.5045, 若SAT来自stretch4逐通道尺度(c=0.6)则无需独立sat步骤。检验第三步骤是否真实存在。"
+      },
+      "test_result": {
+        "psnr_rgb": 40.69,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "thinking": "R1 k对验证 pair1 (0459): pair0上 blur_glass:4+contrast_weaken_stretch:4 = 40.69dB/CI9/10 (R0 28.14dB on this pair)。同参数跨内容验证, 判断是否为pair0过拟合。"
+      },
+      "test_result": {
+        "psnr_rgb": 38.27,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "thinking": "R1 k对验证 pair2 (0032): pair0=40.69/CI9, pair1=38.27/CI10 (R0 pair2=36.14dB)。完成k=3验证, 判定CHANGE。"
+      },
+      "test_result": {
+        "psnr_rgb": 43.57,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "R1 k=3 validation pair1 (0459): best pair0 subtype glass4=35.36dB. Signal source: glass_score=0.3044>0.25 + sigma=0.37<3 triggers SKILL Step2 glass branch; anisotropy=1.4991<1.7 excludes motion; gm_ratio=0.1377 blur present. Global fixed at R0 stretch4+sat3 (variance_ratio=0.1878, mean_shift=-22.6 -> per-channel mean renorm, preserves 0.453% blacks)."
+      },
+      "test_result": {
+        "psnr_rgb": 28.7,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "R1 k=3 validation pair2 (0032): same glass4 candidate, completes support-set validation. Signal source: glass_score=0.3044>0.25, sigma=0.37<3 -> glass branch; anisotropy=1.4991<1.7 no motion; global stretch4+sat3 unchanged (variance_ratio=0.1878, mean_shift=-22.6, chroma_ratio=0.5045)."
+      },
+      "test_result": {
+        "psnr_rgb": 36.93,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,saturate_weaken_HSV:3,contrast_weaken_stretch:4",
+        "thinking": "R1 order hypothesis pair0: both contrast and saturation are ISP priority=2 globals -> blind_challenge shuffles same-priority order; R0 only tested contrast->saturate. Signal basis: chroma_ratio=0.5045 (saturation weaken) and variance_ratio=0.1878 (contrast weaken) are equally strong; swap keeps glass4 (glass_score=0.3044>0.25) and same severities."
+      },
+      "test_result": {
+        "psnr_rgb": 35.14,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,saturate_weaken_HSV:3,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 32,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "thinking": "R1 severity neighbor pair0: glass4=35.36 > glass5=34.82 > gaussian4=34.78 identifies glass branch (glass_score=0.3044>0.25, sigma=0.37<3) with sev4 peak; gm_ratio=0.1377 partly from contrast compression so true blur may be milder -> test glass3. Global stretch4+sat3 fixed."
+      },
+      "test_result": {
+        "psnr_rgb": 35.28,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 33,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "thinking": "R1 independent verification of the 2-step winner: signal basis glass_score=0.3044>0.25 (sigma=0.37<3 -> glass branch), anisotropy=1.4991<1.7; saturation dropped because contrast_from_saturation=true and chroma_ratio=0.5045 is reproduced by per-channel contrast_weaken_stretch c=0.6 (unique_G over-contraction -28% under sat3). Expect ~40.7dB if correct."
+      },
+      "test_result": {
+        "psnr_rgb": 40.67,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 34,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:3",
+        "thinking": "R2 severity re-scan: variance_ratio=0.1878 + contrast_spread_ratio=0.4362 fix the global family (stretch, preserves exact zeros). R0 bracketed stretch only WITH sat3 present (sev3 32.69 / sev4 34.29 / sev5 27.51); the corrected 2-step pipeline never re-scanned the contrast axis. Test sev3 (c=0.8) under glass4."
+      },
+      "test_result": {
+        "psnr_rgb": 31.26,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 35,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:5",
+        "thinking": "R2 severity re-scan upper side: variance_ratio=0.1878, mean_shift=-22.6 (stretch mean->0.5 marker). stretch5 (c=0.4) got 27.51 with sat3; re-test under the corrected 2-step glass4 pipeline to close the contrast axis."
+      },
+      "test_result": {
+        "psnr_rgb": 29.82,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 36,
+      "hypothesis": {
+        "pipeline": "blur_glass:3,contrast_weaken_stretch:4",
+        "thinking": "R2 blur severity re-scan under the corrected 2-step pipeline: glass_score=0.3044>0.25 (sigma=0.37<3) routes glass; anisotropy=1.4991<1.7 excludes motion; gm_ratio=0.1377 embeds the contrast contraction c=0.6, so the blur may be milder than the gm_ratio-derived sev5. R1 tested glass3 only with sat3 (35.28); re-test glass3 with stretch4."
+      },
+      "test_result": {
+        "psnr_rgb": 39.35,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 37,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+        "thinking": "R2 blur severity upper side: full_analysis estimated_severity=5 comes from gm_ratio=0.1377 which includes contrast c=0.6; glass5 (sigma1.6, shift4, iter2) got 34.82 with sat3. Re-test under the corrected 2-step pipeline to close the glass axis."
+      },
+      "test_result": {
+        "psnr_rgb": 39.68,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 38,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4",
+        "thinking": "R2 subtype control under the corrected 2-step global: glass_score=0.3044 is only marginal and the blur DT's low-confidence glass branch needs a no-shuffle control. R1 compared gaussian4 only with sat3 (34.78 vs glass4 35.36); repeat gaussian4 under stretch4 to verify the glass advantage is not a saturation artifact."
+      },
+      "test_result": {
+        "psnr_rgb": 39.24,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 39,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+        "thinking": "R2 cross-pair check on the weakest support pair (pair1, R1=38.27): glass5 was the closest alternative on pair0 (39.68 vs 40.69). Test whether the upper glass severity flips the ranking on different content; CHANGE would require pair1 > 40.27 (+2 dB vs R1)."
+      },
+      "test_result": {
+        "psnr_rgb": 37.15,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 40,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "thinking": "R2 anchor: re-measure the unchanged R1 winner in this session (glass stochastic shuffle differs per process; R1 re-run gave 40.69/40.67). Signal basis: glass_score=0.3044>0.25 + sigma=0.37<3 + anisotropy=1.4991<1.7 -> glass branch; variance_ratio=0.1878 + mean_shift=-22.6 -> stretch4 (c=0.6). All 5 R2 candidates on pair0 were below the R1 value; this anchor confirms the ranking within the R2 process."
+      },
+      "test_result": {
+        "psnr_rgb": 40.68,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+      "psnr_rgb": 43.57,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 32
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+      "psnr_rgb": 40.69,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 30
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+      "psnr_rgb": 40.68,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 40
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+      "psnr_rgb": 40.67,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 33
+    },
+    {
+      "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+      "psnr_rgb": 39.68,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 37
+    },
+    {
+      "pipeline": "blur_glass:3,contrast_weaken_stretch:4",
+      "psnr_rgb": 39.35,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 36
+    },
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4",
+      "psnr_rgb": 39.24,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 38
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:1",
+      "psnr_rgb": 38.76,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 29
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+      "psnr_rgb": 38.27,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 31
+    },
+    {
+      "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+      "psnr_rgb": 37.15,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 39
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 36.93,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 30
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 36.14,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 25
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 35.36,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 27
+    },
+    {
+      "pipeline": "blur_glass:3,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 35.28,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 32
+    },
+    {
+      "pipeline": "blur_glass:4,saturate_weaken_HSV:3,contrast_weaken_stretch:4",
+      "psnr_rgb": 35.14,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 31
+    },
+    {
+      "pipeline": "blur_glass:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 34.82,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 26
+    },
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 34.78,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 28
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 34.29,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 21
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:3,saturate_weaken_HSV:3",
+      "psnr_rgb": 32.69,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 20
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:3",
+      "psnr_rgb": 31.26,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 34
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:2,saturate_weaken_HSV:3",
+      "psnr_rgb": 29.92,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 19
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:5",
+      "psnr_rgb": 29.82,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 35
+    },
+    {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 28.7,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 29
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 28.14,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 24
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,saturate_weaken_HSV:4",
+      "psnr_rgb": 27.76,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 18
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,saturate_weaken_HSV:3",
+      "psnr_rgb": 27.71,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,saturate_weaken_HSV:2",
+      "psnr_rgb": 27.51,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:5,saturate_weaken_HSV:3",
+      "psnr_rgb": 27.51,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:3",
+      "psnr_rgb": 26.89,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_gaussian:3,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:3",
+      "psnr_rgb": 26.85,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:2",
+      "psnr_rgb": 26.8,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,saturate_weaken_HSV:1",
+      "psnr_rgb": 26.65,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_gaussian:5,brightness_darken_shfit_RGB:1,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+      "psnr_rgb": 26.55,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 23
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1",
+      "psnr_rgb": 26.49,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_stretch:1,compression_jpeg:1",
+      "psnr_rgb": 26.37,
+      "ci_pass": "2/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_gaussian:4,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1",
+      "psnr_rgb": 26.35,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1",
+      "psnr_rgb": 26.34,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_lens:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1",
+      "psnr_rgb": 26.34,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:1,compression_jpeg:1",
+      "psnr_rgb": 26.21,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:4,brightness_darken_shfit_RGB:1",
+      "psnr_rgb": 25.08,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_gamma_RGB:1",
+      "psnr_rgb": 24.57,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:3,brightness_darken_shfit_RGB:2",
+      "psnr_rgb": 21.76,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:5,contrast_weaken_scale:3",
+      "psnr_rgb": 20.35,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 15.05,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_gaussian",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "contrast_weaken_stretch",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "saturate_weaken_HSV",
+        "severity": 3,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Pair0 signal->candidate->PSNR chain: no noise (sigma=0.37), no JPEG (block_boundary=1.002; every JPEG sim inflated bb by >190%), strong blur (gm_ratio=0.138, anisotropy=1.50<1.7 excludes motion, lens==gaussian PSNR tie). Global tone was the limiting factor: contrast_weaken_scale family capped at 26.9dB because PIL blend lifts all pure-black pixels (target keeps 0.453% at 0), whereas contrast_weaken_stretch preserves blacks and renormalizes per-channel mean to 0.5 (mean_shift=-22.6 implies clean mean~0.59). Bracketed severity scan of stretch on pair0: sev1 26.49, sev2 29.92, sev3 32.69, sev4 34.29, sev5 27.51 -> peak at sev4. Saturation needed (+1.0dB over no-sat; sev2/3/4 within 0.25dB, sev3 chosen). Cross-pair validation (k=3, same params): pair0=34.29dB, pair1=28.14dB, pair2=36.14dB. Verdict UNCERTAIN rather than LIKELY because deterministic PSNR is 30-40dB (not >40) and blur severity is not identifiable (sigma 3/4/5 tied). No noise -> no signal-mode validation."
+  },
+  "cross_pair_validation": {
+    "pipeline": "blur_gaussian:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+    "pair0_0227": {
+      "psnr_rgb": 34.29,
+      "ci_pass": "3/10"
+    },
+    "pair1_0459": {
+      "psnr_rgb": 28.14,
+      "ci_pass": "5/10"
+    },
+    "pair2_0032": {
+      "psnr_rgb": 36.14,
+      "ci_pass": "7/10"
+    },
+    "mean_psnr": 32.86,
+    "note": "Same parameters applied to all 3 support pairs; content-dependent PSNR spread 28.1-36.1 dB. unique_G agreement on pair2 = 0% error, impulse_pct_zero = 0% error."
+  },
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 5
+        },
+        {
+          "function": "contrast_weaken_stretch",
+          "severity": 3
+        },
+        {
+          "function": "saturate_weaken_HSV",
+          "severity": 3
+        }
+      ],
+      "psnr_pair0": 32.69,
+      "function_family": "contrast_weaken_stretch (severity neighbor sev3)",
+      "reason": "Only 1.6dB below winner on pair0; same family, milder stretch c=0.8"
+    }
+  ],
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 overall verdict UNCERTAIN; R0 support PSNR 17.91 (k=3 pairs)",
+    "mode": "PSNR (noise_prior sigma=0.37 < 2; no noise step in any candidate)",
+    "signal_reinterpretation": [
+      {
+        "signal": "step3_blur verdict=GLASS_BLUR (glass_score=0.3044>0.25, sigma=0.37<3) + anisotropy=1.4991<1.7",
+        "source": "full_analysis_R1.json step3_blur (re-run on pair0)",
+        "misjudgement": "R0 noted glass_score is marginal but chose blur_gaussian (default) and never PSNR-tested blur_glass; SKILL blur decision tree routes glass_score>0.25 + sigma<3 -> glass",
+        "action": "Test blur_glass severities 5 and 4 under the R0 globals",
+        "result": "pair0: glass5 34.82, glass4 35.36 vs gaussian5 34.29 (R0); same-severity gaussian4 control 34.78 -> glass wins by 0.58 dB"
+      },
+      {
+        "signal": "gm_ratio=0.1377 is a composite of blur and contrast contraction (c=0.6), so full_analysis estimated_severity=5 (from gm_ratio) overstates the blur severity",
+        "source": "full_analysis_R1 step3_blur signals.gm_ratio=0.1377, spectral_slope_ratio=1.4039, pca=1.5; R0 scale-family scan (blur3 26.85 >= blur5 26.34) never re-checked under stretch4 globals",
+        "action": "Glass severity scan 5 -> 4",
+        "result": "glass4 > glass5 by 0.54 dB on pair0; severity 4 chosen"
+      },
+      {
+        "signal": "saturation step is a false positive: full_analysis step4_global false_positive_checks.contrast_from_saturation=true; chroma_ratio=0.5045 is reproduced by per-channel contrast_weaken_stretch (c=0.6) alone; CI unique_G in R1 tests showed sim-target diff -30 (28%, over-contraction)",
+        "source": "full_analysis_R1 step4_global signals.saturation_chroma_ratio=0.5045 + false_positive_checks; test_candidate CI metrics R27-R29; R0's sat severity scan was performed only under contrast_weaken_stretch:1 (rounds 16-18), never under the winning stretch4",
+        "action": "Re-scan the saturation axis under stretch4: sat3 -> sat1 -> no saturation",
+        "result": "pair0: sat3 35.36, sat1 38.76 (+3.40), no sat 40.69 (+5.33); removing saturation also fixed unique_G (diff -1, 1%) and impulse_pct_zero (diff 0.053, 12%) -> the 2-step pipeline is correct; R0's third step was spurious"
+      },
+      {
+        "signal": "no compression / no quantization despite unique_G=106 (<200 rule): unique_G is fully reproduced by the 2-step pipeline",
+        "source": "block_boundary=1.0024 (0% FP, no JPEG); unique_G target 106 [106,106,106], dct_zero_ratio=0.8606; R1 winner unique_G error 1% / 0% / 0% on k=3",
+        "action": "No JPEG or quantization candidate needed",
+        "result": "unique_G<200 explained by contrast stretch contraction; no compression step"
+      },
+      {
+        "signal": "no noise (sigma=0.37<2); mean_shift=-22.6 consistent with contrast_weaken_stretch mean->0.5 (clean mean ~0.589); variance_ratio=0.1878 (std ratio 0.433)",
+        "source": "full_analysis_R1 step2_noise + step4_global; unchanged from R0",
+        "action": "Keep PSNR mode; keep contrast_weaken_stretch:4 (R0 severity bracket peak)",
+        "result": "Confirmed by the 2-step pipeline reaching 38-44 dB"
+      }
+    ],
+    "candidates_tested": [
+      {
+        "round": 26,
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "pair0_psnr": 34.82,
+        "ci": "3/10"
+      },
+      {
+        "round": 27,
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "pair0_psnr": 35.36,
+        "ci": "4/10"
+      },
+      {
+        "round": 28,
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+        "pair0_psnr": 34.78,
+        "ci": "4/10"
+      },
+      {
+        "round": 29,
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:1",
+        "pair0_psnr": 38.76,
+        "ci": "4/10"
+      },
+      {
+        "round": 30,
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "pair0_psnr": 40.69,
+        "ci": "9/10"
+      },
+      {
+        "round": 31,
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "pair1_psnr": 38.27,
+        "ci": "10/10"
+      },
+      {
+        "round": 32,
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "pair2_psnr": 43.57,
+        "ci": "9/10"
+      }
+    ],
+    "k_support_validation": {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+      "pair0_0227": {
+        "psnr_rgb": 40.69,
+        "ci_pass": "9/10"
+      },
+      "pair1_0459": {
+        "psnr_rgb": 38.27,
+        "ci_pass": "10/10"
+      },
+      "pair2_0032": {
+        "psnr_rgb": 43.57,
+        "ci_pass": "9/10"
+      },
+      "mean_psnr": 40.84,
+      "r0_mean_psnr": 32.86,
+      "delta_mean_db": 7.98,
+      "per_pair_delta_db": {
+        "pair0": 6.4,
+        "pair1": 10.13,
+        "pair2": 7.43
+      },
+      "note": "All 3 support pairs improve by >= 6.4 dB; mean 40.84 dB > 40 dB; no single-pair dependence"
+    },
+    "decision": {
+      "decision": "CHANGE",
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+      "per_step_verdict": {
+        "blur_glass:4": "LIKELY",
+        "contrast_weaken_stretch:4": "LIKELY"
+      },
+      "overall_verdict": "LIKELY",
+      "step_count_change": "3 steps (R0) -> 2 steps",
+      "reason": "CHANGE threshold met: >40 dB on pair0/pair2 (40.69/43.57) and +2 dB on every pair (mean +7.98 dB). The R0 pipeline's saturation step was a signal false positive (contrast_from_saturation), and the blur subtype was misjudged (glass_score gate).",
+      "alternatives": [
+        {
+          "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:1",
+          "pair0_psnr": 38.76,
+          "note": "3-step fallback at weakest saturation strength"
+        },
+        {
+          "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+          "pair0_psnr": 34.78,
+          "note": "gaussian subtype fallback"
+        }
+      ]
+    },
+    "independent_verification": {
+      "context": "Duplicate R1 launch ran concurrently in the same directory: the primary R1 agent (dc_start_utc 2026-10-31T02:21:03Z) produced rounds 26-32 and the R1 deliverables at 02:33; this session started ~02:31:30Z, re-ran run_full_analysis on pair0, and appended 5 additional test_candidate checks. The primary CHANGE decision is preserved and independently confirmed.",
+      "verification_pair0": {
+        "round": 33,
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "psnr_rgb": 40.67,
+        "ci_pass": "9/10",
+        "note": "Confirms the primary record 40.69 dB (deterministic re-run, 0.02 dB difference); CI 9/10 matches."
+      },
+      "auxiliary_checks_superseded": [
+        {
+          "round": 29,
+          "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+          "pair1_psnr": 28.7,
+          "note": "sat3 control on pair1; 3-step pipeline inferior to 2-step winner"
+        },
+        {
+          "round": 30,
+          "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+          "pair2_psnr": 36.93,
+          "note": "sat3 control on pair2"
+        },
+        {
+          "round": 31,
+          "pipeline": "blur_glass:4,saturate_weaken_HSV:3,contrast_weaken_stretch:4",
+          "pair0_psnr": 35.14,
+          "note": "global order swap (both ISP priority=2) is worse, rejected"
+        },
+        {
+          "round": 32,
+          "pipeline": "blur_glass:3,contrast_weaken_stretch:4,saturate_weaken_HSV:3",
+          "pair0_psnr": 35.28,
+          "note": "glass severity 3 vs 4: 35.28 vs 35.36, sev4 retained"
+        }
+      ],
+      "round_number_collision": "iterations[] holds two round-29/30/31/32 sets. The first set (sat1 38.76, 2-step pair0 40.69, pair1 38.27, pair2 43.57) belongs to the primary R1 agent; the second set (sat3 pair1 28.7, sat3 pair2 36.93, order-swap 35.14, glass3 35.28) belongs to this duplicate session. Round 33 is this session's verification of the primary winner.",
+      "final_decision_reaffirmed": "CHANGE -> blur_glass:4,contrast_weaken_stretch:4; k=3 PSNR 40.69/38.27/43.57 (primary record) with pair0 independently re-confirmed at 40.67; mean 40.84 vs R0 32.86 (+7.98 dB).",
+      "test_candidate_calls_total_R1": 12,
+      "duplicate_session_wall": "~02:31:30Z-02:41:30Z (about 600 s), 1 run_full_analysis + 5 test_candidate calls"
+    }
+  },
+  "reflection_R2": {
+    "round": "R2",
+    "trigger": "R1 support PSNR 20.96 vs R0 17.91 (delta +3.05 dB > 2 dB) -> R2",
+    "mode": "PSNR (noise_prior sigma=0.37 < 2; no noise step; no JPEG: block_boundary=1.0024)",
+    "signal_reinterpretation": [
+      {
+        "signal": "pair0 re-run run_full_analysis: identical to full_analysis_R1 except residual_intensity_corr 0.5787->0.5739 (numerical noise)",
+        "source": "full_analysis_R2.json vs full_analysis_R1.json (diff only this one value)",
+        "action": "No new signal -> R1 interpretation (glass + stretch, 2 steps) kept",
+        "result": "R2 anchor re-measure of the unchanged winner: 40.68 dB (R1 40.69/40.67)"
+      },
+      {
+        "signal": "contrast severity axis: every R0/R1 stretch scan was performed with saturate_weaken_HSV:3 present; the corrected 2-step pipeline never re-bracketed it",
+        "source": "variance_ratio=0.1878, contrast_spread_ratio=0.4362, mean_shift=-22.6; x_distortion contrast_weaken_stretch c=[1.0,0.9,0.8,0.6,0.4] (discrete)",
+        "action": "Re-scan stretch sev3 (c=0.8) and sev5 (c=0.4) under glass4",
+        "result": "pair0 31.26 / 29.82 vs sev4 40.68 -> sharp peak at the discrete c=0.6; axis closed, no intermediate severity exists"
+      },
+      {
+        "signal": "glass severity axis: full_analysis estimated_severity=5 comes from gm_ratio=0.1377, which embeds the stretch c=0.6 gradient contraction (c/(4m) ~ 0.3)",
+        "source": "gm_ratio=0.1377, spectral_slope_ratio=1.4039, FFT anisotropy=1.4991 (<1.7, motion excluded), glass_score=0.3044>0.25",
+        "action": "Re-scan glass sev3 and sev5 under stretch4",
+        "result": "pair0 39.35 / 39.68 vs sev4 40.68 -> near-flat crest (~1 dB); sev4 retained"
+      },
+      {
+        "signal": "glass_score=0.3044 is only marginally above the 0.25 gate; the R1 glass advantage over gaussian4 (35.36 vs 34.78) was measured with sat3 and needs a clean 2-step control",
+        "source": "glass_score=0.3044, sigma=0.37<3 -> SKILL blur DT glass branch",
+        "action": "gaussian4 + stretch4 control",
+        "result": "39.24 dB on pair0 (-1.44 dB vs glass4) -> glass advantage survives removal of the saturation step, but the subtype margin remains modest"
+      },
+      {
+        "signal": "zero_crossing_density is the only systematic CI failure (41-51% relative error; target ZC exceeds every simulation) while the other 9 metrics pass",
+        "source": "CI metrics of R34-R40; blur_glass uses unseeded np.random.randint shuffling (helper.shuffle_pixels_njit)",
+        "action": "Read as the GT glass shuffle being an unrecoverable random realization (signal-level CI reading, NOT R0-model residual diagnosis)",
+        "result": "Explains the content-dependent 38.27-43.57 dB spread and the simulation PSNR ceiling; no deterministic severity variant can close this gap"
+      },
+      {
+        "signal": "no noise / no JPEG / no quantization",
+        "source": "sigma=0.37<2; block_boundary=1.0024 (0% FP); unique_G reproduced within 1-2% by the 2-step pipeline",
+        "action": "Keep PSNR mode; peeled_noise_check not applicable (no noise step in any candidate)",
+        "result": "Unchanged"
+      }
+    ],
+    "candidates_tested": [
+      {
+        "round": 34,
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:3",
+        "pair0_psnr": 31.26,
+        "ci": "6/10"
+      },
+      {
+        "round": 35,
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:5",
+        "pair0_psnr": 29.82,
+        "ci": "5/10"
+      },
+      {
+        "round": 36,
+        "pipeline": "blur_glass:3,contrast_weaken_stretch:4",
+        "pair0_psnr": 39.35,
+        "ci": "9/10"
+      },
+      {
+        "round": 37,
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+        "pair0_psnr": 39.68,
+        "ci": "7/10"
+      },
+      {
+        "round": 38,
+        "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4",
+        "pair0_psnr": 39.24,
+        "ci": "8/10"
+      },
+      {
+        "round": 39,
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+        "pair1_psnr": 37.15,
+        "ci": "8/10"
+      },
+      {
+        "round": 40,
+        "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+        "pair0_psnr": 40.68,
+        "ci": "9/10",
+        "note": "anchor re-run of the unchanged R1 winner"
+      }
+    ],
+    "k_support_validation": {
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+      "pair0_0227": {
+        "psnr_rgb": 40.68,
+        "ci_pass": "9/10",
+        "note": "R2 anchor re-measure; stable with R1 40.69/40.67"
+      },
+      "pair1_0459": {
+        "psnr_rgb": 38.27,
+        "ci_pass": "10/10",
+        "note": "carried from R1 (identical pipeline); R2 closest alternative glass5 scored 37.15, lower"
+      },
+      "pair2_0032": {
+        "psnr_rgb": 43.57,
+        "ci_pass": "9/10",
+        "note": "carried from R1 (identical pipeline)"
+      },
+      "mean_psnr": 40.84,
+      "r0_mean_psnr": 32.86,
+      "delta_mean_db": 7.98,
+      "note": "Pipeline unchanged; R2 adds no k-pair re-measurement for pair1/pair2 because no candidate improved on pair0 (CHANGE rule requires per-pair improvement over the previous round)"
+    },
+    "decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": "blur_glass:4,contrast_weaken_stretch:4",
+      "per_step_verdict": {
+        "blur_glass:4": "LIKELY",
+        "contrast_weaken_stretch:4": "LIKELY"
+      },
+      "overall_verdict": "LIKELY",
+      "reason": "All 5 new R2 candidates scored below the previous-round winner on pair0 (best alternative glass5 39.68 vs 40.68), and glass5 also underperformed on the weakest pair1 (37.15 vs 38.27). Neither the >40 dB nor the +2 dB change rule is met on any support pair -> keep the R1 pipeline item-for-item.",
+      "alternatives": [
+        {
+          "pipeline": "blur_glass:5,contrast_weaken_stretch:4",
+          "pair0_psnr": 39.68,
+          "pair1_psnr": 37.15,
+          "note": "closest severity-neighbor fallback"
+        },
+        {
+          "pipeline": "blur_gaussian:4,contrast_weaken_stretch:4",
+          "pair0_psnr": 39.24,
+          "note": "cross-subtype fallback (no glass shuffle)"
+        },
+        {
+          "pipeline": "blur_glass:4,contrast_weaken_stretch:4,saturate_weaken_HSV:1",
+          "pair0_psnr": 38.76,
+          "note": "3-step fallback at the weakest saturation strength (inherited from R1)"
+        }
+      ]
+    },
+    "test_candidate_calls": 7,
+    "new_candidates": 5
+  }
+}

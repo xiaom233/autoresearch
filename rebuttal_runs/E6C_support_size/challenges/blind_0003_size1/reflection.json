@@ -1,0 +1,585 @@
+{
+  "challenge_id": "blind_0003_size1",
+  "support_size": 1,
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "MILD_COMPRESSION_POSSIBLE (low): block_boundary=1.0052 (<1.05), unique_G=214 (>=200), unique_G_ratio=0.846, dct_zero_ratio=0.507",
+      "blur": "GLASS_BLUR (medium): gm_ratio=0.2984 (strong blur), glass_score=0.5031>0.25, residual_anisotropy=1.203 (<4, motion excluded), spectral_slope_ratio=1.095, estimated_severity=5",
+      "noise": "sigma=1.48 < 2 -> NO_NOISE per SKILL Step0.5 rule; cross_ch_corr=0.9326/spatial_corr=0.4764 attributed to blur/JPEG coupling",
+      "global": "NO_GLOBAL: variance_ratio=0.868 (blur-induced), mean_shift=-0.5/255, clipped_fraction=0",
+      "global_verdict": "NO_GLOBAL"
+    },
+    "mode": "PSNR (sigma=1.48)",
+    "suspected": [
+      "blur_glass sev~5",
+      "blur_gaussian sev~5 (control)",
+      "compression_jpeg sev1-3 (mild)"
+    ],
+    "ruled_out": [
+      "motion blur (anisotropy=1.20)",
+      "noise (sigma<2)",
+      "brightness/contrast/saturation (NO_GLOBAL)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false,
+    "triggered": false,
+    "reason": "API unavailable; sigma=1.48<2 so SKILL Step0.5 gate (2<sigma<10) not triggered; treated as NO_NOISE"
+  },
+  "support_note": "k=1 (pair0 only). Final candidate re-verified on this single pair (repeat + signal mode); no cross-pair verification possible.",
+  "noise_6step_check": {
+    "measured_on": "peeled residual of blur_glass:2 (peeled_noise_glass2.json); full-residual noise_prior sigma=1.48 (full_analysis.json)",
+    "extreme_pct": 58.36,
+    "vm_slope": 4.5593,
+    "var_slope": -0.0038,
+    "spatial_corr": 0.9509,
+    "rgb_ratio": 1.0626,
+    "cross_ch_corr": 0.9076,
+    "channel_stds": {
+      "R": 4.6,
+      "G": 4.7,
+      "B": 4.9
+    },
+    "noise_prior_sigma_peeled": 2.97,
+    "noise_prior_sigma_full": 1.48,
+    "diagnosis": "NO_NOISE. extreme_pct=58.36%>50% with noise_prior sigma<5 matches the documented peeled §B IMPULSE false positive (JPEG/blur artifact); vm_slope and spatial_corr are inflated by glass pixel-shuffle mismatch (residual is image-aligned, spatial_corr=0.95). Decisive: minimum severity-1 noise sigma in x_distortion is ~12.75 (noise_gaussian_RGB 0.05*255; YCrCb 0.05*255; speckle 0.14 multiplicative; poisson c=80 ~20), far above observed residual sigma 2-3, so no noise step can exist."
+  },
+  "verification_on_support": {
+    "k": 1,
+    "pairs_used": [
+      "clean_0.png / degraded_0.png (pair0 alias clean.png / degraded.png)"
+    ],
+    "pair0_result": "blur_glass:2 -> PSNR 34.67 dB (run) / 34.64 dB (repeat), CI 10/10 both; verification signal MATCH (blur:spectral_slope, blur:wiener_kernel)",
+    "cross_pair_verification": "not possible (single support); anomaly check limited to pair0 repeat stability (0.03 dB spread)"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:5",
+        "thinking": "R1: run_full_analysis gm_ratio=0.298 (strong blur) + glass_score=0.503>0.25 + anisotropy=1.203 (motion excluded) + sigma=1.48<2 -> glass blur sev5 primary candidate"
+      },
+      "test_result": {
+        "psnr_rgb": 28.44,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5",
+        "thinking": "R1: gaussian control against glass (MTF gaussian/lens indistinguishable; SKILL default baseline). gm_ratio=0.298 implies strong blur, sev5 sigma=5"
+      },
+      "test_result": {
+        "psnr_rgb": 28.55,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:4",
+        "thinking": "R2 severity scan: glass est=5 by gm_ratio, sweep down to sev4 (sigma=1.4,shift=3,iter=2); glass PSNR capped by stochastic shuffle, compare relative"
+      },
+      "test_result": {
+        "psnr_rgb": 29.94,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_glass:3",
+        "thinking": "R2 severity scan cont.: sev4 improved over sev5 (29.94 vs 28.44, CI 9/10 vs 8/10) -> continue down to sev3 (sigma=1.2,shift=2,iter=2)"
+      },
+      "test_result": {
+        "psnr_rgb": 32.19,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "R2 severity scan cont.: sev3 best so far (32.19, CI9/10); trend still improving downward -> test sev2 (sigma=0.9,shift=2,iter=1)"
+      },
+      "test_result": {
+        "psnr_rgb": 34.67,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_glass:1",
+        "thinking": "R2 severity scan cont.: sev2 now 34.67 dB CI10/10; monotone improvement 5->2; test sev1 lower boundary (sigma=0.7,shift=1,iter=1) to locate optimum"
+      },
+      "test_result": {
+        "psnr_rgb": 32.85,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:2",
+        "thinking": "R2 cross-type: glass optimum sev2 (34.67, CI10/10); test gaussian at same severity (sigma=2) to check if deterministic gaussian explains target better than stochastic glass"
+      },
+      "test_result": {
+        "psnr_rgb": 34.05,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:3",
+        "thinking": "R2 cross-type severity: gaussian sev2=34.05 (below glass2 34.67); test sev3 (sigma=3) upward since target gm_ratio=0.298 suggests stronger blur"
+      },
+      "test_result": {
+        "psnr_rgb": 32.03,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,compression_jpeg:2",
+        "thinking": "R3 masking test: best blur glass:2 (34.67); target unique_G ratio 0.846 + block_boundary 1.005 -> add mild JPEG (blur then JPEG per physical order), sev2 midpoint"
+      },
+      "test_result": {
+        "psnr_rgb": 31.29,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,compression_jpeg:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "thinking": "R3 masking severity: jpeg:2 too strong (bb diff -0.251 vs target); target bb ~1.005, gaussian:2 sim bb was 0.028 BELOW target -> mild JPEG likely; test jpeg:1"
+      },
+      "test_result": {
+        "psnr_rgb": 32.1,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2,compression_jpeg:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_lens:2",
+        "thinking": "R2 cross-family coverage: glass vs gaussian close (34.67 vs 34.05); lens is deterministic and MTF-indistinguishable from gaussian -> test lens sev2 (disk radius 3) to complete blur family coverage"
+      },
+      "test_result": {
+        "psnr_rgb": 33.64,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Repeat of best candidate to assess stochastic glass variance (shuffle uses np.random); sev2 gave 34.67 dB CI10/10 vs all others <34.1"
+      },
+      "test_result": {
+        "psnr_rgb": 34.64,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:2",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_glass:2",
+        "thinking": "Final cross-check in SIGNAL mode: verify blur signals (spectral slope, Wiener kernel, block_boundary) for chosen glass sev2 candidate against target"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_glass:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "blur_lens:3",
+        "thinking": "R1 signal reinterpretation (deterministic severity gap): MTF cannot separate lens vs gaussian; R0 tested lens ONLY at sev2 (radius 3, PSNR 33.64) and gaussian sev2/3/5, leaving lens sev1/3/4/5 untested. gm_ratio=0.2984 (severity_source=gm_ratio -> sev5, strong smoothing) points to disk radius ~4-6, i.e. lens sev3/4, not radius 3. An exact deterministic kernel match must exceed 40 dB; 33.64 dB at radius 3 is consistent with a neighbouring radius. Testing lens sev3 (radius 4)."
+      },
+      "test_result": {
+        "psnr_rgb": 33.49,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "blur_lens:4",
+        "thinking": "R1 deterministic severity gap cont.: lens sev3 (radius 4) only 33.49 dB (vs lens sev2 radius 3 = 33.64), so GT lens radius is not 4. gm_ratio=0.2984 still indicates strong blur; continue lens disk sweep upward to sev4 (radius 6). Exact deterministic match must be >40 dB."
+      },
+      "test_result": {
+        "psnr_rgb": 30.72,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "blur_lens:1",
+        "thinking": "R1 lens sweep completion (lower boundary): lens radius 4/6 both <34 dB (33.49/30.72), lens radius 3 = 33.64; test lens sev1 (radius 2) to close the 2/3/4/6 grid. If GT were a lens disk on the severity grid, one grid point must match deterministically and exceed 40 dB; so far none do."
+      },
+      "test_result": {
+        "psnr_rgb": 31.29,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:1",
+        "thinking": "R1 deterministic severity gap (gaussian lower boundary): gaussian family trend sev2=34.05 > sev3=32.03 > sev5=28.55 is monotone in kernel distance from ~sigma 2; sev1 (sigma 1) is the only lower grid point untested and would give ~34+ if GT sigma is 1.x. A deterministic exact grid match must exceed 40 dB. Also completes the grid coverage that R0's sweep (2/3/5) left open."
+      },
+      "test_result": {
+        "psnr_rgb": 30.72,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 34.67,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_glass:2",
+      "psnr_rgb": 34.64,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    },
+    {
+      "pipeline": "blur_gaussian:2",
+      "psnr_rgb": 34.05,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 7
+    },
+    {
+      "pipeline": "blur_lens:2",
+      "psnr_rgb": 33.64,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_lens:3",
+      "psnr_rgb": 33.49,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 14
+    },
+    {
+      "pipeline": "blur_glass:1",
+      "psnr_rgb": 32.85,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 6
+    },
+    {
+      "pipeline": "blur_glass:3",
+      "psnr_rgb": 32.19,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_glass:2,compression_jpeg:1",
+      "psnr_rgb": 32.1,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 10
+    },
+    {
+      "pipeline": "blur_gaussian:3",
+      "psnr_rgb": 32.03,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 8
+    },
+    {
+      "pipeline": "blur_glass:2,compression_jpeg:2",
+      "psnr_rgb": 31.29,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 9
+    },
+    {
+      "pipeline": "blur_lens:1",
+      "psnr_rgb": 31.29,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 16
+    },
+    {
+      "pipeline": "blur_lens:4",
+      "psnr_rgb": 30.72,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 15
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "psnr_rgb": 30.72,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 17
+    },
+    {
+      "pipeline": "blur_glass:4",
+      "psnr_rgb": 29.94,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:5",
+      "psnr_rgb": 28.55,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "blur_glass:5",
+      "psnr_rgb": 28.44,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_glass",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "Single-step stochastic glass blur. Signals: glass_score=0.503>0.25 (metric-trust rule), gm_ratio=0.298, anisotropy=1.203 (motion excluded), noise_prior sigma=1.48<2 -> NO_NOISE, NO_GLOBAL, block_boundary=1.005 rules out JPEG (all JPEG q<=25 sims raise bb by >0.2). Severity sweep over glass 1-5 peaked at sev2 (34.67 dB, CI 10/10; repeat 34.64; sev1 32.85, sev3 32.19, gaussian2 34.05, lens2 33.64). Signal verification MATCH (spectral_slope + Wiener kernel). Verdict UNCERTAIN (not LIKELY) because glass is non-deterministic (pixel shuffle) so PSNR cannot exceed ~35 dB by construction (SKILL §C.4) and 34.6 dB sits in the 30-40 dB severity band.",
+    "alternatives": [
+      {
+        "function": "blur_gaussian",
+        "severity": 2,
+        "psnr": 34.05,
+        "ci": "9/10",
+        "function_family": "blur"
+      },
+      {
+        "function": "blur_lens",
+        "severity": 2,
+        "psnr": 33.64,
+        "ci": "10/10",
+        "function_family": "blur"
+      }
+    ]
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "verdict=UNCERTAIN (R0)",
+    "support_psnr_r0": 25.82,
+    "pair0_reanalysis": {
+      "output": "full_analysis_R1.json (run_full_analysis.py re-run; identical signal values to R0 full_analysis.json)",
+      "signals": {
+        "block_boundary": 1.0052,
+        "unique_per_channel": [228, 230, 214],
+        "unique_G_target_vs_clean": [214, 253],
+        "dct_zero_ratio": 0.5074,
+        "gm_ratio": 0.2984,
+        "spectral_slope_ratio": 1.0952,
+        "residual_anisotropy": 1.203,
+        "glass_score": 0.5031,
+        "blur_pca_ratio": 1.124,
+        "noise_prior_sigma": 1.48,
+        "variance_ratio": 0.8684,
+        "contrast_spread_ratio": 0.9197,
+        "chroma_ratio": 0.9657,
+        "brightness_mean_shift": -0.5
+      }
+    },
+    "signal_reinterpretation": [
+      {
+        "signal": "unique_per_channel=228/230/214 (clean 253)",
+        "interpretation": "Quantization functions are NOT mild: quantization_median maps each channel to 20/15/10/6/3 levels and quantization_hist to 24/16/8/6/4 levels at severities 1-5, so any quantization step would cap unique values near <=24. The target keeps 214+ levels, so quantization is excluded analytically without spending a test.",
+        "source": "x_distortion/quantization.py severity tables"
+      },
+      {
+        "signal": "variance_ratio=0.8684, contrast_spread_ratio=0.9197 (threshold-boundary re-check)",
+        "interpretation": "Step-4 thresholds are conservative (variance_ratio<0.55, spread<0.80), so the boundary was re-examined with the actual severity tables: the mildest contrast_weaken_scale:1 (scale 0.75) implies variance_ratio ~0.56, and contrast_weaken_stretch is stronger than that; neither can produce 0.868. Brightness shift sev1 = 0.1*255 = 25.5 levels vs observed mean_shift=-0.5; saturation_weaken sev1 = 0.6-0.7 chroma scale vs observed 0.9657. NO_GLOBAL confirmed as a real finding, not a threshold miss.",
+        "source": "x_distortion/contrast.py, brightness.py, saturate.py severity tables"
+      },
+      {
+        "signal": "block_boundary=1.0052 (<<1.1)",
+        "interpretation": "Block-boundary is the 0%-FP JPEG signal. JPEG q=25 is already the mildest available severity and R0's glass2+jpeg1/2 sims lowered PSNR 34.67->32.10/31.29 and raised bb by >0.2. Pure-JPEG is excluded; no test spent.",
+        "source": "R0 iterations 9/10; SKILL compression rule"
+      },
+      {
+        "signal": "residual_anisotropy=1.203 (<1.7)",
+        "interpretation": "Motion blur is excluded by the calibrated threshold (94% recall, 0% FP). Motion is also angle-random, so a single draw cannot confirm it. Not tested.",
+        "source": "full_analysis step3; SKILL §C"
+      },
+      {
+        "signal": "gm_ratio=0.2984 (severity_source=gm_ratio -> sev5) vs glass PSNR optimum at sev2",
+        "interpretation": "Misjudged/boundary severity signal: the gm-severity mapping assumes a deterministic isotropic blur and is contradicted by R0's full glass sweep (sev5 28.44 dB, sev2 34.67 dB). Also glass_score=0.5031 sits above the glass calibration band 0.19-0.41. This motivated closing the deterministic severity-grid gaps left open by R0 (lens 1/3/4, gaussian 1): if GT were a deterministic gaussian/lens at any grid severity, that exact severity would reproduce the target deterministically at >40 dB.",
+        "source": "R0 iterations 1-8; R1 rounds 14-17"
+      },
+      {
+        "signal": "noise_prior_sigma=1.48; peeled §B on blur_glass:2 (extreme_pct=58.36, vm_slope=4.56, var_slope=-0.004, spatial_corr=0.9509, rgb_ratio=1.06)",
+        "interpretation": "R0's NO_NOISE argument ('minimum sev1 noise sigma in x_distortion is 12.75, far above peeled residual sigma 2-3, so no noise step can exist') is invalid in principle when noise precedes blur: blind_challenge forces noise priority 0 before blur priority 1, and glass's internal gaussians (sigma 0.7-1.6, applied twice) can attenuate sigma 12.75 to order ~2-4 levels, which is exactly the scale of the peeled residual (std 4.7). However there is no positive noise evidence: the peeled residual is highly structured (spatial_corr=0.95), driven by shuffle/kernel mismatch rather than white noise. Noise type under noise->blur is documented as unidentifiable (SKILL §B 54.7% ≈ random). Since R0 blur_glass:2 verify_signals is already MATCH, a noise candidate can only add structured-residual/FWHM mismatches and cannot satisfy the required WEAK->PARTIAL/MATCH improvement on the single pair.",
+        "source": "SKILL §B and pipeline-order rules; x_distortion/noise.py, blur.py; R0 peeled_noise_glass2.json"
+      },
+      {
+        "signal": "deterministic exact-match sanity rule",
+        "interpretation": "For a deterministic GT blur, the exact grid severity reproduces the target (PSNR >> 40 dB). R0 covered gaussian sev2/3/5 and lens sev2; R1 closed gaussian sev1 and lens sev1/3/4. No deterministic grid point exceeded 33.64 dB. The stable ~34-35 dB ceiling is therefore only compatible with stochastic glass pixel-shuffle (SKILL §C.4).",
+        "source": "R0 iterations 1-12 + R1 rounds 14-17"
+      }
+    ],
+    "candidate_tests": [
+      {"round": 14, "pipeline": "blur_lens:3", "radius": 4, "psnr": 33.49, "ci": "9/10", "vs_r0_best": -1.18},
+      {"round": 15, "pipeline": "blur_lens:4", "radius": 6, "psnr": 30.72, "ci": "7/10", "vs_r0_best": -3.95},
+      {"round": 16, "pipeline": "blur_lens:1", "radius": 2, "psnr": 31.29, "ci": "8/10", "vs_r0_best": -3.38},
+      {"round": 17, "pipeline": "blur_gaussian:1", "sigma": 1, "psnr": 30.72, "ci": "9/10", "vs_r0_best": -3.95}
+    ],
+    "deterministic_grid_closure": {
+      "gaussian": {"tested": {"1": 30.72, "2": 34.05, "3": 32.03, "5": 28.55}, "untested": {"4": "ridge at sev2 (2>3>5); a sigma-4 GT would require sev3 or sev5 to beat sev2, which they do not"}},
+      "lens": {"tested": {"1": 31.29, "2": 33.64, "3": 33.49, "4": 30.72}, "untested": {"5": "radius 8 excluded: lens4 (radius 6) already falls below lens3 (radius 4), opposite of the trend a radius-8 GT would produce"}},
+      "glass": {"tested": {"1": 32.85, "2": 34.67, "3": 32.19, "4": 29.94, "5": 28.44}, "note": "stochastic pixel shuffle; PSNR ceiling ~35 dB by construction, sev2 optimal; repeat 34.64 dB"},
+      "excluded_analytically": {
+        "quantization": "unique_per_channel 228/230/214 vs <=24 levels at any severity",
+        "jpeg": "block_boundary 1.0052 and R0 jpeg combos -2.6/-3.4 dB",
+        "contrast/brightness/saturation": "severity tables cannot produce variance_ratio 0.868 / mean_shift -0.5 / chroma_ratio 0.9657",
+        "motion": "residual_anisotropy 1.203 < 1.7",
+        "noise": "no positive signal; noise->blur order unidentifiable; cannot beat an existing MATCH"
+      }
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [["blur_glass", 2]],
+      "rationale": "No new deterministic candidate reached >40 dB or +2 dB over R0's 34.67 dB (threshold 36.67 dB); the best R1 candidate was blur_lens:3 at 33.49 dB. All signal-consistent alternatives are exhausted or lower-scoring. blur_glass:2 remains the only candidate with both the best simulated PSNR (34.67/34.64 dB, CI 10/10) and a verify_signals MATCH. Change evidence is insufficient, so the R0 pipeline is kept verbatim.",
+      "verdict": "UNCERTAIN",
+      "alternatives_kept": ["blur_gaussian:2 (34.05 dB)", "blur_lens:2 (33.64 dB)"]
+    },
+    "single_pair_limitation": "k=1 (pair0 = clean_0/degraded_0, aliases clean.png/degraded.png). Every R1 PSNR comes from this one support pair; no cross-pair verification is possible, so content-specific kernel effects cannot be averaged out. The +2 dB CHANGE threshold was NOT relaxed for k=1; NO_CHANGE is the conservative side. The glass:2 stochastic repeat spread was 0.03 dB (R0 rounds 5/12).",
+    "budget": {
+      "new_candidates": 4,
+      "test_candidate_calls": 4,
+      "mode": "psnr",
+      "run_full_analysis_calls": 1,
+      "peeled_noise_check_calls": 0,
+      "signal_reanalysis_rounds": 1,
+      "limits": "<=5 candidates, <=15 test_candidate.py calls"
+    }
+  }
+}

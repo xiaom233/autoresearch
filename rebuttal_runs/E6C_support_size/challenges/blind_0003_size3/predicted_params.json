@@ -1,0 +1,32 @@
+{
+  "challenge_id": "blind_0003_size3",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 2, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+      "psnr_pair0_rgb": 34.02,
+      "ci": "9/10",
+      "function_family": "gaussian_blur",
+      "reason": "cross-family backup; overshoot_ratio diff 45% (target has glass shuffle texture)"
+    },
+    {
+      "pipeline": [{"function": "blur_lens", "severity": 2}],
+      "psnr_pair0_rgb": 33.61,
+      "ci": "10/10",
+      "function_family": "disk_blur",
+      "reason": "same-MTF backup; lacks pixel-shuffle texture"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 2,
+    "ci_pass_rate": "10/10 on all 3 support pairs",
+    "mode": "PSNR + CI statistical (glass shuffle RNG caps PSNR; SKILL C4)",
+    "rationale": "Single-step glass blur severity 2. Blur DT: anisotropy=1.244<1.7 (not motion); glass_score=0.505>0.25 and 0.466 (pair1) indicates pixel-shuffle HF residual. Severity scan via PSNR peak + CI: glass2 = 34.66/28.44/38.91 dB on pairs 0/1/2, all CI 10/10 with every content-independent metric diff <= 0.004; glass1 (8/10), glass3 (9/10 pair0), glass5 (8/10) all worse. PSNR <40 is expected: helper.shuffle_pixels_njit uses seedless np.random so exact pixels cannot be reproduced. Independent cross-check: run_full_analysis on the glass:2 simulation reproduces the target's full signal fingerprint (sigma 1.5 vs 1.48; variance_ratio 0.868 vs 0.869; mean_shift -0.5; glass_score 0.50 vs 0.505; block_boundary 1.001 vs 1.002). Ruled out: JPEG (block_boundary~1.0, 0%FP), global (variance explained content-dependently by blur; mean_shift -0.5/255<0.005), noise (wavelet sigma content-dependent 1.48/4.08/0.37; impulse_total_pct diff 0), motion blur (anisotropy<1.7).",
+    "psnr_by_pair": {"pair0": 34.66, "pair1": 28.44, "pair2": 38.91},
+    "support_pairs_used": 3,
+    "test_candidate_calls": 20
+  }
+}

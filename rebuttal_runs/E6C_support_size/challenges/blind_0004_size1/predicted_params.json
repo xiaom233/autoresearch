@@ -1,0 +1,48 @@
+{
+  "challenge_id": "blind_0004_size1",
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_motion",
+          "severity": 2
+        }
+      ],
+      "psnr": 23.95,
+      "ci_pass_rate": "9/10",
+      "function_family": "blur_motion",
+      "rationale": "同族次优：两次角度采样 PSNR 20.86/23.95、CI 9/10；系统性失配 impulse_pct_255（目标高 38%），比 sev1（1-5%）差，保留为 severity 备份"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 2
+        }
+      ],
+      "psnr": 25.71,
+      "ci_pass_rate": "6/10",
+      "function_family": "blur_gaussian",
+      "rationale": "跨族对照（PSNR 数值最高但 CI 仅 6/10）。高斯为确定性无随机自由度，若为真值 PSNR 应 inf 而非 25.7dB → 反证排除；保留仅为跨族可审计"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR + CI 统计匹配（motion 角度随机，PSNR 结构性无法达到 40dB）",
+    "rationale": "single-step：blur_motion:1。证据链：(1) gm_ratio=0.648、spectral_slope_ratio=1.057 → 轻度 blur；(2) 确定性 blur 族（gaussian/lens）任意 severity 均 24.9-25.7dB 且 CI 4-7/10——若为真值应 inf PSNR，排除；(3) blur_motion 是随机角度核，PSNR 不能做正确性判据，改用 content-independent CI：motion:1 三次独立角度采样全部 10/10，motion:2/3 稳定 9/10 且系统性失配 impulse_pct_255（38-59%）；(4) JPEG:1 4/10、block_boundary 失配 85% → 无压缩；σ=0.74<2、mean_shift=-0.5、variance_ratio=0.945、chroma_ratio=0.972 → 无噪声/无 global。类型高置信（CI 10/10），severity 主选 1（impulse_pct_255 1-5% 吻合），故 UNCERTAIN 而非 LIKELY。",
+    "notes": [
+      "full_analysis 的 FFT anisotropy=0.00 是 blur 未触发时提前 return 的默认值，不是有效信号；初始据此排除 motion 属误判，已由 iterations R6-R11 修正",
+      "单 support（k=1）：仅 pair0，无跨对验证",
+      "motion:1 与 GT 的随机角度无法对齐，因此仿真 PSNR 上限受角度采样限制"
+    ]
+  }
+}

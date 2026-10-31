@@ -1,0 +1,56 @@
+{
+  "challenge_id": "blind_0002_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "noise_gaussian_YCrCb",
+      2
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_gaussian_YCrCb",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (sigma=14.46)",
+    "verdicts_per_step": [
+      {
+        "step": 1,
+        "function": "noise_gaussian_YCrCb",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "r1_changed": false,
+    "rationale": "R1 NO_CHANGE：R0 管线 noise_gaussian_YCrCb:2 在唯一 support 对 pair0 上已取得 signal MATCH。R1 信号重释与两个新候选均未提供更优解释：(1) JPEG 排除——block_boundary=0.9992、unique_G=256/256，且库内 compression_jpeg 最低档 sev1 即 quality=25，直接测试 block_boundary diff=41%（WEAK）；(2) blur 排除——spectral_slope ratio=0.9937（target 不比 clean 陡），加入 blur_gaussian:1 后 noise:sigma diff=93%（PARTIAL，不如 R0）；(3) saturation/contrast/brightness/gamma 无温和可行档位：saturate_strengthen_HSV 最小 sev1 即 S×3.0，contrast 各档方差比远离 1.0448，mean_shift=-0.4/255，residual_intensity_corr=0.0398<0.15；(4) 噪声类型/强度决定性证据——target §B ch_stds [30.9,22.9,37.3] 与 peeled residual ch_stds [42.8,32.4,52.0]/sqrt(2)=[30.3,22.9,36.8] 在 R/G/B 上差 2.0%/0.0%/1.4%，与库内 YCrCb sev2 理论 [34.7,23.3,42.2]（clip 解释 R/B 约 10% 折损）吻合，而 sev1 [22.0,16.3,26.0]、sev3 [50.8,32.2,62.7] 明显不符。噪声步骤按协议永不 LIKELY，故 verdict=UNCERTAIN。",
+    "signal_sources": [
+      "step1: block_boundary=0.9992, unique_G=256/256, dct_zero_ratio=0.0207",
+      "step2: noise_prior_sigma=14.46, spatial_corr=0.0008, cross_ch_corr=0.1664, residual_intensity_corr=0.0398 (<0.15)",
+      "§B: extreme_pct=51.4 (带符号残差伪影), zero_ratio=2.17%, vm_slope 符号翻转不稳定, var_slope=-0.546, spatial_corr=0.380, rgb_ratio=1.625, cross_ch_corr=0.293, ch_stds=[30.9,22.9,37.3]",
+      "peeled (strip YCrCb:2): residual_std=43.2, ch_stds=[42.8,32.4,52.0] = sqrt(2)x[30.3,22.9,36.8], noise_prior sigma=24.96, channel ratio=1.5",
+      "step3: spectral_slope target=-1.0043 vs clean=-1.0107 (ratio=0.9937), gm_ratio=3.6555 (噪声破坏不可用)",
+      "step4: variance_ratio=1.0448, contrast_spread_ratio=1.064, mean_shift=-0.4/255, clipped_fraction=0.1255, chroma_ratio=1.2044"
+    ],
+    "test_candidate_calls": 2,
+    "new_candidates": [
+      {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_gaussian:1",
+        "verdict": "PARTIAL",
+        "mismatch": "noise:sigma diff=93%"
+      },
+      {
+        "pipeline": "noise_gaussian_YCrCb:2,compression_jpeg:1",
+        "verdict": "WEAK",
+        "mismatch": "compression:block_boundary diff=41%, noise:sigma diff=90%"
+      }
+    ],
+    "single_support_note": "k=1 单 support：仅 pair0（clean_0/degraded_0，clean/degraded 为别名），无跨对验证；单对信号验证噪声较大，按协议阈值不放宽，证据不足即 NO_CHANGE。"
+  }
+}

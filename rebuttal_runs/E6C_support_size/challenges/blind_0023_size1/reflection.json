@@ -1,0 +1,682 @@
+{
+  "challenge_id": "blind_0023_size1",
+  "agent_mode": "E6C support-size blind ID sub-agent",
+  "support": {
+    "k": 1,
+    "pairs": [
+      "clean_0.png / degraded_0.png (alias pair0)"
+    ],
+    "note": "单 support，无法做跨对验证"
+  },
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=4.0534, unique_G_ratio=0.945, dct_zero_ratio=0.888 → JPEG 确认 (bb 0% FP)",
+      "blur": "gm_ratio=0.1233 极低 (强平滑), spectral_slope -1.3796 vs clean -0.9209 (ratio 1.498), residual_anisotropy=1.2897<1.7 排除 motion, glass_score=1.3765>0.25 但 sigma=3.95>3 不满足 SKILL glass 门控, 需实测 gaussian/lens/glass",
+      "noise": "noise_prior_sigma=3.95 (>=2 → SIGNAL 模式), cross_channel_corr=0.8628, residual_intensity_corr=0.4588 (gamma/YCrCb 疑似), 需剥离后 §B 复核",
+      "global": "variance_ratio=0.4574 + spread_ratio=0.6399 → contrast weaken; chroma_ratio=0.7864 疑似 saturation weaken, 但 contrast_from_saturation=true (contrast c~0.75 本身可解释 chroma 下降); mean_shift=5.5/255 无 brightness; clipped_fraction=0"
+    },
+    "mode": "SIGNAL (sigma≈4.0 ≥ 2, PSNR 不可靠)",
+    "physical_order_hypothesis": "noise (sensor) → blur (optical) → contrast/saturation (ISP) → JPEG (storage); 同优先级 p2 内部顺序待定",
+    "suspected": [
+      "compression_jpeg sev4-5",
+      "blur_gaussian/lens sev4-5 (glass 存疑)",
+      "noise gaussian RGB/YCrCb sev1-3",
+      "contrast_weaken_scale sev1 (± saturation_weaken)"
+    ],
+    "ruled_out": [
+      "motion blur (anisotropy 1.29)",
+      "brightness (mean_shift 0.0216<0.08 且方差比≠1)"
+    ]
+  },
+  "qwen_gate": {
+    "available": false,
+    "note": "Qwen/API 不可用，跳过 Step 0.5 门控，按 sigma≥2 直接进入信号验证"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:5",
+        "thinking": "run_full_analysis: block_boundary=4.05 (0% FP → JPEG 确认), dct_zero_ratio=0.888 极高 → 强 JPEG。先测最强 sev5 (quality=5), 比较 bb 与 dct_zero_ratio"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=43%)"
+        ],
+        "pipeline": "compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "compression_jpeg:4",
+        "thinking": "sev5 bb 偏差 43% → 按 severity 扫描规则降一档, 测 jpeg sev4 (quality=8); 目标 bb=4.05 受噪声/模糊调制"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=56%)"
+        ],
+        "pipeline": "compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:5",
+        "thinking": "step3 DT: glass_score=1.3765 高 → glass 候选; gm_ratio=0.123 极低说明强平滑+像素打乱; 目标 slope=-1.3796。JPEG 取最强 sev5 (dct_zero_ratio=0.888 高)。联合验证 slope/wiener/bb"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=39%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:5",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "thinking": "glass:5 模糊信号已全 MATCH; bb 偏差 39% → 按 severity 扫描降 JPEG 一档测 sev4, 观察 bb diff 变化方向"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=11%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "thinking": "sev4 bb diff=11% 仍偏一档; 按扫描规则继续测 sev3, 判断是否过冲 (目标含噪声会压低 bb)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=33%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "variance_ratio=0.4574, spread_ratio=0.6399, chroma_ratio=0.7864, mean_shift 无 → contrast weaken 候选。ImageEnhance c=0.75(sev1) 理论方差比≈0.56×(JPEG衰减)≈目标; 且 c=0.75 可解释 chroma_ratio=0.786 (contrast 等比缩放 RGB → chroma 同步降)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=15%)",
+          "global:mean_shift (diff=0.0129)",
+          "global:variance_ratio (diff=19%)"
+        ],
+        "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "thinking": "p2 内 contrast 与 JPEG 顺序随机。交换顺序: JPEG 先压缩 glass 打乱后的高频 (方差削减更多), 再看 variance_ratio 是否从 0.56 降到目标 0.457; bb 比率应基本不变"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=11%)",
+          "global:mean_shift (diff=0.0136)",
+          "global:variance_ratio (diff=19%)"
+        ],
+        "pipeline": "blur_glass:5,compression_jpeg:4,contrast_weaken_scale:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:3,compression_jpeg:4",
+        "thinking": "scale sev1 方差比 0.56 偏高且 ms 不符 → gamma-like 变换更可能: stretch 将均值映射到 0.5, 若 clean 均值<0.5 则亮化 (对应 target ms=+5.5), 同时压缩方差。step2 residual_intensity_corr=0.4588/ gamma_suspect 支持。先测 c=0.8 (sev3)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=80%)",
+          "global:mean_shift (diff=0.0914)",
+          "global:variance_ratio (diff=47%)"
+        ],
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:3,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "sim(glass5+jpeg4+contrast1) 实测 vr=0.356/ms=2.2/chroma=0.65/bb=4.68/dct=0.914, 全部比目标'更狠'; 目标 gm 0.123>sim 0.103。假设 glass 实为 sev4 (shift=3,sigma=1.4), JPEG 输入高频更少被毁 → vr/chroma/bb/dct 全部向目标回归。测之"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel",
+          "compression:block_boundary"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.143)",
+          "global:mean_shift (diff=0.0130)",
+          "global:variance_ratio (diff=15%)"
+        ],
+        "pipeline": "blur_glass:4,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,noise_gaussian_RGB:2,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "vr/chroma/bb/dct/gm 偏差显示目标比无噪 sim 高频更多 → 真实噪声应在 glass 之后 (否则被 8x 平滑掉): RGB sev2 σ=25.5, 经 contrast0.75 与 JPEG q8 衰减, 与 peeled residual std13.6/σ7.9 的平谱 Gaussian RGB 估计一致; §B rgb_ratio 1.10 偏向 RGB 非 YCrCb"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "compression:block_boundary (diff=13%)",
+          "global:mean_shift (diff=0.0132)",
+          "global:variance_ratio (diff=20%)"
+        ],
+        "pipeline": "blur_glass:5,noise_gaussian_RGB:2,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,noise_gaussian_RGB:1,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "RGB sev2 噪声 sigma 匹配但 vr 偏差仍 20% (噪声方差被 JPEG q8 大量量化); 按 severity 扫描降噪一档测 RGB sev1 (σ=12.75), 观察 vr/bb 与 sigma 是否改善"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "compression:block_boundary (diff=16%)",
+          "global:mean_shift (diff=0.0143)",
+          "global:variance_ratio (diff=19%)"
+        ],
+        "pipeline": "blur_glass:5,noise_gaussian_RGB:1,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,saturate_weaken_HSV:2,compression_jpeg:4",
+        "thinking": "替代全局假设: HSV 去饱和 S×0.55 会亮化均值 (RGB 向 V 收缩, ms 目标+5.5 比 contrast 的+2.2 更吻合) 且降低色度/方差; contrast-from-saturation FP 标记提示二者混淆。先测无噪声确定性签名 (vr/ms/chroma)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "compression:block_boundary (diff=16%)",
+          "global:mean_shift (diff=0.0134)",
+          "global:variance_ratio (diff=28%)"
+        ],
+        "pipeline": "blur_glass:5,saturate_weaken_HSV:2,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,noise_gaussian_RGB:2,contrast_weaken_scale:1,compression_jpeg:3",
+        "thinking": "vr 目标 0.457 高于 q8 模拟 0.346 → 更高质量 JPEG 保留更多方差; 在完整上下文复核 sev3 (q12) 的 bb/dct/vr 综合表现, 与 sev4 对比取优"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=8.0px)",
+          "compression:block_boundary (diff=17%)",
+          "global:mean_shift (diff=0.0162)",
+          "global:variance_ratio (diff=19%)"
+        ],
+        "pipeline": "blur_glass:5,noise_gaussian_RGB:2,contrast_weaken_scale:1,compression_jpeg:3",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "对照测试: SKILL 决策树在 sigma>3 时应默认 gaussian (lens 备选); run_full_analysis 的 agent_instructions 也推荐 gaussian:5。glass 的 slope/wiener 匹配可能不专属; 若 gaussian:5 的 slope 差>0.08 则玻璃成立"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.222)",
+          "compression:block_boundary (diff=40%)",
+          "global:mean_shift (diff=0.0128)",
+          "global:variance_ratio (diff=21%)"
+        ],
+        "pipeline": "blur_gaussian:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "blur_lens:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "SKILL 要求 gaussian↔lens 互测 (MTF 不可区分)。glass:5 已匹配 slope; lens:5 为跨族对照, 若 slope 差>0.08 则玻璃确定"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:wiener_kernel"
+        ],
+        "mismatched_signals": [
+          "blur:spectral_slope (diff=0.113)",
+          "compression:block_boundary (diff=17%)",
+          "global:mean_shift (diff=0.0130)",
+          "global:variance_ratio (diff=19%)"
+        ],
+        "pipeline": "blur_lens:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "contrast_weaken_scale:1,noise_gaussian_RGB:2,blur_glass:5,compression_jpeg:4",
+        "thinking": "均值 +5.5 之谜: PIL contrast 混向 L 均值, 竹林图像 luma 均值远高于 RGB 均值。若 contrast 作用在 clean 原图 (顺序前置), 平均位移=(1-0.75)*(L-RGB) 可达 +5.5; 而玻璃/JPEG 后再对比只给 +2.2。测试顺序 contrast→noise→glass→jpeg"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)",
+          "compression:block_boundary (diff=16%)",
+          "global:mean_shift (diff=0.0137)",
+          "global:variance_ratio (diff=19%)"
+        ],
+        "pipeline": "contrast_weaken_scale:1,noise_gaussian_RGB:2,blur_glass:5,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "最终候选 (物理顺序 noise<blur): 噪声若存在应被 glass 平滑, 故类型/强度不可辨识 (noise→blur DT 54.7%≈随机); 确定性部分 glass:5 (slope/wiener 稳定匹配, gaussian/lens/glass4 均失败) + contrast_weaken_scale:1 (方差/色度/展宽比最吻合, 残差可由 JPEG 编码器版本差异解释) + jpeg:4 (bb/dct 最优)。最终确认"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=10.0px)",
+          "compression:block_boundary (diff=18%)",
+          "global:mean_shift (diff=0.0133)",
+          "global:variance_ratio (diff=23%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "R1 signal re-interpretation: peeled residual std=13.6 but noise_prior sigma=3.95 exactly reproduced by no-noise deterministic sim (R0 sim_scale1), so noise existence is unproven. Pure-deterministic candidate (no noise) is the control baseline for PSNR validation. Signals kept: gm_ratio=0.1233, spectral_slope=-1.3796 (target), variance_ratio=0.4574, chroma_ratio=0.7864, block_boundary=4.0534 (0% FP)."
+      },
+      "test_result": {
+        "psnr_rgb": 25.21,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:1,compression_jpeg:4",
+        "thinking": "R1: R0 only tested contrast_weaken_stretch:3 (mean mapped too bright, ms diff 0.0914) and never scanned stretch sev1/2 (SKILL severity-scan gap). Signals: target variance_ratio=0.4574, mean_shift=+0.0216, chroma_ratio=0.7864, residual_intensity_corr=0.4613 + gamma_suspect=true. Scale1 sim gave vr=0.356 (too much variance cut) and ms=+0.0086 (too little shift); stretch sev1 may land between."
+      },
+      "test_result": {
+        "psnr_rgb": 18.24,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,contrast_weaken_stretch:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:3",
+        "thinking": "R1: R0 judged JPEG severity by signal only (sev4 bb diff 11% vs sev3 33%), but target dct_zero_ratio=0.888 lies between sev4 sim 0.905 and sev3 sim 0.861; R0's residual bias (+13% variance, lower bb/dct) was attributed to a milder target-side encoder (equiv q10-12). Deterministic PSNR comparison against the glass5+scale1+jpeg4 baseline (25.21 dB) directly tests the R0 encoder-version hypothesis (CHANGE requires +2 dB)."
+      },
+      "test_result": {
+        "psnr_rgb": 25.4,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:3",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:3,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "R1: full_analysis step2 verdict=GAUSSIAN_YCrCb (sev~3, cross_channel_corr=0.8628, residual_intensity_corr=0.4613), but R0 only tested gaussian_RGB sev1/2 and never YCrCb. Noise is positional before glass (noise→blur), type unc. §B rgb_ratio=1.1011 argues RGB; this test decides via signal match (noise sigma + structured residual), not PSNR."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=14.0px)",
+          "compression:block_boundary (diff=25%)",
+          "global:variance_ratio (diff=30%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:3,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:2,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "thinking": "R1 SKILL severity scan: YCrCb sev3 returned WEAK (4✓/3✗, matched noise sigma + mean_shift but vr diff 30%). Scan est-1 = sev2 to test whether lower chroma-noise sigma reduces variance_ratio overshoot (target vr=0.4574) while keeping sigma/mean_shift matched; only a WEAK→PARTIAL/MATCH improvement can justify changing the R0 noise subtype (currently gaussian_RGB:2)."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:sigma"
+        ],
+        "mismatched_signals": [
+          "noise:structured_residual (FWHM=12.0px)",
+          "compression:block_boundary (diff=19%)",
+          "global:mean_shift (diff=0.0109)",
+          "global:variance_ratio (diff=25%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:2,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:3",
+      "psnr_rgb": 25.4,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 13
+    },
+    {
+      "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+      "psnr_rgb": 25.21,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 11
+    },
+    {
+      "pipeline": "blur_glass:5,contrast_weaken_stretch:1,compression_jpeg:4",
+      "psnr_rgb": 18.24,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 12
+    }
+  ],
+  "noise_6step_check": {
+    "source": "peeled_noise_check.py 剥离 blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4 后的残差",
+    "extreme_pct": 56.07,
+    "vm_slope": 0.0589,
+    "var_slope": 0.0681,
+    "spatial_corr": 0.9655,
+    "rgb_ratio": 1.1011,
+    "cross_channel_corr": 0.7017,
+    "ch_stds": [
+      12.8,
+      13.7,
+      14.1
+    ],
+    "residual_std": 13.6,
+    "diagnosis": "spatial_corr=0.9655 说明剥离残差高度结构化（glass 随机种子失配 + JPEG 编码差异主导），§B 不可靠；extreme_pct=56% 为有符号残差公式伪影（SKILL 已知 FP，遵循 reflection_trigger 忽略 IMPULSE）；rgb_ratio=1.10<1.4 → 偏 RGB 非 YCrCb。关键证据：无噪声模拟图(sim_scale1)同样测得 noise_prior_sigma=3.95/GAUSSIAN_YCrCb，与目标完全一致 → 目标的 sigma≈4 可由 glass+JPEG 伪影完全解释，真实噪声不可测量。若存在噪声则位于 glass 之前（被 8x 平滑），类型/强度不可辨识（noise→blur DT 54.7%≈随机）。保守取 gaussian_RGB sev2。"
+  },
+  "deterministic_checks": {
+    "blur_discrimination": {
+      "glass5_sims_slope": [
+        -1.4047,
+        -1.3708,
+        -1.4152,
+        -1.3917,
+        -1.3708
+      ],
+      "target_slope": -1.3796,
+      "gaussian5_slope_diff": 0.222,
+      "lens5_slope_diff": 0.113,
+      "glass4_slope_diff": 0.143,
+      "verdict": "blur_glass:5 — slope/wiener/glass_score 在多随机种子下稳定匹配；其余子类型与严重度均失败"
+    },
+    "jpeg_severity_scan": {
+      "sev5_bb_diff_pct": 39,
+      "sev4_bb_diff_pct": 11,
+      "sev3_bb_diff_pct": 33,
+      "dct_zero_target": 0.888,
+      "dct_zero_sev4_sim": 0.905,
+      "dct_zero_sev3_sim": 0.861,
+      "verdict": "compression_jpeg:4 — bb 最接近（sev4 单独最优，sevs 3/5 均显著更差）"
+    },
+    "global_discrimination": {
+      "no_global_sim_vr": 0.6365,
+      "contrast1_sim_vr": 0.3563,
+      "stretch3_sim_ms": 0.113,
+      "sat2_sim_vr_diff_pct": 28,
+      "target_vr": 0.4574,
+      "target_ms": 0.0216,
+      "verdict": "contrast_weaken_scale:1 — 方差/spread/chroma 方向最吻合；stretch 因均值映射到 0.5 (+29/255) 排除；saturation 方差降幅不足且 chroma 方向相反"
+    },
+    "residual_explanation": "目标相对模拟仍系统性偏高 ~13% 幅度（vr/chroma/spread/unique_G 高，bb/dct 低）且均值 +3.3/255；该模式与'目标端 JPEG 编码器比本环境 q8 略温和（等效 q10-12）'一致（同一 x_distortion 代码，不同 Pillow 版本 JPEG 量化表/子采样差异），属环境不可复现差异，非管线错误。"
+  },
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_gaussian_RGB",
+        "severity": 2,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "blur_glass",
+        "severity": 5,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "contrast_weaken_scale",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "rationale": "SIGNAL 模式（sigma≈4）：blur_glass:5 高置信（spectral_slope 与 wiener 核在多随机种子下均 MATCH；gaussian/lens/glass4 对照均失败）。compression_jpeg 存在性确定（bb=4.05, 0% FP），severity 以 bb/dct 综合判定为 4（11% vs 33%/39%）。contrast_weaken_scale:1 为方差/spread/chroma 三个信号的最优单一函数解释（stretch 均值映射 +29/255 排除，saturation 方差降幅不足且 chroma 方向相反）。噪声存在性不可验证（无噪声模拟的 noise_prior 指纹与目标完全一致，sigma=3.95 为 glass+JPEG 伪影底噪），按物理顺序置于 glass 前、取保守 sev2，标记 UNCERTAIN。系统性残差（+13% 幅度、+3.3 均值）指向目标生成端 JPEG 编码器版本差异。",
+    "support_validation": "k=1，仅 pair0（clean_0/degraded_0）可验证；单 support，无法做跨对验证。最终候选在本目录唯一 support 上复核（全部候选测试均使用该对）。"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 overall verdict=UNCERTAIN + support_psnr_r0=16.29",
+    "signal_rerun": {
+      "script": "run_full_analysis.py --target degraded.png --clean clean.png --output full_analysis_R1.json",
+      "result": "与 R0 一致：block_boundary=4.0534, unique_G=242, dct_zero_ratio=0.888, noise_prior_sigma=3.95, gm_ratio=0.1233, spectral_slope=-1.3796, glass_score=1.3765, residual_anisotropy=1.2897, variance_ratio=0.4574, spread_ratio=0.6399, chroma_ratio=0.7864, mean_shift=5.5/255(0.0216), clipped_fraction=0, residual_intensity_corr=0.4613"
+    },
+    "signal_reinterpretation": [
+      {
+        "signal": "residual_intensity_corr=0.4613 + gamma_suspect_from_noise=true；R0 仅测过 contrast_weaken_stretch:3",
+        "gap": "SKILL severity 扫描缺口：stretch sev1/2 从未测试",
+        "hypothesis": "contrast_weaken_stretch:1 (gamma-like) 可同时解释 variance_ratio=0.4574 与 mean_shift=+5.5/255",
+        "test": "round12 确定性子管线 PSNR (glass5+stretch1+jpeg4)",
+        "result": "18.24 dB vs scale1 无噪声基线 25.21 dB（-6.97 dB，CI 5/10）",
+        "verdict": "REJECT — gamma-like 重释否定，contrast_weaken_scale:1 维持"
+      },
+      {
+        "signal": "noise_prior_sigma=3.95 与无噪声确定性模拟指纹一致（R0 sim_scale1）；peeled residual_std=13.6",
+        "gap": "R0 从未对无噪声确定性管线做 PSNR 验证，噪声存在性仅由信号间接推断",
+        "hypothesis": "若确定性管线可 >40 dB 复现目标，则 noise 步骤为假阳性",
+        "test": "round11 无噪声确定性 PSNR (glass5+scale1+jpeg4)",
+        "result": "25.21 dB (CI 7/10)，RMSE≈14.0 ≈ peeled residual std 13.6；未达 40 dB",
+        "verdict": "INCONCLUSIVE — 噪声存在性仍不可证伪，按保守原则保留 noise 步骤"
+      },
+      {
+        "signal": "full_analysis step2 verdict=GAUSSIAN_YCrCb (cross_channel_corr=0.8628, sigma≈3.95) vs R0 peeled §B rgb_ratio=1.1011、ch_stds=[12.8,13.7,14.1]",
+        "gap": "R0 只测 gaussian_RGB sev1/2，从未测 YCrCb（full_analysis 推荐）",
+        "hypothesis": "noise_gaussian_YCrCb:3 / :2 可能更匹配噪声信号",
+        "test": "round14/15 SIGNAL 模式（noise→glass→scale1→jpeg4）",
+        "result": "YCrCb:3 = WEAK (4✓/3✗, 匹配 sigma+mean_shift, vr diff 30%, bb 25%)；YCrCb:2 = WEAK (3✓/4✗, sigma 匹配但 mean_shift/vr 失配)",
+        "verdict": "REJECT — 无 WEAK→PARTIAL/MATCH；rgb_ratio 1.10<1.4 与 ch_stds 比值 1.10 支持 RGB，维持 gaussian_RGB:2"
+      },
+      {
+        "signal": "dct_zero_ratio: target 0.888 介于 sev4 sim 0.905 与 sev3 sim 0.861；block_boundary: sev4 diff 11% vs sev3 33%",
+        "gap": "R0 仅用信号判定 JPEG 严重度，未做确定性 PSNR 对照",
+        "hypothesis": "目标端编码器更温和（等效 q10-12）→ jpeg sev3 可能更优",
+        "test": "round13 确定性子管线 PSNR (glass5+scale1+jpeg3)",
+        "result": "25.40 dB vs jpeg4 基线 25.21 dB（+0.19 dB，< +2 dB 阈值，CI 7/10）",
+        "verdict": "REJECT — bb 信号与 PSNR 均不支持改档，compression_jpeg:4 维持"
+      }
+    ],
+    "candidates_tested": [
+      "round11 blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4 → 25.21 dB (CI 7/10)",
+      "round12 blur_glass:5,contrast_weaken_stretch:1,compression_jpeg:4 → 18.24 dB (CI 5/10)",
+      "round13 blur_glass:5,contrast_weaken_scale:1,compression_jpeg:3 → 25.40 dB (CI 7/10)",
+      "round14 noise_gaussian_YCrCb:3,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4 → WEAK (4✓/3✗)",
+      "round15 noise_gaussian_YCrCb:2,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4 → WEAK (3✓/4✗)"
+    ],
+    "k1_limitation": "k=1，仅 pair0 可验证，无法做跨对一致性检验。噪声候选在单对上的 verify_signals 匹配数在 4✓/3✗ 与 3✓/4✗ 间摆动，单对噪声验证方差大；按指令阈值不放宽（需 WEAK→PARTIAL/MATCH 或确定性 >40 dB/+2 dB），证据不足即 NO_CHANGE。",
+    "decision": "NO_CHANGE",
+    "pipeline_r1": [
+      {"function": "noise_gaussian_RGB", "severity": 2, "verdict": "UNCERTAIN"},
+      {"function": "blur_glass", "severity": 5, "verdict": "LIKELY"},
+      {"function": "contrast_weaken_scale", "severity": 1, "verdict": "UNCERTAIN"},
+      {"function": "compression_jpeg", "severity": 4, "verdict": "UNCERTAIN"}
+    ],
+    "rationale": "R1 信号重释（run_full_analysis 重跑与 R0 一致）未发现被忽略/误判/边界信号可改变管线：gamma-like 全局（stretch:1）被 PSNR 否定（18.24 vs 25.21 dB）；JPEG sev3 仅 +0.19 dB（< +2 dB）且 bb 信号不利；YCrCb 噪声两档均 WEAK、无 PARTIAL/MATCH。无噪声确定性候选 25.21 dB 未达 40 dB，噪声存在性不可证伪，保留 R0 保守管线。support_psnr_r0=16.29 低于确定性模拟 PSNR 25.21 dB，与 glass:5 信息破坏性 + jpeg:4 的强退化一致，不构成管线结构错误证据。全部 5 个候选（rounds 11-15，5 次 test_candidate）均未达 CHANGE 阈值 → NO_CHANGE，R1 pipeline 与 R0 逐项相同。"
+  }
+}

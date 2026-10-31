@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "ocab",
+    "window_size": 16,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 30
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression: block_boundary=2.0134>1.1 (Tier S, 0%FP) + dct_zero_ratio=0.857 + unique_G=256 -> compression_jpeg sev2 LIKELY; 无 JPEG 专用架构开关可启用",
+    "blur: residual_anisotropy=1.8846>1.7 (Tier A, 0%FP) + blur_pca_ratio=3.342>2.5 (0%FP; 跨族仿真 gaussian/lens PCA~1.0 与 target 3.34 不符) + gm_ratio=0.2755 匹配 motion:3 仿真 (0.268-0.306) -> blur_motion 类型高置信 -> 启用 OCAB + window_size=16 (exp10 motion +1.19 dB)",
+    "noise: noise_prior_sigma=1.11<2 且与无噪声仿真下限完全相同 (target 1.11 vs sim 1.11, 跨对 0.74 vs 0.74); residual_intensity_corr -0.431 vs -0.429; §B IMPULSE 为 extreme_pct=61.7% 的已知假阳性 -> 无噪声",
+    "global: NO_GLOBAL; variance_ratio=0.8196/0.943/0.937 可由 blur 完全解释 (无 global 仿真精确复现 0.819/0.820), brightness_mean_shift=-0.4, contrast/saturation detected_raw=false, contrast_from_variance=false -> 无 contrast Tier A -> 不启用 FiLM-GCM / ColorPre",
+    "support 一致性: pair0/1/2 anisotropy=1.885/1.326/2.886, PCA=3.34/2.79/2.65 (三对均>2.5); 主支持对 pair0 (=训练目标 degraded.png) 满足 anisotropy>1.7, pair1 低于阈值作为残留风险记录; k=3 未放宽任何阈值",
+    "参数公平性: OCAB 在 dim=64 下膨胀至 2.1M (4.7x, 违反 <=1.05x 规则), 按 finetune_strategy §五 强制 AR_EMBED_DIM=30 (OCAB 467K, +2.9%)"
+  ],
+  "rationale": "管线 blur_motion:3 + compression_jpeg:2。JPEG 为 Tier S 确认 (block_boundary=2.013, dct_zero=0.857); blur 双 Tier A 信号 (anisotropy=1.8846>1.7 且 0%FP, PCA=3.342>2.5 且 0%FP) 指 motion, 按 finetune_strategy §七 启用 OCAB+ws16 (exp10 motion +1.19dB), 并按 §五 参数公平性设 embed_dim=30。variance_ratio=0.82 经无 global 仿真证实由 blur 引起而非 contrast -> 不启用 FiLM-GCM/ColorPre。无噪声 (sigma=1.11 等于无噪声仿真下限)。SimpleGate 默认常开 (-32K, exp39 8/9 安全)。2-epoch 预算下 True Ft 约等于 Direct 且无全局退化 -> Direct 从零训练, LR=5e-4, EPOCH=2。"
+}

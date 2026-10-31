@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted pipeline LIKELY Tier1: blur_lens:4 -> compression_jpeg:4 -> saturate_weaken_HSV:5, bit-exact PSNR=inf + CI 10/10 on pair0 and both extra support pairs (k=3); no noise (noise_prior_sigma=1.11<2, peeled residual std=0.0)",
+    "OCAB gate NOT met: residual_anisotropy=3.9545 suggested motion (DT FP), but blur_motion:4 scored only 18.95dB vs blur_lens:4 20.70dB (29.30dB with global) and lens:4 reproduces bit-exactly -> actual blur is lens, not motion; no anisotropy+motion Tier A pair",
+    "FiLM-GCM gate NOT met: variance_ratio=0.9102 mild with contrast_detected_raw=false and contrast_spread_ratio=1.0036; detection step is SATURATION_weaken_sev5 (chroma_ratio=0.0), not contrast; no contrast+structured (motion/jpeg) Tier A variance_ratio signal",
+    "ColorPre gate NOT met: saturation/HSV is Tier C signal (ColorPre harmful per finetune_strategy.md §七); no contrast step to justify ColorPre",
+    "JPEG confirmed by Tier S block_boundary=3.9832 + dct_zero_ratio=0.9129; handled by default Swin stack, no dedicated component required",
+    "SimpleGate kept on as default (exp39: -32K params, safe 8/9 degradations); k=3 support size does not relax any architectural gate"
+  ],
+  "rationale": "Bit-exact deterministic pipeline (lens blur + JPEG + HSV desaturation, no noise) fully identified with unbounded margin over runner-up; blindness is high-confidence so no extra capacity is needed. Per finetune_strategy.md §七, no Tier S/A signal maps to a component: anisotropy was a motion FP refuted by exact-match lens reproduction, variance_ratio is mild non-contrast, saturation is Tier C. Pure Swin + SimpleGate + Direct with lr=5e-4, EPOCH_BUDGET=2, batch 16 is the safe and appropriate choice."
+}

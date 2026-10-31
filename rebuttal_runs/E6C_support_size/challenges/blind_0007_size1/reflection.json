@@ -1,0 +1,413 @@
+{
+  "challenge_id": "blind_0007_size1",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9971 << 1.1; unique_G target=256 vs clean=252, 量化不可能增加唯一值 → JPEG/quantization 数学上排除)",
+      "blur": "BLUR_UNLIKELY (spectral_slope_ratio=0.9984 vs 阈值1.08; gm_ratio=5.71 被噪声破坏不可用; 残差相邻像素相关 spatial_corr=0.0015 ≈ 白噪声, 任何 blur 会留下结构化残差 → 排除)",
+      "noise": "SPECKLE (noise_prior_sigma=4.32; intensity_var_corr=0.9274 方差随亮度强增长 → 信号相关噪声; intensity_scaled_var_corr=0.4292>0.3 → 偏向 speckle 而非 poisson)",
+      "global": "NO_GLOBAL (variance_ratio=1.0302, mean_shift=-0.8/255; 跨通道残差相关 cross_channel_corr=0.0026 → 残差逐通道独立, 确定性色彩/对比变换会产生跨通道强相关 → 排除)"
+    },
+    "mode": "SIGNAL (sigma=4.32)",
+    "suspected": [
+      "noise_speckle (sev1: c=0.14, 残差std 16.3 ≈ 0.14×平均强度×255)",
+      "noise_poisson sev1 (备选: 同为信号相关噪声)"
+    ],
+    "ruled_out": [
+      "compression_jpeg (unique_G=256 封顶 + block_boundary 0.997)",
+      "quantization (unique_G=256)",
+      "blur_* (spectral_slope_ratio=0.9984 + 残差无空间结构)",
+      "brightness/contrast/saturation (variance_ratio=1.03, mean_shift=-0.8, 跨通道独立)",
+      "noise_impulse (§B zero_ratio=0.2467 远低于 0.85)",
+      "noise_gaussian_YCrCb (rgb_ratio=1.29<1.4 且 cross_ch_corr=0.003<0.12)",
+      "noise_gaussian_RGB (intensity_var_corr=0.9274 → 不可能强度无关)"
+    ],
+    "support_note": "单 support (k=1), 只有 pair0; 无法做跨对验证"
+  },
+  "qwen_gate": {
+    "available": false,
+    "reason": "Qwen/API 不可用; sigma=4.32 本应触发边界门控 (2<sigma<10), 按 BLIND_INSTRUCTIONS 跳过并记录"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 60.09,
+    "vm_slope": 16.2392,
+    "var_slope": -4.9706,
+    "spatial_corr": 0.3465,
+    "rgb_ratio": 1.2918,
+    "cross_ch_corr": 0.0033,
+    "ch_stds": [
+      18.9,
+      15.1,
+      14.6
+    ],
+    "residual_std": 16.3,
+    "diagnosis": "extreme_pct=60.09% 为 peeled_noise_check.py 实现伪影(其判据 res<=0 会把全部负残差计为极端值, 与 SKILL.md 已知 FP 规则一致: extreme>50% + noise_prior<5 → 忽略 IMPULSE); zero_ratio=0.2467 直接排除 impulse (impulse 应 >0.85)。vm_slope=16.24 强烈正值 → 乘性/信号相关噪声(speckle 指纹)。var_slope=-4.97 负值(亮部 clipping 压缩方差), 排除 poisson 的 var∝I 正斜率。spatial_corr=0.3465 为 3x3 均值自相关, 恰为白噪声理论值≈1/3, 即残差无空间结构。rgb_ratio=1.29、cross_ch_corr=0.0033 → 逐通道独立, 非 YCrCb。综合: noise_speckle 主假设, noise_poisson 备选。"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "Round 1 主假设: §B vm_slope=16.24 + intensity_var_corr=0.9274 + intensity_scaled_var_corr=0.4292 → 乘性噪声; 残差std=16.3 ≈ speckle sev1 c=0.14×均值强度×255; 单步噪声假设(无 blur/jpeg/global 信号)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT",
+      "agent_interpretation": "verify_signals 的噪声检查只比全局 sigma 与残差白化, 不直接区分子类型 → 追加 run_full_analysis 指纹对比 (full_analysis_sim_speckle1.json): sigma 4.32=4.32, zero_ratio 0.2465 vs 0.2467, ivc 0.9282 vs 0.9274, scaled_ivc 0.4365 vs 0.4292, gm_ratio 5.712 vs 5.711, variance_ratio 1.0305 vs 1.0302, mean_shift -0.8=-0.8, clipped_fraction 0.0773 vs 0.0772 — 9 项指纹逐项吻合"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_poisson:1",
+        "thinking": "Round 1 备选: 同为信号相关噪声(var∝I); 与 speckle 的判据是 intensity_scaled_var_corr(0.43 偏 speckle, poisson 理论≈0); 测试以对比指纹"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=43%)"
+        ],
+        "pipeline": "noise_poisson:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE",
+      "agent_interpretation": "指纹对比 (full_analysis_sim_poisson1.json): sigma=6.55 vs 目标 4.32; zero_ratio=0.137 vs 0.2467; intensity_scaled_var_corr=-0.5044 vs +0.4292 (符号相反, poisson 的 var∝I 使 scaled 不随亮度增长) → poisson 排除"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:1",
+        "thinking": "Round 1 对照: 加性高强度无关噪声基线; intensity_var_corr=0.9274 预期不匹配, 用于确认信号相关结论"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=30%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE",
+      "agent_interpretation": "指纹对比 (full_analysis_sim_gauss_rgb1.json): sigma=5.93 vs 4.32; zero_ratio=0.1169 vs 0.2467; ivc=0.2341 vs 0.9274 (加性噪声方差与亮度无关, 严重偏离); scaled=-0.783 vs +0.4292 → gaussian_RGB 排除"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_speckle:2",
+        "thinking": "Round 3 severity 扫描 +1: 验证 sev1 vs sev2; speckle c=0.21 预期残差std/零残差比偏移, 用于确认严重度"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=43%)"
+        ],
+        "pipeline": "noise_speckle:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE",
+      "agent_interpretation": "指纹对比 (full_analysis_sim_speckle2.json): sigma=6.55 vs 4.32; zero_ratio=0.1988 vs 0.2467; variance_ratio=1.0571 vs 1.0302; gm_ratio=8.135 vs 5.711; clip=0.0930 vs 0.0772 → sev2 全面偏高, severity=1 确认"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,blur_gaussian:1",
+        "thinking": "Round 3 blur 阴性对照: 检验是否存在被噪声掩盖的 mild blur; 物理顺序 noise→blur; 若 target 无 blur, 模拟图 spectral_slope 应显著变陡导致失配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=92%)"
+        ],
+        "pipeline": "noise_speckle:1,blur_gaussian:1",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY",
+      "agent_interpretation": "verify_signals 的 spectral_slope 阈值(0.08)对 sev1 mild blur 不敏感, 但全指纹对比 (full_analysis_sim_speckle1_blurgauss1.json) 决定性排除 blur: GM_ratio=1.161 vs 目标 5.711, sigma=0.7 vs 4.32, variance_ratio=0.978 vs 1.0302, mean_shift=-1.3 vs -0.8。加性 blur 会平滑噪声使 gm_ratio 坍塌, 目标却与 speckle-only 模拟一致 → 无 blur 步。该 PARTIAL 非类型正确信号, 而是 sev1 blur 在 spectral_slope 阈值下不可辨; 指纹已否决"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1",
+        "thinking": "R1 信号重验: §B vm_slope=16.24 + intensity_var_corr=0.9274 + intensity_scaled_var_corr=0.4292 指向乘性噪声; residual_std=16.3 ≈ 0.14×mean(I)×255; 以新 RNG 抽样重验 R0 主预测, 检查 seed 敏感性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_speckle:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_YCrCb:1",
+        "thinking": "R1 阈值边界重检: rgb_ratio=1.2918 (距 YCrCb 阈值 1.4 仅 8%) + ch_stds=[18.9,15.1,14.6] 比值 1.29, 是最接近阈值的未测子类型; 但 cross_channel_corr=0.0033 与 intensity_var_corr=0.9274 预期失配 → 直接对比验证"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=111%)"
+        ],
+        "pipeline": "noise_gaussian_YCrCb:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_speckle:1,compression_jpeg:1",
+        "thinking": "R1 漏检控制: failure_risk=MISS_comp_BY_NOISE; block_boundary=0.9971 距阈值1.1约9%, JPEG库最轻档 sev1=q25 (更强档只会更增大 block_boundary, 单调排除); 叠加在 R0 主噪声后检验是否存在被噪声掩盖的压缩步骤"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=92%)",
+          "compression:block_boundary (diff=78%)"
+        ],
+        "pipeline": "noise_speckle:1,compression_jpeg:1",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "fingerprint_comparison": {
+    "note": "对每个模拟图用 run_full_analysis.py (allowed tool) 重算与目标同口径信号; residual = simulated - clean 即该候选噪声本身",
+    "signals": {
+      "noise_prior_sigma": {
+        "target": 4.32,
+        "speckle1": 4.32,
+        "poisson1": 6.55,
+        "gaussRGB1": 5.93,
+        "speckle2": 6.55,
+        "speckle1_blur1": 0.7
+      },
+      "impulse_zero_ratio": {
+        "target": 0.2467,
+        "speckle1": 0.2465,
+        "poisson1": 0.137,
+        "gaussRGB1": 0.1169,
+        "speckle2": 0.1988
+      },
+      "intensity_var_corr": {
+        "target": 0.9274,
+        "speckle1": 0.9282,
+        "poisson1": 0.9058,
+        "gaussRGB1": 0.2341,
+        "speckle2": 0.9282
+      },
+      "intensity_scaled_var_corr": {
+        "target": 0.4292,
+        "speckle1": 0.4365,
+        "poisson1": -0.5044,
+        "gaussRGB1": -0.783,
+        "speckle2": 0.3794
+      },
+      "gm_ratio": {
+        "target": 5.7111,
+        "speckle1": 5.712,
+        "speckle2": 8.135,
+        "speckle1_blur1": 1.161
+      },
+      "variance_ratio": {
+        "target": 1.0302,
+        "speckle1": 1.0305,
+        "poisson1": 1.0401,
+        "gaussRGB1": 1.006,
+        "speckle2": 1.0571,
+        "speckle1_blur1": 0.978
+      },
+      "mean_shift_x255": {
+        "target": -0.8,
+        "speckle1": -0.8,
+        "poisson1": -0.7,
+        "gaussRGB1": 0.1,
+        "speckle1_blur1": -1.3
+      },
+      "clipped_fraction": {
+        "target": 0.0772,
+        "speckle1": 0.0773,
+        "poisson1": 0.0841,
+        "gaussRGB1": 0.078,
+        "speckle2": 0.093
+      }
+    },
+    "conclusion": "noise_speckle:1 在全部 8 项信号上逐项吻合目标 (含对种子/实现敏感的 zero_ratio 与 clip_fraction); 其它类型/severity 均显著偏离"
+  },
+  "psnr_ranking": [
+    {
+      "pipeline": "noise_speckle:1",
+      "mode": "signal",
+      "verdict": "MATCH",
+      "psnr_rgb": null,
+      "note": "全指纹吻合, 主预测"
+    },
+    {
+      "pipeline": "noise_speckle:1,blur_gaussian:1",
+      "mode": "signal",
+      "verdict": "PARTIAL",
+      "psnr_rgb": null,
+      "note": "noise:sigma diff=92%; 指纹 gm_ratio 1.161 vs 5.711 → 排除 blur"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:1",
+      "mode": "signal",
+      "verdict": "WEAK",
+      "psnr_rgb": null,
+      "note": "noise:sigma diff=30%; ivc 0.234 vs 0.927 排除"
+    },
+    {
+      "pipeline": "noise_poisson:1",
+      "mode": "signal",
+      "verdict": "WEAK",
+      "psnr_rgb": null,
+      "note": "noise:sigma diff=43%; scaled_ivc -0.50 vs +0.43 排除"
+    },
+    {
+      "pipeline": "noise_speckle:2",
+      "mode": "signal",
+      "verdict": "WEAK",
+      "psnr_rgb": null,
+      "note": "noise:sigma diff=43%; 各项偏高 → severity=1"
+    }
+  ],
+  "psnr_ranking_note": "sigma=4.32>2, PSNR 因噪声 seed 失配不可靠, 全程未用 PSNR 判定 (BLIND_INSTRUCTIONS/SKILL 强制); 排名按信号验证 verdict + 指纹吻合度",
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_speckle",
+        "severity": 1,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 2,
+    "alternatives": [],
+    "alternatives_note": "poisson:1 与 gaussian_RGB:1 均未通过统计指纹 (scaled_ivc 符号相反/ivc 严重偏离), 按 Alternatives 质量要求不保存低质量候选",
+    "rationale": "单步乘性噪声: §B vm_slope=16.24、intensity_var_corr=0.9274、intensity_scaled_var_corr=0.4292 指向 speckle; 模拟 noise_speckle:1 的全分析指纹 (sigma/zero_ratio/ivc/scaled/gm_ratio/variance_ratio/mean_shift/clip) 与目标逐项一致; sev2、poisson、gaussian_RGB、blur 控制均失配。噪声步骤按协议永不 LIKELY (seed 失配), 故 verdict=UNCERTAIN。单 support (k=1), 无法跨对验证。",
+    "single_support_validation": "k=1: 仅 pair0 (clean_0/degraded_0, 与 clean/degraded 别名同哈希); 全部候选在 pair0 上复核, 无跨对验证能力",
+    "termination_reason": "主候选 verify_signals MATCH + 全指纹吻合, 跨类型/severity/blur 对照全部排除; 5/25 预算, 信号驱动收敛",
+    "candidate_tests_used": 5
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "R0 verdict=UNCERTAIN (协议强制反思); R0 support PSNR=38.88 dB",
+    "single_support_constraint": "k=1: 仅 pair0 (degraded.png 与 degraded_0.png md5 一致, clean.png 与 clean_0.png md5 一致); 无跨对验证能力, 阈值不因 k=1 放宽, 证据不足即 NO_CHANGE",
+    "signal_reinterpretation": {
+      "reanalysis": "重跑 run_full_analysis.py -> full_analysis_R1.json; 12 项核心信号与 R0 完全一致: block_boundary=0.9971, unique_G=256, sigma=4.32, zero_ratio=0.2467, spatial_corr=0.0015, cross_channel_corr=0.0026, intensity_var_corr=0.9274, intensity_scaled_var_corr=0.4292, gm_ratio=5.7111, spectral_slope_ratio=0.9984, variance_ratio=1.0302, mean_shift=-0.8",
+      "previously_uncompared_signals": [
+        "clipped_fraction=0.0772 (heavy_clipping=true): 乘性 speckle 亮部饱和所致 -> R1 新抽样 speckle:1 模拟 clip=0.0773, 匹配",
+        "contrast_spread_ratio=1.0364: R0 未对比 -> R1 模拟 1.0364 完全一致, 无 contrast 步骤",
+        "saturation_chroma_ratio=1.0964: R0 未对比 -> R1 模拟 1.0967 匹配, 无 saturation 步骤",
+        "block_boundary=0.9971 / dct_zero_ratio=0.1058: R0 仅凭 unique_G=256 数学排除 JPEG; R1 用新模拟补对比 -> speckle:1 模拟 block_boundary=1.0044 (差 0.7%, 噪声容差 5%), dct_zero_ratio=0.1060, 与目标一致 -> 目标的低 block_boundary 由噪声本身解释, 无隐藏 JPEG"
+      ],
+      "threshold_boundary_checks": [
+        "rgb_ratio=1.2918 距 YCrCb 阈值 1.4 仅差 8% (唯一的近阈值未测子类型) -> R1 直接测试",
+        "spatial_corr=0.0015 远低于 0.15 -> 无 spatially_correlated 噪声",
+        "var_slope=-4.9706 < 0 否决 poisson 的 var∝I; poisson sev1 为最低档, 模拟 sigma=6.55 已高于目标 4.32, 更高档单调增大 -> severity 扫描由单调性闭合",
+        "gm_ratio=5.711 被噪声破坏不可用; spectral_slope_ratio=0.9984 距 1.08 阈值 7.6% -> R1 模拟 speckle:1 slope_ratio=0.9979 复现该值, 无需 blur 步骤解释"
+      ],
+      "noise_6step_r1": {
+        "extreme_pct": 60.09,
+        "extreme_pct_note": "已知 FP 规则 (extreme>50% + sigma<5 + zero_ratio 0.2467 远低于 0.85) -> 非 impulse",
+        "vm_slope": 16.2392,
+        "var_slope": -4.9706,
+        "spatial_corr_3x3": 0.3465,
+        "spatial_corr_note": "3x3 均值自相关 ~1/3 为白噪声理论值, 残差无空间结构",
+        "rgb_ratio": 1.2918,
+        "cross_ch_corr": 0.0033,
+        "ch_stds": [18.9, 15.1, 14.6],
+        "diagnosis": "speckle (乘性), sev1; §B 与 R0 一致"
+      }
+    },
+    "candidates": [
+      {
+        "round": 6,
+        "pipeline": "noise_speckle:1",
+        "mode": "signal",
+        "verify": "MATCH (2✓/0✗)",
+        "fingerprints_target_vs_sim": {
+          "noise_prior_sigma": [4.32, 4.32],
+          "impulse_zero_ratio": [0.2467, 0.2467],
+          "spatial_corr": [0.0015, 0.0026],
+          "cross_channel_corr": [0.0026, 0.0028],
+          "intensity_var_corr": [0.9274, 0.9285],
+          "intensity_scaled_var_corr": [0.4292, 0.4411],
+          "block_boundary": [0.9971, 1.0044],
+          "dct_zero_ratio": [0.1058, 0.106],
+          "unique_G": [256, 256],
+          "variance_ratio": [1.0302, 1.0305],
+          "mean_shift_x255": [-0.8, -0.8],
+          "clipped_fraction": [0.0772, 0.0773],
+          "contrast_spread_ratio": [1.0364, 1.0364],
+          "saturation_chroma_ratio": [1.0964, 1.0967],
+          "spectral_slope_target": [-1.4827, -1.482],
+          "spectral_slope_ratio": [0.9984, 0.9979]
+        },
+        "decision": "ACCEPT (与 R0 相同; 新 RNG 抽样在 16 项指纹上复现目标)"
+      },
+      {
+        "round": 7,
+        "pipeline": "noise_gaussian_YCrCb:1",
+        "mode": "signal",
+        "verify": "WEAK (noise:sigma diff=111%)",
+        "fingerprints": "sigma 9.64 vs 4.32; cross_channel_corr 0.1495 vs 0.0026 (YCrCb 色度转换产生跨通道残差相关, 结构失配); zero_ratio 0.0818 vs 0.2467; clipped 0.106 vs 0.0772",
+        "severity_scan": "YCrCb sev1 为最低档, 更高档 sigma 单调增大 (sigma_l 0.05->0.09), 无 sev<1 可扫 -> 单调性闭合",
+        "decision": "REJECT"
+      },
+      {
+        "round": 8,
+        "pipeline": "noise_speckle:1,compression_jpeg:1",
+        "mode": "signal",
+        "verify": "WEAK (noise:sigma diff=92%, compression:block_boundary diff=78%)",
+        "severity_scan": "JPEG sev1=q25 为库内最轻档; sev2-5 quality 更低 -> block_boundary 单调增大, 单调性闭合",
+        "decision": "REJECT (排除被噪声掩盖的 JPEG)"
+      }
+    ],
+    "severity_and_subtype_scan_closure": "speckle:2 已由 R0 指纹否决 (sigma 6.55, gm 8.135, var_ratio 1.0571 全面偏高); poisson/YCrCb/JPEG 的 severity 扫描均因 sev1 为最低档且指标随 severity 单调增大而闭合; blur 由 spectral_slope (0.9984, 目标模拟复现 0.9979) + anisotropy=0.0 + R0 speckle+blur 指纹坍塌 (gm 1.161 vs 5.711) 排除",
+    "decision": "NO_CHANGE",
+    "reason": "R1 信号重释未发现被忽略/误判信号: R0 未对比的 4 项信号 (clip/contrast_spread/saturation_chroma/block_boundary) 全部由 noise_speckle:1 模拟复现; 唯一近阈值未测子类型 YCrCb 被结构信号否决 (cross_ch 0.0026 vs 0.1495); 隐藏 JPEG 控制在最轻档即 78% 失配; blur/poisson/severity≥2 已由 R0 及单调性排除。k=1 单对限制下没有达到 CHANGE 门槛的更优候选, 维护 R0 管线。",
+    "support_psnr_r0": 38.88,
+    "test_candidate_calls": 3,
+    "alternatives": []
+  }
+}

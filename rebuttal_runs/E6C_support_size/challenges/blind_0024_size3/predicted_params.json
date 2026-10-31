@@ -1,0 +1,57 @@
+{
+  "challenge_id": "blind_0024_size3",
+  "pipeline": [
+    {"function": "noise_speckle", "severity": 3, "verdict": "UNCERTAIN"},
+    {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+    {"function": "saturate_strengthen_HSV", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 2},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 4}
+      ],
+      "signal_verdict": "PARTIAL 4/6 (pair0); WEAK 2/6 (pair1)",
+      "evidence": "pair0 mean_shift -42.9 exact and chroma_ratio 1.6495 vs target 1.6553; but variance_ratio overshoots (1.4334 vs 1.3713) and pair1 spectral_slope fails (0.090)",
+      "function_family": "noise-gaussian-YCrCb"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 3},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 4}
+      ],
+      "signal_verdict": "PARTIAL 4/6 (pair0)",
+      "evidence": "pair0 mean -42.6 (target -42.9), variance_ratio 1.4050 vs 1.3713 (9% over threshold), chroma 1.5735 vs 1.6553",
+      "function_family": "noise-poisson"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_gaussian_YCrCb", "severity": 4},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 4}
+      ],
+      "signal_verdict": "PARTIAL 4/6 (pair0)",
+      "evidence": "pair0 mean_shift diff 0.0096; chroma_ratio 2.0022 overshoots heavily vs target 1.6553",
+      "function_family": "noise-gaussian-YCrCb"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 3},
+        {"function": "blur_lens", "severity": 3},
+        {"function": "saturate_strengthen_HSV", "severity": 4}
+      ],
+      "signal_verdict": "WEAK (pair0)",
+      "evidence": "gaussian vs lens MTF indistinguishable in principle, but lens failed spectral_slope (0.123) and noise sigma (350%) on pair0; Wiener kernel alone matched",
+      "function_family": "blur-lens"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "N/A (SIGNAL mode; verify_signals used instead of CI/PSNR)",
+    "mode": "SIGNAL (pair0 sigma_prior=3.83 on residual; deterministic steps verified with mean_shift/variance_ratio/chroma/spectral_slope/Wiener kernel)",
+    "rationale": "No compression: block_boundary 0.9996/1.009/0.997 and unique_G 233/237/243 across the 3 support pairs (0% FP signal). Global = saturate_strengthen_HSV (only one global step possible): chroma ratio 1.655/2.495/1.663, clipped 32%/27%/30%, spread 0.51/0.85/0.94, mean drop -42.9/-42.0/-28.1; brightness_darken peel leaves residual_std 51.4 vs 10.2 for saturation, and YCrCb-saturation mispredicts mean by 31 levels. Blur = blur_gaussian:3: isotropic (FFT anisotropy 1.15, motion excluded), glass peel worse; sev3 is the only severity passing spectral_slope and Wiener kernel on all pairs (sev4/5 fail slope 0.238/0.405; lens fails sigma 350%). Order = noise -> blur -> saturate: post-blur noise fails variance (+40%) and sigma (2800%); sat-before-blur fails variance (1005%). Noise is present but type is not diagnosable under noise-before-blur (SKILL 54.7%): noise_speckle:3 is the best empirical fit (5/6 checks pair0, variance_ratio 1.351/0.9664/0.9626 vs targets 1.371/0.9667/0.9823), with gaussian_YCrCb:2/:4 and poisson:3 as alternatives. Overall UNCERTAIN because the noise step cannot be LIKELY and the saturation severity slightly over-darkens pairs 1/2 by ~5 gray levels."
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "challenge_id": "blind_0004_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_motion", 1]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {
+          "function": "blur_motion",
+          "severity": 2
+        }
+      ],
+      "psnr": 23.95,
+      "ci_pass_rate": "9/10",
+      "function_family": "blur_motion",
+      "rationale": "同族次优：两次角度采样 PSNR 20.86/23.95、CI 9/10；系统性失配 impulse_pct_255（目标高 38%），比 sev1（1-5%）差，保留为 severity 备份"
+    },
+    {
+      "pipeline": [
+        {
+          "function": "blur_gaussian",
+          "severity": 2
+        }
+      ],
+      "psnr": 25.71,
+      "ci_pass_rate": "6/10",
+      "function_family": "blur_gaussian",
+      "rationale": "跨族对照（PSNR 数值最高但 CI 仅 6/10）。高斯为确定性无随机自由度，若为真值 PSNR 应 inf 而非 25.7dB → 反证排除；保留仅为跨族可审计"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR + CI 统计匹配（motion 角度随机，PSNR 结构性无法达到 40dB）",
+    "support_psnr_r0": 33.11,
+    "k_support_pairs": 1,
+    "r1_summary": "R1 信号重释未发现可验证的修正方向：阈值边界全局信号 (variance_ratio=0.945, contrast_spread_ratio=0.9628) 被库内最小 contrast 档强度证伪（contrast_weaken_stretch:1 实测 PSNR=14.44dB、unique_G -42%）；brightness/gamma 被 mean_shift=-0.5 排除（库最小档 ≈+25/255）；saturation 被 2.8% 幅度排除（库最小档 30-40%）；确定性 blur 排除补全至 gaussian sev4（23.74dB ≪ inf）。维持 R0 pipeline。",
+    "rationale": "single-step：blur_motion:1（与 R0 逐项相同）。证据链：(1) spectral_slope_ratio=1.0569 低于 1.08 阈值 2.1%，加上 gm_ratio=0.6485 → blur 确定存在，BLUR_UNLIKELY 属阈值边界假阴性；(2) 确定性 blur 族 gaussian sev1-4 = 25.10/25.71/24.86/23.74 dB、lens:2=25.61、glass:2=24.38，均远低于确定性真值应达的 inf → 排除确定性族；(3) motion 为随机角度核，用 content-independent CI 判别：motion:1 三次独立角度采样 10/10，motion:2/3 稳定 9/10 且系统性 impulse_pct_255 失配 38-59%，glass:2 CI 7/10，jpeg:1 CI 4/10；(4) σ=0.74<2、peeled §B extreme_pct=72.68% 属已知 FP（extreme>50% 且 σ<5）、per-channel std 2.7/2.8/2.6 → 无噪声；variance/mean/saturation 比值≈1 → 无 global。severity 取 1（255 饱和统计与 motion:1 匹配）。因 motion 角度随机，PSNR 结构性无法达到 40dB，verdict 维持 UNCERTAIN。",
+    "notes": [
+      "k=1 单 support（仅 pair0）：motion 角度随机导致仿真 PSNR 为角度彩票，单次采样不可作为 CHANGE 依据；无跨对平均",
+      "R1 全部测试仅使用本目录 pair0，未使用其他 size/挑战/E6B/E6A/test 数据",
+      "full_analysis 的 FFT anisotropy=0.00 仍是 blur 未触发时提前 return 的默认值，不作为排除 motion 的依据（沿用 R0 修正）"
+    ]
+  }
+}

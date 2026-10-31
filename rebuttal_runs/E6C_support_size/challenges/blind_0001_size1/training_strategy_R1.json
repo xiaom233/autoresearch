@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "三步 verdict 全为 UNCERTAIN（tier 3, overall UNCERTAIN）: noise_speckle:5 / brightness_darken_gamma_RGB:1 / quantization_hist:2；finetune_strategy.md §七 规定 UNCERTAIN 步骤不加组件（exp37 0/24 胜）",
+    "OCAB 门控不满足: full_analysis step3 spectral_slope_ratio=0.993（<1.08 阈值）、FFT anisotropy=0.00、BLUR_UNLIKELY → 无 motion，anisotropy 远低于 1.7，OCAB 不触发",
+    "FiLM-GCM / ColorPre 门控不满足: step4 variance_ratio=1.3173 但 verdict=NO_GLOBAL（confidence=low），false_positive_checks 中 contrast_from_saturation=true、saturation_from_noise=true，方差膨胀归因于 quantization_hist:2 直方图均衡拉伸而非 contrast 步骤；管线无 motion/jpeg 结构化局部 → 不满足 'variance_ratio ≠ 1.0 + 结构化' 的 Tier A 组合",
+    "unique_G=16（三通道均 [16,16,16]，clean=256）+ block_boundary=1.0007（<1.1，排除 JPEG）是 Tier S 量化证据，但对应 quantization_hist:2 无专用架构开关需求，单纯确定性映射，纯 Swin 足够",
+    "管线含全局退化 brightness_darken_gamma_RGB:1 → §六 Step 1 选 Direct（含全局退化时 Direct 最安全，RandomCurric 无收益风险）",
+    "SimpleGate 默认常开: exp39 -32K 参数、9 退化中 8 安全（仅 S5 motion×3 -0.86）；E6 support 数量 k=1 不改变任何门控阈值"
+  ],
+  "rationale": "三步均为 UNCERTAIN 且 tier 3，无 Tier S/A 组件门控成立（无 motion、无独立 contrast 步骤），按 finetune_strategy.md §七 兜底纯 Swin + SimpleGate + Direct。退化主体为 noise_speckle:5 + quantization_hist:2（unique_G=16 锁定量化），亮度暗化为弱全局分量，Direct 从头训练即可；不启用 DualBranch/CSN/ColorPre/GCM，避免盲识别偏差下的组件危害（exp37）。"
+}

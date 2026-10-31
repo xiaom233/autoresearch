@@ -1,0 +1,34 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted_params: pipeline=[noise_gaussian_YCrCb:2], overall verdict=UNCERTAIN, tier=2 (噪声随机 seed 失配按协议永不 LIKELY), sigma≈14.46 (full_analysis step2 noise_prior_sigma)",
+    "无压缩: step1_compression NO_COMPRESSION (high), block_boundary=0.9992 (<1.1), unique_G=256/256, dct_zero_ratio=0.0207 → 不触发 JPEG 专项",
+    "无模糊/无 motion: step3_blur BLUR_UNLIKELY, spectral_slope_ratio=0.9937 (<1.08 阈值), gm_ratio=3.6555 被噪声破坏不可用 → anisotropy>1.7 + motion 不成立 → OCAB 不启用",
+    "无 contrast Tier A: step4 contrast_from_variance=false, contrast_detected_raw=false; variance_ratio=1.0448 与 YCrCb sev2 噪声方差贡献一致 (reflection final_decision), mean_shift=-0.4/255≈0 → ColorPre/FiLM-GCM 门控不满足",
+    "saturation 信号为噪声伪造 FP: chroma_ratio=1.2044 与 YCrCb σ_chroma=22.2 理论增量一致; 加入 saturate_strengthen_HSV:3 后 verify_signals=WEAK (FWHM=10px, mean_shift diff=0.1595, var_ratio diff=974%), CI 8/10 (impulse_pct_zero 差 416%) → 已剔除, 且 saturation 信号按 §七 Tier C 不加任何组件",
+    "无结构化局部共存 (JPEG 已排除, blur 已排除) → FiLM-GCM 的 contrast+结构化门控不成立",
+    "noise-only 复核: residual FWHM<4px, spatial_corr 归因于 12.55% 噪声诱导裁剪 → 纯局部随机退化, SimpleGate 安全常开 (exp39 8/9 无显著负影响)",
+    "k=1 support 仅影响跨对验证能力, 不改变架构门控 (按 STRATEGY_INSTRUCTIONS 强制规则)"
+  ],
+  "rationale": "单一随机退化 noise_gaussian_YCrCb:2 (UNCERTAIN, Tier 2)。§七 信号门控逐项检查: 无 block_boundary>1.1 (0.9992)、无 anisotropy>1.7/motion、无 contrast Tier A (variance_ratio=1.0448 由噪声方差解释, contrast_from_variance=false)、saturation 低置信信号已被 reflection 判为噪声伪造假阳性; 所有组件触发条件均不满足 → 纯 Swin + SimpleGate + Direct (lr=5e-4, 2 epoch, batch=16)。SimpleGate 为默认常开 (-32K, 8/9 退化安全, 非 S5 motion 场景无 -0.86 风险)。不使用 DualBranch (exp37 盲识别 0/24 胜, 且 STRATEGY_INSTRUCTIONS 禁用) 与 full_analysis 机械推荐的 AR_USE_DUAL_BRANCH。含噪声 → Direct 保守安全, True Ft 无优势 (exp37/38 ≈ Direct)。"
+}

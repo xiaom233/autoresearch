@@ -1,0 +1,33 @@
+{
+  "challenge_id": "blind_0013_size1",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "pipeline = noise_gaussian_RGB:3 (UNCERTAIN) + compression_jpeg:2 (UNCERTAIN); overall Tier 3 UNCERTAIN, k=1 单 support 无法跨对验证",
+    "noise_gaussian_RGB:3: verify_signals 三项 MATCH (noise:sigma / clean_residual / block_boundary); 强度阶梯 sev1-4 sigma diff 单调 75%→50%→MATCH→38%; ch_stds 23.5/23.1/22.9 (rgb_ratio=1.03) → RGB 家族; 噪声 seed 失配 → noise 步骤永不 LIKELY, 不触发任何组件",
+    "compression_jpeg:2: block_boundary=1.2085 > 1.1 (Tier S, 0% FP), dct_zero_ratio=0.4274; JPEG 确认但无对应架构开关可用, 不启用组件",
+    "blur 排除: spectral_slope_ratio=0.984 (<1.08), FFT_anisotropy=0 (≤1.7) → 不满足 OCAB 的 anisotropy>1.7 + motion 条件",
+    "global NO_GLOBAL: variance_ratio=0.8934 但 contrast_from_variance=false, contrast_spread_ratio=0.989, clipped_fraction=0.0636; 加入 contrast_weaken_stretch:2 后 variance_ratio diff=546% → 管线无 contrast 步骤, 不满足 FiLM-GCM (variance_ratio Tier A + 结构化) / ColorPre (contrast Tier A) 门控",
+    "Tier C / UNCERTAIN 兜底: 纯 Swin + Direct (finetune_strategy.md §七); SimpleGate 默认常开 (exp39 -32K, 8/9 退化安全); k=1 不放宽任何门控阈值"
+  ],
+  "rationale": "两步骤均为 UNCERTAIN 且无 Tier S/A 的可启用组件信号 (无 motion/anisotropy、无 contrast 全局步)，按 §七 安全兜底选纯 Swin + SimpleGate + Direct (lr=5e-4, 2 epoch, batch 16, embed_dim 64)。full_analysis 的 DualBranch 建议不采纳 (E6-C 指令禁用, 且 exp37 盲识别场景 0/24 胜)。噪声+JPEG 混合下模型容量足够隐式建模，不需额外组件。"
+}

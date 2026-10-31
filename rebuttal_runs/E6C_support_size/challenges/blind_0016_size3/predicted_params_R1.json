@@ -1,0 +1,76 @@
+{
+  "challenge_id": "blind_0016_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "blur_motion",
+      3
+    ],
+    [
+      "compression_jpeg",
+      2
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 3,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 2,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        [
+          "blur_gaussian",
+          3
+        ],
+        [
+          "compression_jpeg",
+          2
+        ]
+      ],
+      "psnr_rgb_pair0": 23.87,
+      "ci_pass_pair0": "6/10",
+      "function_family": "blur_gaussian",
+      "note": "跨族确定性备份 (R0 保留)。pair0 PSNR 最高但 PCA~1.0 与 target 2.65-3.34 方向性不符; 非随机核 PSNR 偏高属 motion 角度不可复现的已知伪影"
+    },
+    {
+      "pipeline": [
+        [
+          "blur_motion",
+          3
+        ],
+        [
+          "compression_jpeg",
+          3
+        ]
+      ],
+      "psnr_rgb_pair0": 19.98,
+      "ci_pass_pair0": "9/10",
+      "function_family": "blur_motion",
+      "note": "同族 JPEG+1 备份。仿真 block_boundary 2.71 高于 target 2.01, 概率较低"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "SIGNAL + PSNR (sigma<2 无噪声; blur_motion 每次调用随机 angle, PSNR 不可复现, 以 3 对信号匹配为主判据)",
+    "support_psnr_r0": 24.25,
+    "support_psnr_note": "R0 训练模型在 3 对 support 上的 PSNR (r0_result.json), 触发 R1 UNCERTAIN 反思",
+    "psnr_pair0": 19.94,
+    "psnr_pair1": 27.8,
+    "psnr_pair2": 26.43,
+    "psnr_gap": null,
+    "jpeg_severity": "compression_jpeg sev2: 三对仿真 bb 误差 <4% (2.086/2.764/2.601 vs 2.013/2.726/2.616), dct 误差 <1.1% (0.850/0.915/0.925 vs 0.857/0.906/0.916) -> 维持 sev2",
+    "blur_severity": "motion:3 维持。sev2 边界候选 motion:2+J2 三对 PSNR 20.58/28.58/23.90 vs sev3 19.94/27.80/26.43, delta +0.64/+0.78/-2.53, 未达 +2dB 门槛且 pair2 退化",
+    "r1_summary": "三轮信号重释: (1) global 边界 (variance_ratio 0.82, contrast_spread 0.877) 由无 global 仿真精确复现; (2) noise/gamma 边界 (sigma 1.11, ric -0.431, §B extreme 65%) 为 motion 随机角度结构残差 + 已知 IMPULSE 假阳性; (3) blur 子类型/严重度边界 (glass_score 1.01-1.36, pair1 anisotropy 1.326<1.7, gm_ratio 略高) -> PCA 2.65-3.34 三对一致指 motion, sev2 实测无增益。无被忽略/误判的退化, 维持 R0 管线。",
+    "rationale": "JPEG 由 block_boundary 2.01-2.73 + dct_zero 0.857-0.916 确认且 sev2 在 3 对信号误差 <4%; blur 为方向性 motion 核 (PCA 2.65-3.34 >2.5, 0%FP; aniso 1.33-2.89), 三对 gm/var/chroma 与 motion:3+J2 仿真差 <12%; 无噪声 (sigma<2, 无噪声仿真 sigma/ric 与 target 一致), 无 global (仿真复现 variance/chroma)。R1 唯一新候选 motion:2+J2 未通过 +2dB/40dB 门槛, 故 NO_CHANGE。"
+  }
+}

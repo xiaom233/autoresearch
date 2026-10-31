@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "compression: block_boundary=2.0753 (Tier S, 0% FP, unique_G=256, dct_zero_ratio=0.836) -> JPEG confirmed; 架构 schema 无 JPEG 专用组件，不触发任何附加模块",
+    "blur: BLUR_UNLIKELY, gm_ratio=0.9445, spectral_slope_ratio=0.9744, FFT_anisotropy=0.0 -> anisotropy>1.7 的 OCAB 门控不满足，不用 OCAB",
+    "global: mean_shift=+59.5, saturation_chroma_ratio=1.3989, variance_ratio=1.157 但 contrast_detected_raw=false, contrast_from_variance=false；预测管线为 brightness shift_RGB:4 + saturate YCrCb:1，无 contrast 步骤 -> FiLM-GCM(contrast+结构化) 与 ColorPre(contrast Tier A) 门控均不满足",
+    "noise: noise_prior_sigma=0.37(raw)/0.99(peeled) < 2, §B extreme_pct=57.89% 属已知 JPEG/global 残差假阳性 -> NO_NOISE",
+    "predicted_params: 三步 verdict 全为 UNCERTAIN（最佳 PSNR 25.28 dB < 30, gap 0.04 dB, Tier 3），按 exp37 规则 UNCERTAIN 步骤不加组件",
+    "k=1 单 support 无法跨对验证，不放宽任何门控阈值 -> 保守纯 Swin + SimpleGate + Direct"
+  ],
+  "rationale": "三步退化（brightness shift_RGB:4 + saturate_strengthen_YCrCb:1 + JPEG:1/2）全部 UNCERTAIN，仅 JPEG 有 Tier S block_boundary 确认，但 JPEG 无对应架构组件；variance_ratio=1.157 被归因为 brightness/饱和度而非 contrast，因此不满足 FiLM-GCM/ColorPre 的 contrast 门控，OCAB 也因无 motion/各向异性不使用。按默认路径用纯 Swin + SimpleGate（-32K, 8/9 安全）+ Direct 训练，避免在混合 UNCERTAIN 场景引入组件风险。"
+}

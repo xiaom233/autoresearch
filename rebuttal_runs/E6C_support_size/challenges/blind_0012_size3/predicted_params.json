@@ -1,0 +1,55 @@
+{
+  "challenge_id": "blind_0012_size3",
+  "pipeline": [
+    {
+      "function": "blur_motion",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 3,
+      "verdict": "LIKELY"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_motion", "severity": 5},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 20.13,
+      "stats": {
+        "signal_verdict_draw1": "MATCH (spectral_slope + wiener>0.85 + block_boundary<8%)",
+        "signal_verdict_draw2": "PARTIAL (wiener=0.299, slope+bb matched)",
+        "note": "same-family severity 4 vs 5 ambiguity; blur_motion angle is random per apply"
+      },
+      "function_family": "blur_motion"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 23.25,
+      "stats": {
+        "signal_verdict": "MISMATCH (spectral_slope diff=0.131, wiener=0.480)",
+        "note": "cross-family backup; worse than motion on oracle PCA and slope signals"
+      },
+      "function_family": "blur_gaussian"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "ci_pass_rate": "7/10",
+    "mode": "PSNR (sigma=0.74<2) + signal verification (blur angle robust)",
+    "rationale": "Deterministic 2-step (no noise): motion blur + JPEG. Blur type is robust across 3 pairs: motion PCA ratio 4.43/4.33/4.32 (>2.5, 0%FP), spectral_slope_ratio 1.37, gm_ratio 0.40; slope-diff at sev4 (0.081-0.083) < gaussian (0.131) and sev3 (0.129). JPEG severity calibrated by block_boundary (0%FP detection, bb target 2.78/3.37/4.10 across pairs): sev3 diff 8-9% vs sev1 37%, sev2 28%, sev4 23% -> JPEG=3 LIKELY. UNCERTAIN overall because blur_motion applies a random angle per call (x_distortion angle~U(-90,90)) that cannot be reproduced, so PSNR of the correct pipeline spans 20.2-29.4 dB (best 29.44 at motion:4+jpeg:3) and sev4 vs sev5 cannot be separated (one sev5 draw hit kernel MATCH, repeat draw PARTIAL wiener 0.299). No noise (sigma 0.74/0.74/0.37 across pairs; peeled sigma 1.48<2), no global (mean_shift<1/255, variance ratio explained by blur).",
+    "cross_support_verification": {
+      "pair0": {"block_boundary": 2.7761, "dct_zero_ratio": 0.8877, "gm_ratio": 0.4012, "anisotropy": 1.4348, "pca_ratio": 4.432, "sigma": 0.74},
+      "pair1": {"block_boundary": 3.3720, "dct_zero_ratio": 0.9360, "gm_ratio": 0.4100, "anisotropy": 1.7800, "pca_ratio": 4.330, "sigma": 0.74},
+      "pair2": {"block_boundary": 4.0990, "dct_zero_ratio": 0.9450, "gm_ratio": 0.3620, "anisotropy": 1.6200, "pca_ratio": 4.320, "sigma": 0.37},
+      "result": "CONSISTENT on all 3 pairs: compression detected (bb 2.78-4.10, dctz 0.89-0.95), motion blur (pca ~4.3, gm 0.36-0.41, sev est 4), sigma<2 no noise, no global"
+    }
+  }
+}

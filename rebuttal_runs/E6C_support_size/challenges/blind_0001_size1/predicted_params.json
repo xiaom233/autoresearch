@@ -1,0 +1,45 @@
+{
+  "challenge_id": "blind_0001_size1",
+  "pipeline": [
+    {"function": "noise_speckle", "severity": 5, "verdict": "UNCERTAIN"},
+    {"function": "brightness_darken_gamma_RGB", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "quantization_hist", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 5},
+        {"function": "quantization_hist", "severity": 2}
+      ],
+      "verify_signals": "WEAK (2✓/2✗): noise:sigma + noise:clean_residual 匹配, mean_shift 差 12.3 级 / variance_ratio 差 51%",
+      "function_family": "speckle+qhist (无暗化; 噪声指纹与 clipped 最接近目标, 但无法解释 -1.2 级均值偏移)",
+      "note": "噪声指纹几乎逐项一致: sigma 16.93 vs 16.68, intensity_var_corr 0.761 vs 0.772, spatial_corr 0.025 vs 0.0018, cross_ch 0.015 vs 0.0013; 若生成器确实每类只允许一步 (global 互斥), 应首选该 2 步解"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_speckle", "severity": 5},
+        {"function": "brightness_darken_shfit_HSV", "severity": 1},
+        {"function": "quantization_hist", "severity": 2}
+      ],
+      "verify_signals": "PARTIAL (3✓/1✗): sigma/clean_residual/mean_shift 匹配, variance_ratio 差 74%",
+      "function_family": "speckle+HSV-V 乘性暗化+qhist",
+      "note": "clipped 20.45% / chroma 2.80 / sigma 16.18 最接近目标 (16.35% / 2.655 / 16.68), 但 HSV 转换引入跨通道相关 (0.10 vs 目标 0.001)"
+    },
+    {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 4},
+        {"function": "quantization_hist", "severity": 2}
+      ],
+      "verify_signals": "WEAK (2✓/2✗): sigma/clean_residual 匹配, mean_shift 差 0.058 / variance_ratio 差 39%",
+      "function_family": "poisson+qhist (跨族噪声替代)",
+      "note": "full_analysis 默认判 POISSON; intensity_scaled_var_corr -0.685 与目标 -0.679 一致, 但 intensity_var_corr 0.518 远低于目标 0.772, 且 chroma/clipped 偏低"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "4/10 (仅 quantization_hist:2 单步 PSNR 模式测得; 含 noise 候选不使用 CI/PSNR)",
+    "mode": "SIGNAL (sigma=16.7, PSNR 不可用)",
+    "rationale": "确定性证据: unique_G=16 且三通道均 [16,16,16] (clean=256), block_boundary=1.0007 排除 JPEG → global=quantization_hist:2 (c=16 的共享 cdf 唯一能同时产生每通道恰好 16 个离散值); spectral_slope_ratio=0.993 + FFT 各向异性 0 → 无 blur。噪声指纹: 目标残差 spatially white (0.0018) 且跨通道独立 (0.0013), 强度依赖方差 (ivc=0.772), 与 speckle:5+qhist 模拟几乎逐项重合 (sigma 16.93/16.68, ivc 0.761/0.772, spatial 0.025/0.0018, cross 0.015/0.0013, DT 均为 POISSON) → noise=speckle:5。第三分量: 所有单 global 噪声组合 (gauss1/2, poisson4, impulse4, speckle4/5, YCrCb5) 的 qhist 输出 mean_shift 均为 +10~+16 级, 而目标为 -1.2 级; 在噪声后加一格最弱的 gamma 暗化 (brightness_darken_gamma_RGB:1, 端点保持的单调暗化, 不耦合通道) 后 mean_shift 收敛到 -0.7 级并首次达到 PARTIAL (3✓/1✗), 说明量化前直方图确有 ~25 级整体下移。残差: variance_ratio 1.59 vs 1.317 (所有候选均 1.48-1.65, 疑与 qhist cdf 实现细节有关), clipped 26.9% vs 16.35%。综合定 UNCERTAIN: 量化和噪声为高置信, 暗化步为中等置信 (若 E6 生成器沿用 blind_challenge.py 的 global 类别互斥规则则该步不可控, 应以 alternatives[0] 的 2 步解为准)。单 support (k=1), 无法做跨对验证。"
+  }
+}

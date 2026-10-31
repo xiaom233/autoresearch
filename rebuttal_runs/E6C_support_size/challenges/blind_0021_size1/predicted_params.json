@@ -1,0 +1,40 @@
+{
+  "challenge_id": "blind_0021_size1",
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 3, "verdict": "LIKELY"},
+    {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "LIKELY"},
+    {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 39.15,
+      "note": "同函数不同顺序(亮度先于blur); 裁剪位置不同导致39.15 vs inf, 作为顺序备选"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 28.6,
+      "note": "blur 跨族备选; 该值在 brightness-first 顺序下测得, 仅作族级参考(gaussian/lens MTF 不可分, 差距0.25dB)"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "overall_verdict": "LIKELY",
+    "tier": 1,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR (sigma=0.74 < 2, 无噪声; 最终候选 PSNR=inf)",
+    "psnr_rgb": "inf (像素级完全复现; reflection 中记为 99.0 以保持严格 JSON)",
+    "rationale": "block_boundary=3.201(0%FP)->JPEG sev4(CI 10/10); blur 族 PSNR 仲裁->gaussian sev3(FFT_anisotropy=1.65<1.7 排除 motion, glass_score=1.02 为FP); mean_shift=+24/255 -> brightness_brighten_shfit_RGB sev1; 顺序 blur->brightness->jpeg 时像素级完全复现(PSNR=inf)。无噪声(sigma_peeled=1.48<2), 每步确定性 PSNR>=40 -> 全 LIKELY, Tier 1。",
+    "support_verification": "k=1 单 support: 最终候选在唯一 pair0(clean_0/degraded_0) 复核 PSNR=inf; clean.png/degraded.png 为 pair0 别名(SHA256 相同)。单 support, 无法做跨对验证。",
+    "test_candidate_calls": 14,
+    "qwen_gate": {"available": false}
+  }
+}

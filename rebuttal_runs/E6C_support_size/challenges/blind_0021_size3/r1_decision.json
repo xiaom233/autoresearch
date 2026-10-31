@@ -1,0 +1,79 @@
+{
+  "challenge_id": "blind_0021_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_lens", 4],
+    ["brightness_brighten_shfit_RGB", 1],
+    ["compression_jpeg", 4]
+  ],
+  "r1_pipeline": [
+    ["blur_lens", 4],
+    ["brightness_brighten_shfit_RGB", 1],
+    ["compression_jpeg", 4]
+  ],
+  "support_psnr_r0": 26.51,
+  "candidates_tested": [
+    {
+      "id": "H1_order_brightness_first",
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "mode": "psnr",
+      "pairs": {"pair0": 33.97, "pair1": 36.66, "pair2": 42.88},
+      "ci": {"pair0": "10/10", "pair1": "10/10", "pair2": "8/10"},
+      "delta_vs_r0": {"pair0": -0.86, "pair1": -1.68, "pair2": -0.27},
+      "verdict": "REJECT: k=3 全部低于 R0，均值 37.84 vs 38.77 (-0.94dB)"
+    },
+    {
+      "id": "H2_gaussian4_same_order",
+      "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "mode": "psnr",
+      "pairs": {"pair0": 30.70},
+      "ci": {"pair0": "9/10"},
+      "delta_vs_r0": {"pair0": -4.13},
+      "verdict": "REJECT (pair0 筛选)"
+    },
+    {
+      "id": "H3_gaussian5_same_order",
+      "pipeline": "blur_gaussian:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "mode": "psnr",
+      "pairs": {"pair0": 27.82},
+      "ci": {"pair0": "9/10"},
+      "delta_vs_r0": {"pair0": -7.01},
+      "verdict": "REJECT (pair0 筛选)"
+    },
+    {
+      "id": "H4_lens_signal_baseline",
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "mode": "signal",
+      "pairs": {"pair0": "MATCH 5/5"},
+      "verdict": "BASELINE (spectral_slope, Wiener, block_boundary, mean_shift, variance_ratio 全匹配)"
+    },
+    {
+      "id": "H5_glass_signal",
+      "pipeline": "blur_glass:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "mode": "signal",
+      "pairs": {"pair0": "PARTIAL 4/5 (Wiener corr=0.838<0.85)"},
+      "verdict": "REJECT: 同序信号劣于 lens MATCH，无改善"
+    }
+  ],
+  "test_candidate_calls": 7,
+  "best_validation": {
+    "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+    "pair0_psnr": 34.83,
+    "pair1_psnr": 38.34,
+    "pair2_psnr": 43.15,
+    "ci_pass_rate": "10/10 all pairs",
+    "signal_pair0": "MATCH 5/5"
+  },
+  "signal_sources": [
+    "R1 full_analysis (full_analysis_R1.json) 与 R0 逐字段一致，仅 residual_intensity_corr -0.1851 -> -0.1893: block_boundary=3.2006, dct_zero_ratio=0.903, unique_G=256, gm_ratio=0.4047, spectral_slope_ratio=1.224, residual_anisotropy=1.6547, glass_score=1.0231, blur_pca_ratio=1.258, blur_density=0.7802, blur_flatness=0.4053, brightness_mean_shift=24.0, variance_ratio=0.8055, contrast_spread_ratio=0.9226, clipped_fraction=0.0188",
+    "blur_flatness=0.4053: gaussian/glass DT 分界 0.39，lens 分支需 >0.43；仅高 0.015 -> 核形分类为边界级，不能单独定 glass",
+    "glass_score=1.0231: 校准区间 Gaussian 0.04-0.13 / Lens 0.08-0.20 / Glass 0.19-0.41；1.02 远超玻璃上界，且目标含 JPEG(bb=3.2)+clipping(1.88%)，二阶差分被抬高 -> 判为 JPEG/clipping 假阳性",
+    "residual_anisotropy=1.6547<1.7 且 blur_pca_ratio=1.258<2.5 (motion PCA 0%FP) -> motion 排除（0.05 的阈值边界已专门复核）",
+    "peeled_noise_check(R0管线) 复跑: sigma=1.48<2, residual_std=4.6, extreme_pct=92.14%, zero_ratio=0.8443, spatial_corr=0.9276 -> 已文档 JPEG/clipping 假阳性；3 步已占满(blur+brightness+jpeg) 无 noise 位置",
+    "test_candidate --mode signal H4: lens 同序管线 MATCH 5/5 (spectral_slope, Wiener kernel, block_boundary, mean_shift, variance_ratio) -> variance_ratio=0.8055 已由 blur+JPEG 解释，无漏检 contrast",
+    "test_candidate --mode signal H5: glass 同序 PARTIAL 4/5，Wiener corr=0.838<0.85 -> 不支持玻璃",
+    "test_candidate H1: 第三合法顺序 brightness->blur->JPEG k=3 PSNR 33.97/36.66/42.88，全部低于 R0 -> 顺序固定为 blur->brightness->JPEG"
+  ],
+  "reason": "R1 重跑信号与 R0 一致；5 个新候选（第三顺序、gaussian:4、gaussian:5、lens/glass 同序信号）均未达到 >40dB 或 +2dB 门控。blur_lens:4 -> brightness_brighten_shfit_RGB:1 -> compression_jpeg:4 在 k=3 PSNR (34.83/38.34/43.15, CI 10/10) 与 pair0 信号 MATCH 5/5 下仍为最佳且自洽管线。glass 仅有边界级 DT 证据且同序信号劣于 lens；motion 排除；无 noise 步。故 NO_CHANGE，R1 管线与 R0 逐项相同。"
+}

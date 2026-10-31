@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0021_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 3],
+    ["brightness_brighten_shfit_RGB", 1],
+    ["compression_jpeg", 4]
+  ],
+  "r1_pipeline": [
+    ["blur_gaussian", 3],
+    ["brightness_brighten_shfit_RGB", 1],
+    ["compression_jpeg", 4]
+  ],
+  "support_psnr_r0": 24.08,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 99.0,
+      "psnr_note": "inf (像素级完全复现, 严格 JSON 记 99.0)",
+      "ci": "10/10",
+      "purpose": "R0 主候选复测 (k=1 pair0)",
+      "result": "ACCEPT"
+    },
+    {
+      "pipeline": "blur_motion:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 21.91,
+      "ci": "9/10",
+      "purpose": "residual_anisotropy=1.6547 阈值边界 (距 1.7 仅 0.045) 复核",
+      "result": "REJECT"
+    },
+    {
+      "pipeline": "blur_glass:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 26.04,
+      "ci": "10/10",
+      "purpose": "glass_score=1.0231>0.25 (R0 判 FP) 单步隔离复核",
+      "result": "REJECT"
+    }
+  ],
+  "test_candidate_calls": 3,
+  "best_validation": {
+    "pipeline": "blur_gaussian:3,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+    "psnr_rgb": 99.0,
+    "psnr_note": "inf 像素级完全复现",
+    "peeled_residual_std": 0.0,
+    "support_pairs": 1
+  },
+  "signal_sources": [
+    "block_boundary=3.2006 (full_analysis_R1) -> JPEG 确认, 0%FP",
+    "mean_shift=+24.0/255 (per-channel +22.26/+24.50/+25.21) -> brightness_brighten_shfit_RGB:1",
+    "gm_ratio=0.4047, spectral_slope_ratio=1.224 -> blur 存在",
+    "residual_anisotropy=1.6547 (<1.7, 边界) -> R1 blur_motion:3=21.91dB 排除 motion",
+    "glass_score=1.0231 (>0.25, R0 判 FP) -> R1 blur_glass:4=26.04dB 排除 glass",
+    "variance_ratio=0.8055, contrast_spread_ratio=0.9226 -> 方差下降来自 blur+clipping, 非 contrast",
+    "residual_intensity_corr=-0.1906, gamma_suspect -> 精确复现 + R0 gamma=25.84dB 排除 gamma",
+    "noise_prior sigma=0.74 (raw) / 1.48 (peeled lower bound), peeled residual std=0.0 -> NO_NOISE (extreme_pct=100% 为零残差伪影)"
+  ],
+  "reason": "R0 主候选在唯一 support pair0 上像素级完全复现 (PSNR=inf, peeled residual std=0.0), 无新候选可能超过 inf; 阈值边界信号 (anisotropy=1.6547) 与 glass_score 误判风险经 R1 三次针对性测试逐一排除 (21.91/26.04 dB)。k=1 单对限制: 全部验证在同一 pair0, 无跨对独立证据, 阈值不放宽, 维持 R0 管线。support PSNR=24.08 归因于单对训练泛化不足, 非盲识别错误。"
+}

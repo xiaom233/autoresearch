@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "brightness_darken_shfit_RGB:3 verdict=LIKELY, sig: mean_shift=-42.9, clipped_fraction=0.3199, variance_ratio=0.7181 且 brightness_clip_explains_variance=true, contrast_from_variance=false -> 方差变化由压暗裁剪解释, 非 contrast",
+    "contrast 步骤未成立: contrast_detected_raw=true 但被 brightness 裁剪解释, 故 ColorPre/FiLM-GCM 的 Tier A 'variance_ratio!=1.0 (contrast)' 条件不满足",
+    "blur_glass:1 verdict=UNCERTAIN: gm_ratio=0.4782, spectral_slope_ratio=0.9996 (BLUR_UNLIKELY), 无 motion 证据, anisotropy 信号未出现(<1.7) -> 不启用 OCAB (需 anisotropy>1.7 + motion)",
+    "无结构化局部与 contrast 共存: block_boundary=1.0038 (<1.1, 无 JPEG Tier S), unique_G=203 (>=200), 故 FiLM-GCM 的 'contrast+结构化(motion/jpeg)' 组合条件不满足",
+    "pipeline 含全局 brightness 退化 -> 按 §二/Step1 用 Direct 最安全; True Ft 在 2-epoch 预算下 ~= Direct (exp37)",
+    "SimpleGate 默认常开: exp39 -32K 参数, 8/9 退化安全 (仅 S5 motion x3 -0.86), 本挑战无 motion, 使用时无风险",
+    "k=1 单 support (pair0): 仅影响验证覆盖面, 不放宽任何 Tier 门控 (指令要求)"
+  ],
+  "rationale": "预测管线为 blur_glass:1 (UNCERTAIN) + brightness_darken_shfit_RGB:3 (LIKELY)。唯一的 Tier A 候选信号 variance_ratio=0.7181 被 full_analysis 明确归因为压黑暗端裁剪 (brightness_clip_explains_variance=true, contrast_from_variance=false), 不构成 contrast Tier A, 因此不触发 ColorPre/FiLM-GCM; 无 motion/anisotropy>1.7 证据不触发 OCAB; block_boundary=1.0038 远低于 1.1, 无 Tier S JPEG。按 §七 兜底规则采用纯 Swin + SimpleGate + Direct, lr=5e-4, EPOCH=2, batch=16。"
+}

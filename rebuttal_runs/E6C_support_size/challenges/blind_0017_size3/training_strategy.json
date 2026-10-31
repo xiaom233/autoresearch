@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "predicted_params: blur_gaussian:3 (LIKELY) + compression_jpeg:4 (LIKELY), 两步确定性管线; overall verdict UNCERTAIN (Tier 3), psnr_gap=0.37 dB < 3, k=3 support PSNR 26.43-28.25 全部 <30 → 保守默认",
+    "OCAB 门控未过: full_analysis step3 residual_anisotropy=1.4082 < 1.7, blur 非 motion (blur_pca_ratio=1.173, 无方向性证据)",
+    "FiLM-GCM 门控未过: step4_global verdict=NO_GLOBAL, contrast_from_variance=false, variance_ratio=0.7338 被归因于重模糊 (gm_ratio=0.1986), 反射实验 contrast_weaken_scale:1→27.83 dB / saturate_weaken_HSV:1→27.16 dB / contrast_weaken_stretch:2→21.15 dB 均劣于主候选 28.25 dB 且 unique_G 冲突 → 无置信 contrast 步骤",
+    "ColorPre 门控未过: 无 contrast Tier A 确认 (同上), 且 ColorPre 跨退化泛化最差 (16.0 dB gap)",
+    "noise: noise_prior sigma=0.74 << 2 → NO_NOISE; peeled residual spatial_corr=0.9675 为结构化(JPEG+blur)差异而非随机噪声",
+    "compression: block_boundary=8.4409 (Tier S, 0% FP) + dct_zero_ratio=0.9561 + unique_G=224 (ratio 0.90) 确认 JPEG, 无对应架构组件, SimpleGate 默认常开",
+    "SimpleGate: exp39 -32K 参数, 8/9 退化安全 (仅 S5 motion×3 -0.86), 默认启用"
+  ],
+  "rationale": "两步确定性退化 (blur_gaussian:3 → compression_jpeg:4), Tier 3 UNCERTAIN 且无任何 Tier S/A 架构组件门控被明确触发: anisotropy 1.41<1.7 排除 OCAB; 无置信 contrast 步骤 (variance_ratio 归因于模糊, 全局候选 PSNR 均劣) 排除 FiLM-GCM/ColorPre; sigma 0.74 排除噪声类。k=3 support 不改变门控阈值。按 finetune_strategy §七 默认策略: 纯 Swin + SimpleGate + Direct, lr=5e-4, EPOCH=2, BATCH=16, embed_dim=64 (参数公平, 454K 级)。DualBranch 在盲识别场景 0/24 胜且本指令禁用。"
+}

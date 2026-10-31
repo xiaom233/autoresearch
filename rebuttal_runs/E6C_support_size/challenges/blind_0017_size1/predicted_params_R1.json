@@ -1,0 +1,97 @@
+{
+  "challenge_id": "blind_0017_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_gaussian", 4],
+    ["compression_jpeg", 4]
+  ],
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 27.41,
+      "ci": "8/10",
+      "function_family": "blur_glass+compression_jpeg",
+      "evidence": "carried from R0; glass DT branch still possible, glass_score shown to be JPEG-inflated; 2 seeds both 27.41/27.38"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 28.48,
+      "ci": "8/10",
+      "function_family": "blur_gaussian+compression_jpeg",
+      "evidence": "carried from R0; highest simulated PSNR (+0.27dB vs chosen pipeline, below +2dB threshold) but block_boundary CI 16% vs 1% for jpeg4"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 28.22,
+      "ci": "8/10",
+      "function_family": "blur_gaussian+compression_jpeg",
+      "evidence": "carried from R0; severity boundary tie, block 6%"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 28.03,
+      "ci": "7/10",
+      "function_family": "blur_lens+compression_jpeg",
+      "evidence": "carried from R0; wiener MATCH; MTF-indistinguishable from gaussian family"
+    }
+  ],
+  "analysis": {
+    "overall_verdict": "UNCERTAIN",
+    "mode": "PSNR (noise_prior sigma=0.74<2) + signal cross-check",
+    "support_size": {
+      "k": 1,
+      "pairs_used": ["pair0: degraded.png / clean.png"],
+      "limitation": "单对 support：无跨对验证，单对 PSNR 噪声大；CHANGE 阈值未放宽（>40dB 或相对 R0 管线 +2dB，即 >30.21dB）"
+    },
+    "r0_support_psnr": 24.66,
+    "change_threshold": ">40 dB 或 > 30.21 dB（R0 管线仿真 28.21 dB + 2 dB）",
+    "r1_candidates_tested": [
+      {"pipeline": "blur_motion:4,compression_jpeg:4", "psnr": 25.67, "ci": "7/10", "result": "REJECT"},
+      {"pipeline": "blur_gaussian:3,compression_jpeg:3", "psnr": 28.31, "ci": "5/10", "result": "REJECT"},
+      {"pipeline": "blur_gaussian:4,contrast_weaken_stretch:1,compression_jpeg:4", "psnr": 21.72, "ci": "3/10", "result": "REJECT"},
+      {"pipeline": "blur_gaussian:5,compression_jpeg:3", "psnr": 28.34, "ci": "8/10", "result": "REJECT"}
+    ],
+    "deterministic_plateau": "gaussian3-5 x jpeg3-4 全部 28.00-28.48 dB；motion/glass/lens 均 <=28.03；无候选达到 30.21dB CHANGE 门槛",
+    "signal_reanalysis": "full_analysis_R1 重跑与 R0 逐项一致：block_boundary=8.393 (0%FP JPEG), gm_ratio=0.1989, spectral_slope_ratio=1.1319, glass_score=1.6207, noise_prior sigma=0.74, variance_ratio=0.7324, mean_shift=-0.2/255, clipped_fraction=0.0001, residual_intensity_corr=-0.1891 (R0 -0.2063)",
+    "noise_check_R1": {
+      "peeled_pipeline": "blur_gaussian:4,compression_jpeg:4",
+      "extreme_pct": 78.51,
+      "vm_slope": 0.2122,
+      "var_slope": 0.0580,
+      "spatial_corr": 0.9664,
+      "rgb_ratio": 1.5141,
+      "cross_ch_corr": 0.5975,
+      "residual_std": 9.9,
+      "noise_prior_sigma": 1.48,
+      "diagnosis": "NO_NOISE：sigma<2，残差高度结构化（spatial_corr=0.966）；extreme_pct IMPULSE 为文档化假阳性（>50% 且 sigma<5）"
+    },
+    "rationale": "R1 重跑信号无新发现；4 个新候选均未达 +2dB 门槛（best 28.34dB, +0.13dB）。确定性网格闭合，28dB 平台归因于残留随机分量（glass 洗牌无法排除）或 off-grid severity，训练 PSNR 仲裁。R0 管线 gaussian4+jpeg4 维持不变。",
+    "r1_test_candidate_calls": 4,
+    "r1_budget_limit": 15
+  }
+}

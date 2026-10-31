@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "blur_gaussian:4 LIKELY (reflection.json: spectral_slope diff<0.08、wiener kernel corr>0.85 在三对 support pair0/pair1/pair2 全部 MATCH) → 纯 Swin 基线；非 motion，不触发 OCAB",
+    "OCAB 未启用: full_analysis residual_anisotropy=3.17 属 FFT fallback 低置信分支(5% recall)，且 motion sev3/4/5 实测全 MISMATCH(wiener corr 0.481-0.532)，最终判定为 gaussian:4 MATCH → anisotropy 不构成 Tier A motion 证据",
+    "FiLM-GCM 未启用: variance_ratio=0.574 被 blur_gaussian:4 自身完整解释(纯模糊模拟 vr=0.605、chroma 0.794 vs 目标 0.796)，无独立 contrast Tier A 信号，且无 motion/jpeg 结构化步骤",
+    "ColorPre 未启用: 同上，无独立 contrast；saturate_weaken_HSV:2 实测 global 信号 MISMATCH(mean_shift 差 0.0756, variance 差 19%)，reflection 判定 global 为生成伪影/未建模成分",
+    "noise_gaussian_RGB:2 UNCERTAIN: 剥离 blur:4 后残差 std=2.9，类型信号被平滑结构污染(spatial_corr=0.9926, cross_ch 假阳性 0.95)，按 SKILL 默认 gaussian_RGB；UNCERTAIN 步骤不加组件",
+    "JPEG 未启用专项: block_boundary=1.000、unique_G=198、dct_zero=0.823 被纯 blur_gaussian:4 模拟复现(bb=1.0007, unique_G=192, dct=0.826) → 无 compression 步骤",
+    "SimpleGate 默认常开: 纯局部 blur(+0.06)/noise(-0.01) 场景安全(exp39 8/9 无害, -32K)，无 motion S5 风险"
+  ],
+  "rationale": "两步骤中仅 blur_gaussian:4 为 LIKELY/高置信，其自身即可解释 compression/global/anisotropy 全部表层信号；无 Tier S/A 的 motion(anisotropy) 或 contrast(variance_ratio 独立成分) 信号，故全部组件门控不触发。采用默认纯 Swin + SimpleGate + Direct，lr=5e-4、EPOCH=2、batch=16、dim=64；k=3 support 不改变门控。noise 步骤 UNCERTAIN 且序列为先噪声后模糊(梯度干扰有限)，Direct 为安全选择。"
+}

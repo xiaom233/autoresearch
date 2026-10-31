@@ -1,0 +1,46 @@
+{
+  "challenge_id": "blind_0015_size1",
+  "pipeline": [
+    {"function": "blur_glass", "severity": 1, "verdict": "UNCERTAIN"},
+    {"function": "brightness_darken_shfit_RGB", "severity": 3, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "psnr": 28.60,
+      "ci_pass": "8/10",
+      "function_family": "blur_gaussian",
+      "note": "确定性替代：σ=1 gaussian 的平滑量与 glass:1 双σ0.7 接近，但缺少随机置换，overshoot/zero_crossing 差 25-28%"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 1},
+        {"function": "brightness_darken_shfit_RGB", "severity": 3}
+      ],
+      "psnr": 28.84,
+      "ci_pass": "9/10",
+      "function_family": "blur_lens",
+      "note": "跨族替代：radial 核更温和，仅 overshoot 32% 超标"
+    },
+    {
+      "pipeline": [
+        {"function": "brightness_darken_shfit_RGB", "severity": 3},
+        {"function": "blur_glass", "severity": 1}
+      ],
+      "psnr": 26.69,
+      "ci_pass": "10/10",
+      "function_family": "order_swap",
+      "note": "顺序替代：先压暗后玻璃模糊；CI 同为 10/10 但 zero%/unique/hf_lf 略差于 blur→brightness 顺序"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "10/10",
+    "mode": "PSNR (sigma=0.74<2, NO_NOISE); blur_glass 为随机像素置换(np.random 无种子)，PSNR 上限被 seed 限制在 ~26.5dB，最终以 CI 10/10 + 全信号匹配判定",
+    "rationale": "brightness_darken_shfit_RGB:3 由确定性指纹锁定：unique_G 203 精确一致、zero% 32.0/32.2、mean_shift -42.9/-42.8、variance_ratio 0.718/0.722、clipped_fraction 0.320/0.322（模拟 vs 目标）。剩余失配（target 比 shift-only 模拟更平滑但比 gaussian:1 模拟 HF 更高）由 blur_glass:1 的 σ0.7 平滑 + ±1px 随机像素置换解释：glass 顺序 CI 10/10（gaussian 8/10、lens 9/10、glass sev2 9/10），且对最优模拟图重跑 run_full_analysis 后 gm_ratio/slope/sigma/mean_shift/variance/contrast/saturation 共 15 项信号与 target 全部一致（差异<4%）。因 glass 随机置换导致 PSNR 无法收敛到 >40dB（重跑 PSNR 26.51 两次接近但残差 std 12.1 由置换误差主导），blur 步骤只能给 UNCERTAIN；brightness 步骤为 LIKELY。k=1 单 support，无跨对验证。"
+  }
+}

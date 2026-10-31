@@ -1,0 +1,38 @@
+{
+  "challenge_id": "blind_0003_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    {"function": "blur_glass", "severity": 2}
+  ],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 2}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 2}],
+      "psnr_by_pair": {"pair0": 34.02, "pair1": 27.88, "pair2": 37.41},
+      "source": "R0 rounds 7/13/14",
+      "function_family": "gaussian_blur",
+      "reason": "cross-family backup; fails R1 change criterion (deltas vs anchor -0.65/-0.59/-1.46 dB on pairs 0/1/2); cannot reproduce the glass shuffle fingerprint"
+    },
+    {
+      "pipeline": [{"function": "blur_lens", "severity": 2}],
+      "psnr_by_pair": {"pair0": 33.61},
+      "source": "R0 round 6 (pair0 only)",
+      "function_family": "disk_blur",
+      "reason": "same-MTF backup; fails change criterion on pair0 (-1.06 dB vs anchor); pairs 1/2 not tested in R0/R1"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 2,
+    "mode": "PSNR (sigma 1.48 < 2) + CI content-independent metrics",
+    "support_pairs_used": 3,
+    "support_psnr_r0": 26.79,
+    "test_candidate_calls": 4,
+    "psnr_by_pair_R1_anchor": {"pair0": 34.67, "pair1": 28.47, "pair2": 38.87},
+    "ci_pass": "10/10 on all 3 support pairs (max |diff| <= 0.002)",
+    "rationale": "R1 signal reanalysis reran run_full_analysis on pair0 and reproduced the R0 fingerprint exactly (gm_ratio 0.2989, glass_score 0.5049, spectral_slope_ratio 1.0927, anisotropy 1.244, noise sigma 1.48, variance_ratio 0.8686, contrast_spread_ratio 0.9197, mean_shift -0.5, block_boundary 1.0019). Structure: anisotropy<1.7 rules out motion; glass_score>0.25 + R0 simulation-fingerprint identity (sim glass:2: gm_ratio 0.2985, glass_score 0.5048, unique_G 212 vs 211, dct_zero_ratio 0.5068 vs 0.5074, sigma 1.48 vs 1.48) identifies blur_glass severity 2. R1 anchor re-validation on all 3 pairs: 34.67/28.47/38.87 dB, CI 10/10, within 0.04 dB of R0. The only signal never probed in R0 was the flagged mild-compression signal (unique_G_ratio 0.834/0.977/0.901, dct_zero_ratio 0.5074/0.3975/0.7932, block_boundary all <1.05); the minimum JPEG step after blur (blur_glass:2,compression_jpeg:1) was tested on pair0 and rejected (32.08 dB, -2.59 dB vs anchor; CI 6/10 with block_boundary diff 101%, i.e., simulated blockiness about 2x target). Noise was re-ruled-out because wavelet sigma varies 11x across the 3 pairs (1.48/4.08/0.37) and the peeled glass:2 residual (std 4.7, extreme_pct 58.45%, spatial_corr 0.951, vm_slope 4.97, var_slope 0.058, rgb_ratio 1.064, ch_stds 4.6/4.7/4.9, sigma 2.97<5) is the documented SKILL extreme_pct>50% + sigma<5 false-positive mode of the glass shuffle residual. Pair1 residual_intensity_corr=0.4333 (gamma_suspect) is content-dependent because pairs 0/2 have -0.0124/-0.0474 and a global step would break the exact pair0 identity (variance_ratio 0.8686 vs 0.8682, contrast_spread_ratio 0.9197 vs 0.9197). No candidate reached >40 dB or +2 dB on all k pairs, so the pipeline is unchanged. Support PSNR 26.79 < 35 is consistent with non-invertible random pixel shuffle (SKILL C4): simulation PSNR is capped at 34.67/28.47/38.87 dB on pairs 0/1/2 (pair1 alone caps near 28 dB), so the trigger reflects a stochastic-blur evaluation limit rather than an identification error."
+  }
+}

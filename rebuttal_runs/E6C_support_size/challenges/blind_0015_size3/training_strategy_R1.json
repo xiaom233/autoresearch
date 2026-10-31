@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "brightness_darken_shfit_RGB:3 verdict=LIKELY: mean_shift=-42.9, variance_ratio=0.7181, clipped_fraction=0.3199, unique_G=203 与模拟精确一致 -> 全局加性暗化",
+    "full_analysis step4: brightness_clip_explains_variance=true, contrast_from_variance=false -> variance_ratio≠1 由暗化 clipping 解释, 不构成 contrast Tier A, 不触发 ColorPre/FiLM-GCM",
+    "blur_lens:2 verdict=UNCERTAIN: gaussian/lens/glass/motion 全族扫描 PSNR 25.9-29.5 dB 均 <30, gaussian↔lens MTF 不可区分 (CI 8-9/10 平台)",
+    "motion 候选 25.92 dB 最差且 reflection 记录 FFT anisotropy 低, 无 anisotropy_ratio>1.7, 不触发 OCAB",
+    "noise_absent: noise_prior sigma=0.74/1.4/1.5 (均<2), 剥离残差 spatial_corr=0.9724 结构化; compression_absent: block_boundary=1.0038 <1.1 (Tier S 未触发)",
+    "含全局 brightness 暗化 + 盲识别模糊步骤 UNCERTAIN -> Direct 最安全 (finetune_strategy.md Step1/Step3); 盲识别场景组件 0/24 胜 (exp37), 仅 SimpleGate 默认常开 (exp39 8/9 安全)"
+  ],
+  "rationale": "管线为 brightness_darken_shfit_RGB:3 (LIKELY) + blur_lens:2 (UNCERTAIN)。全局步骤方差下降完全由 RGB 均匀暗化的 clipping 解释, 不是 contrast, 因此 ColorPre/FiLM-GCM 的 Tier A 门控不成立; 模糊步骤子类型全族 PSNR 平台 (<30 dB) 且无 motion/anisotropy 信号, OCAB 门控不成立。默认纯 Swin + SimpleGate + Direct, lr=5e-4, EPOCH=2, batch=16。k=3 support 不改变门控阈值, 未放宽任何条件。"
+}

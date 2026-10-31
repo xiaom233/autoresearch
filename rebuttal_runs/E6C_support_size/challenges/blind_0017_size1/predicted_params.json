@@ -1,0 +1,64 @@
+{
+  "challenge_id": "blind_0017_size1",
+  "pipeline": [
+    {
+      "function": "blur_gaussian",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        {"function": "blur_glass", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 27.41,
+      "ci": "8/10",
+      "function_family": "blur_glass+compression_jpeg",
+      "evidence": "highest glass_score=1.62 DT branch; CI block 2-3%, unique_G 1-2%, hf_lf 0%; wiener corr 0.831 just below 0.85; PSNR consistently 0.8dB below gaussian4"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 4},
+        {"function": "compression_jpeg", "severity": 3}
+      ],
+      "psnr": 28.48,
+      "ci": "8/10",
+      "function_family": "blur_gaussian+compression_jpeg",
+      "evidence": "highest PSNR of all 21 candidates but block_boundary CI 16% vs 1% for jpeg4; jpeg4 preferred on 0%FP block signal"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_gaussian", "severity": 3},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 28.22,
+      "ci": "8/10",
+      "function_family": "blur_gaussian+compression_jpeg",
+      "evidence": "severity boundary check; PSNR tied with sev4 (28.22 vs 28.21), unique/overshoot/zero-cross CI better, block 6%"
+    },
+    {
+      "pipeline": [
+        {"function": "blur_lens", "severity": 5},
+        {"function": "compression_jpeg", "severity": 4}
+      ],
+      "psnr": 28.03,
+      "ci": "7/10",
+      "function_family": "blur_lens+compression_jpeg",
+      "evidence": "wiener MATCH, slope 0.228, block 19%; MTF-indistinguishable from gaussian family"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "ci_pass_rate": "8/10 (best candidate, failures only in impulse FP metrics)",
+    "mode": "PSNR (noise_prior sigma=0.74<2) + SIGNAL cross-check",
+    "rationale": "Two-step pipeline: blur (strong, gm_ratio=0.199) then JPEG (block_boundary=8.393, 0%FP). No noise (peeled sigma=1.48<2, residual spatial_corr=0.967 structured → known extreme_pct IMPULSE false positive; impulse:1 control gave no gain). No global: saturation sev2 (-4.3dB), contrast_weaken_scale sev2 (-4.8dB), contrast_weaken_stretch sev2 (-7.1dB) all collapse PSNR/unique counts → variance_ratio=0.732 is a blur+JPEG byproduct. Blur subtype: glass DT branch (glass_score=1.62>0.25) is INVALIDATED here — a pure blur_gaussian:5+compression_jpeg:4 simulation scores glass_score=1.69 in the same analyzer, so glass_score is JPEG-inflated; gaussian family preferred (wiener kernel MATCH >0.85; glass fails at 0.831). All 21 candidates plateau at PSNR 21-28.5dB (best gaussian4+jpeg4=28.21, CI 8/10, block 1%, slope 0.188); no deterministic combo reaches exact-match (>30dB), signature of an unresolved stochastic component (glass cannot be excluded) or off-grid severity. Severity: gm_ratio trend (sim gaussian5 gm=0.138 vs target 0.199; slope sim 1.389 vs target 1.132) indicates blur < sev5, sev3-4 tie at PSNR 28.2 → choose sev4. JPEG sev3 vs 4 tie in PSNR (28.48 vs 28.21) but block_boundary CI 16% vs 1% and signal raw diff 13% → sev4. Single support pair (k=1), no cross-pair validation possible."
+  }
+}

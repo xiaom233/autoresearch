@@ -1,0 +1,93 @@
+{
+  "challenge_id": "blind_0019_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["blur_lens", 4],
+    ["saturate_weaken_HSV", 5],
+    ["compression_jpeg", 3]
+  ],
+  "r1_pipeline": [
+    ["blur_lens", 4],
+    ["saturate_weaken_HSV", 5],
+    ["compression_jpeg", 3]
+  ],
+  "support_psnr_r0": 19.73,
+  "support_size_k": 1,
+  "candidates_tested": [
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:3,saturate_weaken_HSV:5",
+      "hypothesis": "Priority-2 steps are shuffled by the generator: JPEG applied on the colour image then desaturated (V=max) differs from desaturate-then-JPEG. Structural ordering, not noise.",
+      "mode": "psnr",
+      "psnr_rgb": 28.52,
+      "ci_pass": "8/10",
+      "verdict": "REJECT (below R0 29.48; no +2 dB)"
+    },
+    {
+      "pipeline": "saturate_weaken_HSV:5,compression_jpeg:3",
+      "hypothesis": "Generator allows 2-4 steps; R0 never tested a pipeline without blur. gm_ratio=0.426 could be gradient loss from strong JPEG rather than a real blur.",
+      "mode": "psnr",
+      "psnr_rgb": 24.27,
+      "ci_pass": "5/10",
+      "verdict": "REJECT (blur is real)"
+    },
+    {
+      "pipeline": "blur_lens:4,saturate_weaken_HSV:5,compression_jpeg:3",
+      "hypothesis": "Diagnostic re-run of R0 best (not a new candidate) with saved simulated image for visual diff; confirms reproducibility 29.48.",
+      "mode": "psnr",
+      "psnr_rgb": 29.48,
+      "ci_pass": "8/10",
+      "verdict": "REFERENCE (best unchanged)"
+    },
+    {
+      "pipeline": "blur_lens:4,saturate_weaken_HSV:5,compression_jpeg:3",
+      "hypothesis": "Signal baseline (diagnostic) to establish WEAK/PARTIAL reference before judging a noise candidate.",
+      "mode": "signal",
+      "verdict": "WEAK (2 matches / 3 mismatches): blur:spectral_slope MATCH, blur:wiener_kernel MATCH; compression:block_boundary diff=33%, global:variance_ratio diff=25%, global:mean_shift diff=0.0064 mismatch"
+    },
+    {
+      "pipeline": "blur_gaussian:5,saturate_weaken_HSV:5,compression_jpeg:3",
+      "hypothesis": "Untested deterministic combo: gm_ratio=0.4257 is severe enough to match gaussian sigma=5 (severity 5); R0 only tested gaussian:4 and with jpeg4.",
+      "mode": "psnr",
+      "psnr_rgb": 28.43,
+      "ci_pass": "7/10",
+      "verdict": "REJECT (below R0; hf_lf diff 0% but pixel-level mismatch)"
+    },
+    {
+      "pipeline": "blur_lens:4,saturate_weaken_HSV:5,compression_jpeg:5",
+      "hypothesis": "Untested JPEG dimension: target block_boundary=3.983 and dct_zero_ratio=0.9129 are very high, suggesting q5 (sev5) storage quality.",
+      "mode": "psnr",
+      "psnr_rgb": 27.78,
+      "ci_pass": "5/10",
+      "verdict": "REJECT (stronger JPEG worsens PSNR)"
+    },
+    {
+      "pipeline": "noise_gaussian_RGB:5,blur_lens:4,saturate_weaken_HSV:5,compression_jpeg:3",
+      "hypothesis": "4-step pipeline: noise is priority 0, i.e. before blur, and is attenuated ~10x by lens radius-6 blur, so noise_prior sigma=1.11 does not exclude it. Would explain the deterministic PSNR plateau and low support PSNR.",
+      "mode": "signal",
+      "verdict": "REJECT: WEAK (3 matches / 4 mismatches); noise:structured_residual FWHM=24.0px, global:variance_ratio diff=238% (vs 25% baseline) -> adding variance moves away from target, so the target is not missing noise"
+    }
+  ],
+  "new_candidates": 5,
+  "diagnostic_runs": 2,
+  "test_candidate_calls": 7,
+  "best_validation": {
+    "pipeline": "blur_lens:4,saturate_weaken_HSV:5,compression_jpeg:3",
+    "psnr_rgb": 29.48,
+    "ci_pass": "8/10",
+    "above_40db": false,
+    "delta_vs_r0_db": 0.0,
+    "threshold_for_change_db": 31.48
+  },
+  "signal_sources": [
+    "saturation_chroma_ratio=0.0 (run_full_analysis step4) => global is saturate_weaken with scale 0.0 (HSV sev5, S*=0 -> V=max grayscale); YCrCb sev5 (luma gray) rejected by PSNR 24.70 vs 29.30",
+    "blur: gm_ratio=0.4257, spectral_slope_ratio=1.2451, residual_anisotropy=3.9545 (<4.0 motion threshold), glass_score=1.0807, blur_pca_ratio=1.227; verify_signals on lens:4 gives blur:spectral_slope MATCH + blur:wiener_kernel MATCH",
+    "step count: 2-step saturate+JPEG PSNR 24.27 / CI 5/10 vs 29.48 with lens:4 => blur is not a JPEG artefact",
+    "order within priority 2: generator shuffles global and compression; JPEG-before-saturate 28.52 < 29.48 => R0 order blur->saturate->JPEG retained",
+    "JPEG: block_boundary=3.983 (0%FP), dct_zero_ratio=0.9129, unique_G=256 => JPEG certain; sev3 best by PSNR, but verify_signals block_boundary diff=33% persists and sev5 drops PSNR to 27.78",
+    "global: brightness_mean_shift=10.8, variance_ratio=0.9102, contrast_spread_ratio=1.0036 => not contrast/brightness (contrast_weaken PSNR 18.54); residual variance_ratio mismatch=25% (simulation too contrasty) is the main unresolved signal",
+    "noise: noise_prior_sigma=1.11 raw, peeled sigma=1.98; peeled residual_std=8.4, spatial_corr=0.968, rgb_ratio=1.0, cross_channel_corr=1.0, vm_slope=-0.1217, var_slope=0.0046; 4-step blurred-noise signal test WEAK + variance_ratio 238% => NO_NOISE"
+  ],
+  "reason": "NO_CHANGE. Five new candidates were tested; none exceeded the unchanged thresholds (>40 dB exact reproduction or >= +2 dB over R0 29.48 dB). The R1 signal re-interpretation confirms the R0 structure: HSV saturation sev5 is certified by chroma ratio 0.0; blur is real and its magnitude is correct (both blur signals match at lens:4, and removing blur collapses PSNR to 24.27 / CI 5/10); JPEG is certified by block_boundary=3.983. The priority-2 order shuffle was tested explicitly (28.52) and does not improve. The previously untested deterministic dimensions (gaussian:5, jpeg:5) are worse. The 4-step blurred-noise hypothesis (the only structural alternative that could explain a deterministic plateau) is rejected in signal mode (WEAK, variance_ratio 238%, structured residual FWHM 24px). The remaining 8.4-level residual concentrates in block_boundary (33%) and global variance_ratio (25%), but every discrete change that reduces it (stronger JPEG, stronger blur, contrast weaken) lowers full-pipeline PSNR. With k=1 only pair0 is available, so stochastic blur alternatives (motion random angle, glass random shuffle) cannot be arbitrated by a single-pair PSNR. Evidence insufficient to change; R0 pipeline retained for R1 training and training-PSNR arbitration.",
+  "single_support_note": "k=1: only pair0 (clean_0/degraded_0). No cross-pair validation, no majority vote for signal-mode candidates; thresholds deliberately NOT relaxed."
+}

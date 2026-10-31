@@ -1,0 +1,37 @@
+{
+  "challenge_id": "blind_0010_size3",
+  "round": "R1",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "R1 管线唯一步骤: brightness_darken_gamma_HSV:5, per_step_verdict=LIKELY on pair0 (43.97 dB > 40 dB 确定性确认), UNCERTAIN on pair1/pair2 (24.45/31.17 dB); k=3 mean 33.20 dB vs R0 25.79 (+7.41); 来源 predicted_params_R1.json analysis.per_step_verdict / k_pair_psnr",
+    "无 JPEG (Tier S 未触发): block_boundary=0.9992/0.9973/0.9967 < 1.1, unique_G=241/251/250 > 200; 来源 full_analysis_R1.json / _p1 / _p2 step1_compression",
+    "无 noise: noise_prior_sigma=0.62/1.48/0.74 << noise_gaussian sev1 sigma=12.75, 残差结构化 (pair1 peel 后 spatial_corr 0.651, cross_ch_corr 0.9959, sigma_prior 4.94); 来源 full_analysis_R1*.json step2_noise + reflection.json reflection_R1.noise_recheck",
+    "无 motion, OCAB 不触发: pair0 anisotropy=0 (R0 reflection ruled_out), pair2 residual_anisotropy=1.375 < 1.7; spectral_slope_ratio 0.928/1.010/1.091; pair2 glass_score=0.2998 仅低置信模糊旗标, 且 blur+gamma 两步探针在 pair1 无增益 (22.54/22.42 < 24.45 单步), R1 未采纳模糊步骤; 来源 full_analysis_R1_p2 step3_blur + reflection.json reflection_R1.hypotheses_tested",
+    "variance_ratio=0.193/0.709/0.830 非 Tier A contrast 信号: full_analysis 三对均 contrast_from_variance=false, pair0 brightness_clip_explains_variance=true, contrast_from_clipping=true → 方差不降由暗化黑裁剪造成, ColorPre 不触发; 来源 full_analysis_R1*.json step4_global.false_positive_checks",
+    "FiLM-GCM 不触发: 需 Tier A variance_ratio + 结构化局部 (motion/jpeg), 本挑战无 motion (anisotropy<1.7) 无 JPEG (block_boundary<1.1); 且 brightness_HSV+GCM 有 NaN 风险 (finetune_strategy.md §五 排名1 L1 NaN, §九 GCM 诱发 NaN), exp38 gamma 上 FiLM +0.05 ≈ 0",
+    "saturation/chroma_ratio 0.289/0.620/0.393 属 Tier C HSV 信号 → 不加组件 (finetune_strategy.md §七: saturation 信号不加组件, ColorPre 有害); 单函数 per category 限制下 chroma 损失由 V-gamma 自身解释",
+    "单步全局 brightness(gamma) 属低难度 (finetune_strategy.md §六 Step 0; §二 gamma→Direct, 组件无效); 单步无多退化梯度干扰, 不需要 RandomCurric",
+    "SimpleGate 默认常开 (-32K, exp39 8/9 安全; SF5 gamma×3 仅 -0.14), 非 motion 三退化场景; k=3 support 数量不改变架构门控"
+  ],
+  "rationale": "R1 收敛为单步全局 brightness_darken_gamma_HSV:5 (pair0 43.97 dB 确定性确认, 整体仍 UNCERTAIN)。所有逐步骤信号均未达组件门控: 无 JPEG (block_boundary<1.1, unique_G>200)、无 motion (anisotropy 0/1.375<1.7)、variance_ratio 被 full_analysis 明确归因于暗化黑裁剪 (contrast_from_variance=false) 而非 Tier A contrast、chroma 损失属 Tier C saturation 信号、模糊仅 pair2 低置信旗标且两步探针无增益。FiLM-GCM 额外有 brightness_HSV NaN 风险且 exp38 在 gamma 上收益≈0。按 finetune_strategy.md §六/§七 与 E6-C 指令, 采用纯 Swin + SimpleGate + Direct, 不加任何组件; LR=5e-4, EPOCH=2, batch=16 与协议一致, k=3 不放宽门控。"
+}

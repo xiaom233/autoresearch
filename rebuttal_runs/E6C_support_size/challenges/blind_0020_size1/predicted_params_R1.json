@@ -1,0 +1,70 @@
+{
+  "challenge_id": "blind_0020_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_glass", 4], ["contrast_weaken_stretch", 4]],
+  "pipeline": [
+    {"function": "blur_glass", "severity": 4, "verdict": "LIKELY"},
+    {"function": "contrast_weaken_stretch", "severity": 4, "verdict": "LIKELY"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 5}, {"function": "contrast_weaken_stretch", "severity": 4}],
+      "psnr": 39.67,
+      "ci_pass": "7/10",
+      "function_family": "glass blur (same-family severity alt) + contrast_stretch",
+      "source": "R0 round6"
+    },
+    {
+      "pipeline": [{"function": "blur_glass", "severity": 3}, {"function": "contrast_weaken_stretch", "severity": 4}],
+      "psnr": 39.34,
+      "ci_pass": "9/10",
+      "function_family": "glass blur (same-family severity alt, R1 下界补测) + contrast_stretch",
+      "source": "R1 round12"
+    },
+    {
+      "pipeline": [{"function": "blur_gaussian", "severity": 4}, {"function": "contrast_weaken_stretch", "severity": 4}],
+      "psnr": 39.27,
+      "ci_pass": "8/10",
+      "function_family": "gaussian blur (cross-family alt) + contrast_stretch",
+      "source": "R0 round4"
+    },
+    {
+      "pipeline": [{"function": "blur_lens", "severity": 5}, {"function": "contrast_weaken_stretch", "severity": 4}],
+      "psnr": 38.9,
+      "ci_pass": "9/10",
+      "function_family": "lens blur (cross-family alt) + contrast_stretch",
+      "source": "R0 round8"
+    }
+  ],
+  "analysis": {
+    "verdict": "LIKELY",
+    "tier": 1,
+    "mode": "PSNR (noise_prior sigma=0.37 < 2; peeled sigma=0.74 → NO_NOISE; 确定性退化 PSNR 可用)",
+    "r0_support_psnr": 16.5,
+    "support_k": 1,
+    "support_note": "k=1 单 support (pair0=clean.png/degraded.png, 与 clean_0/degraded_0 同文件); 全部验证仅在同一 pair0 完成, 无法跨对验证, 单对结论不确定性高",
+    "r1_signal_reevaluation": {
+      "compression": "unique_G=106<200 与 dct_zero_ratio=0.8605 提示压缩, 但 block_boundary=1.0036<1.05 且无块效应; 实测追加最轻 compression_jpeg:1 得 38.32dB (CI 2/10), 低于 R0 40.66 → 压缩步骤排除",
+      "blur": "gm_ratio=0.1377 + spectral_slope_ratio=1.4012 + residual_anisotropy=1.5045 (<1.7 排除 motion) + glass_score=0.3012 边界信号; 补测 glass3 得 39.34dB, 确认 glass severity 曲线峰值在 sev4 (3:39.34 / 4:40.66 / 5:39.67)",
+      "global": "variance_ratio=0.1878 + contrast_spread_ratio=0.4362 + mean_shift=-22.6 + saturation_chroma_ratio=0.5045 + gamma_suspect=true 指向非线性 S 曲线; 实测 contrast_weaken_scale:4 仅 20.01dB (CI 4/10) → contrast_weaken_stretch 子类型确认",
+      "gamma": "R0 已测 brightness_darken_gamma_RGB:2=14.87dB; gamma 单调曲线难以在 mean_shift=-22.6 的同时把 variance 压到 0.188 → 机制不符, 不再测试",
+      "noise": "peeled_noise_check R1: 残留 std=2.4/255, noise_prior sigma=0.74<2; §B extreme_pct=67.79%/vm_slope=1.679/spatial_corr=0.9854 为 glass shuffle 结构化伪影 (已知假阳性模式) → NO_NOISE; gaussian_RGB 最小 sev1 sigma≈12.75 远大于残留 std"
+    },
+    "r1_validation": {
+      "test_candidate_calls": 3,
+      "candidates": [
+        {"pipeline": "blur_glass:4,contrast_weaken_stretch:4,compression_jpeg:1", "psnr_rgb": 38.32, "ci_pass": "2/10", "delta_vs_r0": -2.34},
+        {"pipeline": "blur_glass:3,contrast_weaken_stretch:4", "psnr_rgb": 39.34, "ci_pass": "9/10", "delta_vs_r0": -1.32},
+        {"pipeline": "blur_glass:4,contrast_weaken_scale:4", "psnr_rgb": 20.01, "ci_pass": "4/10", "delta_vs_r0": -20.65}
+      ],
+      "incumbent": {"pipeline": "blur_glass:4,contrast_weaken_stretch:4", "psnr_rgb": 40.66, "repeat_psnr_rgb": 40.67, "ci_pass": "9/10"}
+    },
+    "rationale": "R1 三个新候选 (压缩追加 / glass 下界 / scale 子类型) 均低于 R0 最佳 40.66/40.67dB, 未满足 >40dB 或相对上一轮 +2dB 的变更阈值; k=1 仅 pair0, 单对验证噪声大, 证据不足不放宽阈值 → NO_CHANGE, 保留 R0 pipeline. R0 support PSNR=16.50 偏低: 仿真剥离残差仅 2.4/255 (等效 40.5dB) 表明管线对唯一 support 已高保真, 低 support PSNR 更可能受 glass 强模糊下小模型+单对训练的可恢复性限制, 而非识别错误; glass 为随机 pixel shuffle, 同函数同 severity 独立实现的 PSNR 上限约 40.7dB.",
+    "limitations": [
+      "k=1 单 support, 无跨对验证",
+      "glass 随机 shuffle 使同参数重复施加的 PSNR 上限约 40.7dB, 难以追求显著提升",
+      "support PSNR 无法区分盲识别误差与训练可恢复性限制"
+    ]
+  }
+}

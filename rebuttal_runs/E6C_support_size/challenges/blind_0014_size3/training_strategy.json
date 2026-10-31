@@ -1,0 +1,35 @@
+{
+  "challenge_id": "blind_0014_size3",
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "pipeline = brightness_brighten_shfit_HSV:3 (LIKELY) + compression_jpeg:2 (LIKELY), Tier 1, 3/3 support 对 PSNR=inf, CI 10/10 (predicted_params.json)",
+    "JPEG 确认：block_boundary=2.0753 (Tier S, 0% FP), dct_zero_ratio=0.8359 → 仅确认退化参数，不改变架构（finetune_strategy §七：block_boundary 触发 JPEG 专项，非组件）",
+    "OCAB 不启用：anisotropy=0（full_analysis step3 未报告非零各向异性）, gm_ratio=0.9445, spectral_slope_ratio=0.9744 < 1.08, BLUR_UNLIKELY → motion 不存在，anisotropy>1.7 门控不满足",
+    "FiLM-GCM 不启用：variance_ratio=1.157 但 contrast_detected_raw=false, contrast_from_variance=false, contrast_spread_ratio=1.0641；方差膨胀由 HSV-V 加法增亮导致（mean_shift=+59.5, clipped_fraction=0.07），管线无 contrast 步骤 → 'contrast + 结构化' Tier A 门控不满足；且 brightness_HSV + FiLM-GCM 有 NaN 风险（finetune_strategy §三/§九）",
+    "ColorPre 不启用：需 contrast Tier A；本挑战 variance_ratio 非 contrast 归因（contrast_from_variance=false），且存在 saturation_chroma_ratio=1.399 的色度放大（HSV-V 副产物），ColorPre 在 saturation 场景有害",
+    "noise 不存在：noise_prior sigma=0.37 < 2，最终剥离残差 std=0.0（reflection noise_6step_check）；无需噪声相关处理",
+    "SimpleGate 常开：finetune_strategy §七 默认组件，-32K 参数，8/9 退化安全；本挑战无 motion×3（S5）风险场景",
+    "k=3 support 不改变架构门控：support 数量仅影响盲识别验证，不放宽 Tier S/A 阈值"
+  ],
+  "rationale": "盲识别为确定性精确命中（brightness_brighten_shfit_HSV:3 + compression_jpeg:2，3/3 support PSNR=inf、CI 10/10），但退化不含 contrast 与 motion：variance_ratio=1.157 可完全由 HSV-V 加法增亮+截断解释（contrast_detected_raw=false），anisotropy=0 排除 motion。因此无任何 Tier S/A 组件门控成立（OCAB 需 anisotropy>1.7+motion，FiLM-GCM/ColorPre 需 contrast Tier A），按 finetune_strategy §七 默认纯 Swin + SimpleGate + Direct；FiLM-GCM 在 brightness_HSV 上还有 NaN 风险。2 步管线含全局亮度，Direct 更安全（含全局退化不推荐 RandomCurric），True Ft 与 Direct 无差异亦不采用。lr=5e-4, EPOCH=2, batch=16, embed_dim=64。"
+}

@@ -1,0 +1,59 @@
+{
+  "challenge_id": "blind_0004_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_gaussian", 2]],
+  "pipeline": [
+    {"function": "blur_gaussian", "severity": 2, "verdict": "UNCERTAIN"}
+  ],
+  "alternatives": [
+    {
+      "pipeline": "blur_lens:2",
+      "function_family": "blur_disk",
+      "psnr_rgb_pair0": 25.61,
+      "psnr_rgb_pair1": 29.0,
+      "psnr_rgb_pair2": 32.55,
+      "ci_pass": "pair0 7/10 (R0); pair1 8/10; pair2 9/10 (R1)",
+      "reason": "cross-family isotropic alternative, statistically tied with gaussian:2 on k=3 (pair1 +0.01 dB, pair2 -0.05 dB, pair0 -0.10 dB) and better CI (7/8/9 vs 6/4/8); Wiener kernel corr 0.703 still <0.9 so exact PSF unmatched"
+    },
+    {
+      "pipeline": "blur_gaussian:1",
+      "function_family": "blur_gaussian",
+      "psnr_rgb_pair0": 25.1,
+      "psnr_rgb_pair1": 28.68,
+      "psnr_rgb_pair2": 32.27,
+      "ci_pass": "pair0 7/10; pair1 8/10 (R0); pair2 8/10 (R1)",
+      "reason": "milder severity backup supported by simulation inversion (target gm_ratio 0.649 / variance_ratio 0.945 sit between gaussian sev1 and sev2; gaussian:2 simulation over-blurs with gm 0.442 / variance_ratio 0.905), but PSNR is 0.33-0.61 dB lower than sev2 on all three pairs"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 1,
+    "ci_pass_rate": "R0 gaussian:2: pair0 6/10; pair1 4/10; pair2 8/10. R1 best CI: lens:1 9/9/9, lens:2 7/8/9",
+    "mode": "PSNR (noise_prior sigma 0.74/1.11/0.74 < 2 -> NO_NOISE); R1 signal-mode noise screen was WEAK with noise:sigma diff=1467% and structured_residual FWHM=4.0px, confirming no noise component",
+    "signal_reinterpretation": {
+      "simulation_inversion_pair0": {
+        "method": "run_full_analysis on simulate(clean, blur_gaussian:2) vs clean, compared with run_full_analysis on target vs clean",
+        "gm_ratio": {"target": 0.6485, "sim_gaussian2": 0.4418},
+        "spectral_slope_ratio": {"target": 1.0569, "sim_gaussian2": 1.1324},
+        "variance_ratio": {"target": 0.945, "sim_gaussian2": 0.9052},
+        "contrast_spread_ratio": {"target": 0.9628, "sim_gaussian2": 0.9341},
+        "saturation_chroma_ratio": {"target": 0.972, "sim_gaussian2": 0.9511},
+        "dct_zero_ratio": {"target": 0.4457, "sim_gaussian2": 0.7519},
+        "unique_G": {"target": 250, "sim_gaussian2": 249},
+        "clipped_fraction": {"target": 0.0603, "sim_gaussian2": 0.051},
+        "mean_shift": {"target": -0.5, "sim_gaussian2": -0.5},
+        "conclusion": "gaussian:2 over-blurs; target is milder than sev2 and is bracketed by legal sev1/sev2. unique_G, chroma, clipping and mean shift are fully explained by blur + content, so quantization / brightness / saturation / contrast steps are excluded. Any global scaling that would raise gm_ratio back to 0.649 would also raise variance_ratio by the same factor, moving it away from 0.945, so blur+global combinations are quantitatively excluded."
+      },
+      "noise_recheck": {
+        "raw_sigma_pairs": [0.74, 1.11, 0.74],
+        "peeled_sigma_after_gaussian2_pair0": 1.48,
+        "peeled_spatial_corr": 0.98,
+        "peeled_var_slope": 0.737,
+        "signal_mode_screen": "blur_gaussian:2,noise_gaussian_RGB:1 -> WEAK; matched only blur:spectral_slope; noise:sigma diff=1467%; structured_residual FWHM=4.0px",
+        "conclusion": "NO_NOISE; peeled residual is structured blur-mismatch, not random noise"
+      }
+    },
+    "rationale": "k=3 support signals agree on a single mild isotropic blur (gm_ratio 0.649/0.519/0.571, spectral_slope_ratio 1.04-1.06, block_boundary 1.012/1.001/0.981, sigma 0.74/1.11/0.74). R1 simulation inversion shows R0's gaussian:2 is slightly too strong (target second-order statistics sit between legal sev1 and sev2), but no legal x_distortion blur reproduces the target: k=3 PSNR stays 24.3-32.6 dB, and R1's newly validated candidates (glass:1 24.29/26.69/30.45; lens:1 25.15/28.61/32.32; lens:2 25.61/29.00/32.55; gaussian:1 25.10/28.68/32.27) all fail the +2 dB CHANGE threshold versus R0's gaussian:2 (25.71/28.99/32.60). Global, quantization and noise steps are excluded by the simulation inversion and signal-mode screen. Therefore NO_CHANGE per protocol; blur_gaussian:2 is retained as the best legal approximation (verdict UNCERTAIN), with lens:2 as the tied cross-family alternative (best CI) and gaussian:1 as the signal-supported milder severity backup."
+  }
+}

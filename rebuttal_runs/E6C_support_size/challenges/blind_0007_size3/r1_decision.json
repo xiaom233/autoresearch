@@ -1,0 +1,96 @@
+{
+  "challenge_id": "blind_0007_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_speckle", 1]
+  ],
+  "r1_pipeline": [
+    ["noise_speckle", 1]
+  ],
+  "support_psnr_r0": 35.62,
+  "candidates_tested": [
+    {
+      "candidate": "noise_speckle:1 (baseline control)",
+      "calls": 1,
+      "pairs": ["pair0"],
+      "result": "MATCH (2✓/0✗) — R1 新 seed 复现 R0"
+    },
+    {
+      "candidate": "noise_speckle:2 (severity boundary; pair2 自动建议 sev2)",
+      "calls": 3,
+      "pairs": ["pair0", "pair1", "pair2"],
+      "result": "WEAK ×3 (noise:sigma diff 43% / 34% / 52%) — 含自动建议 sev2 的 pair2 也 WEAK"
+    },
+    {
+      "candidate": "noise_poisson:1 (pair1 自动判 POISSON, R0 未实测)",
+      "calls": 1,
+      "pairs": ["pair1"],
+      "result": "WEAK (noise:sigma diff 32%)"
+    },
+    {
+      "candidate": "noise_gaussian_RGB:2 (SKILL severity 扫描补漏)",
+      "calls": 1,
+      "pairs": ["pair0"],
+      "result": "WEAK (noise:sigma diff 146%)"
+    },
+    {
+      "candidate": "noise_speckle:1,compression_jpeg:1 (MISS_comp_BY_NOISE)",
+      "calls": 1,
+      "pairs": ["pair0"],
+      "result": "WEAK (noise:sigma diff 92%, compression:block_boundary diff 77%)"
+    },
+    {
+      "candidate": "noise_speckle:1,blur_gaussian:1 (FP_blur_risk)",
+      "calls": 1,
+      "pairs": ["pair0"],
+      "result": "PARTIAL (noise:sigma diff 92%; blur:spectral_slope/wiener 宽松匹配) — sigma 崩塌与 target 匹配的噪声强度矛盾"
+    },
+    {
+      "candidate": "noise_speckle:1,contrast_strengthen:1 (variance_ratio 边界)",
+      "calls": 0,
+      "pairs": [],
+      "result": "ABORTED: contrast_strengthen 非 x_distortion 有效函数名 (KeyError, 施加退化阶段中止, 未写 verification); 改用 speckle:1 模拟图 full_analysis 直接对比 variance_ratio/contrast_spread_ratio 边界信号"
+    }
+  ],
+  "test_candidate_calls": 8,
+  "test_candidate_calls_note": "8 次有效 signal 模式验证; 另有 1 次 contrast_strengthen 尝试因函数名无效在退化施加阶段 KeyError 中止, 不计入验证次数、未产生 reflection 记录",
+  "best_validation": {
+    "r0_candidate": "noise_speckle:1 — R1 pair0 control MATCH (2✓/0✗); R0 3/3 对 MATCH",
+    "sim_full_analysis_pair0": {
+      "format": "[target, noise_speckle:1 模拟]",
+      "variance_ratio": [1.0302, 1.0305],
+      "contrast_spread_ratio": [1.0364, 1.0364],
+      "saturation_chroma_ratio": [1.0964, 1.0966],
+      "clipped_fraction": [0.0772, 0.0773],
+      "mean_shift": [-0.8, -0.8],
+      "block_boundary": [0.9971, 1.0016],
+      "dct_zero_ratio": [0.1058, 0.1057],
+      "spectral_slope_ratio": [0.9984, 0.9979],
+      "noise_prior_sigma": [4.32, 4.45],
+      "intensity_var_corr": [0.9274, 0.9286]
+    },
+    "sim_full_analysis_pair2": {
+      "format": "[target, noise_speckle:1 模拟]",
+      "variance_ratio": [1.1242, 1.1242],
+      "contrast_spread_ratio": [1.121, 1.121],
+      "saturation_chroma_ratio": [1.4862, 1.4866],
+      "clipped_fraction": [0.0037, 0.0036],
+      "mean_shift": [-0.6, -0.6],
+      "block_boundary": [1.0023, 0.9976],
+      "dct_zero_ratio": [0.0559, 0.0560],
+      "spectral_slope_ratio": [0.9919, 0.9911],
+      "noise_prior_sigma": [6.67, 6.67],
+      "intensity_var_corr": [0.9183, 0.9174]
+    }
+  },
+  "signal_sources": [
+    "full_analysis_R1.json (pair0 重跑): sigma=4.32, bb=0.9971, slope_ratio=0.9984, variance_ratio=1.0302, mean_shift=-0.8, clipped=0.0772",
+    "full_analysis_p1.json: auto POISSON (sigma=4.82); peeled_check_p1target var_slope=-3.8693 与 poisson 预期相反",
+    "full_analysis_p2.json: auto SPECKLE sev2 (sigma=6.67); variance_ratio=1.1242, contrast_spread=1.121, saturation=1.4862, slope_ratio=0.9919, bb=1.0023",
+    "full_analysis_sim_speckle1_pair0_R1.json / full_analysis_sim_speckle1_pair2_R1.json: speckle:1 模拟全信号与 target 逐项一致 (含 pair2 sigma=6.67 精确相等 → sev2 建议为内容假象)",
+    "R0 peeled_check §B cross_pair_validation: residual_std 16.3/16.7/15.8 与 sev1 模拟精确相等; target vm_slope 9.5-18.9 大正 vs gaussian 模拟 -5.62 符号相反",
+    "test_candidate R7-R14 signal 验证记录 (见 reflection.json iterations)"
+  ],
+  "reason": "R1 重释所有被忽略/边界信号后, 无候选优于 R0: (1) sev 边界——speckle:2 三对全 WEAK, 自动建议 sev2 的 pair2 上 sigma diff 52%, 而 sev1 模拟 sigma 与 target 精确相等 (6.67); (2) 类型——poisson 实测 WEAK (32%) 且 peeled var_slope 负号排除 poisson, gaussian_RGB:2 扫描 WEAK (146%) 排除加性族; (3) 掩蔽步骤——jpeg 补入后 bb 差 77% WEAK, blur 补入后 sigma 崩 92% 与 target 匹配的噪声强度矛盾; (4) global 边界——pair2 variance_ratio=1.1242/contrast=1.121/saturation=1.4862 被 speckle:1 模拟逐位复现, pair0 同样逐项一致, 无需额外 global 步骤。R0 候选 3/3 对 MATCH, R1 新候选均更差 → NO_CHANGE, pipeline 保持 noise_speckle:1; 噪声步骤按 exp34/37 规则 verdict=UNCERTAIN。"
+}

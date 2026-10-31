@@ -1,0 +1,71 @@
+{
+  "challenge_id": "blind_0009_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    {"function": "noise_poisson", "severity": 2},
+    {"function": "saturate_strengthen_YCrCb", "severity": 3}
+  ],
+  "r1_pipeline": [
+    {"function": "noise_poisson", "severity": 2},
+    {"function": "saturate_strengthen_YCrCb", "severity": 3}
+  ],
+  "support_psnr_r0": 31.8,
+  "support_size": 3,
+  "candidates_tested": [
+    {
+      "id": "C1",
+      "pipeline": "noise_poisson:3,saturate_strengthen_YCrCb:3",
+      "hypothesis": "噪声严重度上界 (c=40 vs c=60)",
+      "pairs": {"pair0": "PARTIAL (sigma diff 57%)", "pair2": "MATCH 4/4"},
+      "decision": "REJECT"
+    },
+    {
+      "id": "C2",
+      "pipeline": "saturate_strengthen_YCrCb:3,noise_poisson:2",
+      "hypothesis": "顺序检验 sat 先于 noise",
+      "pairs": {"pair0": "WEAK (sigma 67%, mean 0.0096, var 14%)"},
+      "decision": "REJECT"
+    },
+    {
+      "id": "C3",
+      "pipeline": "noise_gaussian_YCrCb:2,saturate_strengthen_YCrCb:3",
+      "hypothesis": "full_analysis 初判 YCrCb 高斯噪声族",
+      "pairs": {"pair1": "WEAK (sigma 55%, mean 0.0321, var 17%)"},
+      "decision": "REJECT"
+    },
+    {
+      "id": "C4",
+      "pipeline": "noise_poisson:2,saturate_strengthen_HSV:2",
+      "hypothesis": "full_analysis 建议 saturation_HSV 子类型",
+      "pairs": {"pair0": "WEAK (mean 0.1637, var 81%, sigma 133%)"},
+      "decision": "REJECT"
+    },
+    {
+      "id": "C5",
+      "pipeline": "blur_gaussian:1,noise_poisson:2,saturate_strengthen_YCrCb:3",
+      "hypothesis": "遗漏 blur 步骤检验 (噪声鲁棒 Wiener/slope)",
+      "pairs": {"pair0": "MATCH 6/6"},
+      "decision": "NO_ADOPT"
+    }
+  ],
+  "test_candidate_calls": 9,
+  "best_validation": {
+    "pipeline": "noise_poisson:2,saturate_strengthen_YCrCb:3",
+    "r1_anchor_rounds": [27, 28, 29],
+    "pair0": "MATCH 4/4 (R27; R0 亦匹配 R18)",
+    "pair1": "MATCH 4/4 (R28; R0 亦匹配 R19)",
+    "pair2": "MATCH 4/4 (R29; R0 亦匹配 R17)",
+    "matched_signals": ["noise:sigma", "noise:clean_residual", "global:mean_shift", "global:variance_ratio"]
+  },
+  "signal_sources": {
+    "noise_type_poisson": "residual_intensity_corr=0.478→0.4707 (R1 rerun) + peeled §B var_slope=11.26 (R0) + 三对 sigma 5.56/23.6/25.57 随内容变化, 符合 sqrt(I/c); C3 gaussian_YCrCb:2+sat:3 在 pair1 WEAK (sigma 55%) 排除 YCrCb 高斯族",
+    "noise_severity_2": "C1 poisson:3 pair0 sigma +57% (PARTIAL), pair2 MATCH (亮内容简并); R0 poisson:1 sigma -27%; sev2 三对 MATCH",
+    "order_noise_before_sat": "C2 交换为 sat→poisson 后 WEAK (sigma 67%, mean 0.0096, var 14%); 与 blind_challenge priority(noise=0 < sat=2) 一致",
+    "global_saturation_YCrCb_sev3": "R1 anchor 三对 mean_shift/variance_ratio MATCH; C4 HSV:2 WEAK (mean 0.1637, var 81%) 排除 HSV; R0 contrast_strengthen_scale:4 MISMATCH",
+    "no_compression": "full_analysis_R1: block_boundary=0.9998, unique_G=256 (==clean), dct_zero_ratio=0.0499 (0%FP 信号)",
+    "no_blur": "spectral_slope target -1.1988 vs clean -1.2014 (ratio 0.9979, 方向与模糊相反); gm_ratio=7.259 被饱和/噪声破坏不可用; C5 显示 verify_signals blur 检查对该噪声/饱和区 mild blur 不敏感 (工具限制, 非模糊证据)",
+    "r1_rerun_stability": "pair0 full_analysis_R1 与 R0 full_analysis.json 仅 residual_intensity_corr 差异 (0.478→0.4707), 其余 156 项信号一致"
+  },
+  "reason": "R0 管线在三对 support 上 R1 独立复核均 MATCH 4/4; 5 个新候选 (poisson:3 上界、顺序交换、gaussian_YCrCb 族、HSV 子类型、加入 blur:1) 无一取得优于 R0 的信号匹配 (全部 WEAK/PARTIAL 或与 R0 同分但不增加证据), 按 +2dB/信号改善判定规则均不足以 CHANGE。仅存的未决点是 poisson sev2/sev3 在亮内容上的简并, pair0 判别支持 sev2, 故维持 R0。"
+}

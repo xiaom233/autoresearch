@@ -1,0 +1,138 @@
+{
+  "challenge_id": "blind_0014_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "brightness_brighten_shfit_RGB",
+      4
+    ],
+    [
+      "saturate_strengthen_YCrCb",
+      1
+    ],
+    [
+      "compression_jpeg",
+      1
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "brightness_brighten_shfit_RGB",
+      "severity": 4,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "saturate_strengthen_YCrCb",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    },
+    {
+      "function": "compression_jpeg",
+      "severity": 1,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [
+    {
+      "pipeline": [
+        [
+          "brightness_brighten_shfit_RGB",
+          4
+        ],
+        [
+          "saturate_strengthen_YCrCb",
+          1
+        ],
+        [
+          "compression_jpeg",
+          2
+        ]
+      ],
+      "psnr_rgb": 25.24,
+      "ci_pass": "9/10",
+      "note": "R0 alternative retained: JPEG q18; highest CI; 0.04 dB below R0 best"
+    },
+    {
+      "pipeline": [
+        [
+          "brightness_brighten_shfit_RGB",
+          4
+        ],
+        [
+          "compression_jpeg",
+          1
+        ],
+        [
+          "saturate_strengthen_YCrCb",
+          1
+        ]
+      ],
+      "psnr_rgb": 25.08,
+      "ci_pass": "7/10",
+      "note": "R0 alternative retained: order variant, saturation after JPEG"
+    },
+    {
+      "pipeline": [
+        [
+          "brightness_brighten_gamma_RGB",
+          4
+        ],
+        [
+          "saturate_strengthen_YCrCb",
+          1
+        ],
+        [
+          "compression_jpeg",
+          2
+        ]
+      ],
+      "psnr_rgb": 24.84,
+      "ci_pass": "7/10",
+      "note": "cross-family brightness alternative; R1 gamma ±1 scan (sev3 19.70 / sev5 18.21 dB) further confirms gamma family inferior"
+    }
+  ],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 3,
+    "mode": "PSNR (sigma=0.37 raw / 0.99 peeled < 2 -> PSNR usable; no blur, no noise)",
+    "psnr": 25.28,
+    "psnr_gap": 0.04,
+    "single_support": true,
+    "change_threshold": "PSNR > 40 dB or >= +2 dB vs R0 best (>= 27.28 dB); not reached by any R1 candidate",
+    "r1_candidates": [
+      {
+        "pipeline": "brightness_brighten_shfit_RGB:4,saturate_strengthen_YCrCb:2,compression_jpeg:1",
+        "psnr_rgb": 19.68,
+        "signal_source": "saturation_chroma_ratio=1.3989 -> sat severity +1 scan",
+        "result": "REJECT (worse, sat sev1 is correct direction)"
+      },
+      {
+        "pipeline": "brightness_brighten_gamma_RGB:5,saturate_strengthen_YCrCb:1,compression_jpeg:2",
+        "psnr_rgb": 18.21,
+        "signal_source": "residual_intensity_corr=-0.2184 gamma_suspect -> gamma severity +1",
+        "result": "REJECT"
+      },
+      {
+        "pipeline": "brightness_brighten_gamma_RGB:3,saturate_strengthen_YCrCb:1,compression_jpeg:2",
+        "psnr_rgb": 19.7,
+        "signal_source": "same gamma flag -> gamma severity -1",
+        "result": "REJECT (gamma family sev3/4/5 all <= 24.84 dB)"
+      },
+      {
+        "pipeline": "brightness_brighten_shfit_RGB:4,compression_jpeg:1",
+        "psnr_rgb": 22.94,
+        "signal_source": "variance_ratio=1.157 + chroma_ratio=1.399 -> saturation contribution control at q25",
+        "result": "retain saturation step (+2.34 dB vs 2-step)"
+      },
+      {
+        "pipeline": "saturate_strengthen_YCrCb:1,brightness_brighten_shfit_RGB:4,compression_jpeg:1",
+        "psnr_rgb": 24.48,
+        "signal_source": "order prior: saturation-before-brightness untested at q25",
+        "result": "REJECT (order worse)"
+      }
+    ],
+    "rationale": "R1 复跑 pair0 信号与 R0 完全一致: block_boundary=2.0753 (JPEG, 0%FP), gm_ratio=0.9445/spectral_slope_ratio=0.9744 (no blur), noise_prior sigma=0.37 (peeled 0.99 < 2 -> NO_NOISE, §B extreme_pct=54.43% documented FP), mean_shift=+59.5 + clipped_fraction=0.07 (brightness), variance_ratio=1.157/spread_ratio=1.0641 (contrast_detected_raw=false), saturation_chroma_ratio=1.3989, residual_intensity_corr=-0.2184 (gamma_suspect). R1 对 R0 未覆盖的 5 个候选做了验证: saturation severity ±1 (只存在 +1 -> 19.68 dB), gamma_RGB ±1 (18.21/19.70 dB), 2-step q25 对照 (22.94 -> saturation 独立贡献 +2.34 dB), 顺序变体 sat->bright->jpeg1 (24.48 dB). 无一达到 +2 dB 阈值 (>=27.28) 或 >40 dB, R0 best 25.28 dB 保持最优. k=1 单 support: 单对 PSNR 噪声大, 未放宽阈值, 证据不足 -> NO_CHANGE, pipeline 与 R0 逐项相同.",
+    "single_support_limit": "k=1: only pair0 (DIV2K 0480); no cross-pair robustness check; single-pair PSNR variance not estimable; threshold not relaxed"
+  }
+}

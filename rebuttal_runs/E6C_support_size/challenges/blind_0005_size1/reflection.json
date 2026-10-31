@@ -1,0 +1,348 @@
+{
+  "challenge_id": "blind_0005_size1",
+  "support_pairs": 1,
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "NO_COMPRESSION (block_boundary=0.9989, unique_G=256/256, dct_zero_ratio=0.016)",
+      "blur": "BLUR_UNLIKELY (gm_ratio=5.333 >1, spectral_slope_ratio=0.903)",
+      "noise": "step2 verdict IMPULSE with noise_prior_sigma=0.0 and impulse_zero_ratio=0.90",
+      "global": "CONTRAST_strengthen_sev5; SATURATION_strengthen_sev5 flagged (variance_ratio=2.184, contrast_spread_ratio=2.80, saturation_chroma_ratio=3.252, clipped_fraction=0.1007, mean_shift=1.3/255)"
+    },
+    "mode": "PSNR initially (sigma=0.0) -> revised to CI-statistical fingerprint (sparse impulse: wavelet MAD sigma=0.0 is an artifact; PSNR invalid under noise seed mismatch)",
+    "reinterpretation": "impulse_zero_ratio=0.90 means 90% of residual pixels are ~0 (target-clean): the change is SPARSE, not dense. clipped_fraction=0.1007 equals the 10% pixels pushed to exact 0/255 by salt&pepper. The global contrast/saturation verdicts are outlier-inflation false positives: sparse 0/255 pixels inflate variance (2.18x), chroma std (3.25x) and gradients (gm_ratio 5.33x). Untouched 90% pixels are byte-identical to clean, which excludes any blur/JPEG/contrast step (those alter nearly all pixels).",
+    "suspected": [
+      "noise_impulse (salt&pepper, amount ~0.10)"
+    ],
+    "ruled_out": [
+      "global contrast/saturation (non-impulse pixels identical to clean; variance/chroma inflation from outliers)",
+      "blur (no spectral flattening on untouched pixels; spectral_slope_ratio=0.903)",
+      "compression (block_boundary=0.9989, unique_G=256, impulse sim reproduces block_boundary within 0.002)",
+      "brightness (mean_shift=1.3/255)"
+    ]
+  },
+  "coupling_notes": "Detector false positives are driven by the sparse impulse outliers (gm/variance/chroma); the correct peel is the sparse-noise itself (no deterministic step to strip). Cross-seed impulse residual is statistically stationary in amount (0.10) and 0/255 split (~5%/5%).",
+  "qwen_gate": {
+    "available": false,
+    "triggered": "signal contradiction (IMPULSE verdict with sigma=0.0 and global FP flags)",
+    "action": "skipped; resolved by §B zero_ratio + cross-seed CI statistical fingerprint"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 95.0,
+    "extreme_pct_note": "peeled_noise_check defines extreme as res<=0 or res>=255; the 90% exact-zero residual pixels all count, so this is not comparable to the standard >0.3% impulse threshold. Discriminative evidence is zero_ratio + exact 0/255 counts.",
+    "vm_slope": 9.8786,
+    "vm_slope_note": "patches containing sparse +/-255 outliers inflate cov(mean^2, var); artifact, not speckle",
+    "var_slope": -0.2466,
+    "spatial_corr": 0.3467,
+    "spatial_corr_note": "center-inclusive 3x3 mean smoothing: isolated spikes correlate with their own average (~sqrt(1/9)); not spatial structure",
+    "rgb_ratio": 1.0376,
+    "cross_ch_corr": 0.0043,
+    "zero_ratio": 0.9,
+    "residual_std": 42.1,
+    "ch_stds": [
+      43.0,
+      41.4,
+      41.6
+    ],
+    "diagnosis": "IMPULSE. 90.00% of residual pixels are exactly 0 (sparse change = amount 0.10); changed pixels sit at exact 0/255 with ~5%/5% split; channels independent (rgb_ratio 1.04, cross_ch 0.004). noise_prior wavelet sigma=0.0 in run_full_analysis is invalid for sparse noise (MAD~0); peeled noise_prior on the same residual reports sigma=23.2 with flat slope."
+  },
+  "peeling_note": "No deterministic degradation exists to peel (non-impulse pixels are identical to clean). peeled_noise_check was therefore run with an empty peel set (--pipeline ','), giving residual = target - clean directly; the argument applies zero distortions (skipped empty steps).",
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:5",
+        "thinking": "Signal: variance_ratio=2.184, contrast_spread_ratio=2.80, clipped_fraction=0.1007, mean_shift~1.3/255. No compression (bb=0.999, unique_G=256), no blur (gm_ratio=5.33 sharp), sigma=0. Hypothesis: pure contrast strengthen (scale family, sev5)."
+      },
+      "test_result": {
+        "psnr_rgb": 9.64,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:5",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_scale:1",
+        "thinking": "Severity scan: variance_ratio=2.184 implies effective scale k=sqrt(2.184)=1.48, matching sev1 (1.4) rather than sev5 (4.0). PIL contrast preserve mean -> matches mean_shift~1.3. Test sev1."
+      },
+      "test_result": {
+        "psnr_rgb": 15.0,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_scale:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "saturate_strengthen_HSV:1",
+        "thinking": "Saturation signal: saturation_chroma_ratio=3.252 matches HSV scale c=3.0 at sev1. contrast_from_saturation flag raised (chroma boost can inflate variance/spread: vr=2.18, spread=2.80). gm_ratio=5.33 consistent with chroma gradient amplification. Test saturation-only HSV sev1."
+      },
+      "test_result": {
+        "psnr_rgb": 11.56,
+        "ci_pass": "6/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "saturate_strengthen_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "contrast_strengthen_stretch:1",
+        "thinking": "Contrast family alternative: scale sev1/5 both far off; stretch (c=2.0, sigmoid-like per-channel) can raise variance to 2.18 with 10% clipping while mean preserved. Test stretch sev1."
+      },
+      "test_result": {
+        "psnr_rgb": 14.76,
+        "ci_pass": "3/10",
+        "ci_verdict": "POOR",
+        "method": "PSNR",
+        "pipeline": "contrast_strengthen_stretch:1",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "Key re-interpretation: step2 impulse_zero_ratio=0.90 means 90% residual pixels ~0 -> sparse change, not dense noise; wavelet sigma=0 is expected for impulse. Target clipped_fraction=0.1007 exactly matches impulse amount=0.10 at sev5. variance_ratio=2.18, chroma_ratio=3.25, gm_ratio=5.33 are all inflated by sparse 0/255 outliers (explains contrast/saturation FP). Test noise_impulse:5."
+      },
+      "test_result": {
+        "psnr_rgb": 12.67,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:5",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT (manual override: PSNR < 20 is expected under noise seed mismatch; CI 10/10 with impulse_total_pct diff=0.009%, pct_zero 0.003%, pct_255 0.006% is decisive)"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_impulse:4",
+        "thinking": "Mandatory severity scan around est sev5: impulse amount sev4=0.07 vs target residual zero_ratio 0.90 (amount=0.10). Expect impulse_total_pct drop ~3 pts -> discriminates severity."
+      },
+      "test_result": {
+        "psnr_rgb": 13.37,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT (impulse_total_pct diff=+2.998% = 30% error; severity 5 confirmed)"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "Seed-stability check for winning candidate (different random seed): if impulse amount=0.10 is correct, statistical CI fingerprint (impulse total/zero/255, unique, block_boundary, hf_lf) must again be ~0 diff regardless of seed positions."
+      },
+      "test_result": {
+        "psnr_rgb": 12.68,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_impulse:5",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT (seed-invariant fingerprint: all impulse/clipping/unique/block/hf metrics within 0.013%)"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5",
+        "thinking": "R1 re-verify winning hypothesis in SIGNAL mode (R0 used PSNR/CI). Signal sources: residual zero_ratio=0.9000 (90% pixels byte-identical -> sparse change, excludes all dense ops); changed 10% pixels at exact 0/255 with ~5%/5% split (salt&pepper amount=0.10); peeled ch_stds 43.0/41.4/41.6, rgb_ratio=1.04, cross_ch=0.004 (channel-balanced impulse); wavelet sigma=0.0 invalid for sparse noise. Boundary signals flagged by R0 as outliers: variance_ratio=2.184/clipped=0.1007/gm_ratio=5.33 arise from the sparse 0/255 spikes, not from global contrast; vm_slope=9.88 and spatial_corr=0.347 are self-correlation artifacts of isolated spikes. Single support pair k=1: no cross-pair validation possible."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:5",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_impulse:4",
+        "thinking": "R1 mandatory severity boundary check (est=5): signal source zero_ratio=0.9000 implies impulse amount=0.10. If x_distortion sev4 amount=0.07, simulated impulse_total_pct should fall ~3 points below target (R0 PSNR/CI test showed +2.998% misfit, 30% error). SIGNAL mode comparison to confirm type family holds and inspect whether signal stats discriminate the boundary."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_impulse:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:5",
+        "thinking": "R1 cross-family control: dense gaussian noise is the main confusion family for impulse. Signal source: residual zero_ratio=0.9000 means target changes only 10% of pixels with exact 0/255 values; gaussian noise modifies nearly every pixel with continuous residuals, so clean-pixel fraction and residual value structure must fail. Tests whether the sparse-vs-dense distinction (the decisive R0 evidence) is reproducible."
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=2600%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:5",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "contrast_strengthen_scale:1",
+      "psnr_rgb": 15.0,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "contrast_strengthen_stretch:1",
+      "psnr_rgb": 14.76,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "noise_impulse:4",
+      "psnr_rgb": 13.37,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "noise_impulse:5 (seed 2)",
+      "psnr_rgb": 12.68,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "noise_impulse:5",
+      "psnr_rgb": 12.67,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "saturate_strengthen_HSV:1",
+      "psnr_rgb": 11.56,
+      "ci_pass": "6/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "contrast_strengthen_scale:5",
+      "psnr_rgb": 9.64,
+      "ci_pass": "3/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "psnr_ranking_note": "PSNR ordering is NOT the decision criterion here: impulse noise has random positions, so PSNR is seed-mismatch noise (SKILL 判据分离: noise severity judged by statistics, not PSNR). Ranking kept for audit only.",
+  "single_support_note": "k=1 (only pair0: clean_0.png/degraded_0.png, aliases clean.png/degraded.png). All checks were run on this single support pair; cross-pair validation is impossible. Conclusion rests on: (a) residual zero_ratio=0.9000 -> 90% pixels byte-identical (excludes every dense degradation), (b) exact 0/255 sparse change 10%, split ~5/5, (c) noise_impulse:5 statistical fingerprint 10/10 CI across two seeds, (d) sev4 misfits by 30%.",
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_impulse",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "tier": 2,
+    "ci_pass_rate": "10/10",
+    "mode": "CI-statistical fingerprint (PSNR invalid: noise seed mismatch; wavelet sigma estimator invalid for sparse impulse)",
+    "rationale": "Single support pair. 90.00% of residual pixels are exactly zero and the remaining ~10% are exact 0/255 (salt&pepper, ~5%/5%) -> noise_impulse amount=0.10 = severity 5. Two independent seeds reproduce all 10 content-independent metrics within 0.013%; sev4 (amount 0.07) misfits impulse metrics by 30%. No other degradation can be present because all non-impulse pixels are byte-identical to clean. Global contrast/saturation detections are outlier-inflation false positives of the sparse 0/255 pixels. Verdict capped at UNCERTAIN per noise rules (noise type/severity never LIKELY due to seed mismatch).",
+    "alternatives": []
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "verdict=UNCERTAIN (noise step capped; triggered by UNCERTAIN rule regardless of support PSNR)",
+    "support_pairs": 1,
+    "single_pair_limitation": "k=1: only pair0 (degraded.png/clean.png = aliases of degraded_0/clean_0). No second support pair exists, so no cross-pair validation and no majority vote; change threshold (+2 dB / WEAK->MATCH improvement) is NOT relaxed for k=1. Conclusion rests on one pair's residual structure plus the multi-seed statistical fingerprint already established in R0.",
+    "signal_rereview": {
+      "full_analysis_R1": "Reproduced R0 exactly: block_boundary=0.9989, unique_G=256/256, dct_zero_ratio=0.016 (NO_COMPRESSION); gm_ratio=5.3326 but spectral_slope_ratio=0.9031 (BLUR_UNLIKELY; gm inflation from impulse spikes); noise IMPULSE with noise_prior_sigma=0.0; global flags variance_ratio=2.184/mean_shift=1.3/clipped_fraction=0.1007.",
+      "ignored_or_misjudged_signals_rechecked": [
+        "residual zero_ratio=0.9000 (90% pixels byte-identical to clean): reproduced; any dense op (blur/JPEG/contrast/brightness/saturation/quantization) would touch nearly all pixels -> all excluded, not just disfavored.",
+        "clipped_fraction=0.1007 equals the 10% changed pixels: exact 0/255 salt&pepper, ~5%/5% split. It is NOT global clipping (no intermediate-pixel shift).",
+        "variance_ratio=2.1845 / contrast_spread_ratio=2.8017 / saturation_chroma_ratio=3.252 / gm_ratio=5.3326: outlier inflation by sparse +-255 residuals, not global gamma/contrast/saturation.",
+        "vm_slope=9.8786 and spatial_corr=0.3467 (peeled §B): artifacts of isolated spikes feeding center-inclusive moments; not speckle/spatial structure.",
+        "noise_prior wavelet sigma=0.0 vs peeled residual std=42.1: sparse-noise artifact; sigma estimator invalid here. rgb_ratio=1.0376, cross_ch=0.0043, ch_stds=[43.0,41.4,41.6] -> channel-balanced pixel-level salt&pepper."
+      ],
+      "threshold_boundary_checks": [
+        "Impulse amount boundary: zero_ratio=0.9000 -> amount=0.10. Severity remeasured only through R0's content-independent fingerprint (impulse_total_pct, pct_zero, pct_255): sev5 diff 0.009% vs sev4 +2.998% (30% error). verify_signals itself cannot resolve this boundary (sev4 also MATCH).",
+        "No blur despite gm_ratio>1: spectral_slope_ratio=0.9031<1.08 and 90% untouched pixels exclude blur.",
+        "No JPEG despite risk list MISS_comp_BY_NOISE: block_boundary=0.9989 and byte-identical 90% pixels exclude JPEG."
+      ]
+    },
+    "r1_candidates": [
+      {
+        "pipeline": "noise_impulse:5",
+        "mode": "signal",
+        "verdict": "MATCH (2/2: noise:sigma, noise:clean_residual)",
+        "role": "re-verify R0 winner in signal mode",
+        "decision": "ACCEPT"
+      },
+      {
+        "pipeline": "noise_impulse:4",
+        "mode": "signal",
+        "verdict": "MATCH (2/2)",
+        "role": "mandatory severity boundary scan; signal mode insensitive to impulse amount, severity anchored by R0 fingerprint (sev5 0.009% vs sev4 30% misfit)",
+        "decision": "REJECT (severity 5 retained)"
+      },
+      {
+        "pipeline": "noise_gaussian_RGB:5",
+        "mode": "signal",
+        "verdict": "WEAK (1/2; noise:sigma diff=2600%)",
+        "role": "cross-family control (dense noise)",
+        "decision": "REJECT"
+      }
+    ],
+    "validation_summary": {
+      "test_candidate_calls_R1": 3,
+      "best_validation": "noise_impulse:5 SIGNAL MATCH, consistent with R0 CI-statistical fingerprint 10/10 across two seeds",
+      "improvement_over_previous_round": "none measurable (previous round already MATCH-equivalent; no candidate can exceed MATCH)"
+    },
+    "decision": "NO_CHANGE",
+    "rationale": "R1 signal re-analysis reproduces every R0 signal and confirms the sparse-residual argument: 90.00% of pixels are byte-identical to clean, so no dense degradation can be present; the remaining 10% are exact 0/255 salt&pepper (amount 0.10 = noise_impulse severity 5). noise_impulse:5 is re-verified MATCH in signal mode; the gaussian cross-family control is WEAK (sigma diff 2600%). Severity boundary sev5-vs-sev4 is not resolvable by verify_signals (both MATCH) and remains anchored on R0's content-independent fingerprint where sev5 fits within 0.009% and sev4 misfits by 30%. k=1 single-pair limitation recorded; no evidence beyond MATCH exists, so the pipeline is unchanged. Support PSNR R0=44.80 dB is consistent with a correct prediction but was not used as a signal criterion.",
+    "support_psnr_r0": 44.8
+  }
+}

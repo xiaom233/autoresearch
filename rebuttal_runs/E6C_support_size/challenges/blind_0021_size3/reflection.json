@@ -1,0 +1,915 @@
+{
+  "challenge_id": "blind_0021_size3",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "COMPRESSION_DETECTED: block_boundary=3.201 (>1.05, 0%FP 14400-case), dct_zero_ratio=0.903, unique_G=256 (ratio=1.0)",
+      "blur": "GLASS_BLUR (medium): gm_ratio=0.405, spectral_slope_ratio=1.224, glass_score=1.023>0.25, sigma=0.74<3; residual_anisotropy=1.65<1.7 (not motion); blur_pca_ratio=1.258",
+      "noise": "GAUSSIAN_YCrCb (low conf): noise_prior_sigma=0.74 < 2 -> per Step 0.5 rule NO_NOISE; spatial_corr=0.766 elevated (likely JPEG/blur artifact); residual_intensity_corr=-0.185, gamma_suspect=True; will verify on peeled residual",
+      "global": "NO_GLOBAL: brightness_mean_shift=24.0 attributed to JPEG (brightness_from_jpeg=true), variance_ratio=0.8055 but contrast_from_variance=false, contrast_spread_ratio=0.9226, saturation_chroma_ratio=0.9235"
+    },
+    "mode": "PSNR (sigma=0.74 < 2)",
+    "suspected": [
+      "compression_jpeg",
+      "blur_glass"
+    ],
+    "ruled_out": [
+      "blur_motion (residual_anisotropy=1.65<1.7)",
+      "noise (sigma<2; pending peeled check)"
+    ],
+    "qwen_gate": {
+      "available": false
+    }
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "thinking": "block_boundary=3.201 (0%FP) -> JPEG exists, est sev=4 (dct_zero_ratio=0.903); glass_score=1.023>0.25 + sigma=0.74<3 -> blur_glass est sev=4 (gm_ratio=0.405). Physical order blur before JPEG. Combined test since both signatures strong."
+      },
+      "test_result": {
+        "psnr_rgb": 19.32,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_glass:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Cross-family control: glass is non-deterministic so PSNR weak; test gaussian at same sev=4 (gm_ratio=0.405, sigma=1.224 ratio). If PSNR jumps >=5dB gaussian is real type (known DT failure mode glass->gaussian)."
+      },
+      "test_result": {
+        "psnr_rgb": 19.95,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:2,blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Mean shift=+24/255=0.094 (all channels same dir). run_full_analysis suppressed brightness only via brightness_from_jpeg rule (block_uniformity=3.2). DC offset alone caps PSNR near 20.5dB, matching observed 19.9dB. Add brightness_brighten (est sev=2: int(0.094/0.07)+1) before blur (priority 0 ambient light)."
+      },
+      "test_result": {
+        "psnr_rgb": 24.62,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:2,blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_gaussian:4,compression_jpeg:4",
+        "thinking": "Shift_RGB:2 improved 19.95->24.62 but CI clipping metrics worsened (pct_255 diff +38%: sim clips highlights more than target). Gamma variant raises midtones without hard clipping -> test gamma_RGB same sev as nonlinear alternative."
+      },
+      "test_result": {
+        "psnr_rgb": 26.52,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:1,blur_gaussian:4,compression_jpeg:4",
+        "thinking": "gamma_RGB:2 best so far 26.52dB but sim still over-clips highlights vs target (pct_255 diff +45%). Severity scan down: gamma_RGB:1 may match mean shift +24 with less clipping."
+      },
+      "test_result": {
+        "psnr_rgb": 25.17,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:1,blur_gaussian:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_glass:4,compression_jpeg:4",
+        "thinking": "With brightness fixed (gamma_RGB:2), compare blur family: glass_score=1.023>0.25 medium conf. Glass is stochastic -> PSNR limited; if glass true, gaussian 26.5dB is near ceiling."
+      },
+      "test_result": {
+        "psnr_rgb": 24.44,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_glass:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_lens:4,compression_jpeg:4",
+        "thinking": "Cross-family blur control: lens vs gaussian MTF known indistinguishable; radial_ratio not reported elevated. Test lens:4 same sev to complete 3-family coverage."
+      },
+      "test_result": {
+        "psnr_rgb": 27.09,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_lens:5,compression_jpeg:4",
+        "thinking": "Blur severity scan up: lens:4 best (27.09). gm_ratio=0.405 moderate-strong; test sev5 to bracket (severity_source=gm_ratio may underestimate when brightness inflates gradients)."
+      },
+      "test_result": {
+        "psnr_rgb": 25.99,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_lens:5,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_lens:3,compression_jpeg:4",
+        "thinking": "Blur severity scan down: lens:4 27.09 > lens:5 25.99. Test sev3 to complete ±1 bracket."
+      },
+      "test_result": {
+        "psnr_rgb": 26.34,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:2,blur_lens:3,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_HSV:2,blur_lens:4,compression_jpeg:4",
+        "thinking": "Brightness variant coverage: HSV gamma brightens V only (preserves chroma ratio); target saturation_chroma_ratio=0.9235 slight chroma decrease. Compare vs RGB gamma (best 27.09)."
+      },
+      "test_result": {
+        "psnr_rgb": 22.94,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_HSV:2,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_gamma_RGB:3,blur_lens:4,compression_jpeg:4",
+        "thinking": "Clipping direction (diff=target-sim): target has MORE 255-clipping (+0.84 pts) than gamma_RGB:2 sim -> brightness under-applied. Severity scan up gamma_RGB:3 (sev2 26.52 > sev1 25.17)."
+      },
+      "test_result": {
+        "psnr_rgb": 23.18,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_gamma_RGB:3,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_gamma_RGB:2",
+        "thinking": "Order hypothesis: brightness priority=2 (ISP stage) -> applied after blur, shuffled with JPEG. If JPEG precedes brightness, highlight clipping occurs after quantization (no re-smoothing) -> target's extra 255-clipping explained. Test blur->JPEG->brightness."
+      },
+      "test_result": {
+        "psnr_rgb": 28.62,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_gamma_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:2",
+        "thinking": "Order blur->JPEG->brightness is best (28.62, CI 8/10). Retest brightness variant under best order: shift_RGB adds constant (hard clipping) vs gamma_RGB; target still has +0.85pt more 255s than sim."
+      },
+      "test_result": {
+        "psnr_rgb": 25.37,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:2",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "thinking": "Mean shift +24/255 matches shift_RGB c=0.10=+25.5 (sev1) per x_distortion source; shift_RGB:2 c=0.15 overshoots (sim pct_255 3.3pts above target). Test sev1 under best order blur->JPEG->brightness."
+      },
+      "test_result": {
+        "psnr_rgb": 34.1,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_gamma_RGB:1",
+        "thinking": "Best order now fixed (blur->JPEG->brightness, shift_RGB:1 = 34.10dB). Compare gamma_RGB:1 under same order (gamma=0.8, may match +24 shift with different clipping profile)."
+      },
+      "test_result": {
+        "psnr_rgb": 26.89,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_gamma_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "thinking": "Best global fixed (shift_RGB:1, 34.10dB). Blur cross-family under best order: gaussian:4 vs lens:4 (MTF indistinguishable, PSNR arbitrates)."
+      },
+      "test_result": {
+        "psnr_rgb": 30.49,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:3,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "thinking": "Blur severity scan down under best combo: lens:4 34.10 (gaussian:4 30.49). Test lens:3."
+      },
+      "test_result": {
+        "psnr_rgb": 30.1,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:3,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:5,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "thinking": "Blur severity scan up under best combo: lens:3 30.10, lens:4 34.10 -> test lens:5."
+      },
+      "test_result": {
+        "psnr_rgb": 29.08,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:5,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:3,brightness_brighten_shfit_RGB:1",
+        "thinking": "JPEG severity scan down under best combo (blur lens:4 34.10, block_boundary matched 5%). Test jpeg:3."
+      },
+      "test_result": {
+        "psnr_rgb": 28.67,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:3,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:5,brightness_brighten_shfit_RGB:1",
+        "thinking": "JPEG severity scan up under best combo: jpeg:3 28.67 (bb diff 14%), jpeg:4 34.10 (bb 0%). Test jpeg:5."
+      },
+      "test_result": {
+        "psnr_rgb": 26.05,
+        "ci_pass": "5/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:5,brightness_brighten_shfit_RGB:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_HSV:1",
+        "thinking": "Complete shift-family coverage: shift_HSV:1 (c=0.1 on V) vs shift_RGB:1 best (34.10). Target chroma_ratio=0.9235 slightly reduced; HSV V-shift may preserve chroma differently."
+      },
+      "test_result": {
+        "psnr_rgb": 29.25,
+        "ci_pass": "7/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_HSV:1",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "Order control for best combo: brightness may sit in priority-2 group before JPEG (blur->brightness->JPEG) instead of after (34.10). Test both shuffles of p2."
+      },
+      "test_result": {
+        "psnr_rgb": 34.83,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "R1-H1 顺序重释: mean_shift=+24/255=0.094 精确匹配 shift_RGB sev1(c=0.10,+25.5); blind_challenge 中 brightness priority=0 可先于 blur。R0 仅用 sev2/gamma 污染版测过 brightness->blur(24.62/27.09), 未用正确 sev1+lens:4 测第三合法顺序 brightness->blur->JPEG。若为真实顺序应近精确匹配。"
+      },
+      "test_result": {
+        "psnr_rgb": 33.97,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1-H2 子类型同序对照: R0 的 gaussian:4(30.49) 是在 blur->JPEG->brightness 顺序下测的, 与最佳顺序 blur->brightness->JPEG(34.83) 不可比。现固定最佳顺序与 shift:1, 单独替换 blur 子类型为 gaussian:4, 检验 MTF 不可分条件下 PSNR 是否仍劣于 lens。"
+      },
+      "test_result": {
+        "psnr_rgb": 30.7,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_gaussian:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1-H3 严重度边界: gm_ratio=0.4047 落入 sev4 区间(0.35-0.50), 但 gaussian sigma=5 的强模糊可能匹配该梯度比。R0 从未在最佳顺序下测 gaussian:5; 若 GT 为 gaussian:5 应出现 >+2dB 跳变。"
+      },
+      "test_result": {
+        "psnr_rgb": 27.82,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "blur_gaussian:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1-H4 信号基线: glass/motion 为非确定性模糊, SKILL C.4 规定 PSNR 不可用于其子类型判定; 用 verify_signals(spectral_slope+Wiener核+bb+dct+mean_shift+variance_ratio) 为 lens:4 最佳管线建立信号基线, 作为 glass 候选的同序对照。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "blur:wiener_kernel",
+          "compression:block_boundary",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "blur_glass:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "thinking": "R1-H4 glass信号对照: DT 边界信号 flatness=0.4053(阈值0.39)与 glass_score=1.023(超出glass校准区间0.19-0.41)只在边界/异常区, 需同序信号对照。glass 为随机像素打乱, PSNR 不可用(前述 PSNR=24.44 为 RNG 失配), 故用 verify_signals 比较 spectral_slope 与 Wiener 核是否匹配。"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "blur:spectral_slope",
+          "compression:block_boundary",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [
+          "blur:wiener_kernel (corr=0.838)"
+        ],
+        "pipeline": "blur_glass:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "R1-H1 跨对验证 pair1: 唯一有逐图差异可能的顺序候选(brightness priority=0)在 pair0=33.97(R0基线34.83, -0.86dB); 用 3 对全覆盖判断其均值能否达到 +2dB 门控。"
+      },
+      "test_result": {
+        "psnr_rgb": 36.66,
+        "ci_pass": "10/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "thinking": "R1-H1 跨对验证 pair2: 完成 brightness->blur->JPEG 顺序候选的 k=3 全覆盖。pair0 -0.86dB, pair1 -1.68dB, 若 pair2 也低于基线则顺序假设彻底排除。"
+      },
+      "test_result": {
+        "psnr_rgb": 42.88,
+        "ci_pass": "8/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "mode": "psnr"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 42.88,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 36.66,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 34.83,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 34.1,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 33.97,
+      "ci_pass": "10/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 30.7,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 30.49,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_lens:3,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 30.1,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_HSV:1",
+      "psnr_rgb": 29.25,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_lens:5,compression_jpeg:4,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 29.08,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:3,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 28.67,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_gamma_RGB:2",
+      "psnr_rgb": 28.62,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+      "psnr_rgb": 27.82,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 5
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:2,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 27.09,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_gamma_RGB:1",
+      "psnr_rgb": 26.89,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:2,blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 26.52,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:2,blur_lens:3,compression_jpeg:4",
+      "psnr_rgb": 26.34,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:5,brightness_brighten_shfit_RGB:1",
+      "psnr_rgb": 26.05,
+      "ci_pass": "5/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 4
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:2,blur_lens:5,compression_jpeg:4",
+      "psnr_rgb": 25.99,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_lens:4,compression_jpeg:4,brightness_brighten_shfit_RGB:2",
+      "psnr_rgb": 25.37,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:1,blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 25.17,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_shfit_RGB:2,blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 24.62,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 2
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:2,blur_glass:4,compression_jpeg:4",
+      "psnr_rgb": 24.44,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_RGB:3,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 23.18,
+      "ci_pass": "7/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "brightness_brighten_gamma_HSV:2,blur_lens:4,compression_jpeg:4",
+      "psnr_rgb": 22.94,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 3
+    },
+    {
+      "pipeline": "blur_gaussian:4,compression_jpeg:4",
+      "psnr_rgb": 19.95,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "blur_glass:4,compression_jpeg:4",
+      "psnr_rgb": 19.32,
+      "ci_pass": "8/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    }
+  ],
+  "noise_6step_check": {
+    "extreme_pct": 92.14,
+    "vm_slope": 3.5498,
+    "var_slope": 0.1076,
+    "spatial_corr": 0.9276,
+    "rgb_ratio": 1.1372,
+    "cross_ch_corr": 0.8153,
+    "noise_prior_sigma": 1.48,
+    "zero_ratio": 0.8443,
+    "residual_std": 4.6,
+    "diagnosis": "NO_NOISE. Values from peeled_noise_check on best deterministic pipeline (blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4). extreme_pct=92.14% is the documented JPEG/clipping false positive (extreme_pct>50% AND noise_prior sigma<5; zero_ratio=0.8443 shows residual is mostly exact-zero clipping residue). spatial_corr=0.9276 indicates structured residual (blur/JPEG), not white noise. Peeling with gaussian pipeline gave residual std=8.4, sigma=1.48; with correct lens pipeline residual std=4.6. sigma=1.48<2 -> NO_NOISE per Step 0.5 rule; qwen gate not triggered (sigma<2), API unavailable."
+  },
+  "support_validation": [
+    {
+      "pair": 1,
+      "psnr_rgb": 38.34,
+      "ci_pass_rate": "10/10",
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4"
+    },
+    {
+      "pair": 2,
+      "psnr_rgb": 43.15,
+      "ci_pass_rate": "10/10",
+      "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4"
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "blur_lens",
+        "severity": 4,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "brightness_brighten_shfit_RGB",
+        "severity": 1,
+        "verdict": "LIKELY"
+      },
+      {
+        "function": "compression_jpeg",
+        "severity": 4,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "alternatives": [
+      "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4 (pair0 30.49dB, CI 7/10)"
+    ],
+    "rationale": "3-step deterministic pipeline; noise ruled out (peeled sigma=1.48<2). Best pair0: blur_lens:4 -> brightness_brighten_shfit_RGB:1 -> compression_jpeg:4 = 34.83dB CI 10/10. Cross-pair (k=3): pair0 34.83, pair1 38.34, pair2 43.15, all CI 10/10. Severity scans peak at chosen values (blur 3/4/5=30.10/34.83/29.08; jpeg 3/4/5=28.67/34.83/26.05). Blur subtype kept UNCERTAIN: glass DT (score=1.02) vs lens PSNR winner (+4.3dB over gaussian, MTF known indistinguishable); pair0 PSNR in 30-40 band so LIKELY withheld for blur. Brightness LIKELY: deterministic mean_shift +24/255 matches c=0.10 exactly and clipping CI metrics agree within 0-7%. Overall verdict UNCERTAIN per per-step rule (any non-LIKELY -> UNCERTAIN)."
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": {
+      "type": "UNCERTAIN",
+      "k": 3,
+      "support_psnr_r0": 26.51,
+      "uncertain_step": "blur subtype (lens vs glass vs gaussian)",
+      "object": "信号重释，不使用 R0 模型 residual 做退化类型诊断"
+    },
+    "r1_full_analysis": {
+      "file": "full_analysis_R1.json",
+      "vs_r0": "与 full_analysis.json 逐字段一致，仅 residual_intensity_corr -0.1851 -> -0.1893",
+      "key_signals": {
+        "block_boundary": 3.2006,
+        "dct_zero_ratio": 0.903,
+        "unique_G": 256,
+        "gm_ratio": 0.4047,
+        "spectral_slope_ratio": 1.224,
+        "residual_anisotropy": 1.6547,
+        "glass_score": 1.0231,
+        "blur_pca_ratio": 1.258,
+        "blur_density": 0.7802,
+        "blur_flatness": 0.4053,
+        "brightness_mean_shift": 24.0,
+        "variance_ratio": 0.8055,
+        "contrast_spread_ratio": 0.9226,
+        "clipped_fraction": 0.0188,
+        "peeled_noise_sigma": 1.48,
+        "peeled_residual_std": 4.6,
+        "peeled_zero_ratio": 0.8443
+      }
+    },
+    "signal_reinterpretation": [
+      {
+        "signal": "blur_flatness",
+        "r0_value": 0.4053,
+        "r1_reading": "核形 DT 在 flatness<=0.39 判 gaussian(高信)、flatness>0.43 且 pca<=2.14 判 lens；实测 0.4053 仅比 gaussian/glass 分界 0.39 高 0.015，且低于 lens 分支阈值 0.43 → glass 判定为边界级，不能单独定论",
+        "source": "run_full_analysis step3 + blur_kernel_recovery.classify_kernel_matrix"
+      },
+      {
+        "signal": "glass_score",
+        "r0_value": 1.0231,
+        "r1_reading": "校准区间 Gaussian 0.04-0.13 / Lens 0.08-0.20 / Glass 0.19-0.41；1.023 远超玻璃上界，且目标同时含 JPEG(block_boundary=3.2) 与 brightness clipping(1.88%)，二阶差分被 8x8 块边界和硬限幅抬高 → 判为 JPEG/clipping 假阳性，不作为玻璃证据",
+        "source": "run_full_analysis glass_score 校准区间 + step1/step4 信号"
+      },
+      {
+        "signal": "residual_anisotropy / blur_pca_ratio",
+        "r0_value": "1.6547 / 1.258",
+        "r1_reading": "anisotropy 1.65 低于 1.7 且远低于 2.2；pca 1.258<2.5 (motion PCA 0%FP) → motion blur 排除（对 1.65 的阈值边界已专门复核）",
+        "source": "run_full_analysis step3"
+      },
+      {
+        "signal": "variance_ratio / contrast_spread_ratio",
+        "r0_value": "0.8055 / 0.9226",
+        "r1_reading": "并非漏检 contrast：同序 lens 管线 verify_signals 的 variance_ratio 检查 MATCH；方差下降可由 blur(主)+JPEG 解释，且 3 步已满(blur+brightness+JPEG)无 contrast 位置",
+        "source": "test_candidate --mode signal H4"
+      },
+      {
+        "signal": "mean_shift / clipped_fraction",
+        "r0_value": "+24.0 / 0.0188",
+        "r1_reading": "shift_RGB sev1 c=0.10 (+25.5) 经 1.88% 高光限幅后恰为 +24；同序信号 mean_shift MATCH；brightness 家族维持 shift_RGB sev1",
+        "source": "x_distortion/brightness.py + H4"
+      },
+      {
+        "signal": "noise sigma / peeled §B",
+        "r0_value": "sigma=1.48, extreme_pct=92.14%, zero_ratio=0.8443",
+        "r1_reading": "peeled_noise_check 复跑一致（residual_std=4.6, spatial_corr=0.9276）；extreme_pct>50% 且 sigma<5 为已文档 JPEG/clipping 假阳性（zero_ratio=0.844 表明残差多为精确零）；3 步管线已占满，无 noise 可插入 → NO_NOISE",
+        "source": "peeled_pair0_R1.json + SKILL 逐层剥离规则"
+      },
+      {
+        "signal": "blur subtype via PSNR (lens vs gaussian)",
+        "r0_value": "lens:4 34.83 vs gaussian:4 30.49（顺序不同，不可比）",
+        "r1_reading": "同序(blur->brightness->JPEG)重测：gaussian:4=30.70、gaussian:5=27.82 → lens 优势 +4.13/+7.01dB 非顺序混淆；MTF 虽文档不可分，但像素级 PSNR 在 k=3 一致支持 lens",
+        "source": "H2/H3"
+      }
+    ],
+    "candidates_R1": [
+      {
+        "id": "H1_order",
+        "pipeline": "brightness_brighten_shfit_RGB:1,blur_lens:4,compression_jpeg:4",
+        "hypothesis_source": "blind_challenge 中 brightness priority=0 可先于 blur；R0 仅用 sev2/gamma 污染版测过该顺序",
+        "mode": "psnr",
+        "results": {"pair0": 33.97, "pair1": 36.66, "pair2": 42.88},
+        "ci": {"pair0": "10/10", "pair1": "10/10", "pair2": "8/10"},
+        "delta_vs_r0": {"pair0": -0.86, "pair1": -1.68, "pair2": -0.27},
+        "decision": "REJECT"
+      },
+      {
+        "id": "H2_gaussian4",
+        "pipeline": "blur_gaussian:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "hypothesis_source": "MTF 文档不可分；R0 的 gaussian:4 在不同顺序下测，需同序对照",
+        "mode": "psnr",
+        "results": {"pair0": 30.70},
+        "decision": "REJECT (pair0 筛选)"
+      },
+      {
+        "id": "H3_gaussian5",
+        "pipeline": "blur_gaussian:5,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "hypothesis_source": "gm_ratio=0.4047 处于 sev 边界；gaussian:5 从未在最佳顺序下测试",
+        "mode": "psnr",
+        "results": {"pair0": 27.82},
+        "decision": "REJECT (pair0 筛选)"
+      },
+      {
+        "id": "H4_lens_signal_baseline",
+        "pipeline": "blur_lens:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "hypothesis_source": "非确定性 blur 需信号验证(SKILL C.4)；为 lens 建立同序信号基线",
+        "mode": "signal",
+        "results": {"pair0": "MATCH 5/5 (spectral_slope, Wiener, block_boundary, mean_shift, variance_ratio)"},
+        "decision": "BASELINE"
+      },
+      {
+        "id": "H5_glass_signal",
+        "pipeline": "blur_glass:4,brightness_brighten_shfit_RGB:1,compression_jpeg:4",
+        "hypothesis_source": "DT glass_score>0.25 + kernel flatness 边界；glass 为随机像素打乱，PSNR 无效",
+        "mode": "signal",
+        "results": {"pair0": "PARTIAL 4/5 (Wiener corr=0.838<0.85)"},
+        "decision": "REJECT (劣于 lens MATCH)"
+      }
+    ],
+    "k_pair_validation": {
+      "baseline_lens_psnr": {"pair0": 34.83, "pair1": 38.34, "pair2": 43.15, "ci": "10/10 all"},
+      "H1_psnr": {"pair0": 33.97, "pair1": 36.66, "pair2": 42.88},
+      "note": "H1 是唯一可能逐图差异的确定性替代，已完成 k=3 全覆盖；均值 37.84 vs R0 38.77 (-0.94dB)。H2/H3 在 pair0 已低 4-7dB，不再浪费跨对预算。psnr_ranking 中 round=5 条目含不同 target(pair0/1/2)，跨对不可直接比较。"
+    },
+    "change_gate": {
+      "rule": "确定性候选 >40dB 或相对上一轮 +2dB；非确定性 blur 用同序信号对照(类比 noise 规则，SKILL C.4)",
+      "outcome": "无候选达标：H1 均值 -0.94dB；H2 -4.13dB；H3 -7.01dB；H5 PARTIAL < lens MATCH"
+    },
+    "final_decision": {
+      "decision": "NO_CHANGE",
+      "pipeline": [
+        {"function": "blur_lens", "severity": 4, "verdict": "UNCERTAIN"},
+        {"function": "brightness_brighten_shfit_RGB", "severity": 1, "verdict": "LIKELY"},
+        {"function": "compression_jpeg", "severity": 4, "verdict": "LIKELY"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "rationale": "R1 信号重释确认 R0 管线：JPEG(bb=3.2006 0%FP, dct=0.903, 同序信号 MATCH)、brightness shift_RGB:1(mean_shift +24 精确, MATCH)、blur lens:4(k=3 PSNR 34.83/38.34/43.15 全 CI10/10, 同序信号 MATCH 5/5, 比 gaussian:4 高 4.13dB、比 gaussian:5 高 7.01dB；第三合法顺序 k=3 全部更低)。glass 仅边界级证据(flatness 0.405 vs 0.39；glass_score 1.023 超校准区间)且同序信号 PARTIAL 劣于 lens；motion 排除；noise 无位置。所有确定性替代均低于 +2dB 门控 → 保持 R0 管线，R1 文件逐项相同。"
+    },
+    "limitations": [
+      "glass/motion 等随机模糊无法用 PSNR 验证；R1 以信号对照替代，Wiener 核 corr=0.838 与阈值 0.85 仅差 0.012，判别力有限",
+      "支持集仅 k=3 对且同源 DIV2K；薄纹理/低光场景的 subtype 泛化未验证",
+      "R0 support PSNR 26.51 可能部分来自训练收敛因素，不能单独作为退化误判证据；R1 未使用模型 residual 反推退化类型"
+    ]
+  }
+}

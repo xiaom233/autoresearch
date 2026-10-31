@@ -1,0 +1,69 @@
+{
+  "challenge_id": "blind_0016_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [["blur_motion", 3], ["compression_jpeg", 2]],
+  "r1_pipeline": [["blur_motion", 3], ["compression_jpeg", 2]],
+  "support_psnr_r0": 24.25,
+  "support_k": 3,
+  "candidates_tested": [
+    {
+      "candidate": "blur_motion:2,compression_jpeg:2",
+      "signal_motivation": "三对 target gm_ratio (0.2755/0.3469/0.3269) 均略高于 motion:3 仿真 (0.268/0.306/0.302), 提示 target 可能略锐于 sev3; JPEG sev2 固定",
+      "per_pair": {
+        "pair0": {"psnr_rgb": 20.58, "ci_pass": "7/10", "source": "中断前 R1 round 101 (本目录 reflection.json)"},
+        "pair1": {"psnr_rgb": 28.58, "ci_pass": "10/10", "source": "本会话 test_candidate.py round 19"},
+        "pair2": {"psnr_rgb": 23.9, "ci_pass": "7/10", "source": "本会话 test_candidate.py round 20"}
+      },
+      "delta_vs_r0_pipeline": {"pair0": 0.64, "pair1": 0.78, "pair2": -2.53},
+      "verdict": "REJECT",
+      "reason": "无一对达到 +2 dB 或 >40 dB 的 CHANGE 门槛; pair2 明显退化 (-2.53 dB); motion 随机角度使单次 PSNR 有噪声, 但三对方向不一致, 且 gm_ratio 差异仅 3-12%, 不足以改 severity"
+    }
+  ],
+  "candidates_ruled_out_without_new_test": [
+    {
+      "candidate": "blur_glass:*,compression_jpeg:*",
+      "reason": "glass_score 1.359/1.087/1.008 >0.25, 但 blur_pca_ratio 2.65-3.34 三对一致指方向性 motion (非方向核仿真 PCA~1.0, motion 信号 41% recall 0% FP); glass 属非确定性 blur, PSNR 不可能 >40 或稳定 +2dB; R0 已测 glass:4+J4=21.27 dB"
+    },
+    {
+      "candidate": "blur_gaussian:3,compression_jpeg:2",
+      "reason": "R0 已测 (pair0 23.87 dB, CI 6/10), 保留为跨族 alternative; 确定性核可与 PSNR 比较, 但远离 40 dB, 且 PCA 方向性明确否决"
+    },
+    {
+      "candidate": "noise_gaussian_YCrCb/RGB",
+      "reason": "sigma 1.11/0.74/0.37 <2; §B extreme_pct 65% 满足已知 IMPULSE 假阳性条件 (extreme>50% 且 noise_prior sigma=2.22<5); 无噪声仿真 sigma/ric 与 target 完全一致"
+    },
+    {
+      "candidate": "global contrast/brightness/saturation/gamma",
+      "reason": "mean_shift <1/255, clipped<1%; pair0 variance_ratio 0.82 由 blur 仿真精确复现 (0.819); chroma 0.94-0.99 与仿真一致"
+    },
+    {
+      "candidate": "quantization / JPEG2000",
+      "reason": "unique_G 229-256 未下降; block_boundary 2.01-2.73 指标准 JPEG 且 sev2 三对误差 <4%"
+    }
+  ],
+  "test_candidate_calls": 3,
+  "test_candidate_calls_this_session": 2,
+  "test_candidate_calls_note": "R1 累计 3 次: 中断前 round 101 (pair0 motion:2) 1 次 + 本会话 pair1/pair2 各 1 次; 未超 ≤15 预算",
+  "best_validation": {
+    "pipeline": [["blur_motion", 3], ["compression_jpeg", 2]],
+    "pair0": {"psnr_rgb": 19.94, "ci_pass": "10/10", "signals": "bb 2.086/2.013 (3.6%), dct 0.850/0.857 (0.8%), gm 0.268/0.276 (2.7%), var 0.819/0.820 (0.1%), chroma 0.941/0.940 (0.1%)"},
+    "pair1": {"psnr_rgb": 27.8, "ci_pass": "10/10", "signals": "bb 2.764/2.726 (1.4%), dct 0.915/0.906 (1.0%), gm 0.306/0.347 (11.8%), var 0.937/0.943 (0.7%), chroma 0.959/0.965 (0.6%)"},
+    "pair2": {"psnr_rgb": 26.43, "ci_pass": "8/10", "signals": "bb 2.601/2.616 (0.6%), dct 0.925/0.916 (1.0%), gm 0.302/0.327 (7.6%), var 0.940/0.937 (0.4%), chroma 0.995/0.992 (0.3%)"},
+    "note": "blur_motion 随机角度导致 PSNR 不可复现 (三对 19.94-27.80), 信号一致性 (bb/dct <4%, pca 方向性) 为主判据"
+  },
+  "signal_sources": [
+    {"signal": "block_boundary", "values": "target 2.013/2.726/2.616 vs motion:3+J2 仿真 2.086/2.764/2.601", "conclusion": "JPEG sev2 维持 (0%FP 信号, 误差 <4%)"},
+    {"signal": "dct_zero_ratio", "values": "target 0.857/0.906/0.916 vs 仿真 0.850/0.915/0.925", "conclusion": "JPEG sev2 维持 (误差 <1.1%)"},
+    {"signal": "blur_pca_ratio", "values": "3.342/2.788/2.652 (>2.5 全部; 非方向核仿真 ~1.0)", "conclusion": "motion 子类型确认"},
+    {"signal": "residual_anisotropy", "values": "1.885/1.326/2.886 (>1.7 两对, pair1 边界)", "conclusion": "motion 子类型支持"},
+    {"signal": "glass_score", "values": "1.359/1.087/1.008 (>0.25 全部)", "conclusion": "玻璃信号被 PCA 方向性与非确定性拒否"},
+    {"signal": "gm_ratio", "values": "target 0.2755/0.3469/0.3269 vs motion:3 仿真 0.268/0.306/0.302", "conclusion": "sev2 边界候选, 实测无增益"},
+    {"signal": "variance_ratio", "values": "target 0.8196/0.9433/0.9366 vs 仿真 0.819/0.937/0.940", "conclusion": "方差下降由 blur 解释, 非 contrast/gamma"},
+    {"signal": "saturation_chroma_ratio", "values": "0.9402/0.9646/0.9923 vs 仿真 0.941/0.959/0.995", "conclusion": "无 saturation"},
+    {"signal": "mean_shift / clipped_fraction", "values": "-0.4/-0.7/-0.5 (1/255), 0.0058-0.008", "conclusion": "无 brightness/clipping"},
+    {"signal": "noise_prior_sigma / residual_intensity_corr", "values": "1.11/0.74/0.37; -0.431/-0.264/-0.254 (无噪声仿真 -0.429 匹配)", "conclusion": "无噪声/gamma"},
+    {"signal": "peeled §B (pair0)", "values": "extreme_pct 65.23, vm_slope 1.148, var_slope 0.137, spatial_corr 0.958, noise_prior sigma 2.22", "conclusion": "IMPULSE 已知假阳性 (extreme>50% + sigma<5), 无真实噪声"}
+  ],
+  "reason": "三轮信号重释未发现被忽略/误判的退化: global/noise/gamma 边界信号均可被无 global、无 noise 的 motion:3+J2 仿真精确复现; blur 为方向性 motion (PCA 三对 2.65-3.34); JPEG sev2 三对块边界/DCT 误差 <4%/<1.1%。唯一新候选 motion:2+J2 三对 PSNR 20.58/28.58/23.90, 相对 R0 19.94/27.80/26.43 为 +0.64/+0.78/-2.53 dB, 未达 >40 dB 或 +2 dB 的 CHANGE 门槛且 pair2 退化。故维持 R0 管线, NO_CHANGE。"
+}

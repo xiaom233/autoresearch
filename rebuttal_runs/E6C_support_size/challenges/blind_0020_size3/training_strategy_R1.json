@@ -1,0 +1,33 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": true,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "R1 pipeline=blur_glass:4 (LIKELY) + contrast_weaken_stretch:4 (LIKELY), overall verdict=LIKELY, tier=1 (predicted_params_R1.json). k=3 support 40.69/38.27/43.57 dB (mean 40.84, CI 9/10, 10/10, 9/10) is used only as confirmation, not to relax any architecture gate",
+    "OCAB gate fails: full_analysis_R1 step3_blur residual_anisotropy=1.4991 < 1.7 => no motion; blur is glass (glass_score=0.3044>0.25, sigma=0.37<3), not directional",
+    "FiLM-GCM gate fails: contrast present but no structured local degradation — block_boundary=1.0024 < 1.1 (no JPEG), anisotropy=1.4991 < 1.7 (no motion); per instruction contrast without JPEG/motion does not satisfy the FiLM-GCM gate",
+    "ColorPre gate met: variance_ratio=0.1878 != 1.0 (Tier A contrast signal; step4_global contrast_from_variance=true), contrast_weaken_stretch:4 is independently PSNR-verified on all 3 support pairs (40.69/43.57 > 40 dB, 38.27 close, CI 9-10/10); chroma_ratio=0.5045 is reproduced by the per-channel stretch c=0.6 (contrast_from_saturation=true resolved as saturation false positive), and R1 removed saturate_weaken_HSV, so ColorPre's only documented disable scenario (saturation) is absent; per-channel affine mechanism of ColorPre matches the mean->0.5 / c=0.6 stretch",
+    "no noise: noise_prior_sigma=0.37 < 2 (full_analysis_R1 step2_noise); no JPEG: block_boundary=1.0024 (0% FP); mean_shift=-22.6 explained by stretch mean->0.5 (clean mean ~0.589), no separate brightness/gamma step in R1 pipeline",
+    "SimpleGate default on (exp39 8/9 safe, no motion triple-degradation here); Direct required for contrast-containing degradation (finetune_strategy §六 Step 1, CLAUDE.md 全局退化不用 Ft); ColorMLP/ChannelCurve/CSN not used (Tier B or contradictory signals), CSN disabled by pure global component in pipeline",
+    "support count k=3 did not relax thresholds: all component gates evaluated from per-step verdicts and raw signal values only"
+  ],
+  "rationale": "R1 two-step deterministic pipeline (glass blur + per-channel contrast stretch). Blur is non-directional (anisotropy 1.4991 < 1.7) so OCAB is off; contrast is present but has no structured local partner (no JPEG block_boundary=1.0024, no motion) so FiLM-GCM is off. The one clear Tier A signal is variance_ratio=0.1878 from a PSNR-verified contrast_weaken_stretch:4 step (k=3 support mean 40.84 dB, CI 9-10/10), which triggers ColorPre (+0.8K, contrast gain +0.62~18.91 in exp10/exp38); its documented harmful/disabled case is saturation, which R1 removed (chroma_ratio fully explained by the per-channel stretch). Therefore ColorPre on, FiLM-GCM off, pure Swin + SimpleGate + Direct. LR=5e-4, EPOCH=2, batch=16 per Phase 5 fairness rules; k=3 support count did not loosen any gate."
+}

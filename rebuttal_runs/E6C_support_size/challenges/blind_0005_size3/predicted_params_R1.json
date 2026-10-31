@@ -1,0 +1,52 @@
+{
+  "challenge_id": "blind_0005_size3",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    [
+      "noise_impulse",
+      5
+    ]
+  ],
+  "pipeline": [
+    {
+      "function": "noise_impulse",
+      "severity": 5,
+      "verdict": "UNCERTAIN"
+    }
+  ],
+  "alternatives": [],
+  "analysis": {
+    "verdict": "UNCERTAIN",
+    "tier": 2,
+    "mode": "SIGNAL (sigma=0.0; impulse seed mismatch makes PSNR unusable)",
+    "support_psnr_r0": 44.53,
+    "support_pairs_used": [
+      "pair0(degraded.png/clean.png)",
+      "pair1(degraded_1.png/clean_1.png)",
+      "pair2(degraded_2.png/clean_2.png)"
+    ],
+    "test_candidate_calls": 8,
+    "signal_reinterpretation": {
+      "compression": "重新读 pair0 全部信号：block_boundary=0.994/1.006、unique_G=256(=clean)/214(clean=213)、dct_zero_ratio=0.016/0.014 → NO_COMPRESSION 复现，无阈值边界信号（离 1.1/200 阈值远）。JPEG 后处理会扰动几乎所有像素，与 90% bit-exact 矛盾。",
+      "blur": "gm_ratio=5.334/3.404（脉冲极值抬高 target 梯度）、spectral_slope_ratio=0.901/0.970（<1.08）、FFT anisotropy=0.00 → 无模糊；任何卷积核都会改动绝大多数像素，与 zero_ratio=0.8999 矛盾。",
+      "noise_type": "zero_ratio=0.8999 = 1-0.1001（逐通道元素级 bit-exact 比例），只有稀疏逐元素脉冲可产生；spatial_corr=0.3457 ≈ 1/3（独立稀疏脉冲经 3x3 邻域均值的理论相关）；rgb_ratio=1.0367<1.4 + cross_ch_corr=0.0046 → 每通道独立（skimage s&p 逐元素采样）；var_slope=0.1529<1.0 排除 poisson；ivc=0.5794 来自 0/255 截断与强度的相关。",
+      "misjudged_signals": "extreme_pct=95.0% 是 peeled 残差把零残差同时计入 res<=0 的假阳性；vm_slope=9.8804 是 90% 全零 16x16 patch（var=0,mean²=0）+ 稀疏尖峰的协方差伪影；peeled_noise_check 内部 noise_prior 在 (residual+128, clean) 错配输入上误报 sigma≈23.2/gaussian_RGB，并非 target 的噪声估计——full_analysis 同图 noise_prior sigma=0.0 才是有效信号。",
+      "global_false_positive": "variance_ratio=2.185/1.239、chroma_ratio=3.253/13.831 由 10% 0/255 极值抬高方差/色度造成（pair2 clean 近零色度 → 13.8）；且两对 verdict 不一致（CONTRAST+SATURATION vs BRIGHTNESS+SATURATION）。关键反证：任何全局 LUT（contrast scale=4.0/brightness/saturation/gamma）都会改动几乎所有像素，与 90% bit-exact 不可兼容。R1 实测 impulse+contrast_strengthen_scale:5 在 3 对上 global:variance_ratio 偏差 +219~701% → 证伪'漏检全局步'。",
+      "severity_boundary": "amount=1-zero_ratio=0.1001 ≈ x_distortion noise_impulse sev5=0.10（sev4=0.07 预期 zero_ratio≈0.93）；full_analysis clipped_fraction=0.1007/0.100 跨对一致；R0 CI impulse_total_pct 10/10 且误差≤0.022%（sev4 仅 7/10、误差 30%）。"
+    },
+    "r1_reproducibility": "full_analysis_R1.json 与 R0 full_analysis.json 完全一致；peeled_sb6_p0_R1.json 与 R0 peeled_sb6_p0.json 完全一致（信号分析确定性复现）。",
+    "candidate_validations": {
+      "noise_impulse:5_baseline": "signal MATCH 2✓/0✗ on pair0/pair1/pair2（3/3）",
+      "noise_impulse:4": "signal MATCH 2✓/0✗ on pair0 —— signal 模式对 impulse severity 不敏感，severity 由确定性 zero_ratio/clipping 统计 + R0 跨对 CI 决定",
+      "noise_impulse:5,contrast_strengthen_scale:5": "signal WEAK 1✓/3✗ on pair0/pair1/pair2（variance_ratio 偏差 +534%/+219%/+701%）",
+      "noise_gaussian_RGB:2": "signal WEAK 1✓/1✗ on pair0（noise:sigma 偏差 950%）"
+    },
+    "rationale": "R1 信号重释未发现可推翻 noise_impulse:5 的新证据：bit-exact 指纹、sev5 amount=0.10、逐对 clipping 0.1007/0.100、3/3 对 MATCH、跨对 CI 10/10 均一致；global/vm_slope/noise_prior 等冲突信号均被定位为脉冲伪影，impulse+contrast 与 dense gaussian 替代均被 signal 拒绝。按含噪候选规则，基线已 3/3 MATCH（最优），无候选使多数对由 WEAK 改善至 PARTIAL/MATCH → NO_CHANGE。噪声步骤按 exp34 规则永不标 LIKELY，维持 UNCERTAIN。",
+    "limitations": [
+      "k=3 support 对全部使用，未用其他 size/挑战/数据集补足",
+      "signal 模式无法分辨 impulse severity（sev4 同样 MATCH）；severity 判据为确定性 zero_ratio/clipping 统计与 R0 CI",
+      "impulse seed 失配使 PSNR（R0 为 11-13 dB）不可作判据"
+    ]
+  }
+}

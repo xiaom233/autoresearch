@@ -1,0 +1,32 @@
+{
+  "strategy": "direct",
+  "architecture": {
+    "attention_type": "swin",
+    "window_size": 8,
+    "use_simple_gate": true,
+    "use_gcm": false,
+    "use_color_pre": false,
+    "use_color_mlp": false,
+    "use_dual_branch": false,
+    "use_csn": false,
+    "use_channel_curve": false,
+    "use_pcp": false,
+    "use_sca": false,
+    "use_gdfn": false,
+    "use_fpro": false,
+    "use_freqmod": false,
+    "embed_dim": 64
+  },
+  "lr": 0.0005,
+  "epoch_budget": 2,
+  "batch_size": 16,
+  "signal_basis": [
+    "blur step: predicted blur_gaussian:4 verdict=UNCERTAIN (full_analysis step3 gm_ratio=0.1989 strong blur; anisotropy/spectral residual_anisotropy=1.3947 < 1.7 so NOT motion -> no OCAB; glass_score=1.62 invalidated: pure blur_gaussian:5+compression_jpeg:4 simulation also scores glass_score=1.69, JPEG-inflated; gaussian family wins on wiener kernel corr > 0.85 MATCH)",
+    "compression step: predicted compression_jpeg:4 verdict=UNCERTAIN (full_analysis step1 block_boundary=8.3928 0%FP JPEG, dct_zero_ratio=0.9571, unique_G=226); PSNR plateau: all deterministic candidates 21-28.5 dB, best gaussian4+jpeg4=28.21 CI 8/10 -> <30 dB, stays UNCERTAIN (predicted_params.analysis)",
+    "global ruled out: variance_ratio=0.7324 is a blur+JPEG byproduct, not contrast: contrast_weaken_scale:2 -4.8 dB (23.18), contrast_weaken_stretch:2 -7.1 dB (21.10), saturate_weaken_HSV:2 -4.3 dB (23.71) vs 28.21 baseline (reflection iterations) -> no ColorPre, no FiLM-GCM (no contrast + no motion/jpeg structured Tier A contrast signal)",
+    "noise ruled out: noise_prior sigma=0.74 raw / peeled sigma=1.48 < 2, residual spatial_corr=0.9666 structured (documented extreme_pct IMPULSE false positive); impulse:1 control no PSNR gain (27.69 vs 27.38) (reflection.noise_6step_check)",
+    "both steps UNCERTAIN -> no component per finetune_strategy.md §七 (UNCERTAIN steps add no components; exp37 0/24 with components); SimpleGate default-on (-32K, exp39 8/9 safe)",
+    "k=1 support does not relax gating: no Tier S/A component trigger exists regardless of support size; anisotropy 1.39 < 1.7, variance_ratio not a true contrast signal, no ColorPre trigger"
+  ],
+  "rationale": "Pure Swin + SimpleGate + Direct is the default and the only safe choice here: both steps are UNCERTAIN (PSNR plateau 27.4-28.5) and every component trigger is absent (anisotropy 1.3947<1.7 no OCAB; no contrast step and variance_ratio refuted by PSNR no ColorPre/FiLM-GCM; no noise no extra branch). finetune_strategy.md §六/§七: UNCERTAIN -> Swin baseline; exp37 blind-ID components 0/24. SimpleGate kept on by default (safe 8/9, L2+0.78). k=1 support cannot cross-validate, so conservative gating is kept unchanged. lr=5e-4, Direct 2-epoch, batch=16 per Phase 5 fairness."
+}

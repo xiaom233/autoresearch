@@ -1,0 +1,925 @@
+{
+  "challenge_id": "blind_0001_size3",
+  "initial_analysis": {
+    "run_full_analysis_summary": {
+      "compression": "block_boundary=1.0007 (<1.05, 无 8x8 块边界); 但 unique_G_target=16 (每通道 [16,16,16]), unique_G_clean=256, unique_G_ratio=0.0625, dct_zero_ratio=0.0212 → unique_G<200 判定必有 compression/quantization (FP=0%)",
+      "blur": "BLUR_UNLIKELY: spectral_slope_ratio=0.993 (target -1.2491 vs clean -1.2579), gm_ratio=5.219 (被量化带/噪声抬高), FFT anisotropy=0, PCA=0.0",
+      "noise": "noise_prior sigma=16.68 (p1=17.17, p2=10.38), intensity_var_corr=0.772, spatial_corr=0.002, cross_ch_corr=0.001, impulse_zero_ratio=0.032 → 自动推断 POISSON",
+      "global": "NO_GLOBAL: mean_shift=-1.2, clipped_fraction=0.1635 (heavy), variance_ratio=1.317, saturation_chroma_ratio=2.655 (saturation_from_noise FP flag)"
+    },
+    "mode": "SIGNAL (sigma=16.7, noise_prior) — 但怀疑 sigma 为量化带假阳性, 首测用 PSNR 判定确定性量化是否精确复现",
+    "key_hypothesis": "三对 support 每通道唯一色阶恒为 16, 与 x_distortion.quantization_hist severity=2 (num_classes=16) 完全吻合; histogram-equalization 映射可解释 variance_ratio>1 / clipping 16-33% / saturation chroma 比升高; 量化带边缘解释 gm_ratio~5.2 与 wavelet sigma 10-17 (信号相关残差, 误判 Poisson)",
+    "sigma_boundary": "sigma in (2,10) borderline for p2=10.38; Qwen gate unavailable → recorded qwen_gate={available:false}"
+  },
+  "qwen_gate": {
+    "available": false,
+    "reason": "Qwen/API 不可用 (E6-C 指令), 跳过 Step 0.5"
+  },
+  "noise_6step_check": {
+    "extreme_pct": 55.13,
+    "vm_slope": 31.6461,
+    "var_slope": 0.2886,
+    "spatial_corr": 0.3424,
+    "rgb_ratio": 1.1539,
+    "cross_ch_corr": 0.0022,
+    "intensity_var_corr": 0.7718,
+    "target_residual_noise_signals": {
+      "noise_prior_sigma": 16.68,
+      "impulse_zero_ratio": 0.0319,
+      "spatial_corr": 0.0018,
+      "cross_channel_corr": 0.0013,
+      "intensity_var_corr": 0.7718,
+      "intensity_scaled_var_corr": -0.6789
+    },
+    "peeled_check_note": "peeled_noise_check --pipeline quantization_median:2 的 §B 数值 (extreme 55.13%/vm_slope 31.6) 被量化阶跃主导, IMPULSE/SPECKLE 推断为已知假阳性 (残差非白噪声, 量化最后执行使噪声混叠进 bin 翻转); 真正的噪声类型判定来自全管线统计匹配: poisson:5+median2 在 3 对上同时精确匹配 sigma/gm/VR/ms/chroma/ivc (见 cross_pair_validation), gaussian_RGB:2 对照 ivc=0.102 vs 目标 0.772 明确劣于 poisson",
+    "diagnosis": "noise 为强信号相关噪声 (poisson)。噪声先于量化 (quantization 必须最后, 否则 unique 色阶会远多于 16)。速度谱/统计匹配均支持 poisson sev5; peel 后的 §B 无法独立判型 (量化耦合)"
+  },
+  "cross_pair_validation": {
+    "candidate": "noise_poisson:5,quantization_median:2",
+    "pair0": {
+      "sigma": [
+        16.68,
+        16.68
+      ],
+      "gm_ratio": [
+        5.22,
+        5.23
+      ],
+      "variance_ratio": [
+        1.317,
+        1.318
+      ],
+      "mean_shift": [
+        -1.2,
+        -1.2
+      ],
+      "clipped_fraction": [
+        0.164,
+        0.15
+      ],
+      "chroma_ratio": [
+        2.66,
+        2.66
+      ],
+      "spectral_slope": [
+        -1.2491,
+        -1.2519
+      ],
+      "unique_G": [
+        16,
+        15
+      ],
+      "intensity_var_corr": [
+        0.772,
+        0.774
+      ]
+    },
+    "pair1": {
+      "sigma": [
+        17.17,
+        16.93
+      ],
+      "gm_ratio": [
+        5.63,
+        5.63
+      ],
+      "variance_ratio": [
+        1.143,
+        1.143
+      ],
+      "mean_shift": [
+        -2.9,
+        -2.8
+      ],
+      "clipped_fraction": [
+        0.147,
+        0.147
+      ],
+      "chroma_ratio": [
+        1.75,
+        1.75
+      ],
+      "spectral_slope": [
+        -1.1459,
+        -1.144
+      ],
+      "unique_G": [
+        16,
+        15
+      ],
+      "intensity_var_corr": [
+        0.829,
+        0.838
+      ]
+    },
+    "pair2": {
+      "sigma": [
+        10.38,
+        10.5
+      ],
+      "gm_ratio": [
+        5.23,
+        5.23
+      ],
+      "variance_ratio": [
+        1.081,
+        1.082
+      ],
+      "mean_shift": [
+        -1.7,
+        -1.7
+      ],
+      "clipped_fraction": [
+        0.332,
+        0.332
+      ],
+      "chroma_ratio": [
+        1.49,
+        1.49
+      ],
+      "spectral_slope": [
+        -1.3343,
+        -1.3325
+      ],
+      "unique_G": [
+        16,
+        15
+      ],
+      "intensity_var_corr": [
+        0.908,
+        0.908
+      ]
+    },
+    "format": "[target, simulated]; verify_signals verdict = MATCH on all 3 pairs (noise:sigma, noise:clean_residual, global:mean_shift, global:variance_ratio 全部通过)",
+    "unique_off_by_one": "target 每通道 16 色阶, 本仓库 quantization_median:2 (c=15) 输出 15; 其余全部信号完全一致 → 挑战生成端 median 量化 class 数应为 16 (sev2), 即实现/版本差异导致的一级色阶差异"
+  },
+  "iterations": [
+    {
+      "round": 1,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2",
+        "thinking": "R1: 三对 support 每通道唯一色阶=16, 与 quantization_hist sev2 (c=16) 完全一致; block_boundary=1.0 排除 JPEG; 首测直接验证确定性量化能否精确复现 (若为确定性则 PSNR 可靠)"
+      },
+      "test_result": {
+        "psnr_rgb": 14.83,
+        "ci_pass": "4/10",
+        "ci_verdict": "NEEDS_WORK",
+        "method": "PSNR",
+        "pipeline": "quantization_hist:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 2,
+      "hypothesis": {
+        "pipeline": "quantization_hist:2",
+        "thinking": "R1b: 同一候选改用信号模式, 读取 target vs simulated 各信号数值差 (PSNR 14.83 但 unique 完全一致 → 需确认是映射差异还是缺后续 global 步骤)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MISMATCH",
+        "matched_signals": [],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0626)",
+          "global:variance_ratio (diff=50%)"
+        ],
+        "pipeline": "quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 3,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "thinking": "R2: unique=16 要求量化必须最后执行(noise→quant); 目标残差 intensity_var_corr=0.77 且 noise_prior sigma=16.7 → 测试 poisson sev3 (信号相关噪声) + quant_hist2 组合"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=29%)",
+          "global:mean_shift (diff=0.0582)",
+          "global:variance_ratio (diff=48%)"
+        ],
+        "pipeline": "noise_poisson:3,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 4,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "thinking": "R3: pois3+qh2 使 sigma 11.7/gm 3.86 (目标 16.7/5.2) 方向正确; 提高噪声强度观察 sigma/gm/VR/mean_shift 趋势 — 更强噪声使直方图更平坦, quant_hist 的 cdf 映射趋近恒等, 预期 ms↓ VR↓ 向目标收敛"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0626)",
+          "global:variance_ratio (diff=64%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 5,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,contrast_strengthen_scale:2,quantization_hist:2",
+        "thinking": "R5: 目标 clip=16-33% 远高于 qh2-alone 9%, 且 VR=1.317<1.476, ms≈0 vs +14.7 → 量化前可能存在 contrast_strengthen (ISP priority2, 在 noise 之后); 检验是否使 VR/ms/clip 向目标收敛"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=22%)",
+          "global:mean_shift (diff=0.0392)",
+          "global:variance_ratio (diff=195%)"
+        ],
+        "pipeline": "noise_poisson:5,contrast_strengthen_scale:2,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 6,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,contrast_strengthen_scale:1,quantization_hist:2",
+        "thinking": "R6: R5 显示 contrast 使 ms 从 +14.7→-0.04 (目标 -0.005) 方向正确但 VR 过冲 (1.93 vs 1.317); 降为 sev1 (scale=1.4) 检验 VR/ms 折中"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0168)",
+          "global:variance_ratio (diff=137%)"
+        ],
+        "pipeline": "noise_poisson:5,contrast_strengthen_scale:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 7,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,saturate_strengthen_HSV:2,quantization_hist:2",
+        "thinking": "R7: contrast 因 bin 空置使 unique 10<16 被排除; 目标 chroma 比 1.49-2.66 高于 qh2-alone 1.43 且 clip 高 → 测试 saturate_strengthen (priority2 在 quant 前); 观察 ms/VR/clip/chroma"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=50%)",
+          "global:mean_shift (diff=0.0903)",
+          "global:variance_ratio (diff=134%)"
+        ],
+        "pipeline": "noise_poisson:5,saturate_strengthen_HSV:2,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 8,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,saturate_strengthen_HSV:1,quantization_hist:2",
+        "thinking": "R8: sat2 (scale6) 过冲 ms=-24.3/chroma 5.0; 降为 sat1 (scale3) 检验是否落在目标 ms=-1.2/chroma 2.66"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=52%)",
+          "global:mean_shift (diff=0.0688)",
+          "global:variance_ratio (diff=134%)"
+        ],
+        "pipeline": "noise_poisson:5,saturate_strengthen_HSV:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 9,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:1,quantization_hist:2",
+        "thinking": "R9: HSV sat1 (scale3)/sat2 (scale6) 效果接近且过冲; YCrCb sat1 scale=2 更温和, 检验 ms/chroma/sigma 是否同时接近目标 (-1.2/2.66/16.7)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=45%)",
+          "global:mean_shift (diff=0.0062)",
+          "global:variance_ratio (diff=118%)"
+        ],
+        "pipeline": "noise_poisson:5,saturate_strengthen_YCrCb:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 10,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,brightness_darken_shfit_RGB:1,quantization_hist:2",
+        "thinking": "R10: saturate 过冲 (sigma 24/chroma 4.2); 目标 ms≈0 且 qh2-alone 亮 +14.7 → 测试 brightness_darken(-0.1) 置于 quant 前 (若在 quant 后会使色阶合并<16); 观察 ms/VR/clip/sigma"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0294)",
+          "global:variance_ratio (diff=75%)"
+        ],
+        "pipeline": "noise_poisson:5,brightness_darken_shfit_RGB:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 11,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,brightness_darken_gamma_RGB:1,quantization_hist:2",
+        "thinking": "R11: shift暗化使 bin 空置 uG=13 被排除; gamma暗化 (1.4) 平滑单调, 高 bin 仍占据, 预期保留 16 色阶; 检验 ms/sigma/gm/uG"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0086)",
+          "global:variance_ratio (diff=83%)"
+        ],
+        "pipeline": "noise_poisson:5,brightness_darken_gamma_RGB:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 12,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,saturate_strengthen_YCrCb:1,quantization_hist:2",
+        "thinking": "R12: satY1 能把 ms 拉回 (~+0.3) 且保 16 色阶, 但 pois5 使 sigma/gm/chroma 过冲; 降噪声到 pois3 观察是否同时接近 sigma 16.7/gm 5.2/VR 1.32/chroma 2.66"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0231)",
+          "global:variance_ratio (diff=79%)"
+        ],
+        "pipeline": "noise_poisson:3,saturate_strengthen_YCrCb:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 13,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,saturate_strengthen_YCrCb:1,quantization_hist:2",
+        "thinking": "R13: 与 r12 相同结构但噪声换成 gaussian_RGB:2 (sigma~25.5, 与 pois3 中灰等效强度); 检验噪声类型是否可区分, 比较 sigma/gm/ms/VR"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0292)",
+          "global:variance_ratio (diff=78%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,saturate_strengthen_YCrCb:1,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 14,
+      "hypothesis": {
+        "pipeline": "noise_poisson:3,quantization_median:2",
+        "thinking": "R14: 诊断 per-channel 量化假设 — quantization_median 是逐通道量化 (与 target 每通道独立 16 色阶的签名一致); 检验其 ms/VR/chroma/clip 是否比 joint-hist 更接近目标 (若 ms≈0、chroma>1.5、clip 高 则支持逐通道量化实现差异)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=35%)",
+          "global:variance_ratio (diff=63%)"
+        ],
+        "pipeline": "noise_poisson:3,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 15,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "thinking": "R15: 复核最简 2 步管线 (pois5+qh2) 的精确信号, 与 r12 的 sat 变体对比; 若 sigma/gm 可接受则优先保留最简管线 (生成器类别互斥假设下 sat+quant 不可能共存)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0627)",
+          "global:variance_ratio (diff=64%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 16,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "thinking": "R16: 跨对复核最简候选 (pois5+qh2) 在 pair1 上的信号一致性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0890)",
+          "global:variance_ratio (diff=47%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 17,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "thinking": "R16: 跨对复核最简候选 (pois5+qh2) 在 pair2 上的信号一致性"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=61%)",
+          "global:mean_shift (diff=0.1165)",
+          "global:variance_ratio (diff=264%)"
+        ],
+        "pipeline": "noise_poisson:5,quantization_hist:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 18,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_median:2",
+        "thinking": "R18: per-channel 量化假设下用更强噪声 (pois5) + median2 (逐通道, 15 色) 检验能否同时接近 sigma 16.7/gm 5.2/ms -1.2 (r14 用 pois3 时 ms/intensity_var_corr 已匹配但强度不足)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 19,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_median:2",
+        "thinking": "R19: 跨对复核 MATCH 候选 (pois5+median2) 在 pair1"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 20,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_median:2",
+        "thinking": "R19: 跨对复核 MATCH 候选 (pois5+median2) 在 pair2"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 21,
+      "hypothesis": {
+        "pipeline": "noise_gaussian_RGB:2,quantization_median:2",
+        "thinking": "R21: 跨族对照 — 同强度 gaussian_RGB:2 替换 poisson:5, 检验 intensity_var_corr/sigma 是否同样匹配 (Poisson 若正确, gaussian 的 ivc 应显著偏低)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=30%)",
+          "global:mean_shift (diff=0.0071)",
+          "global:variance_ratio (diff=82%)"
+        ],
+        "pipeline": "noise_gaussian_RGB:2,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 22,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_median:2",
+        "thinking": "R22: 最终候选记录用 PSNR/CI 数值 (噪声 seed 失配故 PSNR 仅作档案参考, 判据用信号)"
+      },
+      "test_result": {
+        "psnr_rgb": 13.15,
+        "ci_pass": "9/10",
+        "ci_verdict": "GOOD",
+        "method": "PSNR",
+        "pipeline": "noise_poisson:5,quantization_median:2",
+        "mode": "psnr"
+      },
+      "decision": "REJECT"
+    },
+    {
+      "round": 23,
+      "hypothesis": {
+        "pipeline": "noise_impulse:3,quantization_median:2",
+        "thinking": "R1-1: peeled_noise_check(quantization_median:2) 残差 extreme_pct=55.13%>0.3%、residual std=39.9 → 自动诊断 IMPULSE(high confidence)。R0 将其归因于量化带假阳性，但从未实测 impulse；目标 clipped_fraction=16.4%、impulse_zero_ratio=3.2% 与 impulse 亦相容。检验 impulse:3 置于 median2 前能否复现 sigma/gm/VR/ms/chroma"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=88%)",
+          "global:mean_shift (diff=0.0051)",
+          "global:variance_ratio (diff=71%)"
+        ],
+        "pipeline": "noise_impulse:3,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 24,
+      "hypothesis": {
+        "pipeline": "noise_impulse:5,quantization_median:2",
+        "thinking": "R1-2: R1-1 impulse:3 WEAK (sigma diff 88%)。按 SKILL severity 扫描规则, 同类型扫 ±2 上界: impulse:5 (最强脉冲密度) 检验 sigma/VR 能否向目标收敛; 若仍 WEAK 则排除 impulse 族 (peeled extreme_pct 为量化带已知假阳性)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=76%)",
+          "global:mean_shift (diff=0.0102)",
+          "global:variance_ratio (diff=22%)"
+        ],
+        "pipeline": "noise_impulse:5,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 25,
+      "hypothesis": {
+        "pipeline": "noise_speckle:5,quantization_median:2",
+        "thinking": "R1-3: R0 未实测 speckle 族。speckle 为乘性噪声 var∝intensity², 同样可产生 target 的 intensity_var_corr=0.772 高值; 与 poisson (var∝intensity) 是仅剩的强度相关噪声混淆对。检验 speckle:5+median2 能否同时复现 sigma 16.68/gm 5.22/VR 1.317/ms -1.2/chroma 2.66/ivc 0.772"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual"
+        ],
+        "mismatched_signals": [
+          "global:mean_shift (diff=0.0074)",
+          "global:variance_ratio (diff=23%)"
+        ],
+        "pipeline": "noise_speckle:5,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 26,
+      "hypothesis": {
+        "pipeline": "noise_speckle:4,quantization_median:2",
+        "thinking": "R1-4: R1-3 speckle:5 WEAK (VR 差 23%); 按 severity 扫描规则降一级 speckle:4, 若 VR/ms 向目标 (1.317/-1.2) 收敛则保留为替代, 否则排除 speckle 族"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "PARTIAL",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "global:variance_ratio (diff=10%)"
+        ],
+        "pipeline": "noise_speckle:4,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "ADJUST_SEVERITY"
+    },
+    {
+      "round": 27,
+      "hypothesis": {
+        "pipeline": "noise_speckle:3,quantization_median:2",
+        "thinking": "R1-5: R1-4 speckle:4 PARTIAL (仅 VR 差 10%); 按 PARTIAL severity 扫描规则测 speckle:3, 检验 VR 是否收敛到 <8% 且 sigma/ms 保持匹配"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=29%)",
+          "global:variance_ratio (diff=39%)"
+        ],
+        "pipeline": "noise_speckle:3,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 28,
+      "hypothesis": {
+        "pipeline": "noise_poisson:4,quantization_median:2",
+        "thinking": "R1-6: run_full_analysis estimated_severity=4 而 R0 采用 poisson:5; 检验 sev4 能否同样复现 sigma 16.68/VR 1.317/ms -1.2 (R0 记录 pois5 三对 sigma 16.68/16.93/10.50 vs target 16.68/17.17/10.38, 其中 pair1 模拟偏低 → sev 边界需确认)"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "WEAK",
+        "matched_signals": [
+          "noise:clean_residual",
+          "global:mean_shift"
+        ],
+        "mismatched_signals": [
+          "noise:sigma (diff=21%)",
+          "global:variance_ratio (diff=45%)"
+        ],
+        "pipeline": "noise_poisson:4,quantization_median:2",
+        "mode": "signal"
+      },
+      "decision": "TRY_ALTERNATIVE"
+    },
+    {
+      "round": 29,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_median:1",
+        "thinking": "R1-7: 唯一残余偏差 = unique_G target 16 vs median:2 模拟 15 (逐通道恒定)。检验量化 severity 方向: median:1 每通道色阶数若 >16 (约 31/32) 则证明 16 介于 sev1-2 之间、仓库内无精确匹配, median:2 为最近实现; 若 median:1 恰为 16 则可能修正 off-by-one"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5,quantization_median:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 30,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_median:1",
+        "thinking": "R1-8: pair1 跨对复核 median:1 修正。pair0 上 median:1 使 unique_G=16 (target 16; R0 median:2=15) 且 clip/slope 更精确; 检验 pair1 是否同样 MATCH 并保持 unique_G=16"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5,quantization_median:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    },
+    {
+      "round": 31,
+      "hypothesis": {
+        "pipeline": "noise_poisson:5,quantization_median:1",
+        "thinking": "R1-9: pair2 跨对复核 median:1。pair0/1 均 MATCH 且 unique_G=16 与 target 一致; 检验 pair2 (sigma 10.38 边界对) 是否同样匹配并保持 unique_G=16"
+      },
+      "test_result": {
+        "method": "verify_signals",
+        "verdict": "MATCH",
+        "matched_signals": [
+          "noise:sigma",
+          "noise:clean_residual",
+          "global:mean_shift",
+          "global:variance_ratio"
+        ],
+        "mismatched_signals": [],
+        "pipeline": "noise_poisson:5,quantization_median:1",
+        "mode": "signal"
+      },
+      "decision": "ACCEPT"
+    }
+  ],
+  "psnr_ranking": [
+    {
+      "pipeline": "quantization_hist:2",
+      "psnr_rgb": 14.83,
+      "ci_pass": "4/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 1
+    },
+    {
+      "pipeline": "noise_poisson:5,quantization_median:2",
+      "psnr_rgb": 13.15,
+      "ci_pass": "9/10",
+      "verdict": "?",
+      "mode": "psnr",
+      "round": 22
+    }
+  ],
+  "final_decision": {
+    "pipeline": [
+      {
+        "function": "noise_poisson",
+        "severity": 5,
+        "verdict": "UNCERTAIN"
+      },
+      {
+        "function": "quantization_median",
+        "severity": 2,
+        "verdict": "LIKELY"
+      }
+    ],
+    "overall_verdict": "UNCERTAIN",
+    "mode": "SIGNAL",
+    "rationale": "1) 噪声必须在量化之前: 三对 target 每通道唯一色阶恒为 16, 若噪声在量化后会产生数百色阶 → 顺序固定 noise→quantization。2) 确定性步 quantization_median:2 证据: 全管线 (poisson:5+median2) 在 3 对 support 上同时精确复现 variance_ratio (1.317/1.143/1.081), mean_shift (-1.2/-2.9/-1.7), chroma (2.66/1.75/1.49), clipped_fraction, spectral_slope, gm_ratio 与 intensity_var_corr (误差 <1%); CI 9/10; 唯一差异为 unique_G 15 vs 16 (本仓库 median sev2 用 15 色, 挑战端应为 16 色, 属实现版本差异) → 判 LIKELY。3) 噪声步 poisson:5: verify_signals MATCH (sigma 16.68 vs 16.68 等), 但噪声 seed 失配 → 按协议噪声步永不 LIKELY, 判 UNCERTAIN。gaussian_RGB:2 对照明确劣于 poisson (sigma -30%, ivc 0.10 vs 0.77)。4) 备选: gaussian/饱和/对比/brightness 变体均已测试但不合格 (WEAK), alternatives 留空。",
+    "test_candidate_count": 22,
+    "best_support_evidence": "pair0/1/2 全部 MATCH (verify_signals 4/4 信号), CI 9/10"
+  },
+  "reflection_R1": {
+    "round": "R1",
+    "trigger": "verdict=UNCERTAIN; R0 support PSNR=29.99 dB",
+    "signal_reinterpretation": [
+      {
+        "signal": "unique_per_channel (确定性量化签名)",
+        "r0_interpretation": "target 16 色 vs median:2 模拟 15 色, 归因为挑战端实现版本差异",
+        "r1_finding": "同仓库 quantization_median:1 在全部 3 对 support 上精确产生 unique_per_channel=[16,16,16]; median:2 系统性少 1 色。'版本差异' 假设被否定, 实为 severity 误判",
+        "action": "pipeline quantization_median 2→1"
+      },
+      {
+        "signal": "peeled §B extreme_pct=55.13% (strip median:2) / 55.47% (strip median:1) → 自动诊断 IMPULSE",
+        "r0_interpretation": "量化带假阳性, 未实测",
+        "r1_finding": "impulse:3 与 impulse:5 + median2 实测 WEAK (sigma diff 88%/76%, VR diff 71%/22%); noise_prior sigma 16.7 远高于 impulse 模拟; §B extreme_pct 在两种剥离线管下均 >55% → 证实为量化带+噪声 seed 失配伪影",
+        "action": "REJECT impulse 族"
+      },
+      {
+        "signal": "intensity_var_corr=0.772/0.829/0.908 (强度相关噪声); vm_slope 被量化主导不可用",
+        "r0_interpretation": "poisson vs gaussian 已比较; speckle 未测",
+        "r1_finding": "speckle:5 WEAK (VR 23%), speckle:4 PARTIAL (VR 10%), speckle:3 WEAK (sigma 29%, VR 39%); 均劣于 poisson:5 (VR 误差 <0.1%)",
+        "action": "speckle 仅作已否决的跨族对照"
+      },
+      {
+        "signal": "run_full_analysis estimated_severity=4 vs R0 poisson:5",
+        "r0_interpretation": "sev5 由 3 对 sigma 匹配选定",
+        "r1_finding": "pois:4+median2 WEAK (sigma -21%, VR -45%) → sev5 确认",
+        "action": "保持 poisson:5"
+      },
+      {
+        "signal": "spectral_slope_ratio 0.993/0.982/0.994, gm_ratio 5.22 (noise-destroyed)",
+        "r0_interpretation": "BLUR_UNLIKELY",
+        "r1_finding": "修正后模拟 spectral_slope 与 target 逐对精确一致 (-1.2491/-1.1456/-1.3353 vs target -1.2491/-1.1459/-1.3343), 加 blur 会破坏该匹配",
+        "action": "维持无 blur"
+      }
+    ],
+    "cross_pair_validation": {
+      "candidate": "noise_poisson:5,quantization_median:1",
+      "pair0": {"unique": [16, 16], "sigma": [16.68, 16.68], "variance_ratio": [1.3173, 1.3180], "mean_shift": [-1.2, -1.2], "clipped_fraction": [0.1635, 0.1638], "spectral_slope": [-1.2491, -1.2491], "chroma": [2.6552, 2.6572], "ivc": [0.7718, 0.7693], "verify": "MATCH 4/4"},
+      "pair1": {"unique": [16, 16], "sigma": [17.17, 17.17], "variance_ratio": [1.1433, 1.1429], "mean_shift": [-2.9, -2.9], "clipped_fraction": [0.1472, 0.1472], "spectral_slope": [-1.1459, -1.1456], "chroma": [1.7518, 1.7518], "ivc": [0.8294, 0.8349], "verify": "MATCH 4/4"},
+      "pair2": {"unique": [16, 16], "sigma": [10.38, 10.50], "variance_ratio": [1.0812, 1.0815], "mean_shift": [-1.7, -1.7], "clipped_fraction": [0.332, 0.332], "spectral_slope": [-1.3343, -1.3353], "chroma": [1.4853, 1.4856], "ivc": [0.9079, 0.9121], "verify": "MATCH 4/4"},
+      "format": "[target, simulated]; unique=unique_per_channel; 3/3 对 MATCH (每对 4/4 信号)",
+      "vs_r0": "R0 median:2: unique=15 (vs 16), pair0 clip=0.150 (vs 0.1635), pair1 sigma=16.93 (vs 17.17), pair0 spectral_slope=-1.2519 (vs -1.2491); median:1 以上指标全部精确命中"
+    },
+    "candidates_tested": 4,
+    "candidate_detail": {
+      "impulse": "noise_impulse:3/5 + median2 → WEAK/WEAK",
+      "speckle": "noise_speckle:5/4/3 + median2 → WEAK/PARTIAL(VR 10%)/WEAK",
+      "poisson_severity": "noise_poisson:4 + median2 → WEAK, 确认 sev5",
+      "quantization_severity": "noise_poisson:5 + median:1 → pair0/1/2 全部 MATCH, ACCEPT"
+    },
+    "test_candidate_calls": 9,
+    "iterations_ref": "iterations rounds 23-31 (test_candidate.py 自动记录)",
+    "noise_6step_check_R1": {
+      "note": "剥离残差 §B 被量化带+seed 失配主导, 6 项数值不能用于判型 (peeled_noise_R1.json); 判型依据为全管线统计匹配 + 直方图不变式",
+      "peeled_median2": {"extreme_pct": 55.13, "vm_slope": 31.6461, "var_slope": 0.2886, "spatial_corr": 0.3424, "rgb_ratio": 1.1539, "cross_ch_corr": 0.0022},
+      "peeled_median1": {"extreme_pct": 55.47, "vm_slope": 35.3610, "var_slope": -0.1759, "spatial_corr": 0.3410, "rgb_ratio": 1.1570, "cross_ch_corr": 0.0023},
+      "target_residual": {"sigma": 16.68, "impulse_zero_ratio": 0.0319, "spatial_corr": 0.0018, "cross_ch_corr": 0.0013, "intensity_var_corr": 0.7718, "intensity_scaled_var_corr": -0.6789},
+      "diagnosis": "全管线 (poisson:5+median1) 在 3 对复现 sigma/ivc/VR/ms/clip/slope/chroma; impulse 与 speckle 实测均劣 → poisson"
+    },
+    "final_decision_r1": {
+      "pipeline": [
+        {"function": "noise_poisson", "severity": 5, "verdict": "UNCERTAIN"},
+        {"function": "quantization_median", "severity": 1, "verdict": "LIKELY"}
+      ],
+      "overall_verdict": "UNCERTAIN",
+      "decision": "CHANGE",
+      "rationale": "R0 的唯一残余偏差 (unique_G 15 vs 16) 实为 quantization_median severity 误判: 同仓库 median:1 精确产生 16 色。修正后在 k=3 全部 support 对上 verify_signals MATCH (4/4), 且 clip/sigma/slope/ms/VR/chroma/ivc 逐项精确或更接近; 噪声步 poisson:5 经 sev4 边界对照确认; impulse/speckle 两族实测 WEAK/PARTIAL 排除。变更满足 3/3 对 PARTIAL/MATCH 门槛。"
+    }
+  }
+}

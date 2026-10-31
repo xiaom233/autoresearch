@@ -1,0 +1,78 @@
+{
+  "challenge_id": "blind_0023_size1",
+  "round": "R1",
+  "decision": "NO_CHANGE",
+  "r0_pipeline": [
+    ["noise_gaussian_RGB", 2],
+    ["blur_glass", 5],
+    ["contrast_weaken_scale", 1],
+    ["compression_jpeg", 4]
+  ],
+  "r1_pipeline": [
+    ["noise_gaussian_RGB", 2],
+    ["blur_glass", 5],
+    ["contrast_weaken_scale", 1],
+    ["compression_jpeg", 4]
+  ],
+  "support_psnr_r0": 16.29,
+  "support_k": 1,
+  "support_pairs": ["clean_0.png / degraded_0.png (alias pair0)"],
+  "candidates_tested": [
+    {
+      "round": 11,
+      "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+      "mode": "psnr",
+      "result": "25.21 dB (CI 7/10)",
+      "purpose": "无噪声确定性基线；检验噪声存在的必要性（>40 dB 才可删除噪声）"
+    },
+    {
+      "round": 12,
+      "pipeline": "blur_glass:5,contrast_weaken_stretch:1,compression_jpeg:4",
+      "mode": "psnr",
+      "result": "18.24 dB (CI 5/10)",
+      "purpose": "gamma-like 全局重释；补 R0 severity 扫描缺口（R0 仅测 stretch:3）"
+    },
+    {
+      "round": 13,
+      "pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:3",
+      "mode": "psnr",
+      "result": "25.40 dB (CI 7/10)",
+      "purpose": "JPEG 严重度 PSNR 对照（target dct_zero=0.888 介于 sev3 0.861 / sev4 0.905）"
+    },
+    {
+      "round": 14,
+      "pipeline": "noise_gaussian_YCrCb:3,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+      "mode": "signal",
+      "result": "WEAK (4✓/3✗)",
+      "purpose": "full_analysis step2 推荐的 YCrCb 子类型（R0 未测）"
+    },
+    {
+      "round": 15,
+      "pipeline": "noise_gaussian_YCrCb:2,blur_glass:5,contrast_weaken_scale:1,compression_jpeg:4",
+      "mode": "signal",
+      "result": "WEAK (3✓/4✗)",
+      "purpose": "YCrCb severity 扫描 est-1（WEAK→扫 sev 后仍无改善）"
+    }
+  ],
+  "test_candidate_calls": 5,
+  "best_validation": {
+    "deterministic_baseline_psnr_db": 25.21,
+    "deterministic_best_psnr_db": 25.40,
+    "best_pipeline": "blur_glass:5,contrast_weaken_scale:1,compression_jpeg:3",
+    "psnr_gain_db_vs_baseline": 0.19,
+    "change_threshold": ">40 dB 或相对上一轮 +2 dB（k=1 不放宽）",
+    "noise_best_verdict": "WEAK（两候选均无 WEAK→PARTIAL/MATCH）",
+    "conclusion": "全部候选低于 CHANGE 阈值 → NO_CHANGE"
+  },
+  "signal_sources": [
+    {"signal": "full_analysis_R1 noise_prior_sigma", "value": 3.95, "source": "run_full_analysis.py 重跑 pair0（与 R0 一致，sigma≥2 → SIGNAL 模式）"},
+    {"signal": "residual_intensity_corr / gamma_suspect", "value": "0.4613 / true", "source": "full_analysis_R1 step2；对应假设：contrast_weaken_stretch:1（R0 未做 sev1-2 扫描）"},
+    {"signal": "block_boundary", "value": 4.0534, "source": "full_analysis_R1 step1（0% FP，JPEG 确认）"},
+    {"signal": "dct_zero_ratio", "value": "target 0.888 vs sev4 sim 0.905 vs sev3 sim 0.861", "source": "R0 deterministic_checks + R1 round13"},
+    {"signal": "variance_ratio / mean_shift / chroma_ratio", "value": "0.4574 / +5.5/255 (0.0216) / 0.7864", "source": "full_analysis_R1 step4"},
+    {"signal": "peeled §B rgb_ratio / ch_stds", "value": "1.1011 / [12.8,13.7,14.1]", "source": "R0 peeled_noise_check（本挑战目录 peeled_noise_check.json）"},
+    {"signal": "spectral_slope / glass_score / residual_anisotropy", "value": "-1.3796 / 1.3765 / 1.2897", "source": "full_analysis_R1 step3（glass:5 维持）"},
+    {"signal": "确定性子管线 PSNR", "value": "25.21 dB (no-noise) / 18.24 dB (stretch1) / 25.40 dB (jpeg3)", "source": "R1 test_candidate.py --mode psnr on pair0"}
+  ],
+  "reason": "R1 共测 5 个新候选（≤5），全部未达 CHANGE 阈值：确定性候选最高 25.40 dB（jpeg sev3，vs no-noise scale1 基线 25.21 dB，仅 +0.19 dB < +2 dB；stretch:1 仅 18.24 dB，否定 gamma-like 重释）；含噪声候选 YCrCb sev3/sev2 均为 WEAK（4✓/3✗、3✓/4✗），无 WEAK→PARTIAL/MATCH。no-noise 确定性候选 PSNR 25.21 dB < 40 dB，噪声步骤存在性不可证伪，保留 R0 的保守 noise_gaussian_RGB:2。k=1 单对限制：无法跨对验证，噪声子类型/严重度证据不足（YCrCb 两档在 4✓/3✗ 与 3✓/4✗ 间摆动），按指令不放宽阈值 → NO_CHANGE。"
+}
