@@ -50,7 +50,7 @@ def parse(name, rnd):
         "predicted_params.json" if rnd == "R0" else f"predicted_params_{rnd}.json")
     if not pfile.exists():
         return None
-    pipe = [[s["function"], int(s["severity"])] for s in json.load(open(pfile))["pipeline"]]
+    pipe = [([s["function"], int(s["severity"])] if isinstance(s, dict) else [s[0], int(s[1])]) for s in json.load(open(pfile))["pipeline"]]
     return {"round": rnd, "checkpoint": str(ck.relative_to(ROOT)),
             "checkpoint_sha256": sha_file(ck), "checkpoint_step": step,
             "support_psnr": float(psnr), "predicted_pipeline": pipe, "exp_meta": exp_meta}

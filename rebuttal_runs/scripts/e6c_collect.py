@@ -40,7 +40,7 @@ def pipeline(path):
     if not path.exists():
         return None
     d = json.loads(path.read_text())
-    return [(s["function"], int(s["severity"])) for s in d.get("pipeline", [])]
+    return [((s["function"], int(s["severity"])) if isinstance(s, dict) else (s[0], int(s[1]))) for s in d.get("pipeline", [])]
 
 
 def main():

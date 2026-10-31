@@ -20,6 +20,17 @@ for _ in $(seq 1 720); do
   sleep 30
 done
 [ -f "$P" ] && [ -f "$S" ] || { echo "[$(date -u +%FT%TZ)] $NAME $RND: params/strategy timeout" >> "$LOG"; exit 2; }
+.venv/bin/python3 - "$P" "$PREV" <<'PYNORM' || exit 5
+import json, sys
+for path in sys.argv[1:]:
+    d = json.load(open(path)); ch = False; new = []
+    for s in d.get("pipeline", []):
+        if isinstance(s, dict): new.append(s)
+        else:
+            new.append({"function": s[0], "severity": int(s[1]), "verdict": s[2] if len(s) > 2 else "UNCERTAIN"}); ch = True
+    if ch:
+        d["pipeline"] = new; json.dump(d, open(path, "w"), ensure_ascii=False, indent=2)
+PYNORM
 
 .venv/bin/python3 - "$P" "$PREV" "$DIR/${NAME}_${RND}_action.json" "$NAME" "$RND" <<'PY'
 import json, sys
